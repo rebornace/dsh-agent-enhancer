@@ -67,3 +67,23 @@ it('installs and removes compiled CSS through the client effect', async () => {
   expect(dom.window.document.head.querySelector('style[data-dsh-composer-enhancer]')).toBeNull()
   for (const dispose of resolved.slice(1)) await dispose()
 })
+
+it('aligns composer overlays with the input width', async () => {
+  const dom = new JSDOM('<head></head>')
+  const style = dom.window.document.createElement('style')
+  style.textContent = await readFile('src/client/styles.module.css', 'utf8')
+  dom.window.document.head.append(style)
+  const rules = Array.from(style.sheet?.cssRules ?? [])
+
+  for (const className of ['historyDialog', 'prediction', 'hints']) {
+    const rule = rules.find(candidate => candidate instanceof dom.window.CSSStyleRule &&
+      candidate.selectorText === `.${className}`)
+    expect(rule, className).toBeDefined()
+    const declaration = (rule as CSSStyleRule).style
+    expect(declaration.getPropertyValue('left'), className).toBe('0px')
+    expect(declaration.getPropertyValue('right'), className).toBe('0px')
+    expect(declaration.getPropertyValue('width'), className).toBe('auto')
+    expect(declaration.getPropertyValue('max-width'), className).toBe('none')
+    expect(declaration.getPropertyValue('box-sizing'), className).toBe('border-box')
+  }
+})

@@ -61,9 +61,12 @@
 
 .prediction {
   position: absolute;
+  left: 0;
   right: 0;
   bottom: calc(100% + 8px);
-  max-width: min(560px, calc(100vw - 32px));
+  box-sizing: border-box;
+  width: auto;
+  max-width: none;
   padding: 8px 12px;
   color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-sm-14);
@@ -81,11 +84,14 @@
 .historyDialog {
   position: absolute;
   z-index: 20;
+  left: 0;
   right: 0;
   bottom: calc(100% + 8px);
   display: grid;
   gap: 8px;
-  width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
+  width: auto;
+  max-width: none;
   padding: 12px;
   color: var(--dsw-alias-label-primary);
 }
@@ -122,11 +128,14 @@
 .hints {
   position: absolute;
   z-index: 21;
+  left: 0;
   right: 0;
   bottom: calc(100% + 8px);
   display: grid;
   gap: 8px;
-  width: min(420px, calc(100vw - 32px));
+  box-sizing: border-box;
+  width: auto;
+  max-width: none;
 }
 
 .hint {
