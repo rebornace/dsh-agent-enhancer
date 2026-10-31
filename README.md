@@ -12,22 +12,17 @@
 
 退出所有 Desktop 窗口和托盘进程，确认旧主进程结束后再安装/启动；不要只重新启动启动器。
 
-在仓库根目录的 PowerShell 中执行（未压缩目录方式，路径由 `Resolve-Path` 自动获取）：
+在仓库根目录的 PowerShell 中构建并安装 tgz：
 
 ```powershell
 corepack pnpm install --frozen-lockfile
 corepack pnpm build
-$PluginDir = (Resolve-Path .).Path
-dsh plugin --profile desktop add $PluginDir
+corepack pnpm pack --pack-destination dist
+$PackagePath = (Resolve-Path ./dist/dsh-composer-enhancer-0.1.2.tgz).Path
+dsh plugin --profile desktop add $PackagePath
 ```
 
-也可以先运行 `corepack pnpm pack --pack-destination dist` 生成 tgz，再安装该包：
-
-```sh
-dsh plugin --profile desktop add ./dist/dsh-composer-enhancer-0.1.2.tgz
-```
-
-本地目录和 tgz 均已通过官方插件管理器安装验证。不要使用 `web` profile 代替 Desktop 安装或验收。安装并启动 Desktop 后，Composer 右侧会出现优化入口，插件设置中会出现“Composer 增强”。
+请安装 tgz，不要直接添加源码仓库目录；仓库中的开发依赖会与官方 DSH 运行时产生重复的 `Session` 类，导致真实模型调用失败。tgz 安装已通过真实模型优化验证。不要使用 `web` profile 代替 Desktop 安装或验收。安装并启动 Desktop 后，Composer 右侧会出现优化入口，插件设置中会出现“Composer 增强”。
 
 ## 三项操作
 
