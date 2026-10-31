@@ -15,7 +15,7 @@
 直接从 npm 安装，无需下载 tgz 或构建源码：
 
 ```sh
-dsh plugin --profile desktop add dsh-composer-enhancer@0.1.3
+dsh plugin --profile desktop add dsh-composer-enhancer@0.1.4
 ```
 
 npm registry 安装已通过真实模型优化验证。不要使用 `web` profile 代替 Desktop 安装或验收。安装并启动 Desktop 后，Composer 右侧会出现优化入口，插件设置中会出现“Composer 增强”。
