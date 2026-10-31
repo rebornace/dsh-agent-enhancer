@@ -1,6 +1,11 @@
 {
   "name": "dsh-composer-enhancer",
   "version": "0.1.2",
+  "author": "rebornace",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rebornace/dsh-composer-enhancer.git"
+  },
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/host/index.d.ts",

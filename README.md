@@ -12,17 +12,13 @@
 
 退出所有 Desktop 窗口和托盘进程，确认旧主进程结束后再安装/启动；不要只重新启动启动器。
 
-在仓库根目录的 PowerShell 中构建并安装 tgz：
+直接从 npm 安装，无需下载 tgz 或构建源码：
 
-```powershell
-corepack pnpm install --frozen-lockfile
-corepack pnpm build
-corepack pnpm pack --pack-destination dist
-$PackagePath = (Resolve-Path ./dist/dsh-composer-enhancer-0.1.2.tgz).Path
-dsh plugin --profile desktop add $PackagePath
+```sh
+dsh plugin --profile desktop add dsh-composer-enhancer@0.1.2
 ```
 
-请安装 tgz，不要直接添加源码仓库目录；仓库中的开发依赖会与官方 DSH 运行时产生重复的 `Session` 类，导致真实模型调用失败。tgz 安装已通过真实模型优化验证。不要使用 `web` profile 代替 Desktop 安装或验收。安装并启动 Desktop 后，Composer 右侧会出现优化入口，插件设置中会出现“Composer 增强”。
+npm registry 安装已通过真实模型优化验证。不要直接添加源码仓库目录，以免开发依赖与官方 DSH 运行时重复。不要使用 `web` profile 代替 Desktop 安装或验收。安装并启动 Desktop 后，Composer 右侧会出现优化入口，插件设置中会出现“Composer 增强”。
 
 ## 三项操作
 

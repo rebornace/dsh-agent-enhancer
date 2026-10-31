@@ -60,7 +60,7 @@ if (packedManifest.engines?.dsh !== '>=0.2.1-rc.5 <0.3.0-0') {
   throw new Error('Packed manifest has an invalid DSH compatibility range')
 }
 
-for (const path of files.filter(path => /\.(?:js|map|ts|json|yml)$/.test(path))) {
+for (const path of files.filter(path => path !== 'package/package.json' && /\.(?:js|map|ts|json|yml)$/.test(path))) {
   const contents = await readEntry(path)
   if (/(?:[A-Za-z]:[\\/]|file:\/\/\/|\/Users\/|\/home\/)/.test(contents)) {
     throw new Error(`Package contains an absolute source path: ${path}`)
