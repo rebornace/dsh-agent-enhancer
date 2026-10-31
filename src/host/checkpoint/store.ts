@@ -7,6 +7,20 @@ import { CHECKPOINT_SCHEMA_VERSION } from './types.ts'
 import type { Checkpoint, CheckpointJournal } from './types.ts'
 
 const MAX_CHECKPOINTS = 20
+const checkpointQueues = new Map<string, Promise<void>>()
+const journalQueues = new Map<string, Promise<void>>()
+
+async function serialize<T>(queues: Map<string, Promise<void>>, key: string, operation: () => Promise<T>): Promise<T> {
+  const previous = queues.get(key) ?? Promise.resolve()
+  const result = previous.then(operation)
+  const tail = result.then(() => undefined, () => undefined)
+  queues.set(key, tail)
+  try {
+    return await result
+  } finally {
+    if (queues.get(key) === tail) queues.delete(key)
+  }
+}
 
 const sessionIdSchema = z.string().min(1).transform(value => value as SessionId)
 const gapSchema = z.discriminatedUnion('type', [
@@ -19,7 +33,10 @@ const fileSchema = z.object({
   beforeText: z.string().nullable(),
   beforeHash: z.string(),
   afterHash: z.string(),
-}).strict()
+}).strict().superRefine((file, context) => {
+  const valid = file.change === 'create' ? file.beforeText === null : file.beforeText !== null
+  if (!valid) context.addIssue({ code: 'custom', path: ['beforeText'], message: 'Invalid before-image' })
+})
 const checkpointSchema = z.object({
   schemaVersion: z.literal(CHECKPOINT_SCHEMA_VERSION),
   pluginVersion: z.string().min(1),
@@ -34,7 +51,10 @@ const checkpointSchema = z.object({
   coverage: z.enum(['complete', 'partial']),
   gaps: z.array(gapSchema),
   files: z.array(fileSchema),
-}).strict()
+}).strict().superRefine((checkpoint, context) => {
+  const valid = checkpoint.coverage === 'complete' ? checkpoint.gaps.length === 0 : checkpoint.gaps.length > 0
+  if (!valid) context.addIssue({ code: 'custom', path: ['gaps'], message: 'Coverage does not match gaps' })
+})
 const storeSchema = z.object({
   schemaVersion: z.literal(CHECKPOINT_SCHEMA_VERSION),
   checkpoints: z.array(checkpointSchema).max(MAX_CHECKPOINTS),
@@ -105,31 +125,34 @@ async function writeAtomic(path: string, value: unknown): Promise<void> {
 export class CheckpointStore {
   private readonly checkpointDirectory: string
   private readonly journalDirectory: string
+  private readonly rootKey: string
 
   constructor(private readonly root: string) {
     this.checkpointDirectory = join(root, 'checkpoints')
     this.journalDirectory = join(root, 'journals')
+    this.rootKey = join(root, '.')
   }
 
   async save(checkpoint: Checkpoint): Promise<void> {
     assertCheckpointSchema(checkpoint)
     const parsed = checkpointSchema.safeParse(checkpoint)
     if (!parsed.success) throw new CheckpointStoreError('INVALID_CHECKPOINT')
-    const checkpoints = await this.list(checkpoint.sessionId)
-    const existing = checkpoints.findIndex(value => value.id === checkpoint.id)
-    if (existing >= 0) checkpoints.splice(existing, 1, parsed.data)
-    else checkpoints.push(parsed.data)
-    checkpoints.sort((left, right) => left.createdAt - right.createdAt || left.turn - right.turn || left.id.localeCompare(right.id))
-    await this.ensureDirectories()
-    await writeAtomic(this.checkpointPath(checkpoint.sessionId), {
-      schemaVersion: CHECKPOINT_SCHEMA_VERSION,
-      checkpoints: checkpoints.slice(-MAX_CHECKPOINTS),
+    await serialize(checkpointQueues, this.checkpointKey(checkpoint.sessionId), async () => {
+      const checkpoints = await this.list(checkpoint.sessionId)
+      const existing = checkpoints.findIndex(value => value.id === checkpoint.id)
+      if (existing >= 0) checkpoints.splice(existing, 1, parsed.data)
+      else checkpoints.push(parsed.data)
+      checkpoints.sort((left, right) => left.createdAt - right.createdAt || left.turn - right.turn || left.id.localeCompare(right.id))
+      await this.ensureDirectories()
+      await writeAtomic(this.checkpointPath(checkpoint.sessionId), {
+        schemaVersion: CHECKPOINT_SCHEMA_VERSION,
+        checkpoints: checkpoints.slice(-MAX_CHECKPOINTS),
+      })
     })
   }
 
   async list(sessionId: SessionId): Promise<Checkpoint[]> {
     await this.ensureDirectories()
-    await this.cleanTemporaryFiles(this.checkpointDirectory)
     let stored: unknown
     try {
       stored = await this.readJson(this.checkpointPath(sessionId))
@@ -143,33 +166,50 @@ export class CheckpointStore {
     return parsed.data.checkpoints
   }
 
+  async recoverInterruptedWrites(sessionId: SessionId): Promise<void> {
+    await serialize(checkpointQueues, this.checkpointKey(sessionId), async () => {
+      await this.ensureDirectories()
+      const prefix = `.${basename(this.checkpointPath(sessionId))}.`
+      await this.cleanTemporaryFiles(this.checkpointDirectory, prefix)
+    })
+  }
+
   async beginJournal(journal: CheckpointJournal): Promise<void> {
     assertCheckpointSchema(journal)
     const parsed = journalSchema.safeParse(journal)
     if (!parsed.success) throw new CheckpointStoreError('INVALID_JOURNAL')
-    await this.ensureDirectories()
-    await this.cleanTemporaryFiles(this.journalDirectory)
-    await writeAtomic(join(this.journalDirectory, `${digest(journal.id)}.json`), parsed.data)
+    await serialize(journalQueues, this.rootKey, async () => {
+      await this.ensureDirectories()
+      await writeAtomic(join(this.journalDirectory, `${digest(journal.id)}.json`), parsed.data)
+    })
   }
 
   async completeJournal(id: string): Promise<void> {
-    await this.ensureDirectories()
-    await removeIfPresent(join(this.journalDirectory, `${digest(id)}.json`))
+    await serialize(journalQueues, this.rootKey, async () => {
+      await this.ensureDirectories()
+      await removeIfPresent(join(this.journalDirectory, `${digest(id)}.json`))
+    })
   }
 
   async recoverJournal(): Promise<CheckpointJournal[]> {
-    await this.ensureDirectories()
-    await this.cleanTemporaryFiles(this.journalDirectory)
-    const journals: CheckpointJournal[] = []
-    for (const name of (await readdir(this.journalDirectory)).sort()) {
-      if (!name.endsWith('.json')) continue
-      const stored = await this.readJson(join(this.journalDirectory, name))
-      assertCheckpointSchema(stored)
-      const parsed = journalSchema.safeParse(stored)
-      if (!parsed.success) throw new CheckpointStoreError('INVALID_STORE')
-      if (parsed.data.status === 'prepared' || parsed.data.status === 'files-restored') journals.push(parsed.data)
-    }
-    return journals.sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id))
+    return serialize(journalQueues, this.rootKey, async () => {
+      await this.ensureDirectories()
+      await this.cleanTemporaryFiles(this.journalDirectory)
+      const journals: CheckpointJournal[] = []
+      for (const name of (await readdir(this.journalDirectory)).sort()) {
+        if (!name.endsWith('.json')) continue
+        const stored = await this.readJson(join(this.journalDirectory, name))
+        assertCheckpointSchema(stored)
+        const parsed = journalSchema.safeParse(stored)
+        if (!parsed.success) throw new CheckpointStoreError('INVALID_STORE')
+        if (parsed.data.status === 'prepared' || parsed.data.status === 'files-restored') journals.push(parsed.data)
+      }
+      return journals.sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id))
+    })
+  }
+
+  private checkpointKey(sessionId: SessionId): string {
+    return `${this.rootKey}\0${sessionId}`
   }
 
   private checkpointPath(sessionId: SessionId): string {
@@ -182,9 +222,9 @@ export class CheckpointStore {
     await mkdir(this.journalDirectory, { recursive: true, mode: 0o700 })
   }
 
-  private async cleanTemporaryFiles(directory: string): Promise<void> {
+  private async cleanTemporaryFiles(directory: string, prefix = ''): Promise<void> {
     for (const name of await readdir(directory)) {
-      if (name.endsWith('.tmp')) await unlink(join(directory, name))
+      if (name.startsWith(prefix) && name.endsWith('.tmp')) await unlink(join(directory, name))
     }
   }
 

@@ -81,6 +81,63 @@ describe('CheckpointStore', () => {
     expect(values.map(value => value.turn)).toEqual(Array.from({ length: 20 }, (_, index) => index + 2))
   })
 
+  it('serializes concurrent saves for one Session across store instances', async () => {
+    const stores = [new CheckpointStore(root), new CheckpointStore(root)]
+    const values = Array.from({ length: 12 }, (_, index) => checkpoint(index + 1))
+
+    await Promise.all(values.map((value, index) => stores[index % stores.length]!.save(value)))
+
+    const stored = await stores[0]!.list(sessionId)
+    expect(stored.map(value => value.turn)).toEqual(values.map(value => value.turn))
+  })
+
+  it.each([
+    {
+      name: 'complete coverage with gaps',
+      value: { ...checkpoint(), gaps: [{ type: 'workspace', reason: 'capture-failed' }] } as Checkpoint,
+    },
+    {
+      name: 'partial coverage without gaps',
+      value: { ...checkpoint(), coverage: 'partial', gaps: [] } as Checkpoint,
+    },
+    {
+      name: 'create with a before-image',
+      value: {
+        ...checkpoint(),
+        files: [{ ...checkpoint().files[0]!, change: 'create', beforeText: 'before' }],
+      } as Checkpoint,
+    },
+    {
+      name: 'modify without a before-image',
+      value: {
+        ...checkpoint(),
+        files: [{ ...checkpoint().files[0]!, change: 'modify', beforeText: null }],
+      } as Checkpoint,
+    },
+    {
+      name: 'delete without a before-image',
+      value: {
+        ...checkpoint(),
+        files: [{ ...checkpoint().files[0]!, change: 'delete', beforeText: null }],
+      } as Checkpoint,
+    },
+  ])('rejects $name in both the disk write and read contracts', async ({ value }) => {
+    const store = new CheckpointStore(root)
+    const writeError = await store.save(value).then(() => null, error => error as unknown)
+
+    await store.save(checkpoint())
+    const directory = join(root, 'checkpoints')
+    const name = (await readdir(directory)).find(entry => entry.endsWith('.json'))!
+    const path = join(directory, name)
+    const stored = JSON.parse(await readFile(path, 'utf8')) as { checkpoints: unknown[] }
+    stored.checkpoints[0] = value
+    await writeFile(path, JSON.stringify(stored), 'utf8')
+    const readError = await store.list(sessionId).then(() => null, error => error as unknown)
+
+    expect(writeError).toMatchObject({ code: 'INVALID_CHECKPOINT' })
+    expect(readError).toMatchObject({ code: 'INVALID_STORE' })
+  })
+
   it('rejects an incompatible checkpoint schema before writing it', async () => {
     const store = new CheckpointStore(root)
     const incompatible = { ...checkpoint(), schemaVersion: 2 } as unknown as Checkpoint
@@ -117,15 +174,30 @@ describe('CheckpointStore', () => {
     }
   })
 
-  it('ignores and removes an interrupted temporary write without damaging committed data', async () => {
+  it('never deletes temporary files during normal reads because they may be in flight', async () => {
     const store = new CheckpointStore(root)
     await store.save(checkpoint())
     const directory = join(root, 'checkpoints')
-    const interrupted = join(directory, 'interrupted.tmp')
-    await writeFile(interrupted, '{ partial json', 'utf8')
+    await writeFile(join(directory, 'active.tmp'), '{ partial json', 'utf8')
 
     await expect(store.list(sessionId)).resolves.toEqual([checkpoint()])
-    expect(await readdir(directory)).not.toContain('interrupted.tmp')
+    expect(await readdir(directory)).toContain('active.tmp')
+  })
+
+  it('cleans only the target Session temporary files during explicit recovery', async () => {
+    const store = new CheckpointStore(root)
+    await store.save(checkpoint())
+    const directory = join(root, 'checkpoints')
+    const name = (await readdir(directory)).find(entry => entry.endsWith('.json'))!
+    const interrupted = `.${name}.interrupted.tmp`
+    await writeFile(join(directory, interrupted), '{ partial json', 'utf8')
+    await writeFile(join(directory, '.other-session.json.interrupted.tmp'), '{ partial json', 'utf8')
+
+    await store.recoverInterruptedWrites(sessionId)
+
+    await expect(store.list(sessionId)).resolves.toEqual([checkpoint()])
+    expect(await readdir(directory)).not.toContain(interrupted)
+    expect(await readdir(directory)).toContain('.other-session.json.interrupted.tmp')
   })
 
   it('recovers pending journals, removes completed ones, and never creates Session logs', async () => {
