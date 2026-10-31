@@ -154,6 +154,7 @@ describe('AuxiliaryModels', () => {
     }), new AbortController().signal)
     const options = h.stream.mock.calls[0]?.[0]!
     const system = options.system!
+    expect(system).toContain('草稿始终是用户准备发给 Agent 的请求，不是 Agent 向用户提问，不得颠倒说话者')
     expect(system).toContain('模糊或过短')
     expect(system).toContain('已经明确')
     expect(system).toContain('最小必要改动')
@@ -226,6 +227,7 @@ describe('AuxiliaryModels', () => {
     expect(content.text).toContain('如何测试？')
     expect(content.text).toContain('先写失败测试。')
     expect(content.text).not.toContain('旧问题')
+    expect(audit.system).toContain('预测始终是下一条用户提示词，不是助手回答、评论或向用户追问')
     expect(audit.system).toContain('最多一条短问题')
     expect(audit.system).toContain('不补写用户正在输入的内容')
   })
