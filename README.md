@@ -15,10 +15,23 @@
 直接从 npm 安装，无需下载 tgz 或构建源码：
 
 ```sh
-dsh plugin --profile desktop add dsh-composer-enhancer@0.1.2
+dsh plugin --profile desktop add dsh-composer-enhancer@0.1.3
 ```
 
-npm registry 安装已通过真实模型优化验证。不要直接添加源码仓库目录，以免开发依赖与官方 DSH 运行时重复。不要使用 `web` profile 代替 Desktop 安装或验收。安装并启动 Desktop 后，Composer 右侧会出现优化入口，插件设置中会出现“Composer 增强”。
+npm registry 安装已通过真实模型优化验证。不要使用 `web` profile 代替 Desktop 安装或验收。安装并启动 Desktop 后，Composer 右侧会出现优化入口，插件设置中会出现“Composer 增强”。
+
+## 目录开发安装
+
+在仓库根目录的 PowerShell 中执行：
+
+```powershell
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+$PluginDir = (Resolve-Path .).Path
+dsh plugin --profile desktop add $PluginDir
+```
+
+需要与宿主共享实例的 DSH 包同时声明在 `peerDependencies` 和 `devDependencies`：目录链接时运行中使用宿主副本，类型检查和测试使用开发副本。不要把这些包移入 `dependencies`，否则会产生重复运行时并导致 `Session` 类型错误。目录安装已通过真实模型优化验证。
 
 ## 三项操作
 
