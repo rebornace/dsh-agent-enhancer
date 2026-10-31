@@ -70,8 +70,52 @@ dsh plugin --profile desktop add $PluginDir
 
 ## 卸载
 
+### npm 安装
+
+仅当插件通过 npm registry 安装时，执行：
+
 ```sh
 dsh plugin --profile desktop remove dsh-composer-enhancer
 ```
+
+此流程已在隔离 profile 验证，会移除 profile 内的包和 bundle 条目。**不要把它用于下面的目录链接安装。**
+
+### 目录开发安装
+
+> [!WARNING]
+> 对目录链接安装，禁止执行 `dsh plugin --profile desktop remove dsh-composer-enhancer`，也不要在 profile 中执行等效的 `pnpm remove`。DSH `0.2.1-rc.5` 下该操作会沿目录链接删除源仓库的 `node_modules` 和部分 `.git` 元数据。`dsh plugin ... unlink` 也已验证只会输出 `Nothing to unlink`，不能移除链接或 bundle 条目。
+
+退出所有 Desktop 窗口和托盘进程，确认旧主进程结束后再操作：
+
+1. 编辑 **DSH profile 目录**中的 `package.json`，不要编辑源仓库的同名文件。从 `dependencies` 删除 `dsh-composer-enhancer`，并从 `dsh.profile.bundles` 数组删除同一项；保留 `@deepseek-ai/dsh-base` 和其他插件。
+2. 在 PowerShell 中定位 profile，并运行 `install` 更新 lockfile。未设置 `DSH_HOME` 时，默认目录为 `$HOME/.dsh`：
+
+   ```powershell
+   $DshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }
+   $ProfileDir = Join-Path $DshHome 'profiles\desktop'
+   dsh plugin --profile desktop install
+   ```
+
+3. `install` 可能留下目录链接。在同一 PowerShell 中执行以下 Guard 流程，只删除 profile 中的 Junction / SymbolicLink 本身，不递归删除其目标：
+
+   ```powershell
+   $PluginLink = Join-Path $ProfileDir 'node_modules\dsh-composer-enhancer'
+   $Item = Get-Item -LiteralPath $PluginLink -Force -ErrorAction SilentlyContinue
+   if ($null -ne $Item) {
+     if ($Item.LinkType -notin @('SymbolicLink', 'Junction')) {
+       throw "拒绝删除非链接路径：$PluginLink"
+     }
+     $Item.Delete()
+   }
+   Test-Path -LiteralPath $PluginLink # 应为 False
+   ```
+
+4. 在源仓库根目录确认源码、Git 元数据和依赖仍然存在：
+
+   ```powershell
+   git status --short
+   git fsck --full --no-dangling
+   Test-Path -Path .git, package.json, node_modules # 应均为 True
+   ```
 
 重载 Desktop 后，增强入口、监听和请求随之移除，官方 Composer 的菜单、IME、草稿持久化与发送行为保持由官方实现。
