@@ -12,12 +12,13 @@
 
 退出所有 Desktop 窗口和托盘进程，确认旧主进程结束后再安装/启动；不要只重新启动启动器。
 
-从源码目录安装（未压缩目录方式）：
+在仓库根目录的 PowerShell 中执行（未压缩目录方式，路径由 `Resolve-Path` 自动获取）：
 
-```sh
+```powershell
 corepack pnpm install --frozen-lockfile
 corepack pnpm build
-dsh plugin --profile desktop add /absolute/path/to/dsh-composer-enhancer
+$PluginDir = (Resolve-Path .).Path
+dsh plugin --profile desktop add $PluginDir
 ```
 
 也可以先运行 `corepack pnpm pack --pack-destination dist` 生成 tgz，再安装该包：
