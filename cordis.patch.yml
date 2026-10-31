@@ -1,0 +1,3 @@
+- insert:
+    - id: composer-enhancer
+      name: dsh-composer-enhancer

@@ -1,0 +1,142 @@
+.root {
+  position: relative;
+}
+
+.toolbarIcon {
+  width: 28px;
+  padding: 0;
+}
+
+.settings {
+  display: grid;
+  gap: 16px;
+  max-width: 640px;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-sm-14);
+}
+
+.settings h2,
+.settings h3,
+.settings p {
+  margin: 0;
+}
+
+.settingsHeader {
+  display: grid;
+  gap: 4px;
+}
+
+.settingsHeader p,
+.settingDescription,
+.privacy p {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settingText {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settingText h3,
+.privacy h3 {
+  font: inherit;
+  font-weight: 600;
+}
+
+.privacy {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: var(--dsw-radius-sm);
+}
+
+.prediction {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 8px 12px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-sm-14);
+  white-space: pre-wrap;
+  pointer-events: none;
+  user-select: none;
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: var(--dsw-radius-sm);
+}
+
+.prediction kbd {
+  margin-left: 8px;
+}
+
+.historyDialog {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 8px);
+  display: grid;
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 12px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.historyHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font: var(--dsw-font-sm-14);
+}
+
+.historyResults {
+  max-height: 240px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.historyResult {
+  padding: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  border-radius: var(--dsw-radius-sm);
+}
+
+.historyResult[aria-selected='true'] {
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.hints {
+  position: absolute;
+  z-index: 21;
+  right: 0;
+  bottom: calc(100% + 8px);
+  display: grid;
+  gap: 8px;
+  width: min(420px, calc(100vw - 32px));
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-sm-14);
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: var(--dsw-radius-sm);
+}

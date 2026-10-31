@@ -1,0 +1,11 @@
+node_modules/
+lib/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tgz
+.dsh-home/
+.research-rc3/
+.worktrees/
+.superpowers/

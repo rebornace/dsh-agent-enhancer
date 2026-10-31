@@ -1,0 +1,221 @@
+// @vitest-environment jsdom
+import { Context } from '@deepseek-ai/cordis'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { act, cleanup, render, screen } from '@testing-library/react'
+import { createElement } from 'react'
+import { afterEach, expect, it, vi } from 'vitest'
+import { apply, inject } from '../src/client/index.ts'
+import type { ComposerSession } from '../src/client/composer/session.ts'
+import { ComposerControls } from '../src/client/dsh/controls.tsx'
+import type { ComposerControlsProps } from '../src/client/dsh/controls.tsx'
+import { clientRemoteInfo, composerEnhancerCall } from '../src/client/remote.ts'
+
+vi.mock('../src/client/styles.module.css', () => ({ default: {}, installCss: () => () => {} }))
+
+const contexts: Context[] = []
+
+function remotePayload() {
+  return {
+    method: 'generate' as const,
+    data: {
+      operation: 'optimize' as const,
+      requestId: 'req-1',
+      sessionId: 'session-1' as SessionId,
+      source: 'source',
+      references: [],
+      context: [],
+    },
+  }
+}
+
+afterEach(async () => {
+  cleanup()
+  for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
+  vi.restoreAllMocks()
+})
+
+it('mounts the shared Remote and host config entry and disposes the Remote', async () => {
+  expect(inject).toContain('remote.pluginInventory')
+  const ctx = new Context()
+  contexts.push(ctx)
+  const get = vi.fn(() => ({ getSnapshot: () => ({ value: {} }), subscribe: () => () => {} }))
+  const unmount = vi.fn()
+  const mount = vi.fn(async () => unmount)
+  const register = vi.fn(() => () => {})
+  ctx.provide('remote', {
+    $mount: mount,
+    pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
+  } as never)
+  ctx.provide('configForms', { get, whileServed: () => () => {} } as never)
+  ctx.provide('locale', { register, bind: () => (key: string) => key } as never)
+  ctx.provide('slots', { inject: vi.fn(() => () => {}) } as never)
+
+  const fiber = await ctx.plugin({ apply })
+
+  expect(get).toHaveBeenCalledWith('composer-enhancer')
+  expect(mount).toHaveBeenCalledWith(clientRemoteInfo)
+  await vi.waitFor(() => { expect(mount).toHaveBeenCalledTimes(1) })
+  await fiber.dispose()
+  expect(unmount).toHaveBeenCalledTimes(1)
+})
+
+it('invokes the mounted namespace through the declared Cordis injection', async () => {
+  const ctx = new Context()
+  contexts.push(ctx)
+  let pluginCtx: Context | undefined
+  const call = vi.fn(async () => ({ ok: true as const, value: null }))
+  const remote = new Proxy({
+    $mount: async () => () => {},
+    pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
+  }, {
+    get(target, property, receiver) {
+      if (property === 'composerEnhancer' && pluginCtx !== undefined) {
+        return Reflect.get(pluginCtx, 'remote.composerEnhancer')
+      }
+      return Reflect.get(target, property, receiver)
+    },
+  })
+  ctx.provide('remote', remote as never)
+  ctx.provide('remote.pluginInventory', remote.pluginInventory as never)
+  ctx.provide('configForms', {
+    get: () => ({ getSnapshot: () => ({ value: {} }), subscribe: () => () => {} }),
+    whileServed: () => () => {},
+  } as never)
+  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
+  ctx.provide('slots', { inject: vi.fn(() => () => {}) } as never)
+  await ctx.plugin({ inject, apply(context) { pluginCtx = context; apply(context) } })
+  ctx.provide('remote.composerEnhancer', { call } as never)
+  await vi.waitFor(() => { expect(pluginCtx).toBeDefined() })
+
+  const payload = remotePayload()
+  const signal = new AbortController().signal
+  const result = await composerEnhancerCall.invoke(pluginCtx!.remote, { payload }, signal)
+
+  expect(result).toBeNull()
+  expect(call).toHaveBeenCalledWith(payload, signal)
+})
+
+it('rejects declared Remote failures with their sanitized auxiliary category', async () => {
+  const remote = {
+    composerEnhancer: {
+      call: async () => ({
+        ok: false as const,
+        error: {
+          code: 'composer-enhancer/failed',
+          message: 'provider credential and private text',
+          details: { code: 'INVALID_OUTPUT' },
+        },
+      }),
+    },
+  }
+  const payload = remotePayload()
+
+  const rejection = await composerEnhancerCall.invoke(remote, { payload }).catch((error: unknown) => error)
+
+  expect(rejection).toMatchObject({ name: 'AuxiliaryError', code: 'INVALID_OUTPUT' })
+  expect((rejection as Error).message).not.toContain('provider credential')
+})
+
+it('rethrows a real Remote cancellation rejection unchanged', async () => {
+  const controller = new AbortController()
+  controller.abort()
+  const remote = {
+    composerEnhancer: {
+      call: async () => { throw controller.signal.reason },
+    },
+  }
+
+  const rejection = await composerEnhancerCall.invoke(
+    remote,
+    { payload: remotePayload() },
+    controller.signal,
+  ).catch((error: unknown) => error)
+
+  expect(rejection).toBe(controller.signal.reason)
+  expect(rejection).toMatchObject({ name: 'AbortError' })
+})
+
+it('maps an ordinary Remote rejection to a sanitized model failure', async () => {
+  const cause = new Error('provider credential and private text')
+  const remote = {
+    composerEnhancer: {
+      call: async () => { throw cause },
+    },
+  }
+
+  const rejection = await composerEnhancerCall.invoke(remote, { payload: remotePayload() })
+    .catch((error: unknown) => error)
+
+  expect(rejection).not.toBe(cause)
+  expect(rejection).toMatchObject({ name: 'AuxiliaryError', code: 'MODEL_FAILED' })
+  expect((rejection as Error).message).not.toContain('provider credential')
+})
+
+it('aborts pending optimization and hides the button on a real form notification', async () => {
+  const ctx = new Context()
+  contexts.push(ctx)
+  const listeners = new Set<() => void>()
+  let value: { optimizeEnabled?: boolean } = { optimizeEnabled: true }
+  const form = {
+    getSnapshot: () => ({ value }),
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+  }
+  const registrations: Array<{
+    name: string
+    inject: (sessionId: SessionId) => { session: ComposerSession }
+  }> = []
+  const register = vi.fn((options: {
+    name: string
+    inject: (sessionId: SessionId) => { session: ComposerSession }
+  }) => {
+    registrations.push(options)
+    return () => {}
+  })
+  const mount = vi.fn(async () => () => {})
+  ctx.provide('remote', {
+    $mount: mount,
+    pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
+  } as never)
+  ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
+  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
+  ctx.provide('slots', {
+    inject: (_key: string, registerEntry: () => () => void) => { registerEntry(); return () => {} },
+    register,
+  } as never)
+  let requestSignal: AbortSignal | undefined
+  const method = composerEnhancerCall as unknown as {
+    invoke: (remote: unknown, input: unknown, signal?: AbortSignal) => Promise<never>
+  }
+  vi.spyOn(method, 'invoke').mockImplementation((_remote, _input, signal) => {
+    requestSignal = signal
+    return new Promise(() => {})
+  })
+  ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
+  await ctx.plugin({ apply })
+  await vi.waitFor(() => {
+    expect(registrations.some(entry => entry.name === 'conversation.input.right')).toBe(true)
+  })
+  const registration = registrations.find(entry => entry.name === 'conversation.input.right')
+  expect(registration).toBeDefined()
+  const sessionId = 'session-1' as SessionId
+  const session = registration!.inject(sessionId).session
+  session.attach({ replace: () => false, setDraft: () => {} })
+  session.sync({ sessionId, draft: 'source', draftRev: 1, selection: { start: 0, end: 0 }, occurrences: [], running: false }, [], false)
+  const t = ((key: string) => key) as ComposerControlsProps['t']
+  render(createElement(ComposerControls, { session, t }))
+
+  act(() => { void session.optimize() })
+  expect(screen.getByRole('button', { name: 'optimizePending' })).toBeTruthy()
+  expect(requestSignal?.aborted).toBe(false)
+
+  act(() => {
+    value = { optimizeEnabled: false }
+    for (const listener of listeners) listener()
+  })
+
+  expect(requestSignal?.aborted).toBe(true)
+  expect(screen.queryByRole('button')).toBeNull()
+})
