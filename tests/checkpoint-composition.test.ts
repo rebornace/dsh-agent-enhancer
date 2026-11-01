@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -6,6 +6,16 @@ import { MessageId } from '@deepseek-ai/dsh-llm'
 import { SessionStore } from '@deepseek-ai/dsh-session'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, expect, it, vi } from 'vitest'
+
+const io = vi.hoisted(() => ({ readFile: vi.fn() }))
+vi.mock('node:fs/promises', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  const readFile = ((...args: unknown[]) => {
+    io.readFile(...args)
+    return Reflect.apply(actual.readFile, undefined, args)
+  }) as unknown as typeof actual.readFile
+  return { ...actual, readFile }
+})
 import { CheckpointStore } from '../src/host/checkpoint/store.ts'
 import {
   apply,
@@ -24,6 +34,7 @@ afterEach(async () => {
   if (previousDshHome === undefined) delete process.env.DSH_HOME
   else process.env.DSH_HOME = previousDshHome
   for (const directory of temporaryDirectories.splice(0)) await rm(directory, { recursive: true, force: true })
+  vi.restoreAllMocks()
 })
 
 it('assembles the guarded rollback service beside the model Remote and disposes both contributions', async () => {
@@ -87,33 +98,43 @@ function appendUser(session: Session, turn: number, text: string) {
   }, { surfaceOp: 'append' })
 }
 
-async function runFileTurn(h: Awaited<ReturnType<typeof captureFixture>>) {
+async function runFileTurn(
+  h: Awaited<ReturnType<typeof captureFixture>>,
+  turn = 2,
+  paths: readonly string[] = ['note.txt'],
+) {
   const prompt = {
-    id: MessageId('user-2'), role: 'user' as const,
-    content: [{ type: 'text' as const, text: 'second prompt' }], source: { kind: 'user' as const },
+    id: MessageId(`user-${turn}`), role: 'user' as const,
+    content: [{ type: 'text' as const, text: `prompt ${turn}` }], source: { kind: 'user' as const },
   }
   await h.ctx.waterfall('agent/pre-step', {
-    agent: h.agent, messages: [prompt], turn: 2, step: 0, signal: new AbortController().signal,
+    agent: h.agent, messages: [prompt], turn, step: 0, signal: new AbortController().signal,
   } as never, async () => ({ kind: 'enter', messages: [prompt] }))
-  h.session.append('turn/start', { turn: 2 })
-  appendUser(h.session, 2, 'second prompt')
-  const absolutePath = join(h.workspaceRoot, 'note.txt')
-  const target = { absolutePath, displayPath: absolutePath }
-  const exec = {
-    agent: h.agent,
-    name: 'write_file',
-    arguments: { path: 'note.txt' },
-    signal: new AbortController().signal,
+  h.session.append('turn/start', { turn })
+  appendUser(h.session, turn, `prompt ${turn}`)
+  for (const path of paths) {
+    const absolutePath = join(h.workspaceRoot, path)
+    const target = { absolutePath, displayPath: absolutePath }
+    const exec = {
+      agent: h.agent,
+      name: 'write_file',
+      arguments: { path },
+      signal: new AbortController().signal,
+    }
+    await h.ctx.waterfall('tools/execute', exec as never, async () => {
+      await h.ctx.waterfall('fs/write-intent', target as never, exec, () => undefined)
+      await writeFile(absolutePath, `after ${turn}`, 'utf8')
+      return { value: null, content: [], isError: false }
+    })
   }
-  await h.ctx.waterfall('tools/execute', exec as never, async () => {
-    await h.ctx.waterfall('fs/write-intent', target as never, exec, () => undefined)
-    await writeFile(absolutePath, 'after', 'utf8')
-    return { value: null, content: [], isError: false }
-  })
   await h.ctx.waterfall('agent/pre-step', {
-    agent: h.agent, messages: [], turn: 2, step: 1, signal: new AbortController().signal,
+    agent: h.agent, messages: [], turn, step: 1, signal: new AbortController().signal,
   } as never, async () => ({ kind: 'enter', messages: [] }))
-  h.session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+  h.session.append('turn/end', { turn, reason: { kind: 'completed' } })
+}
+
+async function setRollbackEnabled(ctx: Context, enabled: boolean) {
+  await ctx.waterfall(ctx.fiber, 'internal/update', Config({ rollbackEnabled: enabled }), false, () => {})
 }
 
 it('captures a real turn and file before-image only after the independent switch is enabled', async () => {
@@ -140,7 +161,7 @@ it('captures a real turn and file before-image only after the independent switch
     sessionId: h.session.id,
     turn: 2,
     atSeq: 2,
-    prompt: 'second prompt',
+    prompt: 'prompt 2',
     coverage: 'complete',
     files: [{ path: 'note.txt', change: 'modify', beforeText: 'before' }],
   })
@@ -152,4 +173,58 @@ it('captures a real turn and file before-image only after the independent switch
   h.session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
   await Promise.resolve()
   expect(await h.store.list(h.session.id)).toHaveLength(1)
+})
+
+it('follows runtime enable, disable, and re-enable in one Context without relying on initial config', async () => {
+  const h = await captureFixture(false)
+  h.session.append('turn/start', { turn: 1 })
+  appendUser(h.session, 1, 'first prompt')
+  h.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  await writeFile(join(h.workspaceRoot, 'note.txt'), 'before', 'utf8')
+
+  await setRollbackEnabled(h.ctx, true)
+  await runFileTurn(h, 2)
+  await vi.waitFor(async () => {
+    expect(await h.store.list(h.session.id)).toHaveLength(1)
+  })
+
+  await setRollbackEnabled(h.ctx, false)
+  await runFileTurn(h, 3)
+  await Promise.resolve()
+  expect(await h.store.list(h.session.id)).toHaveLength(1)
+
+  await setRollbackEnabled(h.ctx, true)
+  await runFileTurn(h, 4)
+  await vi.waitFor(async () => {
+    expect(await h.store.list(h.session.id)).toHaveLength(2)
+  })
+  expect((await h.store.list(h.session.id)).map(checkpoint => checkpoint.turn)).toEqual([2, 4])
+})
+
+it('never reads or saves excluded file contents during live capture', async () => {
+  const h = await captureFixture(true)
+  h.session.append('turn/start', { turn: 1 })
+  appendUser(h.session, 1, 'first prompt')
+  h.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  const paths = ['.env', '.git/config', 'node_modules/pkg/index.js'] as const
+  const secrets = ['ENV_SECRET_VALUE', 'GIT_SECRET_VALUE', 'NODE_MODULES_SECRET_VALUE'] as const
+  await mkdir(join(h.workspaceRoot, '.git'), { recursive: true })
+  await mkdir(join(h.workspaceRoot, 'node_modules/pkg'), { recursive: true })
+  for (const [index, path] of paths.entries()) {
+    await writeFile(join(h.workspaceRoot, path), secrets[index]!, 'utf8')
+  }
+  const read = io.readFile
+
+  await runFileTurn(h, 2, paths)
+
+  await vi.waitFor(async () => {
+    expect(await h.store.list(h.session.id)).toHaveLength(1)
+  })
+  const [checkpoint] = await h.store.list(h.session.id)
+  expect(checkpoint).toMatchObject({ coverage: 'partial', files: [] })
+  const serialized = JSON.stringify(checkpoint)
+  for (const [index, path] of paths.entries()) {
+    expect(serialized).not.toContain(secrets[index]!)
+    expect(read.mock.calls.filter(call => String(call[0]) === join(h.workspaceRoot, path))).toEqual([])
+  }
 })

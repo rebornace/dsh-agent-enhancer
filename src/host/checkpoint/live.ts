@@ -7,7 +7,7 @@ import type { SessionStore } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { captureCheckpoint } from './capture.ts'
-import { readSnapshot, snapshotHash } from './files.ts'
+import { readSnapshot, snapshotHash, unsafePath } from './files.ts'
 import type { CurrentSnapshot } from './files.ts'
 import type { CheckpointStore } from './store.ts'
 import type { FileCheckpoint } from './types.ts'
@@ -164,6 +164,10 @@ export class DshCheckpointCapture {
         return
       }
       const path = relativePath.split(sep).join('/')
+      if (unsafePath(path)) {
+        turn.incomplete = true
+        return
+      }
       if (turn.files.has(path) || turn.capturing.has(path)) return
       turn.capturing.add(path)
       try {
@@ -197,9 +201,35 @@ export class DshCheckpointCapture {
   }
 }
 
-export function applyCheckpointCapture(ctx: Context, options: CheckpointCaptureOptions): void {
-  ctx.effect(() => {
-    const capture = new DshCheckpointCapture(ctx, options)
-    return async () => { await capture.close() }
-  })
+export class DshCheckpointCaptureSwitch {
+  private capture: DshCheckpointCapture | undefined
+  private readonly closing = new Set<Promise<void>>()
+  private closed = false
+
+  constructor(private readonly ctx: Context, private readonly options: CheckpointCaptureOptions) {}
+
+  setEnabled(enabled: boolean): void {
+    if (this.closed) return
+    if (enabled) {
+      if (this.capture === undefined) this.capture = new DshCheckpointCapture(this.ctx, this.options)
+      return
+    }
+    this.stop()
+  }
+
+  async close(): Promise<void> {
+    if (this.closed) return
+    this.closed = true
+    this.stop()
+    await Promise.allSettled([...this.closing])
+  }
+
+  private stop(): void {
+    const current = this.capture
+    this.capture = undefined
+    if (current === undefined) return
+    const closing = current.close()
+    this.closing.add(closing)
+    void closing.finally(() => { this.closing.delete(closing) })
+  }
 }

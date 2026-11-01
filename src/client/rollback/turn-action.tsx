@@ -91,8 +91,10 @@ export function RollbackTurnAction(props: RollbackTurnActionProps) {
   }, [props.rollback, turn.turn])
 
   if (!snapshot.enabled) return null
-  const disabledReason = session.running ? 'rollbackUnavailableRunning' as const
-    : turn.status !== 'closed' ? 'rollbackTurnOpen' as const
+  const canExecute = props.useAccess('checkpointRollback/execute')
+  const disabledReason = canExecute === false ? 'rollbackUnavailablePermission' as const
+    : session.running ? 'rollbackUnavailableRunning' as const
+      : turn.status !== 'closed' ? 'rollbackTurnOpen' as const
       : turn.start === undefined ? 'rollbackTurnStartMissing' as const
         : turn.start.seq <= 0 ? 'rollbackUnavailableFirstTurn' as const : null
   const blocked = active?.preview === undefined || active.preview.unavailable.length > 0 || active.preview.conflicts.length > 0

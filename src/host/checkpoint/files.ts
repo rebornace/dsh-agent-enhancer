@@ -134,7 +134,7 @@ function pathKey(path: string): string {
   return process.platform === 'win32' ? segments(path).map(canonicalSegment).join('/') : path
 }
 
-function unsafePath(path: string): boolean {
+export function unsafePath(path: string): boolean {
   if (!path || path.includes('\0') || isAbsolute(path) || win32.isAbsolute(path) || /^[a-z]:/i.test(path)) return true
   return segments(path).some(segment => {
     if (!segment || segment === '.' || segment === '..') return true
@@ -183,6 +183,7 @@ async function writeJournalAtomic(path: string, value: unknown): Promise<void> {
 }
 
 export async function readSnapshot(workspaceRoot: string, path: string): Promise<CurrentSnapshot> {
+  if (unsafePath(path)) throw new InspectionFailure('unsafe-path')
   let current = resolve(workspaceRoot)
   const target = absolutePath(workspaceRoot, path)
   for (const segment of segments(path)) {

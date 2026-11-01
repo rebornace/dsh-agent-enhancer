@@ -88,6 +88,7 @@ function translate(key: string, params?: Record<string, unknown>): string {
 function setup(options: {
   enabled?: boolean
   running?: boolean
+  canRestore?: boolean
   remote?: RollbackRemote
   turn?: TurnLocation
 } = {}) {
@@ -99,6 +100,8 @@ function setup(options: {
     persistDraft: vi.fn(),
     submit: vi.fn(),
   } as unknown as InputActions
+  const useAccess = vi.fn((action: string) => action === 'checkpointRollback/execute'
+    ? options.canRestore ?? true : true)
   const props = {
     sessionId,
     turn: options.turn ?? turnFixture(),
@@ -106,6 +109,7 @@ function setup(options: {
     openFile: vi.fn(),
     inputActions: actions,
     useSession: (selector: (state: { running: boolean }) => unknown) => selector({ running: options.running ?? false }),
+    useAccess,
     t: translate,
     rollback,
   } as unknown as RollbackTurnActionProps
@@ -115,6 +119,7 @@ function setup(options: {
     actions,
     rollback,
     remote,
+    useAccess,
     setEnabled(value: boolean) {
       enabled = value
       rollback.refreshSettings()
@@ -158,6 +163,14 @@ describe('RollbackTurnAction', () => {
     expect(screen.getByRole('button', { name: 'Roll back to here' }).getAttribute('title')).toBe('The session is still running')
     h.rerenderTurn(turnFixture())
     expect(screen.getByRole('button', { name: 'Roll back to here' })).toHaveProperty('disabled', false)
+  })
+
+  it('uses Slot execute access to disable the entry with a permission reason when available', () => {
+    const h = setup({ canRestore: false })
+    const button = screen.getByRole('button', { name: 'Roll back to here' })
+    expect(button).toHaveProperty('disabled', true)
+    expect(button.getAttribute('title')).toBe('Restore permission is unavailable')
+    expect(h.useAccess).toHaveBeenCalledWith('checkpointRollback/execute')
   })
 
   it('previews messages, tracked files, gaps, and conflicts without writing before confirmation', async () => {

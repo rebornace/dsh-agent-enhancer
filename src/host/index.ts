@@ -6,7 +6,7 @@ import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protoc
 import type {} from '@deepseek-ai/dsh-typert-registry'
 import { AuxiliaryError } from '../errors.ts'
 import { DshCheckpointSessions } from './checkpoint/dsh.ts'
-import { applyCheckpointCapture } from './checkpoint/live.ts'
+import { DshCheckpointCaptureSwitch } from './checkpoint/live.ts'
 import { CheckpointRollbackError, CheckpointRollbackService } from './checkpoint/service.ts'
 import type { CheckpointRollbackRequest } from './checkpoint/service.ts'
 import { CheckpointStore } from './checkpoint/store.ts'
@@ -70,17 +70,30 @@ export function apply(ctx: Context, config: Config): void {
   )
   const store = new CheckpointStore(storageRoot)
   const sessions = new DshCheckpointSessions(ctx)
+  let rollbackEnabled = config.rollbackEnabled.get()
   const rollback = new CheckpointRollbackService({
     store,
     storageRoot,
     pluginVersion: '0.1.5',
     resolveSession: sessions.resolveSession,
-    isEnabled: () => config.rollbackEnabled.get(),
+    isEnabled: () => rollbackEnabled,
   })
   applyCheckpointRollback(ctx, rollback)
-  if (config.rollbackEnabled.get()) {
-    applyCheckpointCapture(ctx, { store, pluginVersion: '0.1.5' })
-  }
+
+  const captures = new DshCheckpointCaptureSwitch(ctx, { store, pluginVersion: '0.1.5' })
+  ctx.effect(() => {
+    const unsubscribe = ctx.on('internal/update', (updated, _noSave, next) => {
+      rollbackEnabled = (updated as Config).rollbackEnabled.get()
+      captures.setEnabled(rollbackEnabled)
+      next()
+    })
+    captures.setEnabled(rollbackEnabled)
+    return async () => {
+      unsubscribe()
+      rollbackEnabled = false
+      await captures.close()
+    }
+  })
 }
 
 export const checkpointHostContribution = {
