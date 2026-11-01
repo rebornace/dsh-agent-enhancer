@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -51,6 +51,32 @@ async function expectMissing(path: string): Promise<void> {
   await expect(access(path)).rejects.toMatchObject({ code: 'ENOENT' })
 }
 
+async function seedPendingJournal(id: string, createdAt: number, currentText: string, restoredText: string): Promise<void> {
+  const store = new CheckpointStore(storageRoot)
+  await store.beginJournal({
+    schemaVersion: 1,
+    id,
+    sessionId,
+    checkpointId: 'checkpoint-1',
+    status: 'files-restored',
+    createdAt,
+  })
+  const directory = join(storageRoot, 'file-journals')
+  await mkdir(directory, { recursive: true })
+  await writeFile(join(directory, `${digest(id)}.json`), JSON.stringify({
+    schemaVersion: 1,
+    id,
+    snapshots: [{
+      path: 'file.txt',
+      exists: true,
+      text: currentText,
+      afterHash: digest(currentText),
+      beforeHash: digest(restoredText),
+    }],
+    completed: ['file.txt'],
+  }), 'utf8')
+}
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'dsh-checkpoint-files-'))
   roots.push(root)
@@ -70,10 +96,10 @@ describe('CheckpointFiles', () => {
     const file = checkpointFile('created.txt', 'create', null, 'after')
 
     await expect(manager().verifyCurrent([file])).resolves.toEqual([])
-    const journal = await manager().restoreFiles([file])
+    const journal = await manager().runTransaction([file])
 
     await expectMissing(path)
-    expect(journal.status).toBe('files-restored')
+    expect(journal.status).toBe('completed')
   })
 
   it('restores a modified file from its before-image', async () => {
@@ -81,7 +107,7 @@ describe('CheckpointFiles', () => {
     await writeFile(path, 'after', 'utf8')
     const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
 
-    await manager().restoreFiles([file])
+    await manager().runTransaction([file])
 
     await expect(readFile(path, 'utf8')).resolves.toBe('before')
   })
@@ -90,7 +116,7 @@ describe('CheckpointFiles', () => {
     const path = join(workspaceRoot, 'nested', 'deleted.txt')
     const file = checkpointFile('nested/deleted.txt', 'delete', 'before', null)
 
-    await manager().restoreFiles([file])
+    await manager().runTransaction([file])
 
     await expect(readFile(path, 'utf8')).resolves.toBe('before')
   })
@@ -104,7 +130,7 @@ describe('CheckpointFiles', () => {
       checkpointFile('deleted.txt', 'delete', 'deleted before', null),
     ]
 
-    await manager().restoreFiles(files)
+    await manager().runTransaction(files)
 
     await expectMissing(join(workspaceRoot, 'created.txt'))
     await expect(readFile(join(workspaceRoot, 'modified.txt'), 'utf8')).resolves.toBe('modified before')
@@ -125,7 +151,7 @@ describe('CheckpointFiles', () => {
     await expect(filesManager.verifyCurrent(files)).resolves.toEqual([
       { path: 'second.txt', reason: 'hash-mismatch', expectedHash: digest('second after'), actualHash: digest('concurrent edit') },
     ])
-    await expect(filesManager.restoreFiles(files)).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(filesManager.runTransaction(files)).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
     await expect(readFile(firstPath, 'utf8')).resolves.toBe('first after')
     await expect(readFile(secondPath, 'utf8')).resolves.toBe('concurrent edit')
     await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toEqual([])
@@ -144,7 +170,7 @@ describe('CheckpointFiles', () => {
     const filesManager = manager()
 
     await expect(filesManager.verifyCurrent([file])).resolves.toMatchObject([{ path: unsafePath, reason }])
-    await expect(filesManager.restoreFiles([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(filesManager.runTransaction([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
   })
 
   it('rejects binary current content', async () => {
@@ -172,7 +198,7 @@ describe('CheckpointFiles', () => {
     const file = checkpointFile('linked.txt', 'modify', 'before', 'after')
 
     await expect(manager().verifyCurrent([file])).resolves.toMatchObject([{ path: 'linked.txt', reason: 'symlink' }])
-    await expect(manager().restoreFiles([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(manager().runTransaction([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
     await expect(readFile(target, 'utf8')).resolves.toBe('after')
   })
 
@@ -184,7 +210,7 @@ describe('CheckpointFiles', () => {
     const file = checkpointFile('escape/file.txt', 'modify', 'before', 'after')
 
     await expect(manager().verifyCurrent([file])).resolves.toMatchObject([{ path: 'escape/file.txt', reason: 'symlink' }])
-    await expect(manager().restoreFiles([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(manager().runTransaction([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
     await expect(readFile(join(outside, 'file.txt'), 'utf8')).resolves.toBe('after')
   })
 
@@ -206,7 +232,7 @@ describe('CheckpointFiles', () => {
     await expect(manager({
       write: (path, text) => failAtStep(() => writeFile(path, text, 'utf8')),
       remove: path => failAtStep(() => rm(path, { force: true })),
-    }).restoreFiles(files)).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+    }).runTransaction(files)).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
 
     await expect(readFile(join(workspaceRoot, 'modified.txt'), 'utf8')).resolves.toBe('modified after')
     await expect(readFile(join(workspaceRoot, 'created.txt'), 'utf8')).resolves.toBe('created after')
@@ -218,12 +244,11 @@ describe('CheckpointFiles', () => {
     const path = join(workspaceRoot, 'modified.txt')
     await writeFile(path, 'after', 'utf8')
     const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
-    const journal = await manager().restoreFiles([file])
-    await expect(readFile(path, 'utf8')).resolves.toBe('before')
 
-    await journal.compensate()
+    await expect(manager().runTransaction([file], async () => {
+      throw new Error('surface append failed')
+    })).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
 
-    expect(journal.status).toBe('compensated')
     await expect(readFile(path, 'utf8')).resolves.toBe('after')
     await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toEqual([])
   })
@@ -233,9 +258,8 @@ describe('CheckpointFiles', () => {
     await writeFile(path, 'after', 'utf8')
     const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
     const store = new CheckpointStore(storageRoot)
-    const journal = await manager().restoreFiles([file])
 
-    await journal.complete('completed')
+    const journal = await manager().runTransaction([file])
 
     expect(journal.status).toBe('completed')
     await expect(readFile(path, 'utf8')).resolves.toBe('before')
@@ -246,12 +270,12 @@ describe('CheckpointFiles', () => {
     const path = join(workspaceRoot, 'modified.txt')
     await writeFile(path, 'after', 'utf8')
     const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
-    const journal = await manager().restoreFiles([file])
     const sidecar = join(storageRoot, 'file-journals', `${digest('restore-1')}.json`)
-    await rm(sidecar)
-    await mkdir(sidecar)
 
-    await expect(journal.complete('completed')).resolves.toBeUndefined()
+    const journal = await manager().runTransaction([file], async () => {
+      await rm(sidecar)
+      await mkdir(sidecar)
+    })
 
     expect(journal.status).toBe('completed')
     await expect(readFile(path, 'utf8')).resolves.toBe('before')
@@ -259,13 +283,11 @@ describe('CheckpointFiles', () => {
   })
 
   it('recovers a files-restored crash by restoring the pre-restore image', async () => {
-    const path = join(workspaceRoot, 'modified.txt')
-    await writeFile(path, 'after', 'utf8')
-    const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
-    await manager().restoreFiles([file])
-    await expect(readFile(path, 'utf8')).resolves.toBe('before')
+    const path = join(workspaceRoot, 'file.txt')
+    await writeFile(path, 'before', 'utf8')
+    await seedPendingJournal('restore-1', 100, 'after', 'before')
 
-    await manager().recoverFiles()
+    await manager().recoverFiles(() => false)
 
     await expect(readFile(path, 'utf8')).resolves.toBe('after')
     await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toEqual([])
@@ -298,10 +320,10 @@ describe('CheckpointFiles', () => {
       remove: path => inject(() => rm(path, { force: true })),
     })
 
-    await expect(failing.restoreFiles(files)).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+    await expect(failing.runTransaction(files)).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
     await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toMatchObject([{ status: 'prepared' }])
 
-    await manager().recoverFiles()
+    await manager().recoverFiles(() => false)
 
     await expect(readFile(join(workspaceRoot, 'first.txt'), 'utf8')).resolves.toBe('first after')
     await expect(readFile(join(workspaceRoot, 'second.txt'), 'utf8')).resolves.toBe('second after')
@@ -316,14 +338,14 @@ describe('CheckpointFiles', () => {
       checkpointFile('created.txt', 'create', null, 'created after'),
       checkpointFile('deleted.txt', 'delete', 'deleted before', null),
     ]
-
-    await manager().restoreFiles(files)
-
     const sidecar = join(storageRoot, 'file-journals', `${digest('restore-1')}.json`)
-    const stored = JSON.parse(await readFile(sidecar, 'utf8')) as unknown
-    expect(stored).toMatchObject({
-      id: 'restore-1',
-      completed: ['modified.txt', 'created.txt', 'deleted.txt'],
+
+    await manager().runTransaction(files, async () => {
+      const stored = JSON.parse(await readFile(sidecar, 'utf8')) as unknown
+      expect(stored).toMatchObject({
+        id: 'restore-1',
+        completed: ['modified.txt', 'created.txt', 'deleted.txt'],
+      })
     })
   })
 
@@ -349,11 +371,199 @@ describe('CheckpointFiles', () => {
     }
 
     const journals = await Promise.all([
-      manager(operations, 'restore-1').restoreFiles([first]),
-      manager(operations, 'restore-2').restoreFiles([second]),
+      manager(operations, 'restore-1').runTransaction([first]),
+      manager(operations, 'restore-2').runTransaction([second]),
     ])
 
     expect(maximumActive).toBe(1)
-    await Promise.all(journals.map(journal => journal.complete('completed')))
+    expect(journals.map(journal => journal.status)).toEqual(['completed', 'completed'])
+  })
+
+  it('preserves a UTF-8 BOM in conflict checks and restored content', async () => {
+    const path = join(workspaceRoot, 'bom.txt')
+    await writeFile(path, '\uFEFFafter', 'utf8')
+    const file = checkpointFile('bom.txt', 'modify', '\uFEFFbefore', '\uFEFFafter')
+    const filesManager = manager()
+
+    await expect(filesManager.verifyCurrent([file])).resolves.toEqual([])
+    await filesManager.runTransaction([file])
+
+    await expect(readFile(path, 'utf8')).resolves.toBe('\uFEFFbefore')
+  })
+
+  it('preserves a UTF-8 BOM when compensating a surface failure', async () => {
+    const path = join(workspaceRoot, 'bom.txt')
+    await writeFile(path, '\uFEFFafter', 'utf8')
+    const file = checkpointFile('bom.txt', 'modify', '\uFEFFbefore', '\uFEFFafter')
+
+    await expect(manager().runTransaction([file], async () => {
+      throw new Error('surface append failed')
+    })).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+
+    await expect(readFile(path, 'utf8')).resolves.toBe('\uFEFFafter')
+  })
+
+  it('rejects a before-image whose beforeHash does not match beforeText', async () => {
+    const path = join(workspaceRoot, 'modified.txt')
+    await writeFile(path, 'after', 'utf8')
+    const file = {
+      ...checkpointFile('modified.txt', 'modify', 'before', 'after'),
+      beforeHash: digest('forged'),
+    }
+
+    await expect(manager().verifyCurrent([file])).resolves.toMatchObject([{ reason: 'invalid-before-image' }])
+    await expect(manager().runTransaction([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(readFile(path, 'utf8')).resolves.toBe('after')
+  })
+
+  it.each(['.git.', '.git ', 'node_modules./pkg/file.txt', 'NODE_MODULES /pkg/file.txt', '.ENV.'])(
+    'rejects Windows path alias %s', async path => {
+      const file = checkpointFile(path, 'delete', 'before', null)
+
+      await expect(manager().verifyCurrent([file])).resolves.toMatchObject([{ reason: 'unsafe-path' }])
+      await expect(manager().runTransaction([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    },
+  )
+
+  it.runIf(process.platform !== 'win32')('stores before-image sidecars with owner-only permissions', async () => {
+    const path = join(workspaceRoot, 'modified.txt')
+    await writeFile(path, 'after', 'utf8')
+    const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
+    const sidecar = join(storageRoot, 'file-journals', `${digest('restore-1')}.json`)
+
+    await manager().runTransaction([file], async () => {
+      expect((await stat(sidecar)).mode & 0o777).toBe(0o600)
+    })
+  })
+
+  it('rejects compensated transitions or compensation after completion', async () => {
+    const path = join(workspaceRoot, 'modified.txt')
+    await writeFile(path, 'after', 'utf8')
+    const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
+    const journal = await manager().runTransaction([file])
+
+    await expect(journal.complete('compensated')).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+    await expect(journal.compensate()).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+    await expect(readFile(path, 'utf8')).resolves.toBe('before')
+  })
+
+  it('rejects preparing a journal again after completion', async () => {
+    const path = join(workspaceRoot, 'modified.txt')
+    await writeFile(path, 'after', 'utf8')
+    const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
+    const journal = await manager().runTransaction([file])
+
+    await expect(journal.complete('prepared')).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+    expect(journal.status).toBe('completed')
+  })
+
+  it('compensates consecutive pending journals in reverse creation order', async () => {
+    await writeFile(join(workspaceRoot, 'file.txt'), 'two', 'utf8')
+    await seedPendingJournal('restore-1', 100, 'original', 'one')
+    await seedPendingJournal('restore-2', 200, 'one', 'two')
+
+    await manager().recoverFiles(() => false)
+
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('original')
+  })
+
+  it('completes rather than compensates when surface append survived a crash', async () => {
+    await writeFile(join(workspaceRoot, 'file.txt'), 'one', 'utf8')
+    await seedPendingJournal('restore-1', 100, 'original', 'one')
+
+    await manager().recoverFiles(() => true)
+
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('one')
+    await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toEqual([])
+  })
+
+  it('holds the Session transaction lock through surface append and completion', async () => {
+    await writeFile(join(workspaceRoot, 'first.txt'), 'first after', 'utf8')
+    await writeFile(join(workspaceRoot, 'second.txt'), 'second after', 'utf8')
+    const first = checkpointFile('first.txt', 'modify', 'first before', 'first after')
+    const second = checkpointFile('second.txt', 'modify', 'second before', 'second after')
+    const events: string[] = []
+
+    const journals = await Promise.all([
+      manager(undefined, 'restore-1').runTransaction([first], async () => {
+        events.push('append-1-start')
+        await new Promise<void>(resolve => { setTimeout(resolve, 25) })
+        events.push('append-1-end')
+      }),
+      manager(undefined, 'restore-2').runTransaction([second], async () => {
+        events.push('append-2')
+      }),
+    ])
+
+    expect(events).toEqual(['append-1-start', 'append-1-end', 'append-2'])
+    expect(journals.map(journal => journal.status)).toEqual(['completed', 'completed'])
+  })
+
+  it('rechecks afterHash before each file mutation and compensates earlier files', async () => {
+    const firstPath = join(workspaceRoot, 'first.txt')
+    const secondPath = join(workspaceRoot, 'second.txt')
+    await writeFile(firstPath, 'first after', 'utf8')
+    await writeFile(secondPath, 'second after', 'utf8')
+    const files = [
+      checkpointFile('first.txt', 'modify', 'first before', 'first after'),
+      checkpointFile('second.txt', 'modify', 'second before', 'second after'),
+    ]
+    const operations: CheckpointFileOperations = {
+      write: async (path, text) => {
+        if (path === firstPath) await writeFile(secondPath, 'external edit', 'utf8')
+        await writeFile(path, text, 'utf8')
+      },
+      remove: path => rm(path, { force: true }),
+    }
+
+    await expect(manager(operations).runTransaction(files, async () => {}))
+      .rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+
+    await expect(readFile(firstPath, 'utf8')).resolves.toBe('first after')
+    await expect(readFile(secondPath, 'utf8')).resolves.toBe('external edit')
+  })
+
+  it('rechecks for directory links introduced between file steps', async () => {
+    const firstPath = join(workspaceRoot, 'first.txt')
+    const secondDirectory = join(workspaceRoot, 'second')
+    const outside = join(root, 'outside')
+    await writeFile(firstPath, 'first after', 'utf8')
+    await mkdir(secondDirectory)
+    await writeFile(join(secondDirectory, 'file.txt'), 'second after', 'utf8')
+    await mkdir(outside)
+    await writeFile(join(outside, 'file.txt'), 'outside original', 'utf8')
+    const files = [
+      checkpointFile('first.txt', 'modify', 'first before', 'first after'),
+      checkpointFile('second/file.txt', 'modify', 'second before', 'second after'),
+    ]
+    const operations: CheckpointFileOperations = {
+      write: async (path, text) => {
+        if (path === firstPath) {
+          await rm(secondDirectory, { recursive: true })
+          await symlink(outside, secondDirectory, process.platform === 'win32' ? 'junction' : 'dir')
+        }
+        await writeFile(path, text, 'utf8')
+      },
+      remove: path => rm(path, { force: true }),
+    }
+
+    await expect(manager(operations).runTransaction(files)).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+
+    await expect(readFile(firstPath, 'utf8')).resolves.toBe('first after')
+    await expect(readFile(join(outside, 'file.txt'), 'utf8')).resolves.toBe('outside original')
+  })
+
+  it('does not overwrite an external edit made before compensation', async () => {
+    const path = join(workspaceRoot, 'modified.txt')
+    await writeFile(path, 'after', 'utf8')
+    const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
+
+    await expect(manager().runTransaction([file], async () => {
+      await writeFile(path, 'external edit', 'utf8')
+      throw new Error('surface append failed')
+    })).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+
+    await expect(readFile(path, 'utf8')).resolves.toBe('external edit')
+    await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toMatchObject([{ status: 'files-restored' }])
   })
 })
