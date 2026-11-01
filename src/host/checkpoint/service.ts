@@ -107,6 +107,13 @@ function markerId(journalId: string): MessageId {
   return MessageId(`${MARKER_PREFIX}${journalId}`)
 }
 
+function isRollbackMarker(event: SessionEvent): boolean {
+  return event.type === 'developer/message'
+    && event.data.message.source.kind === 'checkpoint-rollback'
+    && event.data.message.content.length === 0
+    && event.data.message.id.startsWith(MARKER_PREFIX)
+}
+
 function abortError(): DOMException {
   return new DOMException('Checkpoint rollback was cancelled', 'AbortError')
 }
@@ -127,7 +134,6 @@ export class CheckpointRollbackService {
   private readonly lifetime = new AbortController()
   private readonly pending = new Set<Promise<unknown>>()
   private recovery: Promise<void> | undefined
-  private recovered = false
   private closing: Promise<void> | undefined
 
   constructor(private readonly options: CheckpointRollbackServiceOptions) {}
@@ -141,11 +147,12 @@ export class CheckpointRollbackService {
   }
 
   recover(): Promise<void> {
-    if (this.recovered) return Promise.resolve()
     if (this.recovery !== undefined) return this.recovery
     const operation = this.track(this.runRecovery())
     this.recovery = operation
-    return operation
+    return operation.finally(() => {
+      if (this.recovery === operation) this.recovery = undefined
+    })
   }
 
   close(): Promise<void> {
@@ -307,15 +314,17 @@ export class CheckpointRollbackService {
               operations: this.options.operations,
               now: this.options.now,
             })
-            await files.recoverFiles(journal => this.appendOccurred(adapter, journal))
+            await files.recoverFiles(async journal => {
+              if (!this.appendOccurred(adapter, journal)) return false
+              await adapter.synchronize(linked.signal)
+              return true
+            })
           } finally {
             linked.cleanup()
           }
         })
       }
-      this.recovered = true
     } catch (error) {
-      this.recovery = undefined
       if (error instanceof CheckpointRollbackError) throw error
       throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
     }
@@ -356,7 +365,8 @@ export class CheckpointRollbackService {
         || events.some((event, index) => event.seq !== index)) {
         unavailable.push('unknown-surface')
       } else {
-        if (events.some(event => event.seq > stored.atSeq && typeof event.surfaceOp === 'object')) {
+        if (events.some(event => event.seq > stored.atSeq && typeof event.surfaceOp === 'object'
+          && !isRollbackMarker(event))) {
           unavailable.push('compacted-surface')
         }
         const nodes = adapter.session.surface.nodes.filter(node => node > stored.atSeq)

@@ -400,6 +400,34 @@ describe('CheckpointRollbackService execute', () => {
     await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('after')
   })
 
+  it('previews and executes an earlier rollback after a successful rollback marker', async () => {
+    const h = harness()
+    await seedCheckpoint(h)
+    await h.service.execute({ sessionId, turn: 2 })
+    await h.store.save(checkpoint({
+      id: 'checkpoint-1',
+      turn: 1,
+      atSeq: 1,
+      prompt: 'first prompt',
+      createdAt: 90,
+      files: [fileCheckpoint('file.txt', 'modify', 'original', 'before')],
+    }))
+
+    const preview = await h.service.preview({ sessionId, turn: 1 })
+    expect(preview).toMatchObject({ unavailable: [], conflicts: [] })
+    await expect(h.service.execute({ sessionId, turn: 1 })).resolves.toEqual({
+      sessionId,
+      turn: 1,
+      draft: 'first prompt',
+    })
+
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('original')
+    expect(h.session.deriveMessages().map(message => message.id)).toEqual(['system'])
+    expect(h.adapter.readEvents().filter(event => event.type === 'developer/message'
+      && event.data.message.source.kind === 'checkpoint-rollback')).toHaveLength(2)
+    await expect(h.store.recoverJournal()).resolves.toEqual([])
+  })
+
   it('cancels an in-flight restore on close and compensates before surface append', async () => {
     let release!: () => void
     const gate = new Promise<void>(resolve => { release = resolve })
@@ -429,6 +457,40 @@ describe('CheckpointRollbackService execute', () => {
 })
 
 describe('CheckpointRollbackService journal recovery', () => {
+  it('blocks the same instance and every Session while a new pending journal cannot be recovered', async () => {
+    const h = harness({
+      createId: () => 'restore-1',
+      synchronize: async () => { throw new Error('projection remains unavailable') },
+    })
+    await seedCheckpoint(h)
+    await expect(h.service.execute({ sessionId, turn: 2 })).rejects.toMatchObject({ code: 'ROLLBACK_FAILED' })
+
+    await expect(h.service.preview({ sessionId, turn: 2 })).rejects.toMatchObject({ code: 'ROLLBACK_RECOVERY_FAILED' })
+    await expect(h.service.preview({ sessionId: SessionId('other-session'), turn: 2 }))
+      .rejects.toMatchObject({ code: 'ROLLBACK_RECOVERY_FAILED' })
+
+    await expect(h.store.recoverJournal()).resolves.toMatchObject([{ id: 'restore-1', status: 'files-restored' }])
+  })
+
+  it('retries synchronization on the same instance before completing an appended journal', async () => {
+    let synchronizations = 0
+    const h = harness({
+      createId: () => 'restore-1',
+      synchronize: async () => {
+        synchronizations += 1
+        if (synchronizations === 1) throw new Error('first projection attempt fails')
+      },
+    })
+    await seedCheckpoint(h)
+    await expect(h.service.execute({ sessionId, turn: 2 })).rejects.toMatchObject({ code: 'ROLLBACK_FAILED' })
+
+    await h.service.recover()
+
+    expect(synchronizations).toBe(2)
+    await expect(h.store.recoverJournal()).resolves.toEqual([])
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('before')
+  })
+
   it('completes a crash-pending journal when its surface append is present', async () => {
     const h = harness({
       createId: () => 'restore-1',
