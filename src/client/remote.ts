@@ -3,6 +3,7 @@ import type { TypertCodec, TypertRemoteContribution } from '@deepseek-ai/dsh-typ
 import { AuxiliaryError } from '../errors.ts'
 import type { RpcPayload } from '../host/rpc.ts'
 import type { AuxiliaryResult } from '../host/types.ts'
+import { checkpointClientRemoteInfo } from './rollback/remote.ts'
 
 type Call = (payload: RpcPayload, signal?: AbortSignal) => Promise<RemoteResult<AuxiliaryResult | null>>
 
@@ -33,7 +34,7 @@ export const clientRemoteInfo = {
     }],
     cancellation: { parameter: 'signal' },
     result: codec('dsh-composer-enhancer#AuxiliaryResult|null'),
-  }],
+  }, ...checkpointClientRemoteInfo.descriptors],
 } satisfies TypertRemoteContribution
 
 export const composerEnhancerCall = {

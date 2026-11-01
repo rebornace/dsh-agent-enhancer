@@ -168,7 +168,7 @@ function fixtureSessions(
 }
 
 function configForm() {
-  let value: EnhancerSettings = { historyEnabled: true, optimizeEnabled: true, predictEnabled: true }
+  let value: EnhancerSettings = { historyEnabled: true, optimizeEnabled: true, predictEnabled: true, rollbackEnabled: false }
   const listeners = new Set<() => void>()
   const form: ConfigForm<EnhancerSettings> = {
     getSnapshot: () => ({
@@ -222,11 +222,13 @@ it('loads through the official Loader without replacing the composer bar and cle
     $on: vi.fn(() => () => {}),
     $mount: vi.fn(async () => {
       ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
+      ctx.provide('remote.checkpointRollback', remote.checkpointRollback as never)
       return unmountRemote
     }),
     $host: {},
     session: {},
     pluginInventory: { list: vi.fn(() => inventory) },
+    checkpointRollback: { preview: vi.fn(), execute: vi.fn() },
   }
   const allowed = { getSnapshot: () => true, subscribe: () => () => {} }
   const failWorkspace = (operation: string) => () => {
@@ -342,6 +344,18 @@ it('loads through the official Loader without replacing the composer bar and cle
     }
     expect(ctx.slots.entries('conversation.composer.bar')[0]).toBe(officialBar)
     expect(ctx.slots.entries('settings.plugins.tab').map(entry => entry.options.id)).toContain('composer-enhancer')
+    expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
+    act(() => { settings.accept({ rollbackEnabled: true }) })
+    await vi.waitFor(() => {
+      expect(ctx.slots.entries('conversation.chat.turnTail').map(entry => entry.options.id))
+        .toEqual(['composer-enhancer-rollback'])
+    })
+    act(() => { settings.accept({ rollbackEnabled: false }) })
+    expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
+    act(() => { settings.accept({ rollbackEnabled: true }) })
+    await vi.waitFor(() => {
+      expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(1)
+    })
     expect(settings.listeners.size).toBeGreaterThan(baselineSettingsListeners)
     expect(document.querySelector('style[data-dsh-composer-enhancer]')).not.toBeNull()
     await vi.waitFor(() => {
@@ -391,6 +405,7 @@ it('loads through the official Loader without replacing the composer bar and cle
     })
     expect(ctx.slots.entries('conversation.input.right')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.input.overlay')).toHaveLength(0)
+    expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
     expect(ctx.slots.entries('settings.plugins.tab').map(entry => entry.options.id)).not.toContain('composer-enhancer')
     expect(ctx.slots.entries('conversation.composer.bar')[0]).toBe(officialBar)
     await vi.waitFor(() => { expect(settings.listeners.size).toBe(baselineSettingsListeners) })

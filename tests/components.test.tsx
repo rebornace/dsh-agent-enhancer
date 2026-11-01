@@ -42,6 +42,9 @@ const translations: Record<string, string> = {
   optimizeDescription: 'Optimize the draft or selection, with one-click undo',
   predict: 'Next-prompt prediction',
   predictDescription: 'One suggestion after a reply; Tab to accept',
+  rollback: 'Conversation and file rollback',
+  rollbackDescription: 'Preview and restore conversation and tracked files at eligible turn boundaries',
+  rollbackBoundary: 'External process, service, and untracked-file state is not restored; logs and checkpoints remain after disable.',
   privacyTitle: 'Data and privacy',
   privacy: 'Optimization and prediction send selected text or recent conversation to the current model provider. History never requests a model. No prompt content or acceptance-rate telemetry is collected.',
   coexistence: 'Similar official or third-party features are only reported; they are never disabled automatically.',
@@ -100,7 +103,7 @@ function settingsHarness(
 ) {
   let snapshot: ConfigFormSnapshot<EnhancerSettings> = {
     status: 'ready',
-    value: { historyEnabled: true, optimizeEnabled: true, predictEnabled: true, ...initial },
+    value: { historyEnabled: true, optimizeEnabled: true, predictEnabled: true, rollbackEnabled: false, ...initial },
     base: undefined,
     user: undefined,
     revision: 0,
@@ -876,16 +879,18 @@ describe('ComposerOverlay prompt history search', () => {
 })
 
 describe('PluginSettings', () => {
-  it('renders only the three module switches with privacy and coexistence explanations', () => {
+  it('renders three input switches and an independently disabled rollback switch with clear boundaries', () => {
     settingsHarness()
     expect(screen.getByText('Toggle input helpers as needed')).toBeTruthy()
     expect(screen.getByText('↑↓ revisit sent prompts; Alt+R to search (Ctrl+R in compatible environments)')).toBeTruthy()
     expect(screen.getByText('Optimize the draft or selection, with one-click undo')).toBeTruthy()
     expect(screen.getByText('One suggestion after a reply; Tab to accept')).toBeTruthy()
-    expect(screen.getAllByRole('switch')).toHaveLength(3)
+    expect(screen.getAllByRole('switch')).toHaveLength(4)
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-label'))).toEqual([
-      'Prompt history', 'Optimize prompt', 'Next-prompt prediction',
+      'Prompt history', 'Optimize prompt', 'Next-prompt prediction', 'Conversation and file rollback',
     ])
+    expect(screen.getByRole('switch', { name: 'Conversation and file rollback' }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByText(translations.rollbackBoundary!)).toBeTruthy()
     expect(screen.getByText(translations.privacy!)).toBeTruthy()
     expect(screen.getByText(translations.coexistence!)).toBeTruthy()
     for (const forbidden of ['strength', 'continuation', 'template', 'usage', '强度', '续写', '模板', '用量']) {
@@ -949,7 +954,9 @@ describe('CoexistenceHints', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Dismiss coexistence notice' })[0]!)
     expect(store.getSnapshot()).toEqual(['optimize', 'predict'])
     expect(set).not.toHaveBeenCalled()
-    expect(screen.getAllByRole('switch').every(item => item.getAttribute('aria-checked') === 'true')).toBe(true)
+    expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-checked'))).toEqual([
+      'true', 'true', 'true', 'false',
+    ])
 
     const reopened = new OverlapHintStore(localStorage, 'test-release')
     reopened.accept([{ moduleName: 'dsh-input-assistant', enabled: true }])

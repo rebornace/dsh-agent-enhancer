@@ -149,3 +149,78 @@
   background: var(--dsw-alias-bg-layer-2);
   border-radius: var(--dsw-radius-sm);
 }
+
+.rollbackEntry {
+  white-space: nowrap;
+}
+
+.rollbackDialog {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 48px));
+}
+
+.rollbackContent {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.rollbackPreview {
+  display: grid;
+  gap: 20px;
+  box-sizing: border-box;
+  max-width: 72ch;
+  padding: 16px;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-sm-14);
+}
+
+.rollbackSection {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rollbackSection h3,
+.rollbackSection p {
+  margin: 0;
+}
+
+.rollbackSection h3 {
+  font: inherit;
+  font-weight: 600;
+}
+
+.rollbackList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rollbackList li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rollbackMessage,
+.rollbackFile {
+  display: grid;
+  gap: 4px;
+}
+
+.rollbackFile {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.rollbackMeta {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.92em;
+}
+
+.rollbackConflict {
+  display: block;
+  color: var(--dsw-alias-label-secondary);
+}

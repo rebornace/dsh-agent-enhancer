@@ -16,6 +16,10 @@ import { AcceptedSettingsForm } from './dsh/settings-form.ts'
 import { PluginSettings } from './dsh/settings.tsx'
 import { composerLocales } from './locales.ts'
 import { clientRemoteInfo, composerEnhancerCall } from './remote.ts'
+import { RollbackController } from './rollback/controller.ts'
+import type { RollbackRemote } from './rollback/controller.ts'
+import { checkpointRollbackRemote } from './rollback/remote.ts'
+import { RollbackTurnAction } from './rollback/turn-action.tsx'
 import { installCss } from './styles.module.css'
 
 type InventoryRemote = ClientRemote & {
@@ -92,13 +96,59 @@ export function apply(ctx: Context): void {
       locale: 'composer-enhancer',
       inject: sessionId => ({ session: sessionFor(sessionId), hints }),
     }, ComposerOverlay))
+
+    const rollbackRemote: RollbackRemote = {
+      preview: (request, signal) => checkpointRollbackRemote.preview(mountedCtx.remote, request, signal),
+      execute: (request, signal) => checkpointRollbackRemote.execute(mountedCtx.remote, request, signal),
+    }
+    const rollbackSessions = new Map<SessionId, RollbackController>()
+    const rollbackFor = (sessionId: SessionId) => {
+      let rollback = rollbackSessions.get(sessionId)
+      if (rollback === undefined) {
+        rollback = new RollbackController({
+          sessionId,
+          enabled: () => resolveSettings(form.getSnapshot().value).rollbackEnabled,
+          remote: rollbackRemote,
+        })
+        rollbackSessions.set(sessionId, rollback)
+      }
+      return rollback
+    }
+    let disposeRollbackSlot: (() => void) | undefined
+    const disableRollback = () => {
+      const dispose = disposeRollbackSlot
+      disposeRollbackSlot = undefined
+      dispose?.()
+      for (const rollback of rollbackSessions.values()) rollback.dispose()
+      rollbackSessions.clear()
+    }
+    mountedCtx.effect(() => {
+      const synchronize = () => {
+        const enabled = resolveSettings(form.getSnapshot().value).rollbackEnabled
+        if (!enabled) {
+          disableRollback()
+        } else if (disposeRollbackSlot === undefined) {
+          disposeRollbackSlot = mountedCtx.slots.inject('conversation.chat.turnTail', () => mountedCtx.slots.register({
+            name: 'conversation.chat.turnTail', id: 'composer-enhancer-rollback', order: 120,
+            locale: 'composer-enhancer',
+            inject: sessionId => ({ rollback: rollbackFor(sessionId) }),
+          }, RollbackTurnAction))
+        }
+      }
+      const unsubscribe = form.subscribe(synchronize)
+      synchronize()
+      return () => {
+        unsubscribe()
+        disableRollback()
+      }
+    })
   }
 
   ctx.effect(async () => {
     const unmount = await ctx.remote.$mount(clientRemoteInfo)
     const fiber = await ctx.plugin({
       name: 'composer-enhancer-mounted',
-      inject: ['remote.composerEnhancer'],
+      inject: ['remote.composerEnhancer', 'remote.checkpointRollback'],
       apply: applyMounted,
     })
     return async () => {

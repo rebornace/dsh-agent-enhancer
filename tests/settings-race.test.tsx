@@ -25,7 +25,7 @@ it('does not request prediction after an accepted disable before the mirror catc
   const ctx = new Context()
   contexts.push(ctx)
   const listeners = new Set<() => void>()
-  let value: EnhancerSettings = { historyEnabled: true, optimizeEnabled: true, predictEnabled: true }
+  let value: EnhancerSettings = { historyEnabled: true, optimizeEnabled: true, predictEnabled: true, rollbackEnabled: false }
   let revision = 1
   let snapshot: ReturnType<ConfigForm<EnhancerSettings>['getSnapshot']> = {
     status: 'ready', value, base: undefined, user: undefined, revision, writable: true,
@@ -49,6 +49,7 @@ it('does not request prediction after an accepted disable before the mirror catc
     pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
   } as never)
   ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
+  ctx.provide('remote.checkpointRollback', { preview: vi.fn(), execute: vi.fn() } as never)
   ctx.provide('remote.pluginInventory', { list: vi.fn() } as never)
   ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
   ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)

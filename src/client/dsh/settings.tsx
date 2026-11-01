@@ -17,12 +17,14 @@ const LABELS = {
   history: 'history',
   optimize: 'optimize',
   predict: 'predict',
+  rollback: 'rollback',
 } as const
 
 const DESCRIPTIONS = {
   history: 'historyDescription',
   optimize: 'optimizeDescription',
   predict: 'predictDescription',
+  rollback: 'rollbackDescription',
 } as const
 
 export function PluginSettings({ form, t }: PluginSettingsProps) {
@@ -66,6 +68,7 @@ export function PluginSettings({ form, t }: PluginSettingsProps) {
     <aside aria-label="Data and privacy" className={styles.privacy}>
       <h3>{t('privacyTitle')}</h3>
       <p>{t('privacy')}</p>
+      <p>{t('rollbackBoundary')}</p>
       <p>{t('coexistence')}</p>
     </aside>
   </section>

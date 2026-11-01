@@ -7,7 +7,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'optimizeModelUnavailable' | 'optimizeRequestFailed' | 'optimizeInvalidOutput' | 'optimizeRollbackFailed' | 'optimizeSessionChanged' |
       'settingsTitle' | 'settingsSubtitle' | 'history' | 'historyDescription' | 'optimizeDescription' |
       'predict' | 'predictDescription' | 'privacyTitle' | 'privacy' | 'coexistence' | 'settingsError' |
-      'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'dismissHint'
+      'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'dismissHint' |
+      'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackTitle' | 'rollbackScope' |
+      'rollbackClose' | 'rollbackConfirm' | 'rollbackCancel' | 'rollbackLoading' | 'rollbackRestoring' | 'rollbackFailed' |
+      'rollbackMessages' | 'rollbackFiles' | 'rollbackGaps' | 'rollbackConflicts' | 'rollbackNoMessages' | 'rollbackNoFiles' |
+      'rollbackFile_create' | 'rollbackFile_modify' | 'rollbackFile_delete' | 'rollbackGapWorkspace' | 'rollbackGapPrompt' |
+      'rollbackUnavailableCheckpoint' | 'rollbackUnavailableIncomplete' | 'rollbackUnavailableSessionChanged' |
+      'rollbackUnavailableRunning' | 'rollbackUnavailablePermission' | 'rollbackUnavailableDisabled' |
+      'rollbackUnavailableFirstTurn' | 'rollbackUnavailableIncompatible' | 'rollbackUnavailableCompacted' |
+      'rollbackUnavailableSubagent' | 'rollbackUnavailableUnknown' | 'rollbackConflictUnsafe' | 'rollbackConflictSymlink' |
+      'rollbackConflictRegular' | 'rollbackConflictBinary' | 'rollbackConflictLarge' | 'rollbackConflictBefore' | 'rollbackConflictHash'
   }
 }
 
@@ -43,6 +52,47 @@ export const composerLocales = {
     overlapOptimize: '检测到另一个提示词优化功能。Composer 增强的优化功能仍保持开启。',
     overlapPredict: '检测到另一个回复建议功能。Composer 增强的预测功能仍保持开启。',
     dismissHint: '关闭共存提示',
+    rollback: '对话与文件回滚',
+    rollbackDescription: '在合规轮次末尾预览并恢复对话与已跟踪文件',
+    rollbackBoundary: '不恢复进程、终端、后台任务、数据库、网络、部署、第三方服务或未跟踪文件；关闭后保留已有日志和检查点。',
+    rollbackAction: '回滚到这里',
+    rollbackTitle: '恢复到第 {turn} 轮之前',
+    rollbackScope: '仅恢复对话与已跟踪文件。进程、终端、后台任务、数据库、网络、部署、第三方服务和未跟踪文件不会恢复。',
+    rollbackClose: '关闭回滚预览',
+    rollbackConfirm: '恢复对话与已跟踪文件',
+    rollbackCancel: '取消',
+    rollbackLoading: '正在重新检查对话和文件状态…',
+    rollbackRestoring: '正在恢复对话与已跟踪文件…',
+    rollbackFailed: '回滚未完成，请关闭预览后重试。',
+    rollbackMessages: '将撤回的对话',
+    rollbackFiles: '将恢复的已跟踪文件',
+    rollbackGaps: '不可恢复或受限状态',
+    rollbackConflicts: '文件冲突',
+    rollbackNoMessages: '没有可预览的对话消息。',
+    rollbackNoFiles: '此检查点没有已跟踪文件。',
+    rollbackFile_create: '删除本轮创建的文件',
+    rollbackFile_modify: '恢复修改前内容',
+    rollbackFile_delete: '恢复已删除文件',
+    rollbackGapWorkspace: '工作区捕获不完整',
+    rollbackGapPrompt: '原提示词不是纯文本',
+    rollbackUnavailableCheckpoint: '找不到此轮检查点',
+    rollbackUnavailableIncomplete: '检查点不完整，不能执行恢复',
+    rollbackUnavailableSessionChanged: '会话已变化，请重新预览',
+    rollbackUnavailableRunning: '会话仍在运行',
+    rollbackUnavailablePermission: '当前没有恢复权限',
+    rollbackUnavailableDisabled: '回滚功能已关闭',
+    rollbackUnavailableFirstTurn: '首轮之前没有可恢复边界',
+    rollbackUnavailableIncompatible: '检查点与当前会话或插件版本不兼容',
+    rollbackUnavailableCompacted: '压缩后的对话边界无法安全恢复',
+    rollbackUnavailableSubagent: '子 Agent 会话不支持回滚',
+    rollbackUnavailableUnknown: '对话结构无法安全识别',
+    rollbackConflictUnsafe: '文件路径不安全',
+    rollbackConflictSymlink: '文件路径包含符号链接',
+    rollbackConflictRegular: '当前路径不是普通文件',
+    rollbackConflictBinary: '二进制文件不支持恢复',
+    rollbackConflictLarge: '文件超过恢复大小限制',
+    rollbackConflictBefore: '检查点文件内容无效',
+    rollbackConflictHash: '文件在检查点后发生了变化',
   },
   en: {
     historyTitle: 'Prompt history',
@@ -75,5 +125,46 @@ export const composerLocales = {
     overlapOptimize: 'Another prompt-optimization feature is enabled. Composer Enhance optimization remains enabled.',
     overlapPredict: 'Another reply-suggestion feature is enabled. Composer Enhance prediction remains enabled.',
     dismissHint: 'Dismiss coexistence notice',
+    rollback: 'Conversation and file rollback',
+    rollbackDescription: 'Preview and restore conversation and tracked files at eligible turn boundaries',
+    rollbackBoundary: 'Processes, terminals, background jobs, databases, network activity, deployments, third-party state, and untracked files are not restored. Existing logs and checkpoints remain after disable.',
+    rollbackAction: 'Roll back to here',
+    rollbackTitle: 'Restore before turn {turn}',
+    rollbackScope: 'Restore conversation and tracked files only. Processes, terminals, background jobs, databases, network activity, deployments, third-party state, and untracked files are not restored.',
+    rollbackClose: 'Close rollback preview',
+    rollbackConfirm: 'Restore conversation and tracked files',
+    rollbackCancel: 'Cancel',
+    rollbackLoading: 'Rechecking conversation and file state…',
+    rollbackRestoring: 'Restoring conversation and tracked files…',
+    rollbackFailed: 'Rollback did not complete. Close the preview and try again.',
+    rollbackMessages: 'Conversation to withdraw',
+    rollbackFiles: 'Tracked files to restore',
+    rollbackGaps: 'Unavailable or limited state',
+    rollbackConflicts: 'File conflicts',
+    rollbackNoMessages: 'No conversation messages are available for preview.',
+    rollbackNoFiles: 'This checkpoint has no tracked files.',
+    rollbackFile_create: 'Remove file created in this turn',
+    rollbackFile_modify: 'Restore previous content',
+    rollbackFile_delete: 'Restore deleted file',
+    rollbackGapWorkspace: 'Workspace capture is incomplete',
+    rollbackGapPrompt: 'The original prompt was not plain text',
+    rollbackUnavailableCheckpoint: 'No checkpoint was found for this turn',
+    rollbackUnavailableIncomplete: 'The checkpoint is incomplete and cannot be restored',
+    rollbackUnavailableSessionChanged: 'The session changed. Preview again.',
+    rollbackUnavailableRunning: 'The session is still running',
+    rollbackUnavailablePermission: 'Restore permission is unavailable',
+    rollbackUnavailableDisabled: 'Rollback is disabled',
+    rollbackUnavailableFirstTurn: 'There is no restorable boundary before the first turn',
+    rollbackUnavailableIncompatible: 'The checkpoint is incompatible with this session or plugin version',
+    rollbackUnavailableCompacted: 'The compacted conversation boundary cannot be restored safely',
+    rollbackUnavailableSubagent: 'Subagent sessions do not support rollback',
+    rollbackUnavailableUnknown: 'The conversation structure cannot be verified safely',
+    rollbackConflictUnsafe: 'The file path is unsafe',
+    rollbackConflictSymlink: 'The file path contains a symbolic link',
+    rollbackConflictRegular: 'The current path is not a regular file',
+    rollbackConflictBinary: 'Binary files cannot be restored',
+    rollbackConflictLarge: 'The file exceeds the restore size limit',
+    rollbackConflictBefore: 'The checkpoint file content is invalid',
+    rollbackConflictHash: 'File changed after this checkpoint',
   },
 } as const

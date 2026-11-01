@@ -194,6 +194,7 @@ it('aborts pending optimization and hides the button on a real form notification
     return new Promise(() => {})
   })
   ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
+  ctx.provide('remote.checkpointRollback', { preview: vi.fn(), execute: vi.fn() } as never)
   await ctx.plugin({ apply })
   await vi.waitFor(() => {
     expect(registrations.some(entry => entry.name === 'conversation.input.right')).toBe(true)
@@ -218,4 +219,95 @@ it('aborts pending optimization and hides the button on a real form notification
 
   expect(requestSignal?.aborted).toBe(true)
   expect(screen.queryByRole('button')).toBeNull()
+})
+
+it('registers turn-tail only while enabled, cancels on disable, and cleans up across re-enable and unload', async () => {
+  const ctx = new Context()
+  contexts.push(ctx)
+  const listeners = new Set<() => void>()
+  let value: { rollbackEnabled?: boolean } = { rollbackEnabled: false }
+  const form = {
+    getSnapshot: () => ({ value }),
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+  }
+  interface Entry {
+    readonly name: string
+    readonly inject: (sessionId: SessionId) => unknown
+  }
+  const registrations: Entry[] = []
+  const previewSignals: AbortSignal[] = []
+  const checkpointRollback = {
+    preview: vi.fn((_request: unknown, signal: AbortSignal) => {
+      previewSignals.push(signal)
+      return new Promise<never>(() => {})
+    }),
+    execute: vi.fn(),
+  }
+  const remote = {
+    $mount: async () => () => {},
+    pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
+    checkpointRollback,
+  }
+  ctx.provide('remote', remote as never)
+  ctx.provide('remote.checkpointRollback', checkpointRollback as never)
+  ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
+  ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
+  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
+  ctx.provide('slots', {
+    inject: (_key: string, registerEntry: () => () => void) => registerEntry(),
+    register: (options: Entry) => {
+      registrations.push(options)
+      return () => {
+        const index = registrations.indexOf(options)
+        if (index >= 0) registrations.splice(index, 1)
+      }
+    },
+  } as never)
+  const fiber = await ctx.plugin({ apply })
+  await vi.waitFor(() => {
+    expect(registrations.some(entry => entry.name === 'conversation.input.right')).toBe(true)
+  })
+  expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(0)
+
+  act(() => {
+    value = { rollbackEnabled: true }
+    for (const listener of listeners) listener()
+  })
+  await vi.waitFor(() => {
+    expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(1)
+  })
+  const first = registrations.find(entry => entry.name === 'conversation.chat.turnTail')!
+  const firstRollback = first.inject('session-1' as SessionId) as {
+    rollback: { open(turn: number): void }
+  }
+  act(() => { firstRollback.rollback.open(2) })
+  expect(previewSignals).toHaveLength(1)
+
+  act(() => {
+    value = { rollbackEnabled: false }
+    for (const listener of listeners) listener()
+  })
+  expect(previewSignals[0]?.aborted).toBe(true)
+  expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(0)
+
+  act(() => {
+    value = { rollbackEnabled: true }
+    for (const listener of listeners) listener()
+  })
+  await vi.waitFor(() => {
+    expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(1)
+  })
+  const reopened = registrations.find(entry => entry.name === 'conversation.chat.turnTail')!
+  const secondRollback = reopened.inject('session-1' as SessionId) as {
+    rollback: { open(turn: number): void }
+  }
+  act(() => { secondRollback.rollback.open(2) })
+  expect(previewSignals).toHaveLength(2)
+
+  await fiber.dispose()
+  expect(previewSignals[1]?.aborted).toBe(true)
+  expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(0)
 })

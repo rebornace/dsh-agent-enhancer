@@ -34,24 +34,27 @@ afterEach(async () => {
 })
 
 describe('composer configuration and Remote metadata', () => {
-  it('declares exactly three persistent switches defaulting to true', () => {
+  it('defaults input helpers on and the independent rollback switch off', () => {
     const values = (input: unknown) => Object.fromEntries(Object.entries(input as Record<string, { get(): boolean }>)
       .map(([key, value]) => [key, value.get()]))
     expect(Config.dict!.historyEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.optimizeEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.predictEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.rollbackEnabled?.meta.volatile).toBe(true)
     expect(values(Config({}))).toEqual({
       historyEnabled: true,
       optimizeEnabled: true,
       predictEnabled: true,
+      rollbackEnabled: false,
     })
-    expect(values(Config({ historyEnabled: false, optimizeEnabled: false, predictEnabled: false }))).toEqual({
+    expect(values(Config({ historyEnabled: false, optimizeEnabled: false, predictEnabled: false, rollbackEnabled: false }))).toEqual({
       historyEnabled: false,
       optimizeEnabled: false,
       predictEnabled: false,
+      rollbackEnabled: false,
     })
-    expect(Object.keys(Config({}))).toEqual(['historyEnabled', 'optimizeEnabled', 'predictEnabled'])
-    expect(inject).toEqual(['llm', 'sessions', 'sessionProjections', 'agentDefaultModel', 'typert', 'typertGateway'])
+    expect(Object.keys(Config({}))).toEqual(['historyEnabled', 'optimizeEnabled', 'predictEnabled', 'rollbackEnabled'])
+    expect(inject).toEqual(['llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel', 'typert', 'typertGateway'])
   })
 
   it('publishes one strict cancellable call with a nullable result', () => {
@@ -243,7 +246,7 @@ describe('host composition', () => {
     expect(register).toHaveBeenCalledWith(hostContribution)
     expect(ctx.composerEnhancer).toBeInstanceOf(ComposerEnhancerService)
     await ctx.fiber.dispose()
-    expect(unregister).toHaveBeenCalledTimes(1)
+    expect(unregister).toHaveBeenCalledTimes(2)
   })
 
   it('constructs the single model entry used by the Remote service', () => {

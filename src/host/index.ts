@@ -1,25 +1,27 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
 import { AuxiliaryError } from '../errors.ts'
-import { CheckpointRollbackError } from './checkpoint/service.ts'
-import type {
-  CheckpointRollbackRequest,
-  CheckpointRollbackService,
-} from './checkpoint/service.ts'
+import { DshCheckpointSessions } from './checkpoint/dsh.ts'
+import { CheckpointRollbackError, CheckpointRollbackService } from './checkpoint/service.ts'
+import type { CheckpointRollbackRequest } from './checkpoint/service.ts'
+import { CheckpointStore } from './checkpoint/store.ts'
 import { AuxiliaryModels } from './model.ts'
 import { checkpointRemoteInfo, remoteInfo } from './rpc.ts'
 import type { RpcPayload } from './rpc.ts'
 import type { AuxiliaryResult } from './types.ts'
 
 export const name = 'composer-enhancer'
-export const inject = ['llm', 'sessions', 'sessionProjections', 'agentDefaultModel', 'typert', 'typertGateway']
+export const inject = ['llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel', 'typert', 'typertGateway']
 
 export const Config = z.object({
   historyEnabled: z.boolean().default(true).volatile(),
   optimizeEnabled: z.boolean().default(true).volatile(),
   predictEnabled: z.boolean().default(true).volatile(),
+  rollbackEnabled: z.boolean().default(false).volatile(),
 })
 export type Config = ReturnType<typeof Config>
 
@@ -56,10 +58,24 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-export function apply(ctx: Context, _config: Config): void {
+export function apply(ctx: Context, config: Config): void {
   const models = new AuxiliaryModels(ctx)
   new ComposerEnhancerService(ctx, models)
   ctx.effect(() => ctx.typert.register(hostContribution))
+
+  const storageRoot = join(
+    process.env.DSH_HOME ?? join(homedir(), '.dsh'),
+    'profiles', 'desktop', 'plugin-data', 'dsh-composer-enhancer', 'checkpoint',
+  )
+  const sessions = new DshCheckpointSessions(ctx)
+  const rollback = new CheckpointRollbackService({
+    store: new CheckpointStore(storageRoot),
+    storageRoot,
+    pluginVersion: '0.1.5',
+    resolveSession: sessions.resolveSession,
+    isEnabled: () => config.rollbackEnabled.get(),
+  })
+  applyCheckpointRollback(ctx, rollback)
 }
 
 export const checkpointHostContribution = {

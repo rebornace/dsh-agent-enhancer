@@ -3,12 +3,13 @@ import { DEFAULT_SETTINGS, MODULES, resolveSettings } from '../src/config.ts'
 import { KNOWN_OVERLAPS, overlapHints } from '../src/client/dsh/plugin-hints.ts'
 
 describe('composer settings', () => {
-  it('enables exactly history, optimize, and predict by default', () => {
-    expect(MODULES).toEqual(['history', 'optimize', 'predict'])
+  it('enables input helpers by default while keeping rollback independently opt-in', () => {
+    expect(MODULES).toEqual(['history', 'optimize', 'predict', 'rollback'])
     expect(DEFAULT_SETTINGS).toEqual({
       historyEnabled: true,
       optimizeEnabled: true,
       predictEnabled: true,
+      rollbackEnabled: false,
     })
     expect(resolveSettings(undefined)).toEqual(DEFAULT_SETTINGS)
   })
@@ -18,10 +19,12 @@ describe('composer settings', () => {
       historyEnabled: false,
       optimizeEnabled: false,
       predictEnabled: false,
+      rollbackEnabled: false,
     })).toEqual({
       historyEnabled: false,
       optimizeEnabled: false,
       predictEnabled: false,
+      rollbackEnabled: false,
     })
   })
 
@@ -31,6 +34,7 @@ describe('composer settings', () => {
       historyEnabled: false,
       optimizeEnabled: true,
       predictEnabled: true,
+      rollbackEnabled: false,
     })
     for (const forbidden of ['completion', 'template', 'strength', 'candidate']) {
       expect(serialized).not.toContain(forbidden)

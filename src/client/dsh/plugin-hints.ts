@@ -1,14 +1,14 @@
-import { MODULES } from '../../config.ts'
-import type { ModuleName } from '../../config.ts'
-
 export const KNOWN_OVERLAPS = {
   history: ['dsh-composer-history', 'dsh-prompt-history', 'dsh-input-assistant'],
   optimize: ['dsh-input-assistant'],
   predict: ['dsh-reply-suggestions', 'dsh-prompt-history', 'dsh-input-assistant'],
 } as const
 
-export function overlapHints(entries: readonly { moduleName: string; enabled: boolean }[]): ModuleName[] {
-  return MODULES.filter(module => KNOWN_OVERLAPS[module].some(name =>
+export type OverlapModule = keyof typeof KNOWN_OVERLAPS
+const OVERLAP_MODULES = Object.keys(KNOWN_OVERLAPS) as OverlapModule[]
+
+export function overlapHints(entries: readonly { moduleName: string; enabled: boolean }[]): OverlapModule[] {
+  return OVERLAP_MODULES.filter(module => KNOWN_OVERLAPS[module].some(name =>
     entries.some(entry => entry.enabled && entry.moduleName === name)))
 }
 
@@ -23,7 +23,7 @@ function browserStorage(): HintStorage | undefined {
 }
 
 export class OverlapHintStore {
-  private hints: readonly ModuleName[] = []
+  private hints: readonly OverlapModule[] = []
   private active = true
   private readonly listeners = new Set<() => void>()
 
@@ -32,7 +32,7 @@ export class OverlapHintStore {
     private readonly version = '0.1.0',
   ) {}
 
-  getSnapshot(): readonly ModuleName[] {
+  getSnapshot(): readonly OverlapModule[] {
     return this.hints
   }
 
@@ -52,7 +52,7 @@ export class OverlapHintStore {
     this.emit()
   }
 
-  dismiss(module: ModuleName): void {
+  dismiss(module: OverlapModule): void {
     if (!this.active) return
     this.remember(module)
     if (!this.hints.includes(module)) return
@@ -65,11 +65,11 @@ export class OverlapHintStore {
     this.listeners.clear()
   }
 
-  private key(module: ModuleName): string {
+  private key(module: OverlapModule): string {
     return `dsh-composer-enhancer:overlap-hint:${this.version}:${module}`
   }
 
-  private dismissed(module: ModuleName): boolean {
+  private dismissed(module: OverlapModule): boolean {
     try {
       return this.storage?.getItem(this.key(module)) === '1'
     } catch {
@@ -77,7 +77,7 @@ export class OverlapHintStore {
     }
   }
 
-  private remember(module: ModuleName): void {
+  private remember(module: OverlapModule): void {
     try {
       this.storage?.setItem(this.key(module), '1')
     } catch {}
