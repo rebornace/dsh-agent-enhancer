@@ -72,6 +72,11 @@ export interface CheckpointFilesOptions {
   readonly operations?: CheckpointFileOperations
 }
 
+export interface SurfaceRestoreResult {
+  readonly appended: boolean
+  readonly synchronized: boolean
+}
+
 export type SurfaceAppendOccurred = (journal: CheckpointJournal) => boolean | Promise<boolean>
 
 interface CurrentSnapshot {
@@ -310,16 +315,25 @@ export class CheckpointFiles {
 
   async runTransaction(
     files: readonly FileCheckpoint[],
-    restoreSurface: () => Promise<void> = async () => {},
+    restoreSurface: () => Promise<SurfaceRestoreResult>,
   ): Promise<RestoreJournal> {
     return serialize(this.transactionKey(), async () => {
       const journal = await this.restoreFiles(files)
+      let result: SurfaceRestoreResult
       try {
-        await restoreSurface()
+        result = await restoreSurface()
       } catch {
+        throw new CheckpointFileError('FILE_RESTORE_FAILED')
+      }
+      if (!isRecord(result) || typeof result.appended !== 'boolean' || typeof result.synchronized !== 'boolean') {
+        throw new CheckpointFileError('FILE_RESTORE_FAILED')
+      }
+      if (!result.appended) {
+        if (result.synchronized) throw new CheckpointFileError('FILE_RESTORE_FAILED')
         await journal.compensate()
         throw new CheckpointFileError('FILE_RESTORE_FAILED')
       }
+      if (!result.synchronized) throw new CheckpointFileError('FILE_RESTORE_FAILED')
       try {
         await journal.complete('completed')
         return journal

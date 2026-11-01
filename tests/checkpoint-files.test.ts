@@ -19,6 +19,10 @@ function digest(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
+async function surfaceSucceeded(): Promise<{ appended: true; synchronized: true }> {
+  return { appended: true, synchronized: true }
+}
+
 function checkpointFile(
   path: string,
   change: FileCheckpoint['change'],
@@ -96,7 +100,7 @@ describe('CheckpointFiles', () => {
     const file = checkpointFile('created.txt', 'create', null, 'after')
 
     await expect(manager().verifyCurrent([file])).resolves.toEqual([])
-    const journal = await manager().runTransaction([file])
+    const journal = await manager().runTransaction([file], surfaceSucceeded)
 
     await expectMissing(path)
     expect(journal.status).toBe('completed')
@@ -107,7 +111,7 @@ describe('CheckpointFiles', () => {
     await writeFile(path, 'after', 'utf8')
     const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
 
-    await manager().runTransaction([file])
+    await manager().runTransaction([file], surfaceSucceeded)
 
     await expect(readFile(path, 'utf8')).resolves.toBe('before')
   })
@@ -116,7 +120,7 @@ describe('CheckpointFiles', () => {
     const path = join(workspaceRoot, 'nested', 'deleted.txt')
     const file = checkpointFile('nested/deleted.txt', 'delete', 'before', null)
 
-    await manager().runTransaction([file])
+    await manager().runTransaction([file], surfaceSucceeded)
 
     await expect(readFile(path, 'utf8')).resolves.toBe('before')
   })
@@ -130,7 +134,7 @@ describe('CheckpointFiles', () => {
       checkpointFile('deleted.txt', 'delete', 'deleted before', null),
     ]
 
-    await manager().runTransaction(files)
+    await manager().runTransaction(files, surfaceSucceeded)
 
     await expectMissing(join(workspaceRoot, 'created.txt'))
     await expect(readFile(join(workspaceRoot, 'modified.txt'), 'utf8')).resolves.toBe('modified before')
@@ -151,7 +155,7 @@ describe('CheckpointFiles', () => {
     await expect(filesManager.verifyCurrent(files)).resolves.toEqual([
       { path: 'second.txt', reason: 'hash-mismatch', expectedHash: digest('second after'), actualHash: digest('concurrent edit') },
     ])
-    await expect(filesManager.runTransaction(files)).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(filesManager.runTransaction(files, surfaceSucceeded)).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
     await expect(readFile(firstPath, 'utf8')).resolves.toBe('first after')
     await expect(readFile(secondPath, 'utf8')).resolves.toBe('concurrent edit')
     await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toEqual([])
@@ -170,7 +174,7 @@ describe('CheckpointFiles', () => {
     const filesManager = manager()
 
     await expect(filesManager.verifyCurrent([file])).resolves.toMatchObject([{ path: unsafePath, reason }])
-    await expect(filesManager.runTransaction([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(filesManager.runTransaction([file], surfaceSucceeded)).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
   })
 
   it('rejects binary current content', async () => {
@@ -198,7 +202,7 @@ describe('CheckpointFiles', () => {
     const file = checkpointFile('linked.txt', 'modify', 'before', 'after')
 
     await expect(manager().verifyCurrent([file])).resolves.toMatchObject([{ path: 'linked.txt', reason: 'symlink' }])
-    await expect(manager().runTransaction([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(manager().runTransaction([file], surfaceSucceeded)).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
     await expect(readFile(target, 'utf8')).resolves.toBe('after')
   })
 
@@ -210,7 +214,7 @@ describe('CheckpointFiles', () => {
     const file = checkpointFile('escape/file.txt', 'modify', 'before', 'after')
 
     await expect(manager().verifyCurrent([file])).resolves.toMatchObject([{ path: 'escape/file.txt', reason: 'symlink' }])
-    await expect(manager().runTransaction([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(manager().runTransaction([file], surfaceSucceeded)).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
     await expect(readFile(join(outside, 'file.txt'), 'utf8')).resolves.toBe('after')
   })
 
@@ -232,7 +236,7 @@ describe('CheckpointFiles', () => {
     await expect(manager({
       write: (path, text) => failAtStep(() => writeFile(path, text, 'utf8')),
       remove: path => failAtStep(() => rm(path, { force: true })),
-    }).runTransaction(files)).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+    }).runTransaction(files, surfaceSucceeded)).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
 
     await expect(readFile(join(workspaceRoot, 'modified.txt'), 'utf8')).resolves.toBe('modified after')
     await expect(readFile(join(workspaceRoot, 'created.txt'), 'utf8')).resolves.toBe('created after')
@@ -245,9 +249,7 @@ describe('CheckpointFiles', () => {
     await writeFile(path, 'after', 'utf8')
     const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
 
-    await expect(manager().runTransaction([file], async () => {
-      throw new Error('surface append failed')
-    })).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+    await expect(manager().runTransaction([file], async () => ({ appended: false, synchronized: false }))).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
 
     await expect(readFile(path, 'utf8')).resolves.toBe('after')
     await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toEqual([])
@@ -259,7 +261,7 @@ describe('CheckpointFiles', () => {
     const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
     const store = new CheckpointStore(storageRoot)
 
-    const journal = await manager().runTransaction([file])
+    const journal = await manager().runTransaction([file], surfaceSucceeded)
 
     expect(journal.status).toBe('completed')
     await expect(readFile(path, 'utf8')).resolves.toBe('before')
@@ -275,6 +277,7 @@ describe('CheckpointFiles', () => {
     const journal = await manager().runTransaction([file], async () => {
       await rm(sidecar)
       await mkdir(sidecar)
+      return { appended: true, synchronized: true }
     })
 
     expect(journal.status).toBe('completed')
@@ -320,7 +323,7 @@ describe('CheckpointFiles', () => {
       remove: path => inject(() => rm(path, { force: true })),
     })
 
-    await expect(failing.runTransaction(files)).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+    await expect(failing.runTransaction(files, surfaceSucceeded)).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
     await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toMatchObject([{ status: 'prepared' }])
 
     await manager().recoverFiles(() => false)
@@ -346,6 +349,7 @@ describe('CheckpointFiles', () => {
         id: 'restore-1',
         completed: ['modified.txt', 'created.txt', 'deleted.txt'],
       })
+      return { appended: true, synchronized: true }
     })
   })
 
@@ -371,8 +375,8 @@ describe('CheckpointFiles', () => {
     }
 
     const journals = await Promise.all([
-      manager(operations, 'restore-1').runTransaction([first]),
-      manager(operations, 'restore-2').runTransaction([second]),
+      manager(operations, 'restore-1').runTransaction([first], surfaceSucceeded),
+      manager(operations, 'restore-2').runTransaction([second], surfaceSucceeded),
     ])
 
     expect(maximumActive).toBe(1)
@@ -386,7 +390,7 @@ describe('CheckpointFiles', () => {
     const filesManager = manager()
 
     await expect(filesManager.verifyCurrent([file])).resolves.toEqual([])
-    await filesManager.runTransaction([file])
+    await filesManager.runTransaction([file], surfaceSucceeded)
 
     await expect(readFile(path, 'utf8')).resolves.toBe('\uFEFFbefore')
   })
@@ -396,9 +400,7 @@ describe('CheckpointFiles', () => {
     await writeFile(path, '\uFEFFafter', 'utf8')
     const file = checkpointFile('bom.txt', 'modify', '\uFEFFbefore', '\uFEFFafter')
 
-    await expect(manager().runTransaction([file], async () => {
-      throw new Error('surface append failed')
-    })).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+    await expect(manager().runTransaction([file], async () => ({ appended: false, synchronized: false }))).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
 
     await expect(readFile(path, 'utf8')).resolves.toBe('\uFEFFafter')
   })
@@ -412,7 +414,7 @@ describe('CheckpointFiles', () => {
     }
 
     await expect(manager().verifyCurrent([file])).resolves.toMatchObject([{ reason: 'invalid-before-image' }])
-    await expect(manager().runTransaction([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(manager().runTransaction([file], surfaceSucceeded)).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
     await expect(readFile(path, 'utf8')).resolves.toBe('after')
   })
 
@@ -421,7 +423,7 @@ describe('CheckpointFiles', () => {
       const file = checkpointFile(path, 'delete', 'before', null)
 
       await expect(manager().verifyCurrent([file])).resolves.toMatchObject([{ reason: 'unsafe-path' }])
-      await expect(manager().runTransaction([file])).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+      await expect(manager().runTransaction([file], surfaceSucceeded)).rejects.toMatchObject({ code: 'FILE_CONFLICT' })
     },
   )
 
@@ -433,6 +435,7 @@ describe('CheckpointFiles', () => {
 
     await manager().runTransaction([file], async () => {
       expect((await stat(sidecar)).mode & 0o777).toBe(0o600)
+      return { appended: true, synchronized: true }
     })
   })
 
@@ -440,7 +443,7 @@ describe('CheckpointFiles', () => {
     const path = join(workspaceRoot, 'modified.txt')
     await writeFile(path, 'after', 'utf8')
     const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
-    const journal = await manager().runTransaction([file])
+    const journal = await manager().runTransaction([file], surfaceSucceeded)
 
     await expect(journal.complete('compensated')).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
     await expect(journal.compensate()).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
@@ -451,7 +454,7 @@ describe('CheckpointFiles', () => {
     const path = join(workspaceRoot, 'modified.txt')
     await writeFile(path, 'after', 'utf8')
     const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
-    const journal = await manager().runTransaction([file])
+    const journal = await manager().runTransaction([file], surfaceSucceeded)
 
     await expect(journal.complete('prepared')).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
     expect(journal.status).toBe('completed')
@@ -489,9 +492,11 @@ describe('CheckpointFiles', () => {
         events.push('append-1-start')
         await new Promise<void>(resolve => { setTimeout(resolve, 25) })
         events.push('append-1-end')
+        return { appended: true, synchronized: true }
       }),
       manager(undefined, 'restore-2').runTransaction([second], async () => {
         events.push('append-2')
+        return { appended: true, synchronized: true }
       }),
     ])
 
@@ -516,7 +521,7 @@ describe('CheckpointFiles', () => {
       remove: path => rm(path, { force: true }),
     }
 
-    await expect(manager(operations).runTransaction(files, async () => {}))
+    await expect(manager(operations).runTransaction(files, surfaceSucceeded))
       .rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
 
     await expect(readFile(firstPath, 'utf8')).resolves.toBe('first after')
@@ -547,7 +552,7 @@ describe('CheckpointFiles', () => {
       remove: path => rm(path, { force: true }),
     }
 
-    await expect(manager(operations).runTransaction(files)).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+    await expect(manager(operations).runTransaction(files, surfaceSucceeded)).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
 
     await expect(readFile(firstPath, 'utf8')).resolves.toBe('first after')
     await expect(readFile(join(outside, 'file.txt'), 'utf8')).resolves.toBe('outside original')
@@ -560,10 +565,59 @@ describe('CheckpointFiles', () => {
 
     await expect(manager().runTransaction([file], async () => {
       await writeFile(path, 'external edit', 'utf8')
-      throw new Error('surface append failed')
+      return { appended: false, synchronized: false }
     })).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
 
     await expect(readFile(path, 'utf8')).resolves.toBe('external edit')
     await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toMatchObject([{ status: 'files-restored' }])
+  })
+
+  it('keeps restored files and a recoverable journal when projection fails after append', async () => {
+    const path = join(workspaceRoot, 'modified.txt')
+    await writeFile(path, 'after', 'utf8')
+    const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
+
+    await expect(manager().runTransaction([file], async () => ({
+      appended: true,
+      synchronized: false,
+    }))).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+
+    await expect(readFile(path, 'utf8')).resolves.toBe('before')
+    await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toMatchObject([{ status: 'files-restored' }])
+
+    await manager().recoverFiles(() => true)
+
+    await expect(readFile(path, 'utf8')).resolves.toBe('before')
+    await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toEqual([])
+  })
+
+  it('compensates only when the surface result explicitly says append did not happen', async () => {
+    const path = join(workspaceRoot, 'modified.txt')
+    await writeFile(path, 'after', 'utf8')
+    const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
+
+    await expect(manager().runTransaction([file], async () => ({
+      appended: false,
+      synchronized: false,
+    }))).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+
+    await expect(readFile(path, 'utf8')).resolves.toBe('after')
+    await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toEqual([])
+  })
+
+  it('treats a thrown surface result as uncertain and leaves files for startup recovery', async () => {
+    const path = join(workspaceRoot, 'modified.txt')
+    await writeFile(path, 'after', 'utf8')
+    const file = checkpointFile('modified.txt', 'modify', 'before', 'after')
+
+    await expect(manager().runTransaction([file], async () => {
+      throw new Error('projection outcome is unknown')
+    })).rejects.toMatchObject({ code: 'FILE_RESTORE_FAILED' })
+
+    await expect(readFile(path, 'utf8')).resolves.toBe('before')
+    await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toMatchObject([{ status: 'files-restored' }])
+
+    await manager().recoverFiles(() => true)
+    await expect(new CheckpointStore(storageRoot).recoverJournal()).resolves.toEqual([])
   })
 })
