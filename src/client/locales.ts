@@ -10,6 +10,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'dismissHint' |
       'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackTitle' | 'rollbackScope' |
       'rollbackClose' | 'rollbackConfirm' | 'rollbackCancel' | 'rollbackLoading' | 'rollbackRestoring' | 'rollbackFailed' |
+      'rollbackTurnOpen' | 'rollbackTurnStartMissing' |
       'rollbackMessages' | 'rollbackFiles' | 'rollbackGaps' | 'rollbackConflicts' | 'rollbackNoMessages' | 'rollbackNoFiles' |
       'rollbackFile_create' | 'rollbackFile_modify' | 'rollbackFile_delete' | 'rollbackGapWorkspace' | 'rollbackGapPrompt' |
       'rollbackUnavailableCheckpoint' | 'rollbackUnavailableIncomplete' | 'rollbackUnavailableSessionChanged' |
@@ -64,6 +65,8 @@ export const composerLocales = {
     rollbackLoading: '正在重新检查对话和文件状态…',
     rollbackRestoring: '正在恢复对话与已跟踪文件…',
     rollbackFailed: '回滚未完成，请关闭预览后重试。',
+    rollbackTurnOpen: '本轮尚未结束',
+    rollbackTurnStartMissing: '本轮开始事件尚未加载',
     rollbackMessages: '将撤回的对话',
     rollbackFiles: '将恢复的已跟踪文件',
     rollbackGaps: '不可恢复或受限状态',
@@ -137,6 +140,8 @@ export const composerLocales = {
     rollbackLoading: 'Rechecking conversation and file state…',
     rollbackRestoring: 'Restoring conversation and tracked files…',
     rollbackFailed: 'Rollback did not complete. Close the preview and try again.',
+    rollbackTurnOpen: 'The turn is not closed',
+    rollbackTurnStartMissing: 'The turn start is not loaded',
     rollbackMessages: 'Conversation to withdraw',
     rollbackFiles: 'Tracked files to restore',
     rollbackGaps: 'Unavailable or limited state',

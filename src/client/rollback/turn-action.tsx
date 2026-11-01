@@ -86,15 +86,22 @@ export function RollbackTurnAction(props: RollbackTurnActionProps) {
   const session = props.useSession(state => state)
   const turn = props.turn
   const active = snapshot.active?.turn === turn.turn ? snapshot.active : null
-  useEffect(() => () => { props.rollback.close(turn.turn) }, [props.rollback, turn.turn])
+  useEffect(() => () => {
+    if (props.rollback.getSnapshot().active?.status !== 'executing') props.rollback.close(turn.turn)
+  }, [props.rollback, turn.turn])
 
-  const eligible = snapshot.enabled && !session.running && turn.status === 'closed'
-    && turn.start !== undefined && turn.start.seq > 0
-  if (!eligible) return null
+  if (!snapshot.enabled) return null
+  const disabledReason = session.running ? 'rollbackUnavailableRunning' as const
+    : turn.status !== 'closed' ? 'rollbackTurnOpen' as const
+      : turn.start === undefined ? 'rollbackTurnStartMissing' as const
+        : turn.start.seq <= 0 ? 'rollbackUnavailableFirstTurn' as const : null
   const blocked = active?.preview === undefined || active.preview.unavailable.length > 0 || active.preview.conflicts.length > 0
   return <>
     <Button type="button" size="sm" variant="ghost" className={styles.rollbackEntry}
-      onClick={() => { props.rollback.open(turn.turn) }}>{props.t('rollbackAction')}</Button>
+      disabled={disabledReason !== null} title={disabledReason === null ? undefined : props.t(disabledReason)}
+      onClick={() => {
+        if (disabledReason === null) props.rollback.open(turn.turn)
+      }}>{props.t('rollbackAction')}</Button>
     {active === null ? null : <Modal
       open
       title={props.t('rollbackTitle', { turn: turn.turn })}
@@ -102,11 +109,9 @@ export function RollbackTurnAction(props: RollbackTurnActionProps) {
       closeLabel={props.t('rollbackClose')}
       className={styles.rollbackDialog}
       contentClassName={styles.rollbackContent}
-      onClose={() => {
-        if (active.status !== 'executing') props.rollback.close(turn.turn)
-      }}
+      onClose={() => { props.rollback.close(turn.turn) }}
       footer={<>
-        <Button type="button" data-modal-autofocus disabled={active.status === 'executing'}
+        <Button type="button" data-modal-autofocus
           onClick={() => { props.rollback.close(turn.turn) }}>{props.t('rollbackCancel')}</Button>
         <Button type="button" disabled={active.status !== 'ready' || blocked}
           onClick={() => { void props.rollback.confirm(props.inputActions) }}>

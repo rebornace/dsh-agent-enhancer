@@ -142,19 +142,22 @@ describe('RollbackTurnAction', () => {
     expect(screen.queryByRole('button', { name: 'Roll back to here' })).toBeNull()
 
     h.setEnabled(true)
-    expect(screen.getByRole('button', { name: 'Roll back to here' })).toBeTruthy()
-    for (const ineligible of [
-      turnFixture(1, { startSeq: 0 }),
-      turnFixture(2, { noStart: true }),
-      turnFixture(2, { status: 'open' }),
-    ]) {
+    expect(screen.getByRole('button', { name: 'Roll back to here' })).toHaveProperty('disabled', false)
+    const reasons = [
+      [turnFixture(1, { startSeq: 0 }), 'There is no restorable boundary before the first turn'],
+      [turnFixture(2, { noStart: true }), 'The turn start is not loaded'],
+      [turnFixture(2, { status: 'open' }), 'The turn is not closed'],
+    ] as const
+    for (const [ineligible, reason] of reasons) {
       h.rerenderTurn(ineligible)
-      expect(screen.queryByRole('button', { name: 'Roll back to here' })).toBeNull()
+      expect(screen.getByRole('button', { name: 'Roll back to here' })).toHaveProperty('disabled', true)
+      expect(screen.getByRole('button', { name: 'Roll back to here' }).getAttribute('title')).toBe(reason)
     }
     h.rerenderTurn(turnFixture(), true)
-    expect(screen.queryByRole('button', { name: 'Roll back to here' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Roll back to here' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: 'Roll back to here' }).getAttribute('title')).toBe('The session is still running')
     h.rerenderTurn(turnFixture())
-    expect(screen.getByRole('button', { name: 'Roll back to here' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Roll back to here' })).toHaveProperty('disabled', false)
   })
 
   it('previews messages, tracked files, gaps, and conflicts without writing before confirmation', async () => {
@@ -249,6 +252,28 @@ describe('RollbackTurnAction', () => {
     await Promise.resolve()
     expect(h.rollback.getSnapshot().active).toMatchObject({ turn: 3, status: 'loading' })
     h.rollback.close()
+  })
+
+  it('allows execute to finish and restores the draft when surface replacement unmounts the turn-tail', async () => {
+    const executing = deferred<CheckpointRollbackResult>()
+    let executeSignal: AbortSignal | undefined
+    const remote = remoteWith(async () => preview(), (_request, signal) => {
+      executeSignal = signal
+      return executing.promise
+    })
+    const h = setup({ remote })
+    fireEvent.click(screen.getByRole('button', { name: 'Roll back to here' }))
+    await screen.findByRole('dialog')
+    fireEvent.click(screen.getByRole('button', { name: 'Restore conversation and tracked files' }))
+    await waitFor(() => { expect(remote.execute).toHaveBeenCalledTimes(1) })
+
+    h.unmount()
+    expect(executeSignal?.aborted).toBe(false)
+    executing.resolve({ sessionId, turn: 2, draft: 'prompt after surface replacement' })
+    await waitFor(() => { expect(h.actions.setDraft).toHaveBeenCalledWith('prompt after surface replacement') })
+    expect(h.actions.persistDraft).toHaveBeenCalledTimes(1)
+    expect(h.actions.submit).not.toHaveBeenCalled()
+    expect(h.rollback.getSnapshot().active).toBeNull()
   })
 
   it('aborts preview and removes dialog subscriptions on unmount', async () => {

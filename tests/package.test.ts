@@ -6,6 +6,8 @@ const SHARED_RUNTIME = [
   '@deepseek-ai/dsh-agent-default-model',
   '@deepseek-ai/dsh-api-remotes',
   '@deepseek-ai/dsh-api-session-controller',
+  '@deepseek-ai/dsh-fs',
+  '@deepseek-ai/dsh-tools',
   '@deepseek-ai/dsh-client-locale',
   '@deepseek-ai/dsh-client-ui-chat',
   '@deepseek-ai/dsh-client-ui-conversation',

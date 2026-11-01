@@ -255,6 +255,17 @@ it('registers turn-tail only while enabled, cancels on disable, and cleans up ac
   ctx.provide('remote.checkpointRollback', checkpointRollback as never)
   ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
   ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
+  let mainView = 1
+  const retentionListeners = new Set<() => void>()
+  ctx.provide('sessions', {
+    retainInfo: () => ({
+      getSnapshot: () => ({ referenceCount: mainView, retainedBy: mainView === 0 ? {} : { mainView } }),
+      subscribe: (listener: () => void) => {
+        retentionListeners.add(listener)
+        return () => { retentionListeners.delete(listener) }
+      },
+    }),
+  } as never)
   ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
   ctx.provide('slots', {
     inject: (_key: string, registerEntry: () => () => void) => registerEntry(),
@@ -307,7 +318,19 @@ it('registers turn-tail only while enabled, cancels on disable, and cleans up ac
   act(() => { secondRollback.rollback.open(2) })
   expect(previewSignals).toHaveLength(2)
 
-  await fiber.dispose()
+  act(() => {
+    mainView = 0
+    for (const listener of retentionListeners) listener()
+  })
   expect(previewSignals[1]?.aborted).toBe(true)
+
+  act(() => {
+    mainView = 1
+    for (const listener of retentionListeners) listener()
+    secondRollback.rollback.open(2)
+  })
+  expect(previewSignals).toHaveLength(3)
+  await fiber.dispose()
+  expect(previewSignals[2]?.aborted).toBe(true)
   expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(0)
 })

@@ -54,7 +54,7 @@ describe('composer configuration and Remote metadata', () => {
       rollbackEnabled: false,
     })
     expect(Object.keys(Config({}))).toEqual(['historyEnabled', 'optimizeEnabled', 'predictEnabled', 'rollbackEnabled'])
-    expect(inject).toEqual(['llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel', 'typert', 'typertGateway'])
+    expect(inject).toEqual(['llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel', 'fs', 'tools', 'typert', 'typertGateway'])
   })
 
   it('publishes one strict cancellable call with a nullable result', () => {

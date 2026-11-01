@@ -79,7 +79,7 @@ export interface SurfaceRestoreResult {
 
 export type SurfaceAppendOccurred = (journal: CheckpointJournal) => boolean | Promise<boolean>
 
-interface CurrentSnapshot {
+export interface CurrentSnapshot {
   readonly path: string
   readonly exists: boolean
   readonly text: string | null
@@ -147,7 +147,7 @@ function absolutePath(workspaceRoot: string, path: string): string {
   return resolve(workspaceRoot, ...segments(path))
 }
 
-function snapshotHash(snapshot: CurrentSnapshot): string {
+export function snapshotHash(snapshot: CurrentSnapshot): string {
   return snapshot.exists ? digest(snapshot.text!) : ABSENT_FILE_HASH
 }
 
@@ -182,7 +182,7 @@ async function writeJournalAtomic(path: string, value: unknown): Promise<void> {
   }
 }
 
-async function readSnapshot(workspaceRoot: string, path: string): Promise<CurrentSnapshot> {
+export async function readSnapshot(workspaceRoot: string, path: string): Promise<CurrentSnapshot> {
   let current = resolve(workspaceRoot)
   const target = absolutePath(workspaceRoot, path)
   for (const segment of segments(path)) {

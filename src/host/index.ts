@@ -6,6 +6,7 @@ import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protoc
 import type {} from '@deepseek-ai/dsh-typert-registry'
 import { AuxiliaryError } from '../errors.ts'
 import { DshCheckpointSessions } from './checkpoint/dsh.ts'
+import { applyCheckpointCapture } from './checkpoint/live.ts'
 import { CheckpointRollbackError, CheckpointRollbackService } from './checkpoint/service.ts'
 import type { CheckpointRollbackRequest } from './checkpoint/service.ts'
 import { CheckpointStore } from './checkpoint/store.ts'
@@ -15,7 +16,7 @@ import type { RpcPayload } from './rpc.ts'
 import type { AuxiliaryResult } from './types.ts'
 
 export const name = 'composer-enhancer'
-export const inject = ['llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel', 'typert', 'typertGateway']
+export const inject = ['llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel', 'fs', 'tools', 'typert', 'typertGateway']
 
 export const Config = z.object({
   historyEnabled: z.boolean().default(true).volatile(),
@@ -67,15 +68,19 @@ export function apply(ctx: Context, config: Config): void {
     process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     'profiles', 'desktop', 'plugin-data', 'dsh-composer-enhancer', 'checkpoint',
   )
+  const store = new CheckpointStore(storageRoot)
   const sessions = new DshCheckpointSessions(ctx)
   const rollback = new CheckpointRollbackService({
-    store: new CheckpointStore(storageRoot),
+    store,
     storageRoot,
     pluginVersion: '0.1.5',
     resolveSession: sessions.resolveSession,
     isEnabled: () => config.rollbackEnabled.get(),
   })
   applyCheckpointRollback(ctx, rollback)
+  if (config.rollbackEnabled.get()) {
+    applyCheckpointCapture(ctx, { store, pluginVersion: '0.1.5' })
+  }
 }
 
 export const checkpointHostContribution = {

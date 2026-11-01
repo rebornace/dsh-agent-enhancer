@@ -102,6 +102,7 @@ export function apply(ctx: Context): void {
       execute: (request, signal) => checkpointRollbackRemote.execute(mountedCtx.remote, request, signal),
     }
     const rollbackSessions = new Map<SessionId, RollbackController>()
+    const rollbackRetentions = new Map<SessionId, () => void>()
     const rollbackFor = (sessionId: SessionId) => {
       let rollback = rollbackSessions.get(sessionId)
       if (rollback === undefined) {
@@ -111,6 +112,15 @@ export function apply(ctx: Context): void {
           remote: rollbackRemote,
         })
         rollbackSessions.set(sessionId, rollback)
+        const sessions = mountedCtx.get('sessions')
+        if (sessions !== undefined) {
+          const retention = sessions.retainInfo(sessionId)
+          rollbackRetentions.set(sessionId, retention.subscribe(() => {
+            if ((retention.getSnapshot().retainedBy.mainView ?? 0) === 0) {
+              rollbackSessions.get(sessionId)?.close()
+            }
+          }))
+        }
       }
       return rollback
     }
@@ -120,7 +130,9 @@ export function apply(ctx: Context): void {
       disposeRollbackSlot = undefined
       dispose?.()
       for (const rollback of rollbackSessions.values()) rollback.dispose()
+      for (const unsubscribe of rollbackRetentions.values()) unsubscribe()
       rollbackSessions.clear()
+      rollbackRetentions.clear()
     }
     mountedCtx.effect(() => {
       const synchronize = () => {
