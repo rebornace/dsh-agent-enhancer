@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { createElement } from 'react'
 import type { ClientRemote, PluginInventorySnapshot, RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -19,7 +20,8 @@ import { clientRemoteInfo, composerEnhancerCall } from './remote.ts'
 import { RollbackController } from './rollback/controller.ts'
 import type { RollbackRemote } from './rollback/controller.ts'
 import { checkpointRollbackRemote } from './rollback/remote.ts'
-import { RollbackTurnAction } from './rollback/turn-action.tsx'
+import { RollbackUserNode } from './rollback/user-node.tsx'
+import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { installCss } from './styles.module.css'
 
 type InventoryRemote = ClientRemote & {
@@ -103,6 +105,12 @@ export function apply(ctx: Context): void {
     }
     const rollbackSessions = new Map<SessionId, RollbackController>()
     const rollbackRetentions = new Map<SessionId, () => void>()
+    const tEnhancer = mountedCtx.locale.bind('composer-enhancer')
+    const tChat = mountedCtx.locale.bind('chat')
+    const rollbackUserNode = (props: ChatNodeViewProps<'user'>) => createElement(
+      RollbackUserNode,
+      { ...props, rollback: rollbackFor(props.sessionId), tEnhancer, tChat },
+    )
     const rollbackFor = (sessionId: SessionId) => {
       let rollback = rollbackSessions.get(sessionId)
       if (rollback === undefined) {
@@ -140,11 +148,10 @@ export function apply(ctx: Context): void {
         if (!enabled) {
           disableRollback()
         } else if (disposeRollbackSlot === undefined) {
-          disposeRollbackSlot = mountedCtx.slots.inject('conversation.chat.turnTail', () => mountedCtx.slots.register({
-            name: 'conversation.chat.turnTail', id: 'composer-enhancer-rollback', order: 120,
-            locale: 'composer-enhancer',
-            inject: sessionId => ({ rollback: rollbackFor(sessionId) }),
-          }, RollbackTurnAction))
+          disposeRollbackSlot = mountedCtx.slots.inject('conversation.chat.node', () => mountedCtx.slots.register({
+            name: 'conversation.chat.node', key: 'user', priority: -120,
+            registrant: 'composer-enhancer-rollback-user',
+          }, rollbackUserNode as never))
         }
       }
       const unsubscribe = form.subscribe(synchronize)

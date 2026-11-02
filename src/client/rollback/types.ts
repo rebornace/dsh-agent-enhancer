@@ -1,6 +1,7 @@
 import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
+  CheckpointRollbackOperation,
   CheckpointRollbackPreview,
   CheckpointRollbackRequest,
   CheckpointRollbackResult,
@@ -13,6 +14,7 @@ export interface RollbackRemote {
 
 export interface RollbackActive {
   readonly turn: number
+  readonly operation: CheckpointRollbackOperation
   readonly status: 'loading' | 'ready' | 'executing' | 'error'
   readonly preview?: CheckpointRollbackPreview
   readonly error?: 'preview' | 'execute'

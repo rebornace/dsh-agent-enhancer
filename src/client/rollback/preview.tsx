@@ -1,18 +1,11 @@
-import { Button, MenuSurface, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { useEffect, useSyncExternalStore } from 'react'
+import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { CheckpointUnavailable } from '../../host/checkpoint/service.ts'
 import type { FileConflict } from '../../host/checkpoint/files.ts'
 import styles from '../styles.module.css'
-import type { RollbackController } from './controller.ts'
 import type { RollbackActive } from './types.ts'
 
-export type RollbackTurnActionProps = PropsRuntime<'conversation.chat.turnTail'> & {
-  readonly rollback: RollbackController
-  readonly t: TranslateNS<'composer-enhancer'>
-}
-
-const UNAVAILABLE_KEYS: Record<CheckpointUnavailable, Parameters<RollbackTurnActionProps['t']>[0]> = {
+const UNAVAILABLE_KEYS: Record<CheckpointUnavailable, Parameters<TranslateNS<'composer-enhancer'>>[0]> = {
   'checkpoint-not-found': 'rollbackUnavailableCheckpoint',
   'incomplete-checkpoint': 'rollbackUnavailableIncomplete',
   'prompt-non-text-content': 'rollbackGapPrompt',
@@ -28,7 +21,7 @@ const UNAVAILABLE_KEYS: Record<CheckpointUnavailable, Parameters<RollbackTurnAct
   'unknown-surface': 'rollbackUnavailableUnknown',
 }
 
-const CONFLICT_KEYS: Record<FileConflict['reason'], Parameters<RollbackTurnActionProps['t']>[0]> = {
+const CONFLICT_KEYS: Record<FileConflict['reason'], Parameters<TranslateNS<'composer-enhancer'>>[0]> = {
   'unsafe-path': 'rollbackConflictUnsafe',
   'symlink': 'rollbackConflictSymlink',
   'not-regular-file': 'rollbackConflictRegular',
@@ -39,12 +32,15 @@ const CONFLICT_KEYS: Record<FileConflict['reason'], Parameters<RollbackTurnActio
   'hash-mismatch': 'rollbackConflictHash',
 }
 
-function Preview({ active, t }: {
+export function RollbackPreview({ active, t }: {
   readonly active: RollbackActive
-  readonly t: RollbackTurnActionProps['t']
+  readonly t: TranslateNS<'composer-enhancer'>
 }) {
   if (active.status === 'loading' || active.status === 'executing') {
-    return <p role="status">{t(active.status === 'loading' ? 'rollbackLoading' : 'rollbackRestoring')}</p>
+    const loadingKey = active.status === 'loading'
+      ? 'rollbackLoading'
+      : active.operation === 'undo' ? 'rollbackUndoRestoring' : 'rollbackRestoring'
+    return <p role="status">{t(loadingKey)}</p>
   }
   if (active.status === 'error') return <p role="alert">{t('rollbackFailed')}</p>
   const preview = active.preview
@@ -82,45 +78,28 @@ function Preview({ active, t }: {
   </MenuSurface>
 }
 
-export function RollbackTurnAction(props: RollbackTurnActionProps) {
-  const snapshot = useSyncExternalStore(props.rollback.subscribe, props.rollback.getSnapshot)
-  const session = props.useSession(state => state)
-  const turn = props.turn
-  const active = snapshot.active?.turn === turn.turn ? snapshot.active : null
-  useEffect(() => () => {
-    if (props.rollback.getSnapshot().active?.status !== 'executing') props.rollback.close(turn.turn)
-  }, [props.rollback, turn.turn])
-
-  if (!snapshot.enabled) return null
-  const canExecute = props.useAccess('checkpointRollback/execute')
-  const disabledReason = canExecute === false ? 'rollbackUnavailablePermission' as const
-    : session.running ? 'rollbackUnavailableRunning' as const
-      : turn.status !== 'closed' ? 'rollbackTurnOpen' as const
-      : turn.start === undefined ? 'rollbackTurnStartMissing' as const
-        : turn.start.seq <= 0 ? 'rollbackUnavailableFirstTurn' as const : null
-  const blocked = active?.preview === undefined || active.preview.unavailable.length > 0 || active.preview.conflicts.length > 0
-  return <>
-    <Button type="button" size="sm" variant="ghost" className={styles.rollbackEntry}
-      disabled={disabledReason !== null} title={disabledReason === null ? undefined : props.t(disabledReason)}
-      onClick={() => {
-        if (disabledReason === null) props.rollback.open(turn.turn)
-      }}>{props.t('rollbackAction')}</Button>
-    {active === null ? null : <Modal
-      open
-      title={props.t('rollbackTitle', { turn: turn.turn })}
-      description={props.t('rollbackScope')}
-      closeLabel={props.t('rollbackClose')}
-      className={styles.rollbackDialog}
-      contentClassName={styles.rollbackContent}
-      onClose={() => { props.rollback.close(turn.turn) }}
-      footer={<>
-        <Button type="button" data-modal-autofocus
-          onClick={() => { props.rollback.close(turn.turn) }}>{props.t('rollbackCancel')}</Button>
-        <Button type="button" disabled={active.status !== 'ready' || blocked}
-          onClick={() => { void props.rollback.confirm(props.inputActions) }}>
-          {props.t(active.status === 'executing' ? 'rollbackRestoring' : 'rollbackConfirm')}
-        </Button>
-      </>}
-    ><Preview active={active} t={props.t} /></Modal>}
-  </>
+export function rollbackModalCopy(
+  operation: RollbackActive['operation'],
+  t: TranslateNS<'composer-enhancer'>,
+  turn: number,
+): {
+  readonly title: string
+  readonly description: string
+  readonly confirm: string
+  readonly executing: string
+} {
+  if (operation === 'undo') {
+    return {
+      title: t('rollbackUndoTitle', { turn }),
+      description: t('rollbackUndoScope'),
+      confirm: t('rollbackUndoConfirm'),
+      executing: t('rollbackUndoRestoring'),
+    }
+  }
+  return {
+    title: t('rollbackTitle', { turn }),
+    description: t('rollbackScope'),
+    confirm: t('rollbackConfirm'),
+    executing: t('rollbackRestoring'),
+  }
 }

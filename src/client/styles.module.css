@@ -224,3 +224,35 @@
   display: block;
   color: var(--dsw-alias-label-secondary);
 }
+
+.userMessageRow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.userMessageActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.userMessageAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+}
+
+.userMessageAction:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+}

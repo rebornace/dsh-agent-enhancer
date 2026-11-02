@@ -8,8 +8,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'settingsTitle' | 'settingsSubtitle' | 'history' | 'historyDescription' | 'optimizeDescription' |
       'predict' | 'predictDescription' | 'privacyTitle' | 'privacy' | 'coexistence' | 'settingsError' |
       'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'dismissHint' |
-      'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackTitle' | 'rollbackScope' |
-      'rollbackClose' | 'rollbackConfirm' | 'rollbackCancel' | 'rollbackLoading' | 'rollbackRestoring' | 'rollbackFailed' |
+      'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackUndoAction' |
+      'rollbackTitle' | 'rollbackScope' | 'rollbackUndoTitle' | 'rollbackUndoScope' |
+      'rollbackClose' | 'rollbackConfirm' | 'rollbackUndoConfirm' | 'rollbackCancel' | 'rollbackLoading' |
+      'rollbackRestoring' | 'rollbackUndoRestoring' | 'rollbackFailed' |
       'rollbackTurnOpen' | 'rollbackTurnStartMissing' |
       'rollbackMessages' | 'rollbackFiles' | 'rollbackGaps' | 'rollbackConflicts' | 'rollbackNoMessages' | 'rollbackNoFiles' |
       'rollbackFile_create' | 'rollbackFile_modify' | 'rollbackFile_delete' | 'rollbackGapWorkspace' | 'rollbackGapPrompt' |
@@ -54,16 +56,21 @@ export const composerLocales = {
     overlapPredict: '检测到另一个回复建议功能。Composer 增强的预测功能仍保持开启。',
     dismissHint: '关闭共存提示',
     rollback: '对话与文件回滚',
-    rollbackDescription: '在合规轮次末尾预览并恢复对话与已跟踪文件',
+    rollbackDescription: '在合规用户消息旁预览并恢复对话与已跟踪文件',
     rollbackBoundary: '不恢复进程、终端、后台任务、数据库、网络、部署、第三方服务或未跟踪文件；关闭后保留已有日志和检查点。',
     rollbackAction: '回滚到这里',
+    rollbackUndoAction: '取消回滚',
     rollbackTitle: '恢复到第 {turn} 轮之前',
+    rollbackUndoTitle: '取消第 {turn} 轮回滚',
     rollbackScope: '仅恢复对话与已跟踪文件。进程、终端、后台任务、数据库、网络、部署、第三方服务和未跟踪文件不会恢复。',
+    rollbackUndoScope: '将撤回本次回滚标记，并恢复回滚前的对话与已跟踪文件预览。进程、终端、后台任务、数据库、网络、部署、第三方服务和未跟踪文件不会恢复。',
     rollbackClose: '关闭回滚预览',
     rollbackConfirm: '恢复对话与已跟踪文件',
+    rollbackUndoConfirm: '取消回滚并恢复预览内容',
     rollbackCancel: '取消',
     rollbackLoading: '正在重新检查对话和文件状态…',
     rollbackRestoring: '正在恢复对话与已跟踪文件…',
+    rollbackUndoRestoring: '正在取消回滚并恢复对话与已跟踪文件…',
     rollbackFailed: '回滚未完成，请关闭预览后重试。',
     rollbackTurnOpen: '本轮尚未结束',
     rollbackTurnStartMissing: '本轮开始事件尚未加载',
@@ -129,16 +136,21 @@ export const composerLocales = {
     overlapPredict: 'Another reply-suggestion feature is enabled. Composer Enhance prediction remains enabled.',
     dismissHint: 'Dismiss coexistence notice',
     rollback: 'Conversation and file rollback',
-    rollbackDescription: 'Preview and restore conversation and tracked files at eligible turn boundaries',
+    rollbackDescription: 'Preview and restore conversation and tracked files from eligible user messages',
     rollbackBoundary: 'Processes, terminals, background jobs, databases, network activity, deployments, third-party state, and untracked files are not restored. Existing logs and checkpoints remain after disable.',
     rollbackAction: 'Roll back to here',
+    rollbackUndoAction: 'Undo rollback',
     rollbackTitle: 'Restore before turn {turn}',
+    rollbackUndoTitle: 'Undo rollback before turn {turn}',
     rollbackScope: 'Restore conversation and tracked files only. Processes, terminals, background jobs, databases, network activity, deployments, third-party state, and untracked files are not restored.',
+    rollbackUndoScope: 'Withdraw the rollback marker and restore the conversation and tracked files shown in preview. Processes, terminals, background jobs, databases, network activity, deployments, third-party state, and untracked files are not restored.',
     rollbackClose: 'Close rollback preview',
     rollbackConfirm: 'Restore conversation and tracked files',
+    rollbackUndoConfirm: 'Undo rollback and restore preview',
     rollbackCancel: 'Cancel',
     rollbackLoading: 'Rechecking conversation and file state…',
     rollbackRestoring: 'Restoring conversation and tracked files…',
+    rollbackUndoRestoring: 'Undoing rollback and restoring conversation and tracked files…',
     rollbackFailed: 'Rollback did not complete. Close the preview and try again.',
     rollbackTurnOpen: 'The turn is not closed',
     rollbackTurnStartMissing: 'The turn start is not loaded',

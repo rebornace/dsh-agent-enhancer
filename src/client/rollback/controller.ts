@@ -1,5 +1,6 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
+  CheckpointRollbackOperation,
   CheckpointRollbackPreview,
   CheckpointRollbackRequest,
   CheckpointRollbackResult,
@@ -48,14 +49,14 @@ export class RollbackController {
     this.publish()
   }
 
-  open(turn: number): void {
+  open(turn: number, operation: CheckpointRollbackOperation = 'rollback'): void {
     if (this.disposed || !this.options.enabled() || this.operation?.status === 'executing') return
     this.cancelOperation()
     const version = ++this.version
     const controller = new AbortController()
-    this.operation = { turn, status: 'loading', version, controller }
+    this.operation = { turn, operation, status: 'loading', version, controller }
     this.publish()
-    const request: CheckpointRollbackRequest = { sessionId: this.options.sessionId, turn }
+    const request: CheckpointRollbackRequest = { sessionId: this.options.sessionId, turn, operation }
     void this.options.remote.preview(request, controller.signal).then(result => {
       if (!this.current(version, request, result)) return
       this.operation = { ...this.operation!, status: 'ready', preview: result }
@@ -77,8 +78,12 @@ export class RollbackController {
     const active = this.operation
     if (this.disposed || active?.status !== 'ready' || active.preview === undefined
       || active.preview.unavailable.length > 0 || active.preview.conflicts.length > 0) return
-    const { turn, version } = active
-    const request: CheckpointRollbackRequest = { sessionId: this.options.sessionId, turn }
+    const { turn, version, operation } = active
+    const request: CheckpointRollbackRequest = {
+      sessionId: this.options.sessionId,
+      turn,
+      operation,
+    }
     const controller = new AbortController()
     this.operation = { ...active, status: 'executing', controller }
     this.publish()
@@ -111,8 +116,10 @@ export class RollbackController {
     request: CheckpointRollbackRequest,
     response?: CheckpointRollbackPreview | CheckpointRollbackResult,
   ): boolean {
+    const operation = request.operation ?? 'rollback'
     return !this.disposed && this.options.enabled() && this.version === version
       && this.operation?.version === version && this.operation.turn === request.turn
+      && this.operation.operation === operation
       && (response === undefined || (response.sessionId === request.sessionId && response.turn === request.turn))
   }
 
@@ -127,6 +134,7 @@ export class RollbackController {
       enabled: !this.disposed && this.options.enabled(),
       active: this.operation === null ? null : {
         turn: this.operation.turn,
+        operation: this.operation.operation,
         status: this.operation.status,
         version: this.operation.version,
         ...(this.operation.preview === undefined ? {} : { preview: this.operation.preview }),

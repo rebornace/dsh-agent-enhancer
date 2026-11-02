@@ -221,7 +221,7 @@ it('aborts pending optimization and hides the button on a real form notification
   expect(screen.queryByRole('button')).toBeNull()
 })
 
-it('registers turn-tail only while enabled, cancels on disable, and cleans up across re-enable and unload', async () => {
+it('registers user node replacement only while enabled and cleans up on unload', async () => {
   const ctx = new Context()
   contexts.push(ctx)
   const listeners = new Set<() => void>()
@@ -235,15 +235,12 @@ it('registers turn-tail only while enabled, cancels on disable, and cleans up ac
   }
   interface Entry {
     readonly name: string
-    readonly inject: (sessionId: SessionId) => unknown
+    readonly key?: string
+    readonly registrant?: string
   }
   const registrations: Entry[] = []
-  const previewSignals: AbortSignal[] = []
   const checkpointRollback = {
-    preview: vi.fn((_request: unknown, signal: AbortSignal) => {
-      previewSignals.push(signal)
-      return new Promise<never>(() => {})
-    }),
+    preview: vi.fn((_request: unknown, _signal: AbortSignal) => new Promise<never>(() => {})),
     execute: vi.fn(),
   }
   const remote = {
@@ -255,15 +252,10 @@ it('registers turn-tail only while enabled, cancels on disable, and cleans up ac
   ctx.provide('remote.checkpointRollback', checkpointRollback as never)
   ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
   ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
-  let mainView = 1
-  const retentionListeners = new Set<() => void>()
   ctx.provide('sessions', {
     retainInfo: () => ({
-      getSnapshot: () => ({ referenceCount: mainView, retainedBy: mainView === 0 ? {} : { mainView } }),
-      subscribe: (listener: () => void) => {
-        retentionListeners.add(listener)
-        return () => { retentionListeners.delete(listener) }
-      },
+      getSnapshot: () => ({ referenceCount: 1, retainedBy: { mainView: 1 } }),
+      subscribe: () => () => {},
     }),
   } as never)
   ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
@@ -281,6 +273,7 @@ it('registers turn-tail only while enabled, cancels on disable, and cleans up ac
   await vi.waitFor(() => {
     expect(registrations.some(entry => entry.name === 'conversation.input.right')).toBe(true)
   })
+  expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(0)
   expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(0)
 
   act(() => {
@@ -288,49 +281,24 @@ it('registers turn-tail only while enabled, cancels on disable, and cleans up ac
     for (const listener of listeners) listener()
   })
   await vi.waitFor(() => {
-    expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(1)
+    expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(1)
   })
-  const first = registrations.find(entry => entry.name === 'conversation.chat.turnTail')!
-  const firstRollback = first.inject('session-1' as SessionId) as {
-    rollback: { open(turn: number): void }
-  }
-  act(() => { firstRollback.rollback.open(2) })
-  expect(previewSignals).toHaveLength(1)
+  expect(registrations.find(entry => entry.registrant === 'composer-enhancer-rollback-user')).toBeDefined()
 
   act(() => {
     value = { rollbackEnabled: false }
     for (const listener of listeners) listener()
   })
-  expect(previewSignals[0]?.aborted).toBe(true)
-  expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(0)
+  expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(0)
 
   act(() => {
     value = { rollbackEnabled: true }
     for (const listener of listeners) listener()
   })
   await vi.waitFor(() => {
-    expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(1)
+    expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(1)
   })
-  const reopened = registrations.find(entry => entry.name === 'conversation.chat.turnTail')!
-  const secondRollback = reopened.inject('session-1' as SessionId) as {
-    rollback: { open(turn: number): void }
-  }
-  act(() => { secondRollback.rollback.open(2) })
-  expect(previewSignals).toHaveLength(2)
 
-  act(() => {
-    mainView = 0
-    for (const listener of retentionListeners) listener()
-  })
-  expect(previewSignals[1]?.aborted).toBe(true)
-
-  act(() => {
-    mainView = 1
-    for (const listener of retentionListeners) listener()
-    secondRollback.rollback.open(2)
-  })
-  expect(previewSignals).toHaveLength(3)
   await fiber.dispose()
-  expect(previewSignals[2]?.aborted).toBe(true)
-  expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(0)
+  expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(0)
 })

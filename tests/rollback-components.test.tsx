@@ -9,11 +9,11 @@ import type {
   CheckpointRollbackRequest,
   CheckpointRollbackResult,
 } from '../src/host/checkpoint/service.ts'
+import { RollbackMessageActions } from '../src/client/rollback/actions.tsx'
+import type { RollbackMessageActionsProps } from '../src/client/rollback/actions.tsx'
 import { composerLocales } from '../src/client/locales.ts'
 import { RollbackController } from '../src/client/rollback/controller.ts'
 import type { RollbackRemote } from '../src/client/rollback/controller.ts'
-import { RollbackTurnAction } from '../src/client/rollback/turn-action.tsx'
-import type { RollbackTurnActionProps } from '../src/client/rollback/turn-action.tsx'
 
 const sessionId = 'session-1' as SessionId
 const controllers: RollbackController[] = []
@@ -44,7 +44,7 @@ function remoteWith(
   executeImplementation: RollbackRemote['execute'] = async request => ({
     sessionId: request.sessionId,
     turn: request.turn,
-    draft: 'second prompt',
+    draft: request.operation === 'undo' ? '' : 'second prompt',
   }),
 ): RollbackRemote {
   return {
@@ -91,6 +91,7 @@ function setup(options: {
   canRestore?: boolean
   remote?: RollbackRemote
   turn?: TurnLocation
+  operation?: RollbackMessageActionsProps['operation']
 } = {}) {
   let enabled = options.enabled ?? true
   const remote = options.remote ?? remoteWith()
@@ -105,15 +106,14 @@ function setup(options: {
   const props = {
     sessionId,
     turn: options.turn ?? turnFixture(),
-    seq: 5,
-    openFile: vi.fn(),
+    operation: options.operation ?? 'rollback',
     inputActions: actions,
     useSession: (selector: (state: { running: boolean }) => unknown) => selector({ running: options.running ?? false }),
     useAccess,
     t: translate,
     rollback,
-  } as unknown as RollbackTurnActionProps
-  const view = render(<RollbackTurnAction {...props} />)
+  } as unknown as RollbackMessageActionsProps
+  const view = render(<RollbackMessageActions {...props} />)
   return {
     ...view,
     actions,
@@ -123,15 +123,15 @@ function setup(options: {
     setEnabled(value: boolean) {
       enabled = value
       rollback.refreshSettings()
-      view.rerender(<RollbackTurnAction {...props} />)
+      view.rerender(<RollbackMessageActions {...props} />)
     },
     rerenderTurn(turn: TurnLocation, running = false) {
       const next = {
         ...props,
         turn,
         useSession: (selector: (state: { running: boolean }) => unknown) => selector({ running }),
-      } as RollbackTurnActionProps
-      view.rerender(<RollbackTurnAction {...next} />)
+      } as RollbackMessageActionsProps
+      view.rerender(<RollbackMessageActions {...next} />)
     },
   }
 }
@@ -141,7 +141,7 @@ afterEach(() => {
   for (const rollback of controllers.splice(0)) rollback.dispose()
 })
 
-describe('RollbackTurnAction', () => {
+describe('RollbackMessageActions', () => {
   it('has no entry while disabled and shows one only for an eligible closed turn', () => {
     const h = setup({ enabled: false })
     expect(screen.queryByRole('button', { name: 'Roll back to here' })).toBeNull()
@@ -209,11 +209,26 @@ describe('RollbackTurnAction', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Restore conversation and tracked files' }))
     await waitFor(() => { expect(h.actions.setDraft).toHaveBeenCalledWith('restored editable prompt') })
 
-    const request: CheckpointRollbackRequest = { sessionId, turn: 2 }
+    const request: CheckpointRollbackRequest = { sessionId, turn: 2, operation: 'rollback' }
     expect(remote.execute).toHaveBeenCalledWith(request, expect.any(AbortSignal))
     expect(h.actions.persistDraft).toHaveBeenCalledTimes(1)
     expect(h.actions.submit).not.toHaveBeenCalled()
     await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
+  })
+
+  it('previews and executes undo with distinct copy and clears the draft from the host result', async () => {
+    const remote = remoteWith(
+      async request => preview({ ...preview(), operation: request.operation }),
+      async request => ({ sessionId, turn: request.turn, draft: '' }),
+    )
+    const h = setup({ remote, operation: 'undo' })
+    fireEvent.click(screen.getByRole('button', { name: 'Undo rollback' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Undo rollback before turn 2' })
+    expect(dialog.textContent).toContain('Withdraw the rollback marker')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo rollback and restore preview' }))
+    await waitFor(() => { expect(h.actions.setDraft).toHaveBeenCalledWith('') })
+    expect(remote.preview).toHaveBeenCalledWith({ sessionId, turn: 2, operation: 'undo' }, expect.any(AbortSignal))
+    expect(remote.execute).toHaveBeenCalledWith({ sessionId, turn: 2, operation: 'undo' }, expect.any(AbortSignal))
   })
 
   it('cancels an in-flight restore on disable and accepts a fresh compatible preview after re-enable', async () => {
@@ -267,7 +282,7 @@ describe('RollbackTurnAction', () => {
     h.rollback.close()
   })
 
-  it('allows execute to finish and restores the draft when surface replacement unmounts the turn-tail', async () => {
+  it('allows execute to finish and restores the draft when surface replacement unmounts the user node', async () => {
     const executing = deferred<CheckpointRollbackResult>()
     let executeSignal: AbortSignal | undefined
     const remote = remoteWith(async () => preview(), (_request, signal) => {

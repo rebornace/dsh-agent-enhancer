@@ -23,7 +23,11 @@ import type { ReactNode } from 'react'
 import { expect, it, vi } from 'vitest'
 import type { EnhancerSettings } from '../src/config.ts'
 
-const require = createRequire(import.meta.url)
+function rollbackUserNodeEntries(ctx: Context) {
+  return ctx.slots.entries('conversation.chat.node').filter(entry => entry.options.key === 'user'
+    && entry.registrant === 'composer-enhancer-rollback-user')
+}
+
 const staticModules: Record<string, unknown> = {
   '@deepseek-ai/dsh-client-store': clientStore,
   '@deepseek-ai/dsh-client-ui-primitives': clientPrimitives,
@@ -345,16 +349,16 @@ it('loads through the official Loader without replacing the composer bar and cle
     expect(ctx.slots.entries('conversation.composer.bar')[0]).toBe(officialBar)
     expect(ctx.slots.entries('settings.plugins.tab').map(entry => entry.options.id)).toContain('composer-enhancer')
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
+    expect(rollbackUserNodeEntries(ctx)).toHaveLength(0)
     act(() => { settings.accept({ rollbackEnabled: true }) })
     await vi.waitFor(() => {
-      expect(ctx.slots.entries('conversation.chat.turnTail').map(entry => entry.options.id))
-        .toEqual(['composer-enhancer-rollback'])
+      expect(rollbackUserNodeEntries(ctx)).toHaveLength(1)
     })
     act(() => { settings.accept({ rollbackEnabled: false }) })
-    expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
+    expect(rollbackUserNodeEntries(ctx)).toHaveLength(0)
     act(() => { settings.accept({ rollbackEnabled: true }) })
     await vi.waitFor(() => {
-      expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(1)
+      expect(rollbackUserNodeEntries(ctx)).toHaveLength(1)
     })
     expect(settings.listeners.size).toBeGreaterThan(baselineSettingsListeners)
     expect(document.querySelector('style[data-dsh-composer-enhancer]')).not.toBeNull()
