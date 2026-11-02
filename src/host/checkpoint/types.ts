@@ -19,6 +19,7 @@ export interface FileCheckpoint {
   readonly change: 'create' | 'modify' | 'delete'
   readonly beforeText: string | null
   readonly beforeHash: string
+  readonly afterText: string | null
   readonly afterHash: string
 }
 

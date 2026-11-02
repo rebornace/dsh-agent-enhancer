@@ -35,6 +35,7 @@ const CONFLICT_KEYS: Record<FileConflict['reason'], Parameters<RollbackTurnActio
   'binary': 'rollbackConflictBinary',
   'too-large': 'rollbackConflictLarge',
   'invalid-before-image': 'rollbackConflictBefore',
+  'invalid-after-image': 'rollbackConflictBefore',
   'hash-mismatch': 'rollbackConflictHash',
 }
 

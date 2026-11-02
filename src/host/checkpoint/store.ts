@@ -32,10 +32,13 @@ const fileSchema = z.object({
   change: z.enum(['create', 'modify', 'delete']),
   beforeText: z.string().nullable(),
   beforeHash: z.string(),
+  afterText: z.string().nullable(),
   afterHash: z.string(),
 }).strict().superRefine((file, context) => {
-  const valid = file.change === 'create' ? file.beforeText === null : file.beforeText !== null
-  if (!valid) context.addIssue({ code: 'custom', path: ['beforeText'], message: 'Invalid before-image' })
+  const validBefore = file.change === 'create' ? file.beforeText === null : file.beforeText !== null
+  if (!validBefore) context.addIssue({ code: 'custom', path: ['beforeText'], message: 'Invalid before-image' })
+  const validAfter = file.change === 'delete' ? file.afterText === null : file.afterText !== null
+  if (!validAfter) context.addIssue({ code: 'custom', path: ['afterText'], message: 'Invalid after-image' })
 })
 const checkpointSchema = z.object({
   schemaVersion: z.literal(CHECKPOINT_SCHEMA_VERSION),
@@ -191,21 +194,36 @@ export class CheckpointStore {
     })
   }
 
+  async listPendingJournals(): Promise<CheckpointJournal[]> {
+    return this.readPendingJournals()
+  }
+
   async recoverJournal(): Promise<CheckpointJournal[]> {
     return serialize(journalQueues, this.rootKey, async () => {
       await this.ensureDirectories()
       await this.cleanTemporaryFiles(this.journalDirectory)
-      const journals: CheckpointJournal[] = []
-      for (const name of (await readdir(this.journalDirectory)).sort()) {
-        if (!name.endsWith('.json')) continue
-        const stored = await this.readJson(join(this.journalDirectory, name))
-        assertCheckpointSchema(stored)
-        const parsed = journalSchema.safeParse(stored)
-        if (!parsed.success) throw new CheckpointStoreError('INVALID_STORE')
-        if (parsed.data.status === 'prepared' || parsed.data.status === 'files-restored') journals.push(parsed.data)
-      }
-      return journals.sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id))
+      return this.readPendingJournals()
     })
+  }
+
+  private async readPendingJournals(): Promise<CheckpointJournal[]> {
+    let names: string[]
+    try {
+      names = await readdir(this.journalDirectory)
+    } catch (error) {
+      if (isMissing(error)) return []
+      throw error
+    }
+    const journals: CheckpointJournal[] = []
+    for (const name of names.sort()) {
+      if (!name.endsWith('.json')) continue
+      const stored = await this.readJson(join(this.journalDirectory, name))
+      assertCheckpointSchema(stored)
+      const parsed = journalSchema.safeParse(stored)
+      if (!parsed.success) throw new CheckpointStoreError('INVALID_STORE')
+      if (parsed.data.status === 'prepared' || parsed.data.status === 'files-restored') journals.push(parsed.data)
+    }
+    return journals.sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id))
   }
 
   private checkpointKey(sessionId: SessionId): string {

@@ -52,6 +52,7 @@ function harness(overrides: Partial<CaptureCheckpointOptions> = {}): Harness {
         change: 'modify',
         beforeText: 'before',
         beforeHash: 'before-hash',
+        afterText: 'after',
         afterHash: 'after-hash',
       }]
     },

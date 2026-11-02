@@ -24,7 +24,7 @@ async function serialize<T>(key: string, operation: () => Promise<T>): Promise<T
   }
 }
 
-export type FileConflictReason = 'unsafe-path' | 'symlink' | 'not-regular-file' | 'binary' | 'too-large' | 'invalid-before-image' | 'hash-mismatch'
+export type FileConflictReason = 'unsafe-path' | 'symlink' | 'not-regular-file' | 'binary' | 'too-large' | 'invalid-before-image' | 'invalid-after-image' | 'hash-mismatch'
 
 export interface FileConflict {
   readonly path: string
@@ -75,6 +75,16 @@ export interface CheckpointFilesOptions {
 export interface SurfaceRestoreResult {
   readonly appended: boolean
   readonly synchronized: boolean
+}
+
+export type RestoreDirection = 'rollback' | 'undo'
+
+function expectedHash(file: FileCheckpoint, direction: RestoreDirection): string {
+  return direction === 'rollback' ? file.afterHash : file.beforeHash
+}
+
+function restoredText(file: FileCheckpoint, direction: RestoreDirection): string | null {
+  return direction === 'rollback' ? file.beforeText : file.afterText
 }
 
 export type SurfaceAppendOccurred = (journal: CheckpointJournal) => boolean | Promise<boolean>
@@ -309,17 +319,21 @@ class DurableRestoreJournal implements RestoreJournal {
 export class CheckpointFiles {
   constructor(private readonly options: CheckpointFilesOptions) {}
 
-  async verifyCurrent(files: readonly FileCheckpoint[]): Promise<FileConflict[]> {
-    const inspections = await this.inspect(files)
+  async verifyCurrent(
+    files: readonly FileCheckpoint[],
+    direction: RestoreDirection = 'rollback',
+  ): Promise<FileConflict[]> {
+    const inspections = await this.inspect(files, direction)
     return inspections.flatMap(inspection => inspection.conflict ? [inspection.conflict] : [])
   }
 
   async runTransaction(
     files: readonly FileCheckpoint[],
     restoreSurface: () => Promise<SurfaceRestoreResult>,
+    direction: RestoreDirection = 'rollback',
   ): Promise<RestoreJournal> {
     return serialize(this.transactionKey(), async () => {
-      const journal = await this.restoreFiles(files)
+      const journal = await this.restoreFiles(files, direction)
       let result: SurfaceRestoreResult
       try {
         result = await restoreSurface()
@@ -366,10 +380,13 @@ export class CheckpointFiles {
     return `${resolve(this.options.storageRoot)}\0${this.options.sessionId}`
   }
 
-  private async restoreFiles(files: readonly FileCheckpoint[]): Promise<DurableRestoreJournal> {
+  private async restoreFiles(
+    files: readonly FileCheckpoint[],
+    direction: RestoreDirection,
+  ): Promise<DurableRestoreJournal> {
     let inspections: Inspection[]
     try {
-      inspections = await this.inspect(files)
+      inspections = await this.inspect(files, direction)
     } catch (error) {
       if (error instanceof CheckpointFileError) throw error
       throw new CheckpointFileError('FILE_RESTORE_FAILED')
@@ -392,11 +409,12 @@ export class CheckpointFiles {
     }
     try {
       for (const inspection of inspections) {
-        await this.validateRestoreSnapshot(inspection)
-        if (inspection.file.change === 'create') {
+        await this.validateRestoreSnapshot(inspection, direction)
+        const targetText = restoredText(inspection.file, direction)
+        if (targetText === null) {
           await (this.options.operations?.remove ?? removeIfPresent)(inspection.absolutePath)
         } else {
-          await (this.options.operations?.write ?? writeAtomic)(inspection.absolutePath, inspection.file.beforeText!)
+          await (this.options.operations?.write ?? writeAtomic)(inspection.absolutePath, targetText)
         }
         await journal.recordRestore(inspection.file.path)
       }
@@ -408,9 +426,14 @@ export class CheckpointFiles {
     }
   }
 
-  private async validateRestoreSnapshot(inspection: Inspection): Promise<void> {
+  private async validateRestoreSnapshot(
+    inspection: Inspection,
+    direction: RestoreDirection,
+  ): Promise<void> {
     const current = await readSnapshot(this.options.workspaceRoot, inspection.file.path)
-    if (snapshotHash(current) !== inspection.file.afterHash) throw new CheckpointFileError('FILE_RESTORE_FAILED')
+    if (snapshotHash(current) !== expectedHash(inspection.file, direction)) {
+      throw new CheckpointFileError('FILE_RESTORE_FAILED')
+    }
   }
 
   private async validateCompensationSnapshot(snapshot: FileSnapshot): Promise<void> {
@@ -446,7 +469,10 @@ export class CheckpointFiles {
         afterHash: value.afterHash,
         beforeHash: value.beforeHash,
       }
-      if (snapshotHash(snapshot) !== snapshot.afterHash) throw new CheckpointFileError('FILE_RESTORE_FAILED')
+      const currentHash = snapshotHash(snapshot)
+      if (currentHash !== snapshot.afterHash && currentHash !== snapshot.beforeHash) {
+        throw new CheckpointFileError('FILE_RESTORE_FAILED')
+      }
       seen.add(pathKey(value.path))
       snapshots.push(snapshot)
     }
@@ -467,7 +493,10 @@ export class CheckpointFiles {
     )
   }
 
-  private async inspect(files: readonly FileCheckpoint[]): Promise<Inspection[]> {
+  private async inspect(
+    files: readonly FileCheckpoint[],
+    direction: RestoreDirection,
+  ): Promise<Inspection[]> {
     const inspections: Inspection[] = []
     const seen = new Set<string>()
     const root = resolve(this.options.workspaceRoot)
@@ -479,14 +508,15 @@ export class CheckpointFiles {
         conflict = { path: file.path, reason: 'unsafe-path' }
       }
       seen.add(pathKey(file.path))
-      if (conflict === null) conflict = this.validateBeforeImage(file)
+      if (conflict === null) conflict = this.validateBeforeImage(file) ?? this.validateAfterImage(file)
       let snapshot: FileSnapshot | null = null
       if (conflict === null) {
         try {
           const current = await readSnapshot(this.options.workspaceRoot, file.path)
           const actualHash = current.exists ? digest(current.text!) : null
-          if (snapshotHash(current) !== file.afterHash) {
-            conflict = { path: file.path, reason: 'hash-mismatch', expectedHash: file.afterHash, actualHash }
+          const expected = expectedHash(file, direction)
+          if (snapshotHash(current) !== expected) {
+            conflict = { path: file.path, reason: 'hash-mismatch', expectedHash: expected, actualHash }
           } else {
             snapshot = { ...current, afterHash: file.afterHash, beforeHash: file.beforeHash }
           }
@@ -508,6 +538,18 @@ export class CheckpointFiles {
     if (file.beforeText !== null
       && (Buffer.byteLength(file.beforeText, 'utf8') > MAX_FILE_BYTES || file.beforeText.includes('\0'))) {
       return { path: file.path, reason: 'invalid-before-image' }
+    }
+    return null
+  }
+
+  private validateAfterImage(file: FileCheckpoint): FileConflict | null {
+    const validImage = file.change === 'delete'
+      ? file.afterText === null && file.afterHash === ABSENT_FILE_HASH
+      : file.afterText !== null && digest(file.afterText) === file.afterHash
+    if (!validImage) return { path: file.path, reason: 'invalid-after-image' }
+    if (file.afterText !== null
+      && (Buffer.byteLength(file.afterText, 'utf8') > MAX_FILE_BYTES || file.afterText.includes('\0'))) {
+      return { path: file.path, reason: 'invalid-after-image' }
     }
     return null
   }

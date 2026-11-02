@@ -79,6 +79,9 @@ export function apply(ctx: Context, config: Config): void {
     isEnabled: () => rollbackEnabled,
   })
   applyCheckpointRollback(ctx, rollback)
+  void rollback.recover().catch(() => {
+    ctx.logger.warn('Checkpoint rollback recovery is still pending')
+  })
 
   const captures = new DshCheckpointCaptureSwitch(ctx, { store, pluginVersion: '0.1.5' })
   ctx.effect(() => {

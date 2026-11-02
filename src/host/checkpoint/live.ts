@@ -193,6 +193,7 @@ export class DshCheckpointCapture {
         change: !tracked.before.exists ? 'create' : !after.exists ? 'delete' : 'modify',
         beforeText: tracked.before.exists ? tracked.before.text : null,
         beforeHash,
+        afterText: after.exists ? after.text : null,
         afterHash,
       })
     }

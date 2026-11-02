@@ -34,6 +34,7 @@ function checkpointFile(
     change,
     beforeText,
     beforeHash: beforeText === null ? '' : digest(beforeText),
+    afterText,
     afterHash: afterText === null ? '' : digest(afterText),
   }
 }
@@ -139,6 +140,53 @@ describe('CheckpointFiles', () => {
     await expectMissing(join(workspaceRoot, 'created.txt'))
     await expect(readFile(join(workspaceRoot, 'modified.txt'), 'utf8')).resolves.toBe('modified before')
     await expect(readFile(join(workspaceRoot, 'deleted.txt'), 'utf8')).resolves.toBe('deleted before')
+  })
+
+  it('restores create, modify, and delete after-images when undoing a rollback', async () => {
+    await writeFile(join(workspaceRoot, 'modified.txt'), 'modified before', 'utf8')
+    await writeFile(join(workspaceRoot, 'deleted.txt'), 'deleted before', 'utf8')
+    const files = [
+      checkpointFile('created.txt', 'create', null, 'created after'),
+      checkpointFile('modified.txt', 'modify', 'modified before', 'modified after'),
+      checkpointFile('deleted.txt', 'delete', 'deleted before', null),
+    ]
+
+    await expect(manager().verifyCurrent(files, 'undo')).resolves.toEqual([])
+    await manager().runTransaction(files, surfaceSucceeded, 'undo')
+
+    await expect(readFile(join(workspaceRoot, 'created.txt'), 'utf8')).resolves.toBe('created after')
+    await expect(readFile(join(workspaceRoot, 'modified.txt'), 'utf8')).resolves.toBe('modified after')
+    await expectMissing(join(workspaceRoot, 'deleted.txt'))
+  })
+
+  it('rejects undo when current content no longer matches the rollback beforeHash', async () => {
+    const path = join(workspaceRoot, 'modified.txt')
+    await writeFile(path, 'concurrent edit', 'utf8')
+    const file = checkpointFile('modified.txt', 'modify', 'modified before', 'modified after')
+
+    await expect(manager().verifyCurrent([file], 'undo')).resolves.toEqual([{
+      path: 'modified.txt',
+      reason: 'hash-mismatch',
+      expectedHash: digest('modified before'),
+      actualHash: digest('concurrent edit'),
+    }])
+    await expect(manager().runTransaction([file], surfaceSucceeded, 'undo'))
+      .rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(readFile(path, 'utf8')).resolves.toBe('concurrent edit')
+  })
+
+  it('rejects an after-image whose afterHash does not match afterText', async () => {
+    const path = join(workspaceRoot, 'modified.txt')
+    await writeFile(path, 'before', 'utf8')
+    const file = {
+      ...checkpointFile('modified.txt', 'modify', 'before', 'after'),
+      afterHash: digest('forged'),
+    }
+
+    await expect(manager().verifyCurrent([file], 'undo')).resolves.toMatchObject([{ reason: 'invalid-after-image' }])
+    await expect(manager().runTransaction([file], surfaceSucceeded, 'undo'))
+      .rejects.toMatchObject({ code: 'FILE_CONFLICT' })
+    await expect(readFile(path, 'utf8')).resolves.toBe('before')
   })
 
   it('rejects the whole restore when any afterHash conflicts and writes no journal', async () => {

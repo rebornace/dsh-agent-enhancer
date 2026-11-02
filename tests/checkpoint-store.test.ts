@@ -29,6 +29,7 @@ function checkpoint(turn = 1): Checkpoint {
       change: 'modify',
       beforeText: 'before',
       beforeHash: 'before-hash',
+      afterText: 'after',
       afterHash: 'after-hash',
     }],
   }
@@ -120,6 +121,19 @@ describe('CheckpointStore', () => {
         ...checkpoint(),
         files: [{ ...checkpoint().files[0]!, change: 'delete', beforeText: null }],
       } as Checkpoint,
+    },
+    {
+      name: 'legacy checkpoint without an after-image',
+      value: {
+        ...checkpoint(),
+        files: [{
+          path: 'src/file-1.txt',
+          change: 'modify',
+          beforeText: 'before',
+          beforeHash: 'before-hash',
+          afterHash: 'after-hash',
+        }],
+      } as unknown as Checkpoint,
     },
   ])('rejects $name in both the disk write and read contracts', async ({ value }) => {
     const store = new CheckpointStore(root)

@@ -42,6 +42,7 @@ function fileCheckpoint(
     change,
     beforeText,
     beforeHash: beforeText === null ? '' : digest(beforeText),
+    afterText,
     afterHash: afterText === null ? '' : digest(afterText),
   }
 }
@@ -273,7 +274,7 @@ describe('CheckpointRollbackService preview', () => {
         id: MessageId('summary'),
         role: 'developer',
         content: [{ type: 'text', text: 'summary' }],
-        source: { kind: 'checkpoint-rollback' },
+        source: { kind: 'checkpoint-rollback', form: 'notice', summary: 'Foreign compaction fixture' },
       },
     }, {
       surfaceOp: { op: 'replace', startSeq: SessionSeq(7), endSeq: SessionSeq(8) },
@@ -332,15 +333,22 @@ describe('CheckpointRollbackService execute', () => {
 
     expect(result).toEqual({ sessionId, turn: 2, draft: 'second prompt' })
     await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('before')
-    expect(h.session.deriveMessages().map(message => message.id)).toEqual(['system', 'user-1', 'assistant-1'])
+    expect(h.session.deriveMessages().map(message => message.id)).toEqual([
+      'system', 'user-1', 'assistant-1', expect.stringMatching(/^dsh-composer-enhancer:rollback:2:/),
+    ])
     const events = h.adapter.readEvents()
     expect(events).toHaveLength(originalLength + 1)
     expect(events.at(-1)).toMatchObject({
-      type: 'developer/message',
+      type: 'user/message',
       surfaceOp: { op: 'replace', startSeq: 7, endSeq: 8 },
-      data: { message: { content: [] } },
+      sourceEventSeqs: [7, 8],
+      data: {
+        role: 'user',
+        source: { kind: 'checkpoint-rollback', form: 'notice' },
+        content: [{ type: 'text', text: expect.stringContaining('turn 2') }],
+      },
     })
-    expect(events.filter(event => event.type === 'user/message')).toHaveLength(2)
+    expect(events.filter(event => event.type === 'user/message')).toHaveLength(3)
     await expect(h.store.recoverJournal()).resolves.toEqual([])
   })
 
@@ -422,9 +430,11 @@ describe('CheckpointRollbackService execute', () => {
     })
 
     await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('original')
-    expect(h.session.deriveMessages().map(message => message.id)).toEqual(['system'])
-    expect(h.adapter.readEvents().filter(event => event.type === 'developer/message'
-      && event.data.message.source.kind === 'checkpoint-rollback')).toHaveLength(2)
+    expect(h.session.deriveMessages().map(message => message.id)).toEqual([
+      'system', expect.stringMatching(/^dsh-composer-enhancer:rollback:1:/),
+    ])
+    expect(h.adapter.readEvents().filter(event => event.type === 'user/message'
+      && event.data.source.kind === 'checkpoint-rollback')).toHaveLength(2)
     await expect(h.store.recoverJournal()).resolves.toEqual([])
   })
 
@@ -456,20 +466,160 @@ describe('CheckpointRollbackService execute', () => {
   })
 })
 
+describe('CheckpointRollbackService undo', () => {
+  it('previews and restores the pre-rollback surface and after-images without deleting log events', async () => {
+    const h = harness()
+    await seedCheckpoint(h)
+    const originalLength = h.adapter.readEvents().length
+    await h.service.execute({ sessionId, turn: 2 })
+
+    const preview = await h.service.preview({ sessionId, turn: 2, operation: 'undo' })
+    expect(preview).toMatchObject({
+      operation: 'undo',
+      unavailable: [],
+      conflicts: [],
+      messages: [
+        { seq: 7, type: 'user/message', text: 'second prompt' },
+        { seq: 8, type: 'assistant/message', text: 'second answer' },
+      ],
+    })
+    await expect(h.service.execute({ sessionId, turn: 2, operation: 'undo' })).resolves.toEqual({
+      sessionId,
+      turn: 2,
+      draft: '',
+    })
+
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('after')
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system', 'first prompt', 'first answer', 'second prompt', 'second answer',
+    ])
+    expect(h.adapter.readEvents()).toHaveLength(originalLength + 3)
+    expect(h.adapter.readEvents().filter(event => event.type === 'user/message')).toHaveLength(4)
+    await expect(h.store.recoverJournal()).resolves.toEqual([])
+  })
+
+  it('rejects undo after a file conflict or any newer Session event', async () => {
+    const conflicted = harness()
+    await seedCheckpoint(conflicted)
+    await conflicted.service.execute({ sessionId, turn: 2 })
+    await writeFile(join(workspaceRoot, 'file.txt'), 'new file state', 'utf8')
+
+    await expect(conflicted.service.preview({ sessionId, turn: 2, operation: 'undo' }))
+      .resolves.toMatchObject({ conflicts: [{ reason: 'hash-mismatch' }] })
+    await expect(conflicted.service.execute({ sessionId, turn: 2, operation: 'undo' }))
+      .rejects.toMatchObject({ code: 'ROLLBACK_CONFLICT' })
+
+    const changed = harness()
+    await seedCheckpoint(changed)
+    await changed.service.execute({ sessionId, turn: 2 })
+    appendTurn(changed.session, 3, 'new prompt', 'new answer')
+
+    await expect(changed.service.preview({ sessionId, turn: 2, operation: 'undo' }))
+      .resolves.toMatchObject({ unavailable: expect.arrayContaining(['session-changed']) })
+    await expect(changed.service.execute({ sessionId, turn: 2, operation: 'undo' }))
+      .rejects.toMatchObject({ code: 'ROLLBACK_UNAVAILABLE' })
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('before')
+  })
+
+  it('supports consecutive rollbacks, undo of only the latest rollback, and a fresh rollback after undo', async () => {
+    const h = harness()
+    await seedCheckpoint(h)
+    await h.service.execute({ sessionId, turn: 2 })
+    await h.store.save(checkpoint({
+      id: 'checkpoint-1', turn: 1, atSeq: 1, prompt: 'first prompt', createdAt: 90,
+      files: [fileCheckpoint('file.txt', 'modify', 'original', 'before')],
+    }))
+    await h.service.execute({ sessionId, turn: 1 })
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('original')
+
+    await expect(h.service.preview({ sessionId, turn: 2, operation: 'undo' }))
+      .resolves.toMatchObject({ unavailable: expect.arrayContaining(['session-changed']) })
+    await h.service.execute({ sessionId, turn: 1, operation: 'undo' })
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('before')
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system', 'first prompt', 'first answer', expect.stringContaining('turn 2'),
+    ])
+
+    await h.service.execute({ sessionId, turn: 2, operation: 'undo' })
+    await h.service.execute({ sessionId, turn: 2 })
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('before')
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system', 'first prompt', 'first answer', expect.stringContaining('turn 2'),
+    ])
+  })
+
+  it('resumes a partially appended undo during journal recovery', async () => {
+    const h = harness({ createId: () => 'restore-1' })
+    await seedCheckpoint(h)
+    await h.service.execute({ sessionId, turn: 2 })
+    const append = h.session.append.bind(h.session)
+    let appends = 0
+    vi.spyOn(h.session, 'append').mockImplementation(((...args: unknown[]) => {
+      appends += 1
+      const event = Reflect.apply(append, h.session, args) as SessionEvent
+      if (appends === 2) throw new Error('append persisted before the failure')
+      return event
+    }) as Session['append'])
+
+    await expect(h.service.execute({ sessionId, turn: 2, operation: 'undo' }))
+      .rejects.toMatchObject({ code: 'ROLLBACK_FAILED' })
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('after')
+    await expect(h.store.recoverJournal()).resolves.toMatchObject([{ status: 'files-restored' }])
+
+    vi.restoreAllMocks()
+    await h.service.recover()
+
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system', 'first prompt', 'first answer', 'second prompt', 'second answer',
+    ])
+    await expect(h.store.recoverJournal()).resolves.toEqual([])
+  })
+})
+
 describe('CheckpointRollbackService journal recovery', () => {
-  it('blocks the same instance and every Session while a new pending journal cannot be recovered', async () => {
+  it('blocks previews without performing recovery side effects while a journal is pending', async () => {
+    let synchronizations = 0
     const h = harness({
       createId: () => 'restore-1',
-      synchronize: async () => { throw new Error('projection remains unavailable') },
+      synchronize: async () => {
+        synchronizations += 1
+        throw new Error('projection remains unavailable')
+      },
     })
     await seedCheckpoint(h)
     await expect(h.service.execute({ sessionId, turn: 2 })).rejects.toMatchObject({ code: 'ROLLBACK_FAILED' })
+    expect(synchronizations).toBe(1)
 
     await expect(h.service.preview({ sessionId, turn: 2 })).rejects.toMatchObject({ code: 'ROLLBACK_RECOVERY_FAILED' })
     await expect(h.service.preview({ sessionId: SessionId('other-session'), turn: 2 }))
       .rejects.toMatchObject({ code: 'ROLLBACK_RECOVERY_FAILED' })
 
+    expect(synchronizations).toBe(1)
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('before')
     await expect(h.store.recoverJournal()).resolves.toMatchObject([{ id: 'restore-1', status: 'files-restored' }])
+  })
+
+  it('detects an append that persisted before throwing and leaves files for recovery', async () => {
+    const h = harness({ createId: () => 'restore-1' })
+    await seedCheckpoint(h)
+    const append = h.session.append.bind(h.session)
+    vi.spyOn(h.session, 'append').mockImplementation(((...args: unknown[]) => {
+      Reflect.apply(append, h.session, args)
+      throw new Error('append outcome was reported as a failure')
+    }) as Session['append'])
+
+    await expect(h.service.execute({ sessionId, turn: 2 })).rejects.toMatchObject({ code: 'ROLLBACK_FAILED' })
+
+    expect(h.session.surface.nodes).toHaveLength(4)
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('before')
+    await expect(h.store.recoverJournal()).resolves.toMatchObject([{ status: 'files-restored' }])
+    vi.restoreAllMocks()
+    await h.service.recover()
+    await expect(h.store.recoverJournal()).resolves.toEqual([])
   })
 
   it('retries synchronization on the same instance before completing an appended journal', async () => {
@@ -547,6 +697,9 @@ describe('checkpoint rollback Host Remote', () => {
     ]))
     expect(checkpointHostContribution.invocations).toEqual(checkpointRemoteInfo.descriptors)
     expect(checkpointRollbackRequestSchema.parse({ sessionId, turn: 2 })).toEqual({ sessionId, turn: 2 })
+    expect(checkpointRollbackRequestSchema.parse({ sessionId, turn: 2, operation: 'undo' }))
+      .toEqual({ sessionId, turn: 2, operation: 'undo' })
+    expect(() => checkpointRollbackRequestSchema.parse({ sessionId, turn: 2, operation: 'replace' })).toThrow()
     expect(() => checkpointRollbackRequestSchema.parse({ sessionId, turn: 2, atSeq: 5 })).toThrow()
     expect(() => checkpointRollbackRequestSchema.parse({ sessionId, turn: 2, path: 'file.txt' })).toThrow()
     expect(() => checkpointRollbackRequestSchema.parse({ sessionId, turn: 2, workspaceRoot: root })).toThrow()

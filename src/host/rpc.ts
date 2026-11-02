@@ -86,6 +86,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 export const checkpointRollbackRequestSchema = z.strictObject({
   sessionId: sessionIdSchema,
   turn: z.number().int().positive(),
+  operation: z.enum(['rollback', 'undo']).optional(),
 })
 const checkpointMessageSchema = z.strictObject({
   seq: z.number().int().nonnegative(),
@@ -105,6 +106,7 @@ const checkpointConflictSchema = z.strictObject({
     'binary',
     'too-large',
     'invalid-before-image',
+    'invalid-after-image',
     'hash-mismatch',
   ]),
   expectedHash: z.string().optional(),
@@ -128,6 +130,7 @@ const checkpointUnavailableSchema = z.enum([
 const checkpointPreviewSchema = z.strictObject({
   sessionId: sessionIdSchema,
   turn: z.number().int().positive(),
+  operation: z.enum(['rollback', 'undo']).optional(),
   messages: z.array(checkpointMessageSchema),
   files: z.array(checkpointFileSchema),
   conflicts: z.array(checkpointConflictSchema),

@@ -1,9 +1,10 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { MessageId } from '@deepseek-ai/dsh-llm'
-import { SessionStore } from '@deepseek-ai/dsh-session'
+import { SessionSeq, SessionStore } from '@deepseek-ai/dsh-session'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -60,7 +61,10 @@ it('assembles the guarded rollback service beside the model Remote and disposes 
   expect(unregister).toHaveBeenCalledTimes(2)
 })
 
-async function captureFixture(enabled: boolean) {
+async function captureFixture(
+  enabled: boolean,
+  prepare?: (value: { store: CheckpointStore, session: Session, workspaceRoot: string }) => Promise<void>,
+) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-checkpoint-composition-'))
   temporaryDirectories.push(directory)
   process.env.DSH_HOME = directory
@@ -82,10 +86,11 @@ async function captureFixture(enabled: boolean) {
   ctx.provide('typert', { register: () => () => {} } as never)
   ctx.provide('fs', { processPath: (target: { absolutePath: string }) => target.absolutePath } as never)
   ctx.provide('tools', {} as never)
-  apply(ctx, Config({ rollbackEnabled: enabled }))
   const store = new CheckpointStore(join(
     directory, 'profiles', 'desktop', 'plugin-data', 'dsh-composer-enhancer', 'checkpoint',
   ))
+  await prepare?.({ store, session, workspaceRoot })
+  apply(ctx, Config({ rollbackEnabled: enabled }))
   return { ctx, sessions, session, agent, workspaceRoot, store }
 }
 
@@ -137,6 +142,57 @@ async function setRollbackEnabled(ctx: Context, enabled: boolean) {
   await ctx.waterfall(ctx.fiber, 'internal/update', Config({ rollbackEnabled: enabled }), false, () => {})
 }
 
+it('recovers a persisted surface append during Host startup without a preview call', async () => {
+  const digest = (value: string) => createHash('sha256').update(value).digest('hex')
+  const h = await captureFixture(false, async ({ store, session, workspaceRoot }) => {
+    const storageRoot = join(
+      process.env.DSH_HOME!, 'profiles', 'desktop', 'plugin-data', 'dsh-composer-enhancer', 'checkpoint',
+    )
+    await writeFile(join(workspaceRoot, 'file.txt'), 'before', 'utf8')
+    session.append('turn/start', { turn: 1 })
+    appendUser(session, 1, 'prompt')
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const sourceSeq = session.surface.nodes[0]!
+    session.append('user/message', {
+      id: MessageId('dsh-composer-enhancer:rollback:1:startup-restore'),
+      role: 'user',
+      content: [{ type: 'text', text: 'Rollback notice' }],
+      source: { kind: 'checkpoint-rollback', form: 'notice', summary: 'Rolled back before turn 1' },
+    }, {
+      surfaceOp: { op: 'replace', startSeq: SessionSeq(sourceSeq), endSeq: SessionSeq(sourceSeq) },
+      sourceEventSeqs: [SessionSeq(sourceSeq)],
+    })
+    await store.beginJournal({
+      schemaVersion: 1,
+      id: 'startup-restore',
+      sessionId: session.id,
+      checkpointId: 'checkpoint-startup',
+      status: 'files-restored',
+      createdAt: 1,
+    })
+    const directory = join(storageRoot, 'file-journals')
+    await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, `${digest('startup-restore')}.json`), JSON.stringify({
+      schemaVersion: 1,
+      id: 'startup-restore',
+      snapshots: [{
+        path: 'file.txt',
+        exists: true,
+        text: 'after',
+        afterHash: digest('after'),
+        beforeHash: digest('before'),
+      }],
+      completed: ['file.txt'],
+    }), 'utf8')
+  })
+
+  await vi.waitFor(async () => {
+    expect(await h.store.recoverJournal()).toEqual([])
+  })
+  await expect(readFile(join(h.workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('before')
+  expect(h.session.surface.nodes).toEqual([h.session.snapshotEvents().at(-1)!.seq])
+})
+
 it('captures a real turn and file before-image only after the independent switch is enabled', async () => {
   const disabled = await captureFixture(false)
   disabled.session.append('turn/start', { turn: 1 })
@@ -163,7 +219,7 @@ it('captures a real turn and file before-image only after the independent switch
     atSeq: 2,
     prompt: 'prompt 2',
     coverage: 'complete',
-    files: [{ path: 'note.txt', change: 'modify', beforeText: 'before' }],
+    files: [{ path: 'note.txt', change: 'modify', beforeText: 'before', afterText: 'after 2' }],
   })
   expect(checkpoint!.files[0]!.beforeHash).not.toBe(checkpoint!.files[0]!.afterHash)
 
