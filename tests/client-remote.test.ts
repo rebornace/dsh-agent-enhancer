@@ -12,6 +12,19 @@ import { clientRemoteInfo, composerEnhancerCall } from '../src/client/remote.ts'
 
 vi.mock('../src/client/styles.module.css', () => ({ default: {}, installCss: () => () => {} }))
 
+const rollbackControllerInstances: import('../src/client/rollback/controller.ts').RollbackController[] = []
+
+vi.mock('../src/client/rollback/controller.ts', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../src/client/rollback/controller.ts')>()
+  class TrackingRollbackController extends mod.RollbackController {
+    constructor(options: ConstructorParameters<typeof mod.RollbackController>[0]) {
+      super(options)
+      rollbackControllerInstances.push(this)
+    }
+  }
+  return { ...mod, RollbackController: TrackingRollbackController }
+})
+
 const contexts: Context[] = []
 
 function remotePayload() {
@@ -30,6 +43,7 @@ function remotePayload() {
 
 afterEach(async () => {
   cleanup()
+  rollbackControllerInstances.splice(0)
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
   vi.restoreAllMocks()
 })
@@ -301,4 +315,121 @@ it('registers user node replacement only while enabled and cleans up on unload',
 
   await fiber.dispose()
   expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(0)
+})
+
+it('aborts in-flight rollback preview when rollback is disabled or session retention drops', async () => {
+  const ctx = new Context()
+  contexts.push(ctx)
+  const listeners = new Set<() => void>()
+  let value: { rollbackEnabled?: boolean } = { rollbackEnabled: false }
+  const form = {
+    getSnapshot: () => ({ value }),
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+  }
+  interface Entry {
+    readonly name: string
+    readonly key?: string
+    readonly registrant?: string
+  }
+  const registrations: Entry[] = []
+  let userNodeSlot: ((props: { sessionId: SessionId }) => ReturnType<typeof createElement>) | undefined
+  const previewSignals: AbortSignal[] = []
+  const checkpointRollback = {
+    preview: vi.fn((_request: unknown, signal: AbortSignal) => {
+      previewSignals.push(signal)
+      return new Promise<never>(() => {})
+    }),
+    execute: vi.fn(),
+  }
+  const remote = {
+    $mount: async () => () => {},
+    pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
+    checkpointRollback,
+  }
+  let mainView = 1
+  const retentionListeners = new Set<() => void>()
+  ctx.provide('remote', remote as never)
+  ctx.provide('remote.checkpointRollback', checkpointRollback as never)
+  ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
+  ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
+  ctx.provide('sessions', {
+    retainInfo: () => ({
+      getSnapshot: () => ({ referenceCount: mainView, retainedBy: mainView === 0 ? {} : { mainView } }),
+      subscribe: (listener: () => void) => {
+        retentionListeners.add(listener)
+        return () => { retentionListeners.delete(listener) }
+      },
+    }),
+  } as never)
+  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
+  ctx.provide('slots', {
+    inject: (_key: string, registerEntry: () => () => void) => registerEntry(),
+    register: (options: Entry, component?: (props: { sessionId: SessionId }) => ReturnType<typeof createElement>) => {
+      registrations.push(options)
+      if (options.name === 'conversation.chat.node' && options.key === 'user') {
+        userNodeSlot = component
+      }
+      return () => {
+        const index = registrations.indexOf(options)
+        if (index >= 0) registrations.splice(index, 1)
+      }
+    },
+  } as never)
+  const sessionId = 'session-1' as SessionId
+  const fiber = await ctx.plugin({ apply })
+  await vi.waitFor(() => {
+    expect(registrations.some(entry => entry.name === 'conversation.input.right')).toBe(true)
+  })
+
+  const rollback = () => {
+    act(() => { userNodeSlot!({ sessionId }) })
+    return rollbackControllerInstances.at(-1)!
+  }
+
+  act(() => {
+    value = { rollbackEnabled: true }
+    for (const listener of listeners) listener()
+  })
+  await vi.waitFor(() => {
+    expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(1)
+    expect(userNodeSlot).toBeDefined()
+  })
+
+  act(() => { rollback().open(2) })
+  expect(previewSignals).toHaveLength(1)
+
+  act(() => {
+    value = { rollbackEnabled: false }
+    for (const listener of listeners) listener()
+  })
+  expect(previewSignals[0]?.aborted).toBe(true)
+
+  act(() => {
+    value = { rollbackEnabled: true }
+    for (const listener of listeners) listener()
+  })
+  await vi.waitFor(() => {
+    expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(1)
+  })
+  act(() => { rollback().open(2) })
+  expect(previewSignals).toHaveLength(2)
+
+  act(() => {
+    mainView = 0
+    for (const listener of retentionListeners) listener()
+  })
+  expect(previewSignals[1]?.aborted).toBe(true)
+
+  act(() => {
+    mainView = 1
+    for (const listener of retentionListeners) listener()
+    rollback().open(2)
+  })
+  expect(previewSignals).toHaveLength(3)
+
+  await fiber.dispose()
+  expect(previewSignals[2]?.aborted).toBe(true)
 })

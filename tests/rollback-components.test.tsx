@@ -11,9 +11,16 @@ import type {
 } from '../src/host/checkpoint/service.ts'
 import { RollbackMessageActions } from '../src/client/rollback/actions.tsx'
 import type { RollbackMessageActionsProps } from '../src/client/rollback/actions.tsx'
+import { RollbackUserNode } from '../src/client/rollback/user-node.tsx'
+import type { RollbackUserNodeProps } from '../src/client/rollback/user-node.tsx'
 import { composerLocales } from '../src/client/locales.ts'
 import { RollbackController } from '../src/client/rollback/controller.ts'
 import type { RollbackRemote } from '../src/client/rollback/controller.ts'
+
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>()
+  return { ...actual, writeClipboard: vi.fn(async () => true) }
+})
 
 const sessionId = 'session-1' as SessionId
 const controllers: RollbackController[] = []
@@ -282,6 +289,25 @@ describe('RollbackMessageActions', () => {
     h.rollback.close()
   })
 
+  it('cancels an in-flight preview on disable before confirmation', async () => {
+    const pending = deferred<CheckpointRollbackPreview>()
+    let previewSignal: AbortSignal | undefined
+    const remote = remoteWith((_request, signal) => {
+      previewSignal = signal
+      return pending.promise
+    })
+    const h = setup({ remote })
+    fireEvent.click(screen.getByRole('button', { name: 'Roll back to here' }))
+    expect(h.rollback.getSnapshot().active).toMatchObject({ status: 'loading' })
+
+    h.setEnabled(false)
+    expect(previewSignal?.aborted).toBe(true)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    pending.resolve(preview())
+    await Promise.resolve()
+    expect(h.rollback.getSnapshot().active).toBeNull()
+  })
+
   it('allows execute to finish and restores the draft when surface replacement unmounts the user node', async () => {
     const executing = deferred<CheckpointRollbackResult>()
     let executeSignal: AbortSignal | undefined
@@ -321,5 +347,68 @@ describe('RollbackMessageActions', () => {
     pending.resolve(preview())
     await Promise.resolve()
     expect(h.rollback.getSnapshot().active).toBeNull()
+  })
+})
+
+function userNodeView(options: {
+  marker?: boolean
+  nodeKey?: string
+  chatOrder?: string[]
+  turn?: TurnLocation
+  enabled?: boolean
+} = {}) {
+  const remote = remoteWith()
+  const rollback = controller(remote, () => options.enabled ?? true)
+  const turn = options.turn ?? turnFixture()
+  const nodeKey = options.nodeKey ?? 'user-node-2'
+  const chatOrder = options.chatOrder ?? [nodeKey]
+  return {
+    view: render(<RollbackUserNode {...{
+      sessionId,
+      rollback,
+      node: {
+        key: nodeKey,
+        location: { kind: 'turn', turn },
+        data: {
+          content: [{ type: 'text', text: 'hello' }],
+          source: options.marker ? { kind: 'checkpoint-rollback', form: 'notice', summary: 'Rolled back' } : { kind: 'user' },
+          ...(options.marker ? { id: 'dsh-composer-enhancer:rollback:2:journal-1' } : {}),
+        },
+      },
+      renderFactorySlot: vi.fn(() => null),
+      loadImage: vi.fn(),
+      tEnhancer: translate,
+      tChat: (key: string) => key,
+      useChat: (selector: (state: { order: readonly string[] }) => unknown) => selector({ order: chatOrder }),
+      useSession: (selector: (state: { running: boolean }) => unknown) => selector({ running: false }),
+      useAccess: () => true,
+      inputActions: { setDraft: vi.fn(), persistDraft: vi.fn() },
+    } as unknown as RollbackUserNodeProps} />),
+    rollback,
+  }
+}
+
+describe('RollbackUserNode', () => {
+  it('shows rollback on an ordinary closed turn and hides plugin actions on non-tip markers', () => {
+    const ordinary = userNodeView()
+    expect(screen.getByRole('button', { name: 'Roll back to here' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Undo rollback' })).toBeNull()
+    ordinary.view.unmount()
+
+    const markerNotTip = userNodeView({
+      marker: true,
+      nodeKey: 'marker-node',
+      chatOrder: ['marker-node', 'assistant-tail'],
+    })
+    expect(screen.queryByRole('button', { name: 'Roll back to here' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Undo rollback' })).toBeNull()
+    markerNotTip.view.unmount()
+  })
+
+  it('shows undo only when the rollback marker is the chat order tail', () => {
+    const undoTip = userNodeView({ marker: true, nodeKey: 'marker-tip', chatOrder: ['marker-tip'] })
+    expect(screen.getByRole('button', { name: 'Undo rollback' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Roll back to here' })).toBeNull()
+    undoTip.view.unmount()
   })
 })
