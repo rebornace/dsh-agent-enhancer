@@ -1,6 +1,12 @@
 import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { TurnLocation } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  Button,
+  IconClockOutlineRegular,
+  IconRefreshOutlineRegular,
+  Modal,
+  Tooltip,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { CheckpointRollbackOperation } from '../../host/checkpoint/service.ts'
 import { useEffect, useSyncExternalStore } from 'react'
@@ -41,12 +47,26 @@ export function RollbackMessageActions(props: RollbackMessageActionsProps) {
   const blocked = active?.preview === undefined || active.preview.unavailable.length > 0 || active.preview.conflicts.length > 0
   const modal = active === null ? null : rollbackModalCopy(props.operation, props.t, turn.turn)
 
+  const entryLabel = props.t(entryKey)
+  const entryTooltip = disabledReason === null ? entryLabel : props.t(disabledReason)
+  const EntryIcon = props.operation === 'undo' ? IconRefreshOutlineRegular : IconClockOutlineRegular
+
   return <>
-    <Button type="button" size="sm" variant="ghost" className={styles.rollbackEntry}
-      disabled={disabledReason !== null} title={disabledReason === null ? undefined : props.t(disabledReason)}
-      onClick={() => {
-        if (disabledReason === null) props.rollback.open(turn.turn, props.operation)
-      }}>{props.t(entryKey)}</Button>
+    <Tooltip label={entryTooltip} side="bottom">
+      <button
+        type="button"
+        className={styles.userMessageAction}
+        aria-label={entryLabel}
+        title={entryTooltip}
+        disabled={disabledReason !== null}
+        data-unavailable={disabledReason !== null || undefined}
+        onClick={() => {
+          if (disabledReason === null) props.rollback.open(turn.turn, props.operation)
+        }}
+      >
+        <EntryIcon />
+      </button>
+    </Tooltip>
     {active === null || modal === null ? null : <Modal
       open
       title={modal.title}

@@ -150,10 +150,6 @@
   border-radius: var(--dsw-radius-sm);
 }
 
-.rollbackEntry {
-  white-space: nowrap;
-}
-
 .rollbackDialog {
   width: min(680px, calc(100vw - 32px));
   max-height: min(760px, calc(100vh - 48px));
@@ -242,17 +238,34 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  color: var(--dsw-alias-label-secondary);
+  width: calc(28px + var(--dsh-content-font-delta, 0px));
+  height: calc(28px + var(--dsh-content-font-delta, 0px));
+  padding: 6px;
+  color: var(--dsw-alias-label-tertiary);
   background: transparent;
   border: 0;
   border-radius: var(--dsw-radius-sm);
   cursor: pointer;
 }
 
+.userMessageAction svg {
+  width: calc(15px + var(--dsh-content-font-delta, 0px));
+  height: calc(15px + var(--dsh-content-font-delta, 0px));
+}
+
 .userMessageAction:hover {
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover-solid);
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.userMessageAction:disabled,
+.userMessageAction[data-unavailable] {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.userMessageAction:disabled:hover,
+.userMessageAction[data-unavailable]:hover {
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
 }
