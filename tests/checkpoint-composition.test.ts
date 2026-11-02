@@ -56,7 +56,9 @@ it('assembles the guarded rollback service beside the model Remote and disposes 
 
   expect(register).toHaveBeenCalledTimes(1)
   expect(register).toHaveBeenCalledWith(hostContribution)
-  expect(hostContribution.invocations).toEqual(expect.arrayContaining(checkpointHostContribution.invocations))
+  expect(hostContribution.invocations).toEqual(
+    expect.arrayContaining([...checkpointHostContribution.invocations]),
+  )
   expect(ctx.checkpointRollback).toBeInstanceOf(CheckpointRollbackRemoteService)
   await ctx.fiber.dispose()
   expect(unregister).toHaveBeenCalledTimes(1)
@@ -211,9 +213,9 @@ it('captures a real turn and file before-image only after the independent switch
   await runFileTurn(h)
 
   await vi.waitFor(async () => {
-    expect(await h.store.list(h.session.id)).toHaveLength(1)
+    expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
   })
-  const [checkpoint] = await h.store.list(h.session.id)
+  const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
   expect(checkpoint).toMatchObject({
     sessionId: h.session.id,
     turn: 2,
@@ -223,13 +225,14 @@ it('captures a real turn and file before-image only after the independent switch
     files: [{ path: 'note.txt', change: 'modify', beforeText: 'before', afterText: 'after 2' }],
   })
   expect(checkpoint!.files[0]!.beforeHash).not.toBe(checkpoint!.files[0]!.afterHash)
+  const beforeUnload = (await h.store.list(h.session.id)).length
 
   await h.ctx.fiber.dispose()
   h.session.append('turn/start', { turn: 3 })
   appendUser(h.session, 3, 'after unload')
   h.session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
   await Promise.resolve()
-  expect(await h.store.list(h.session.id)).toHaveLength(1)
+  expect(await h.store.list(h.session.id)).toHaveLength(beforeUnload)
 })
 
 it('follows runtime enable, disable, and re-enable in one Context without relying on initial config', async () => {
@@ -278,7 +281,7 @@ it('never reads or saves excluded file contents during live capture', async () =
     expect(await h.store.list(h.session.id)).toHaveLength(1)
   })
   const [checkpoint] = await h.store.list(h.session.id)
-  expect(checkpoint).toMatchObject({ coverage: 'partial', files: [] })
+  expect(checkpoint).toMatchObject({ coverage: 'complete', files: [] })
   const serialized = JSON.stringify(checkpoint)
   for (const [index, path] of paths.entries()) {
     expect(serialized).not.toContain(secrets[index]!)

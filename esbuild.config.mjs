@@ -1,9 +1,21 @@
 import { execFile } from 'node:child_process'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { isAbsolute, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { build } from 'esbuild'
 import { cssModulesPlugin } from './scripts/css-modules-plugin.mjs'
+
+function relativizeSourceMap(raw) {
+  const map = JSON.parse(raw)
+  map.sources = map.sources.map(source => {
+    let path = source
+    if (path.startsWith('file:')) path = fileURLToPath(path)
+    if (isAbsolute(path)) path = relative(process.cwd(), path)
+    return path.replaceAll('\\', '/')
+  })
+  return `${JSON.stringify(map)}\n`
+}
 
 const execFileAsync = promisify(execFile)
 const manifest = JSON.parse(await readFile('package.json', 'utf8'))
@@ -69,7 +81,7 @@ await writeFile(
   `window.__ModuleLoader__.load({id:${JSON.stringify(manifest.name)},factory:(require)=>{\n` +
     `var module={exports:{}};var exports=module.exports;\n${javascript.text}\nreturn module.exports;\n}});\n`,
 )
-await writeFile('lib/client.js.map', sourcemap.text)
+await writeFile('lib/client.js.map', relativizeSourceMap(sourcemap.text))
 
 const tsc = fileURLToPath(import.meta.resolve('typescript/bin/tsc'))
 await execFileAsync(process.execPath, [tsc, '-p', 'tsconfig.build.json'])

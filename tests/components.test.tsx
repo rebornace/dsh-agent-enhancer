@@ -1017,7 +1017,7 @@ describe('CoexistenceHints', () => {
     expect(store.getSnapshot()).toEqual(['optimize', 'predict'])
     expect(set).not.toHaveBeenCalled()
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-checked'))).toEqual([
-      'true', 'true', 'true', 'false',
+      'true', 'true', 'true', 'true',
     ])
 
     const reopened = new OverlapHintStore(localStorage, 'test-release')

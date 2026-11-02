@@ -68,7 +68,7 @@ Quit every Desktop window and tray process before install, upgrade, or uninstall
 ### npm (recommended)
 
 ```sh
-dsh plugin --profile desktop add dsh-composer-enhancer@0.1.5
+dsh plugin --profile desktop add dsh-composer-enhancer@0.1.6
 ```
 
 You should then see the optimize control and **Composer Enhance** in settings.

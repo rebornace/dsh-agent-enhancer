@@ -60,9 +60,18 @@ if (packedManifest.engines?.dsh !== '>=0.2.1-rc.5 <0.3.0-0') {
   throw new Error('Packed manifest has an invalid DSH compatibility range')
 }
 
+const absolutePath = /(?:[A-Za-z]:[\\/]|file:\/\/\/|\/Users\/|\/home\/)/
 for (const path of files.filter(path => path !== 'package/package.json' && /\.(?:js|map|ts|json|yml)$/.test(path))) {
   const contents = await readEntry(path)
-  if (/(?:[A-Za-z]:[\\/]|file:\/\/\/|\/Users\/|\/home\/)/.test(contents)) {
+  if (path.endsWith('.map')) {
+    const map = JSON.parse(contents)
+    const sources = Array.isArray(map.sources) ? map.sources : []
+    if (sources.some(source => typeof source === 'string' && absolutePath.test(source))) {
+      throw new Error(`Package contains an absolute source path: ${path}`)
+    }
+    continue
+  }
+  if (absolutePath.test(contents)) {
     throw new Error(`Package contains an absolute source path: ${path}`)
   }
 }

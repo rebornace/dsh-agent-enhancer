@@ -459,7 +459,7 @@ describe('CheckpointRollbackService preview', () => {
       content: [{ type: 'text', text: 'stopped mid-thought' }],
       source: { kind: 'user' },
     }, { surfaceOp: 'append' })
-    session.append('turn/end', { turn: 1, reason: { kind: 'cancelled' } })
+    session.append('turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
     const h = harness({ session, seedTurns: false })
 
     const preview = await h.service.preview({ sessionId, turn: 1 })

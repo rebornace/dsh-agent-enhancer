@@ -68,7 +68,7 @@
 ### npm（推荐）
 
 ```sh
-dsh plugin --profile desktop add dsh-composer-enhancer@0.1.5
+dsh plugin --profile desktop add dsh-composer-enhancer@0.1.6
 ```
 
 启动后应能看到 Composer 右侧优化入口，以及设置中的 **Composer 增强**。

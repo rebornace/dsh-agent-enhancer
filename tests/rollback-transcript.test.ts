@@ -34,7 +34,47 @@ function entry(
         message: { id, role: type.startsWith('assistant') ? 'assistant' : 'user', content, source },
       },
     }
-  return { type: 'event', event: event as SessionEventLikeEntry['event'] }
+  return { type: 'event', event } as unknown as SessionEventLikeEntry
+}
+
+function lifecycle(
+  seq: number,
+  type: string,
+  data: Record<string, unknown>,
+  time = 1,
+): SessionEventLikeEntry {
+  return {
+    type: 'event',
+    event: { seq, time, type, data },
+  } as unknown as SessionEventLikeEntry
+}
+
+function assistantAt(
+  seq: number,
+  turn: number,
+  id: string,
+  text: string,
+  time = 1,
+): SessionEventLikeEntry {
+  return {
+    type: 'event',
+    event: {
+      seq,
+      time,
+      type: 'assistant/message',
+      surfaceOp: 'append',
+      data: {
+        turn,
+        step: 1,
+        message: {
+          id,
+          role: 'assistant',
+          content: [{ type: 'text', text }],
+          source: { kind: 'model' },
+        },
+      },
+    },
+  } as unknown as SessionEventLikeEntry
 }
 
 describe('presentRollbackTranscript', () => {
@@ -66,20 +106,6 @@ describe('presentRollbackTranscript', () => {
   })
 
   it('after undo keeps originals hidden, drops the marker, and shows undo copies inside a fresh turn shell', () => {
-    const oldStart = {
-      type: 'event' as const,
-      event: {
-        seq: 4, time: 1, type: 'turn/start',
-        data: { turn: 2 },
-      } as SessionEventLikeEntry['event'],
-    }
-    const oldEnd = {
-      type: 'event' as const,
-      event: {
-        seq: 8, time: 2, type: 'turn/end',
-        data: { turn: 2, reason: { kind: 'completed' } },
-      } as SessionEventLikeEntry['event'],
-    }
     const marker = entry(9, {
       surfaceOp: { op: 'replace', startSeq: 5, endSeq: 7 },
       sourceEventSeqs: [5, 7],
@@ -87,67 +113,30 @@ describe('presentRollbackTranscript', () => {
       sourceKind: 'checkpoint-rollback',
     })
     // Host opens the next monotonic turn (not the rolled-back id) with a step shell.
-    const undoStart = {
-      type: 'event' as const,
-      event: {
-        seq: 10, time: 3, type: 'turn/start',
-        data: { turn: 3 },
-      } as SessionEventLikeEntry['event'],
-    }
-    const undoStepStart = {
-      type: 'event' as const,
-      event: {
-        seq: 11, time: 3, type: 'step/start',
-        data: { turn: 3, step: 1 },
-      } as SessionEventLikeEntry['event'],
-    }
-    const undoUser = entry(12, {
-      surfaceOp: { op: 'replace', startSeq: 9, endSeq: 9 },
-      sourceEventSeqs: [9, 5],
-      id: 'dsh-composer-enhancer:undo:restore-1:0:5',
-      text: 'second prompt',
-    })
-    const undoAssistant = entry(13, {
-      type: 'assistant/message',
-      surfaceOp: 'append',
-      id: 'dsh-composer-enhancer:undo:restore-1:1:7',
-      text: 'second answer',
-    })
-    const undoStepEnd = {
-      type: 'event' as const,
-      event: {
-        seq: 14, time: 4, type: 'step/end',
-        data: { turn: 3, step: 1 },
-      } as SessionEventLikeEntry['event'],
-    }
-    const undoEnd = {
-      type: 'event' as const,
-      event: {
-        seq: 15, time: 4, type: 'turn/end',
-        data: { turn: 3, reason: { kind: 'completed' } },
-      } as SessionEventLikeEntry['event'],
-    }
-    const oldStep = {
-      type: 'event' as const,
-      event: {
-        seq: 6, time: 1, type: 'step/start',
-        data: { turn: 2, step: 1 },
-      } as SessionEventLikeEntry['event'],
-    }
     const entries = [
       entry(1),
-      oldStart,
+      lifecycle(4, 'turn/start', { turn: 2 }),
       entry(5, { text: 'second prompt' }),
-      oldStep,
+      lifecycle(6, 'step/start', { turn: 2, step: 1 }),
       entry(7, { type: 'assistant/message', text: 'second answer' }),
-      oldEnd,
+      lifecycle(8, 'turn/end', { turn: 2, reason: { kind: 'completed' } }, 2),
       marker,
-      undoStart,
-      undoStepStart,
-      undoUser,
-      undoAssistant,
-      undoStepEnd,
-      undoEnd,
+      lifecycle(10, 'turn/start', { turn: 3 }, 3),
+      lifecycle(11, 'step/start', { turn: 3, step: 1 }, 3),
+      entry(12, {
+        surfaceOp: { op: 'replace', startSeq: 9, endSeq: 9 },
+        sourceEventSeqs: [9, 5],
+        id: 'dsh-composer-enhancer:undo:restore-1:0:5',
+        text: 'second prompt',
+      }),
+      entry(13, {
+        type: 'assistant/message',
+        surfaceOp: 'append',
+        id: 'dsh-composer-enhancer:undo:restore-1:1:7',
+        text: 'second answer',
+      }),
+      lifecycle(14, 'step/end', { turn: 3, step: 1 }, 4),
+      lifecycle(15, 'turn/end', { turn: 3, reason: { kind: 'completed' } }, 4),
     ]
 
     const presented = presentRollbackTranscript(entries)
@@ -214,44 +203,21 @@ describe('presentRollbackTranscript', () => {
   })
 
   it('keeps new turns after the restore tip even when they reuse a rolled-back turn number', () => {
-    const oldStart = {
-      type: 'event' as const,
-      event: {
-        seq: 4, time: 1, type: 'turn/start',
-        data: { turn: 1 },
-      } as SessionEventLikeEntry['event'],
-    }
     const marker = entry(9, {
       surfaceOp: { op: 'replace', startSeq: 4, endSeq: 8 },
       sourceEventSeqs: [5, 8],
       id: 'dsh-composer-enhancer:rollback:1:journal-1',
       sourceKind: 'checkpoint-rollback',
     })
-    const turnStart = {
-      type: 'event' as const,
-      event: {
-        seq: 10, time: 2, type: 'turn/start',
-        data: { turn: 1 },
-      } as SessionEventLikeEntry['event'],
-    }
-    const prompt = entry(11, { text: 'fresh prompt after empty restore' })
-    const reply = entry(12, { type: 'assistant/message', text: 'fresh answer' })
-    const turnEnd = {
-      type: 'event' as const,
-      event: {
-        seq: 13, time: 3, type: 'turn/end',
-        data: { turn: 1, reason: { kind: 'completed' } },
-      } as SessionEventLikeEntry['event'],
-    }
     const presented = presentRollbackTranscript([
-      oldStart,
+      lifecycle(4, 'turn/start', { turn: 1 }),
       entry(5, { text: 'old first prompt' }),
       entry(8, { type: 'assistant/message', text: 'old answer' }),
       marker,
-      turnStart,
-      prompt,
-      reply,
-      turnEnd,
+      lifecycle(10, 'turn/start', { turn: 1 }, 2),
+      entry(11, { text: 'fresh prompt after empty restore' }),
+      entry(12, { type: 'assistant/message', text: 'fresh answer' }),
+      lifecycle(13, 'turn/end', { turn: 1, reason: { kind: 'completed' } }, 3),
     ])
     expect(presented.map(item => item.type === 'event' ? item.event.seq : -1)).toEqual([
       9, 10, 11, 12, 13,
@@ -262,20 +228,6 @@ describe('presentRollbackTranscript', () => {
   })
 
   it('hides rolled-back turn boundaries so Completed timing and the turn rail clear', () => {
-    const turnStart = {
-      type: 'event' as const,
-      event: {
-        seq: 4, time: 1, type: 'turn/start',
-        data: { turn: 2 },
-      } as SessionEventLikeEntry['event'],
-    }
-    const turnEnd = {
-      type: 'event' as const,
-      event: {
-        seq: 7, time: 5_000, type: 'turn/end',
-        data: { turn: 2, reason: { kind: 'completed' } },
-      } as SessionEventLikeEntry['event'],
-    }
     const marker = entry(9, {
       surfaceOp: { op: 'replace', startSeq: 5, endSeq: 6 },
       sourceEventSeqs: [5, 6],
@@ -285,10 +237,10 @@ describe('presentRollbackTranscript', () => {
     })
     const entries = [
       entry(1),
-      turnStart,
+      lifecycle(4, 'turn/start', { turn: 2 }),
       entry(5, { text: 'second prompt' }),
       entry(6, { type: 'assistant/message', text: 'second answer' }),
-      turnEnd,
+      lifecycle(7, 'turn/end', { turn: 2, reason: { kind: 'completed' } }, 5_000),
       marker,
     ]
 
@@ -300,77 +252,16 @@ describe('presentRollbackTranscript', () => {
   })
 
   it('renumbers an undo shell when a later prompt reuses its turn id', () => {
-    const undoStart = {
-      type: 'event' as const,
-      event: {
-        seq: 10, time: 3, type: 'turn/start',
-        data: { turn: 2 },
-      } as SessionEventLikeEntry['event'],
-    }
-    const undoAssistant = {
-      type: 'event' as const,
-      event: {
-        seq: 12, time: 3, type: 'assistant/message', surfaceOp: 'append',
-        data: {
-          turn: 2,
-          step: 1,
-          message: {
-            id: 'dsh-composer-enhancer:undo:restore-1:1:7',
-            role: 'assistant',
-            content: [{ type: 'text', text: 'restored answer' }],
-            source: { kind: 'model' },
-          },
-        },
-      } as SessionEventLikeEntry['event'],
-    }
-    const undoEnd = {
-      type: 'event' as const,
-      event: {
-        seq: 13, time: 4, type: 'turn/end',
-        data: { turn: 2, reason: { kind: 'completed' } },
-      } as SessionEventLikeEntry['event'],
-    }
-    const reuseStart = {
-      type: 'event' as const,
-      event: {
-        seq: 14, time: 5, type: 'turn/start',
-        data: { turn: 2 },
-      } as SessionEventLikeEntry['event'],
-    }
-    const freshAssistant = {
-      type: 'event' as const,
-      event: {
-        seq: 16, time: 5, type: 'assistant/message', surfaceOp: 'append',
-        data: {
-          turn: 2,
-          step: 1,
-          message: {
-            id: 'assistant-2',
-            role: 'assistant',
-            content: [{ type: 'text', text: 'fresh answer' }],
-            source: { kind: 'model' },
-          },
-        },
-      } as SessionEventLikeEntry['event'],
-    }
-    const reuseEnd = {
-      type: 'event' as const,
-      event: {
-        seq: 17, time: 6, type: 'turn/end',
-        data: { turn: 2, reason: { kind: 'completed' } },
-      } as SessionEventLikeEntry['event'],
-    }
-
     const presented = presentRollbackTranscript([
       entry(1),
-      undoStart,
+      lifecycle(10, 'turn/start', { turn: 2 }, 3),
       entry(11, { id: 'dsh-composer-enhancer:undo:restore-1:0:5', text: 'restored prompt' }),
-      undoAssistant,
-      undoEnd,
-      reuseStart,
+      assistantAt(12, 2, 'dsh-composer-enhancer:undo:restore-1:1:7', 'restored answer', 3),
+      lifecycle(13, 'turn/end', { turn: 2, reason: { kind: 'completed' } }, 4),
+      lifecycle(14, 'turn/start', { turn: 2 }, 5),
       entry(15, { text: 'fresh prompt' }),
-      freshAssistant,
-      reuseEnd,
+      assistantAt(16, 2, 'assistant-2', 'fresh answer', 5),
+      lifecycle(17, 'turn/end', { turn: 2, reason: { kind: 'completed' } }, 6),
     ])
 
     const turnStarts = presented.flatMap(item => {
