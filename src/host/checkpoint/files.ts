@@ -337,7 +337,9 @@ export class CheckpointFiles {
       let result: SurfaceRestoreResult
       try {
         result = await restoreSurface()
-      } catch {
+      } catch (error) {
+        // Leave the journal pending for recoverFiles when surface work fails after files moved.
+        if (error instanceof CheckpointFileError) throw error
         throw new CheckpointFileError('FILE_RESTORE_FAILED')
       }
       if (!isRecord(result) || typeof result.appended !== 'boolean' || typeof result.synchronized !== 'boolean') {

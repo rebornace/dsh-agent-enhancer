@@ -5,6 +5,7 @@ import type {
   CheckpointRollbackPreview,
   CheckpointRollbackRequest,
   CheckpointRollbackResult,
+  CheckpointRollbackScope,
 } from '../../host/checkpoint/service.ts'
 
 export interface RollbackRemote {
@@ -17,6 +18,7 @@ export interface RollbackActive {
   readonly operation: CheckpointRollbackOperation
   readonly status: 'loading' | 'ready' | 'executing' | 'error'
   readonly preview?: CheckpointRollbackPreview
+  readonly scope?: CheckpointRollbackScope
   readonly error?: 'preview' | 'execute'
   readonly version: number
 }

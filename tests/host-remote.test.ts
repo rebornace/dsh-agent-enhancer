@@ -35,31 +35,64 @@ afterEach(async () => {
 
 describe('composer configuration and Remote metadata', () => {
   it('defaults input helpers on and the independent rollback switch off', () => {
-    const values = (input: unknown) => Object.fromEntries(Object.entries(input as Record<string, { get(): boolean }>)
+    const values = (input: unknown) => Object.fromEntries(Object.entries(input as Record<string, { get(): unknown }>)
       .map(([key, value]) => [key, value.get()]))
     expect(Config.dict!.historyEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.optimizeEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.predictEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.rollbackEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.optimizeProvider?.meta.volatile).toBe(true)
+    expect(Config.dict!.optimizeModel?.meta.volatile).toBe(true)
+    expect(Config.dict!.optimizeReasoningEffort?.meta.volatile).toBe(true)
+    expect(Config.dict!.predictProvider?.meta.volatile).toBe(true)
+    expect(Config.dict!.predictModel?.meta.volatile).toBe(true)
+    expect(Config.dict!.predictReasoningEffort?.meta.volatile).toBe(true)
     expect(values(Config({}))).toEqual({
       historyEnabled: true,
       optimizeEnabled: true,
       predictEnabled: true,
-      rollbackEnabled: false,
+      rollbackEnabled: true,
+      optimizeProvider: '',
+      optimizeModel: '',
+      optimizeReasoningEffort: '',
+      predictProvider: '',
+      predictModel: '',
+      predictReasoningEffort: '',
     })
-    expect(values(Config({ historyEnabled: false, optimizeEnabled: false, predictEnabled: false, rollbackEnabled: false }))).toEqual({
+    expect(values(Config({
       historyEnabled: false,
       optimizeEnabled: false,
       predictEnabled: false,
       rollbackEnabled: false,
+      optimizeProvider: 'deepseek',
+      optimizeModel: 'deepseek-chat',
+      optimizeReasoningEffort: 'low',
+      predictProvider: 'deepseek',
+      predictModel: 'deepseek-chat',
+      predictReasoningEffort: 'high',
+    }))).toEqual({
+      historyEnabled: false,
+      optimizeEnabled: false,
+      predictEnabled: false,
+      rollbackEnabled: false,
+      optimizeProvider: 'deepseek',
+      optimizeModel: 'deepseek-chat',
+      optimizeReasoningEffort: 'low',
+      predictProvider: 'deepseek',
+      predictModel: 'deepseek-chat',
+      predictReasoningEffort: 'high',
     })
-    expect(Object.keys(Config({}))).toEqual(['historyEnabled', 'optimizeEnabled', 'predictEnabled', 'rollbackEnabled'])
+    expect(Object.keys(Config({}))).toEqual([
+      'historyEnabled', 'optimizeEnabled', 'predictEnabled', 'rollbackEnabled',
+      'optimizeProvider', 'optimizeModel', 'optimizeReasoningEffort',
+      'predictProvider', 'predictModel', 'predictReasoningEffort',
+    ])
     expect(inject).toEqual(['llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel', 'fs', 'tools', 'typert', 'typertGateway'])
   })
 
   it('publishes one strict cancellable call with a nullable result', () => {
     expect(remoteInfo.package).toBe('dsh-composer-enhancer')
-    expect(remoteInfo.descriptors).toHaveLength(1)
+    expect(remoteInfo.descriptors).toHaveLength(2)
     expect(remoteInfo.descriptors[0]).toMatchObject({
       namespace: 'composerEnhancer',
       method: 'call',
@@ -67,6 +100,13 @@ describe('composer configuration and Remote metadata', () => {
       implementation: 'call',
       cancellation: { parameter: 'signal' },
     })
+    expect(remoteInfo.descriptors[1]).toMatchObject({
+      namespace: 'composerEnhancer',
+      method: 'listCatalog',
+      service: 'composerEnhancer',
+      implementation: 'listCatalog',
+    })
+    expect(remoteInfo.descriptors[1]).not.toHaveProperty('cancellation')
     expect(hostContribution).toEqual({
       package: 'dsh-composer-enhancer',
       face: 'host',
@@ -249,7 +289,7 @@ describe('host composition', () => {
     expect(register).toHaveBeenCalledTimes(1)
     expect(register).toHaveBeenCalledWith(hostContribution)
     expect(hostContribution.invocations.map(entry => entry.namespace)).toEqual([
-      'composerEnhancer', 'checkpointRollback', 'checkpointRollback',
+      'composerEnhancer', 'composerEnhancer', 'checkpointRollback', 'checkpointRollback',
     ])
     expect(ctx.composerEnhancer).toBeInstanceOf(ComposerEnhancerService)
     await ctx.fiber.dispose()

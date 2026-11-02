@@ -16,6 +16,7 @@ const optimizeReferenceSchema = z.strictObject({
   length: z.number().int().positive(),
   text: z.string().min(1),
 })
+const uiLocaleSchema = z.enum(['zh', 'en']).optional()
 const optimizeRequestSchema = z.strictObject({
   operation: z.literal('optimize'),
   requestId: z.string(),
@@ -23,12 +24,14 @@ const optimizeRequestSchema = z.strictObject({
   source: z.string(),
   references: z.array(optimizeReferenceSchema),
   context: z.array(recentExchangeSchema),
+  uiLocale: uiLocaleSchema,
 })
 const predictRequestSchema = z.strictObject({
   operation: z.literal('predict'),
   requestId: z.string(),
   sessionId: sessionIdSchema,
   context: z.array(recentExchangeSchema),
+  uiLocale: uiLocaleSchema,
 })
 export const auxiliaryRequestSchema = z.discriminatedUnion('operation', [
   optimizeRequestSchema,
@@ -57,6 +60,46 @@ const resultCodec = codec(
   z.union([auxiliaryResultSchema, z.null()]),
 )
 
+// Match Desktop session/modelCatalog wire shape: non-strict objects so adapter
+// metadata extras do not fail Host result validation.
+const modelReasoningEffortSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+})
+const modelReasoningSchema = z.object({
+  efforts: z.array(modelReasoningEffortSchema),
+  defaultEffort: z.string().optional(),
+})
+const modelCatalogModelSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  reasoning: modelReasoningSchema.optional(),
+})
+const modelProviderGroupSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  models: z.array(modelCatalogModelSchema),
+})
+const modelCatalogFailureSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  message: z.string(),
+})
+export const modelCatalogSchema = z.object({
+  default: z.object({
+    provider: z.string(),
+    model: z.string(),
+    reasoningEffort: z.string().optional(),
+  }),
+  routableProviders: z.array(z.string()),
+  groups: z.array(modelProviderGroupSchema),
+  failures: z.array(modelCatalogFailureSchema),
+})
+export type ModelCatalogPayload = z.infer<typeof modelCatalogSchema>
+const catalogCodec = codec('dsh-composer-enhancer#ModelCatalog', modelCatalogSchema)
+
 export const remoteInfo = createTypertRemoteInfo({
   package: 'dsh-composer-enhancer',
   methods: {
@@ -73,6 +116,14 @@ export const remoteInfo = createTypertRemoteInfo({
       cancellation: { parameter: 'signal' },
       result: resultCodec,
     },
+    // Same shape as session/modelCatalog: no cancellation parameter.
+    'composerEnhancer/listCatalog': {
+      service: 'composerEnhancer',
+      implementation: 'listCatalog',
+      invocation: { kind: 'direct' },
+      parameters: [],
+      result: catalogCodec,
+    },
   },
 }, z)
 
@@ -83,10 +134,12 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
+const checkpointScopeSchema = z.enum(['conversation', 'conversation-and-files'])
 export const checkpointRollbackRequestSchema = z.strictObject({
   sessionId: sessionIdSchema,
   turn: z.number().int().positive(),
   operation: z.enum(['rollback', 'undo']).optional(),
+  scope: checkpointScopeSchema.optional(),
 })
 const checkpointMessageSchema = z.strictObject({
   seq: z.number().int().nonnegative(),
@@ -131,6 +184,7 @@ const checkpointPreviewSchema = z.strictObject({
   sessionId: sessionIdSchema,
   turn: z.number().int().positive(),
   operation: z.enum(['rollback', 'undo']).optional(),
+  scope: checkpointScopeSchema.optional(),
   messages: z.array(checkpointMessageSchema),
   files: z.array(checkpointFileSchema),
   conflicts: z.array(checkpointConflictSchema),

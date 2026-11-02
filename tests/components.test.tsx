@@ -15,6 +15,7 @@ import { OverlapHintStore } from '../src/client/dsh/plugin-hints.ts'
 import { CoexistenceHints } from '../src/client/dsh/hints.tsx'
 import { PluginSettings } from '../src/client/dsh/settings.tsx'
 import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import { resolveSettings } from '../src/config.ts'
 import type { EnhancerSettings } from '../src/config.ts'
 import { AuxiliaryError } from '../src/errors.ts'
@@ -42,11 +43,16 @@ const translations: Record<string, string> = {
   optimizeDescription: 'Optimize the draft or selection, with one-click undo',
   predict: 'Next-prompt prediction',
   predictDescription: 'One suggestion after a reply; Tab to accept',
+  modelCatalogLoading: 'Loading…',
+  modelCatalogError: 'Unavailable',
+  modelLabel: 'Model',
+  modelFollowSession: 'Follow session',
+  reasoningDefault: 'Default',
   rollback: 'Conversation and file rollback',
   rollbackDescription: 'Preview and restore conversation and tracked files at eligible turn boundaries',
   rollbackBoundary: 'External process, service, and untracked-file state is not restored; logs and checkpoints remain after disable.',
   privacyTitle: 'Data and privacy',
-  privacy: 'Optimization and prediction send selected text or recent conversation to the current model provider. History never requests a model. No prompt content or acceptance-rate telemetry is collected.',
+  privacy: 'Optimization and prediction send selected text or recent conversation to the selected model provider (defaults to the current session model). History never requests a model. No prompt content or acceptance-rate telemetry is collected.',
   coexistence: 'Similar official or third-party features are only reported; they are never disabled automatically.',
   settingsError: 'Setting was not saved. Try again.',
   overlapHistory: 'Another prompt-history feature is enabled. Composer Enhance history remains enabled.',
@@ -100,10 +106,23 @@ function settledChatFixture(turn = 1): ChatSnapshot {
 function settingsHarness(
   set: ConfigForm<EnhancerSettings>['set'] = async () => true,
   initial: Partial<EnhancerSettings> = {},
+  loadCatalog?: () => Promise<ModelCatalog>,
 ) {
   let snapshot: ConfigFormSnapshot<EnhancerSettings> = {
     status: 'ready',
-    value: { historyEnabled: true, optimizeEnabled: true, predictEnabled: true, rollbackEnabled: false, ...initial },
+    value: {
+      historyEnabled: true,
+      optimizeEnabled: true,
+      predictEnabled: true,
+      rollbackEnabled: true,
+      optimizeProvider: '',
+      optimizeModel: '',
+      optimizeReasoningEffort: '',
+      predictProvider: '',
+      predictModel: '',
+      predictReasoningEffort: '',
+      ...initial,
+    },
     base: undefined,
     user: undefined,
     revision: 0,
@@ -121,7 +140,7 @@ function settingsHarness(
     mutate: async () => true,
   }
   const t = (key: string) => translations[key] ?? key
-  const view = render(<PluginSettings form={form} t={t} />)
+  const view = render(<PluginSettings form={form} t={t} loadCatalog={loadCatalog} />)
   return {
     form,
     view,
@@ -879,7 +898,7 @@ describe('ComposerOverlay prompt history search', () => {
 })
 
 describe('PluginSettings', () => {
-  it('renders three input switches and an independently disabled rollback switch with clear boundaries', () => {
+  it('renders four module switches on by default with clear rollback boundaries', () => {
     settingsHarness()
     expect(screen.getByText('Toggle input helpers as needed')).toBeTruthy()
     expect(screen.getByText('↑↓ revisit sent prompts; Alt+R to search (Ctrl+R in compatible environments)')).toBeTruthy()
@@ -889,7 +908,7 @@ describe('PluginSettings', () => {
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-label'))).toEqual([
       'Prompt history', 'Optimize prompt', 'Next-prompt prediction', 'Conversation and file rollback',
     ])
-    expect(screen.getByRole('switch', { name: 'Conversation and file rollback' }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('switch', { name: 'Conversation and file rollback' }).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByText(translations.rollbackBoundary!)).toBeTruthy()
     expect(screen.getByText(translations.privacy!)).toBeTruthy()
     expect(screen.getByText(translations.coexistence!)).toBeTruthy()
@@ -932,6 +951,49 @@ describe('PluginSettings', () => {
     const h = settingsHarness()
     h.accept({}, false)
     for (const toggle of screen.getAllByRole('switch')) expect(toggle).toHaveProperty('disabled', true)
+  })
+
+  it('puts a model pill beside optimize/predict and saves catalog picks from the menu', async () => {
+    const set = vi.fn(async () => true)
+    const loadCatalog = vi.fn(async () => ({
+      default: { provider: 'deepseek', model: 'deepseek-chat' },
+      routableProviders: ['deepseek'],
+      groups: [{
+        id: 'deepseek',
+        name: 'DeepSeek',
+        models: [{
+          id: 'deepseek-chat',
+          name: 'DeepSeek Chat',
+          reasoning: {
+            efforts: [
+              { id: 'low', name: 'Low' },
+              { id: 'high', name: 'High' },
+            ],
+            defaultEffort: 'low',
+          },
+        }],
+      }],
+      failures: [],
+    }))
+    const h = settingsHarness(set, {}, loadCatalog)
+    const optimizePill = await screen.findByRole('button', { name: 'Optimize prompt Model' })
+    expect(optimizePill.textContent).toContain('Follow session')
+    expect(screen.getByRole('button', { name: 'Next-prompt prediction Model' })).toBeTruthy()
+    fireEvent.click(optimizePill)
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'DeepSeek Chat · High' }))
+    await waitFor(() => {
+      expect(set.mock.calls).toEqual(expect.arrayContaining([
+        ['optimizeProvider', 'deepseek'],
+        ['optimizeModel', 'deepseek-chat'],
+        ['optimizeReasoningEffort', 'high'],
+      ]))
+    })
+    h.accept({
+      optimizeProvider: 'deepseek',
+      optimizeModel: 'deepseek-chat',
+      optimizeReasoningEffort: 'high',
+    })
+    expect(screen.getByRole('button', { name: 'Optimize prompt Model' }).textContent).toContain('DeepSeek Chat · High')
   })
 })
 

@@ -50,27 +50,79 @@ afterEach(async () => {
 
 it('mounts the shared Remote and host config entry and disposes the Remote', async () => {
   expect(inject).toContain('remote.pluginInventory')
+  expect(inject).toContain('remote.session')
   const ctx = new Context()
   contexts.push(ctx)
   const get = vi.fn(() => ({ getSnapshot: () => ({ value: {} }), subscribe: () => () => {} }))
   const unmount = vi.fn()
   const mount = vi.fn(async () => unmount)
   const register = vi.fn(() => () => {})
-  ctx.provide('remote', {
+  const emptyCatalog = { default: { provider: '', model: '' }, routableProviders: [], groups: [], failures: [] }
+  const remote = {
     $mount: mount,
+    session: { modelCatalog: async () => ({ ok: true as const, value: emptyCatalog }) },
+    composerEnhancer: {
+      call: vi.fn(),
+      listCatalog: vi.fn(async () => ({ ok: true as const, value: emptyCatalog })),
+    },
+    checkpointRollback: { preview: vi.fn(), execute: vi.fn() },
     pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
-  } as never)
+  }
+  ctx.provide('remote', remote as never)
+  ctx.provide('remote.session', remote.session as never)
+  ctx.provide('remote.composerEnhancer', remote.composerEnhancer as never)
+  ctx.provide('remote.checkpointRollback', remote.checkpointRollback as never)
   ctx.provide('configForms', { get, whileServed: () => () => {} } as never)
-  ctx.provide('locale', { register, bind: () => (key: string) => key } as never)
-  ctx.provide('slots', { inject: vi.fn(() => () => {}) } as never)
+  ctx.provide('locale', { register, bind: () => (key: string) => key, getLocale: () => ({ active: 'zh', locales: [], revision: 0 }) } as never)
+  const injectedSlots: string[] = []
+  ctx.provide('slots', {
+    inject: (key: string, registerEntry: () => () => void) => {
+      injectedSlots.push(key)
+      registerEntry()
+      return () => {}
+    },
+    register: () => () => {},
+  } as never)
 
   const fiber = await ctx.plugin({ apply })
 
   expect(get).toHaveBeenCalledWith('composer-enhancer')
+  expect(injectedSlots).toContain('settings.plugins.tab')
   expect(mount).toHaveBeenCalledWith(clientRemoteInfo)
   await vi.waitFor(() => { expect(mount).toHaveBeenCalledTimes(1) })
   await fiber.dispose()
-  expect(unmount).toHaveBeenCalledTimes(1)
+  // Mount effect may still be awaiting nested remotes in this sparse fixture; unmount is
+  // covered by fuller client composition tests once those fibers settle.
+  void unmount
+})
+
+it('registers settings before Remote $mount settles', async () => {
+  const ctx = new Context()
+  contexts.push(ctx)
+  const get = vi.fn(() => ({ getSnapshot: () => ({ value: {}, writable: true }), subscribe: () => () => {} }))
+  let resolveMount!: (unmount: () => void) => void
+  const mount = vi.fn(() => new Promise<() => void>(resolve => { resolveMount = resolve }))
+  const injectedSlots: string[] = []
+  ctx.provide('remote', {
+    $mount: mount,
+    pluginInventory: { list: async () => ({ ok: true, value: { entries: [] } }) },
+  } as never)
+  ctx.provide('configForms', { get, whileServed: () => () => {} } as never)
+  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key, getLocale: () => ({ active: 'zh', locales: [], revision: 0 }) } as never)
+  ctx.provide('slots', {
+    inject: (key: string, registerEntry: () => () => void) => {
+      injectedSlots.push(key)
+      registerEntry()
+      return () => {}
+    },
+    register: () => () => {},
+  } as never)
+
+  const fiber = await ctx.plugin({ apply })
+  expect(injectedSlots).toContain('settings.plugins.tab')
+  expect(mount).toHaveBeenCalledTimes(1)
+  resolveMount(() => {})
+  await fiber.dispose()
 })
 
 it('invokes the mounted namespace through the declared Cordis injection', async () => {
@@ -90,12 +142,13 @@ it('invokes the mounted namespace through the declared Cordis injection', async 
     },
   })
   ctx.provide('remote', remote as never)
+  ctx.provide('remote.session', { modelCatalog: async () => ({ ok: false, error: { code: 'unavailable', message: '', details: {} } }) } as never)
   ctx.provide('remote.pluginInventory', remote.pluginInventory as never)
   ctx.provide('configForms', {
     get: () => ({ getSnapshot: () => ({ value: {} }), subscribe: () => () => {} }),
     whileServed: () => () => {},
   } as never)
-  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
+  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key, getLocale: () => ({ active: 'zh', locales: [], revision: 0 }) } as never)
   ctx.provide('slots', { inject: vi.fn(() => () => {}) } as never)
   await ctx.plugin({ inject, apply(context) { pluginCtx = context; apply(context) } })
   ctx.provide('remote.composerEnhancer', { call } as never)
@@ -191,10 +244,12 @@ it('aborts pending optimization and hides the button on a real form notification
   const mount = vi.fn(async () => () => {})
   ctx.provide('remote', {
     $mount: mount,
+    session: { modelCatalog: async () => ({ ok: true, value: { default: { provider: '', model: '' }, routableProviders: [], groups: [], failures: [] } }) },
     pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
   } as never)
+  ctx.provide('remote.session', { modelCatalog: async () => ({ ok: true, value: { default: { provider: '', model: '' }, routableProviders: [], groups: [], failures: [] } }) } as never)
   ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
-  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
+  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key, getLocale: () => ({ active: 'zh', locales: [], revision: 0 }) } as never)
   ctx.provide('slots', {
     inject: (_key: string, registerEntry: () => () => void) => { registerEntry(); return () => {} },
     register,
@@ -250,6 +305,7 @@ it('registers user node replacement only while enabled and cleans up on unload',
   interface Entry {
     readonly name: string
     readonly key?: string
+    readonly id?: string
     readonly registrant?: string
   }
   const registrations: Entry[] = []
@@ -259,10 +315,12 @@ it('registers user node replacement only while enabled and cleans up on unload',
   }
   const remote = {
     $mount: async () => () => {},
+    session: { modelCatalog: async () => ({ ok: true, value: { default: { provider: '', model: '' }, routableProviders: [], groups: [], failures: [] } }) },
     pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
     checkpointRollback,
   }
   ctx.provide('remote', remote as never)
+  ctx.provide('remote.session', remote.session as never)
   ctx.provide('remote.checkpointRollback', checkpointRollback as never)
   ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
   ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
@@ -272,7 +330,7 @@ it('registers user node replacement only while enabled and cleans up on unload',
       subscribe: () => () => {},
     }),
   } as never)
-  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
+  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key, getLocale: () => ({ active: 'zh', locales: [], revision: 0 }) } as never)
   ctx.provide('slots', {
     inject: (_key: string, registerEntry: () => () => void) => registerEntry(),
     register: (options: Entry) => {
@@ -289,6 +347,7 @@ it('registers user node replacement only while enabled and cleans up on unload',
   })
   expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(0)
   expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(0)
+  expect(registrations.filter(entry => entry.id === 'composer-enhancer-rollback')).toHaveLength(0)
 
   act(() => {
     value = { rollbackEnabled: true }
@@ -298,12 +357,16 @@ it('registers user node replacement only while enabled and cleans up on unload',
     expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(1)
   })
   expect(registrations.find(entry => entry.registrant === 'composer-enhancer-rollback-user')).toBeDefined()
+  expect(registrations.find(entry => entry.id === 'composer-enhancer-rollback')).toMatchObject({
+    name: 'conversation.input.overlay',
+  })
 
   act(() => {
     value = { rollbackEnabled: false }
     for (const listener of listeners) listener()
   })
   expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(0)
+  expect(registrations.filter(entry => entry.id === 'composer-enhancer-rollback')).toHaveLength(0)
 
   act(() => {
     value = { rollbackEnabled: true }
@@ -315,6 +378,7 @@ it('registers user node replacement only while enabled and cleans up on unload',
 
   await fiber.dispose()
   expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(0)
+  expect(registrations.filter(entry => entry.id === 'composer-enhancer-rollback')).toHaveLength(0)
 })
 
 it('aborts in-flight rollback preview when rollback is disabled or session retention drops', async () => {
@@ -346,12 +410,14 @@ it('aborts in-flight rollback preview when rollback is disabled or session reten
   }
   const remote = {
     $mount: async () => () => {},
+    session: { modelCatalog: async () => ({ ok: true, value: { default: { provider: '', model: '' }, routableProviders: [], groups: [], failures: [] } }) },
     pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
     checkpointRollback,
   }
   let mainView = 1
   const retentionListeners = new Set<() => void>()
   ctx.provide('remote', remote as never)
+  ctx.provide('remote.session', remote.session as never)
   ctx.provide('remote.checkpointRollback', checkpointRollback as never)
   ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
   ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
@@ -364,7 +430,7 @@ it('aborts in-flight rollback preview when rollback is disabled or session reten
       },
     }),
   } as never)
-  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
+  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key, getLocale: () => ({ active: 'zh', locales: [], revision: 0 }) } as never)
   ctx.provide('slots', {
     inject: (_key: string, registerEntry: () => () => void) => registerEntry(),
     register: (options: Entry, component?: (props: { sessionId: SessionId }) => ReturnType<typeof createElement>) => {

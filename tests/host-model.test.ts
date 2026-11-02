@@ -40,9 +40,17 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 
 interface HarnessOptions {
   chunks?: readonly StreamChunk[]
-  header?: { provider: string; model: string }
-  projection?: { provider: string; model: string }
-  fallback?: { provider: string; model: string }
+  header?: { provider: string; model: string; reasoningEffort?: string }
+  projection?: { provider: string; model: string; reasoningEffort?: string }
+  fallback?: { provider: string; model: string; reasoningEffort?: string }
+  settings?: {
+    optimizeProvider?: string
+    optimizeModel?: string
+    optimizeReasoningEffort?: string
+    predictProvider?: string
+    predictModel?: string
+    predictReasoningEffort?: string
+  }
 }
 
 function harness(options: HarnessOptions = {}) {
@@ -85,7 +93,14 @@ function harness(options: HarnessOptions = {}) {
     stream,
     stateOf,
     currentSelection,
-    models: new AuxiliaryModels(ctx),
+    models: new AuxiliaryModels(ctx, () => ({
+      optimizeProvider: options.settings?.optimizeProvider ?? '',
+      optimizeModel: options.settings?.optimizeModel ?? '',
+      optimizeReasoningEffort: options.settings?.optimizeReasoningEffort ?? '',
+      predictProvider: options.settings?.predictProvider ?? '',
+      predictModel: options.settings?.predictModel ?? '',
+      predictReasoningEffort: options.settings?.predictReasoningEffort ?? '',
+    })),
     setChunks(value: readonly StreamChunk[]) { chunks = value },
     replaceCurrent(value: object) { current = value },
   }
@@ -232,6 +247,21 @@ describe('AuxiliaryModels', () => {
     expect(audit.system).toContain('不补写用户正在输入的内容')
   })
 
+  it('uses English prompt packs when Desktop uiLocale is en', async () => {
+    const h = harness({ header: route })
+    await h.models.generate(optimizeRequest({
+      source: 'clarify this',
+      uiLocale: 'en',
+      context: [{ turn: 1, prompt: 'hi', response: 'hello' }],
+    }), new AbortController().signal)
+    const audit = vi.mocked(appendPluginRecord).mock.calls[0]?.[2]!
+    expect(audit.system).toContain('prompt rewriter')
+    const content = audit.messages[0]!.content[0]!
+    if (content.type !== 'text') throw new Error('Expected a text audit block')
+    expect(content.text).toContain('Recent context')
+    expect(content.text).toContain('Turn 1')
+  })
+
   it('falls back to the host default only when no session route exists', async () => {
     const fallback = { provider: 'default-provider', model: 'default-model' }
     const h = harness({ fallback })
@@ -250,6 +280,63 @@ describe('AuxiliaryModels', () => {
     })
     await h.models.generate(optimizeRequest(), new AbortController().signal)
     expect(h.stream.mock.calls[0]?.[0].reasoningEffort).toBe('low')
+  })
+
+  it('prefers plugin optimize route and reasoning effort over the session model', async () => {
+    const override = { provider: 'cheap', model: 'lite' }
+    const h = harness({
+      header: route,
+      settings: {
+        optimizeProvider: override.provider,
+        optimizeModel: override.model,
+        optimizeReasoningEffort: 'high',
+      },
+    })
+    h.prepare.mockImplementationOnce(async (config, _signal, configure) => {
+      const controls = configure?.(
+        { maxTokens: config.maxTokens },
+        { reasoning: { efforts: [{ id: 'low' }, { id: 'high' }], defaultEffort: 'low' } } as never,
+      )
+      return { config: { ...config, ...controls }, stream: h.stream }
+    })
+    await expect(h.models.generate(optimizeRequest(), new AbortController().signal))
+      .resolves.toMatchObject({ route: override })
+    expect(h.prepare.mock.calls[0]?.[0]).toEqual({ ...override, maxTokens: 1200 })
+    expect(h.stream.mock.calls[0]?.[0].reasoningEffort).toBe('high')
+    expect(h.stateOf).not.toHaveBeenCalled()
+  })
+
+  it('uses the session reasoning effort when following the session model', async () => {
+    const h = harness({ header: { ...route, reasoningEffort: 'high' } })
+    h.prepare.mockImplementationOnce(async (config, _signal, configure) => {
+      const controls = configure?.(
+        { maxTokens: config.maxTokens },
+        { reasoning: { efforts: [{ id: 'low' }, { id: 'high' }], defaultEffort: 'low' } } as never,
+      )
+      return { config: { ...config, ...controls }, stream: h.stream }
+    })
+    await h.models.generate(optimizeRequest(), new AbortController().signal)
+    expect(h.stream.mock.calls[0]?.[0].reasoningEffort).toBe('high')
+  })
+
+  it('falls back to the adapter default effort when the preferred effort is unavailable', async () => {
+    const h = harness({
+      header: route,
+      settings: {
+        optimizeProvider: 'cheap',
+        optimizeModel: 'lite',
+        optimizeReasoningEffort: 'missing',
+      },
+    })
+    h.prepare.mockImplementationOnce(async (config, _signal, configure) => {
+      const controls = configure?.(
+        { maxTokens: config.maxTokens },
+        { reasoning: { efforts: [{ id: 'low' }, { id: 'high' }], defaultEffort: 'high' } } as never,
+      )
+      return { config: { ...config, ...controls }, stream: h.stream }
+    })
+    await h.models.generate(optimizeRequest(), new AbortController().signal)
+    expect(h.stream.mock.calls[0]?.[0].reasoningEffort).toBe('high')
   })
 
   it.each([

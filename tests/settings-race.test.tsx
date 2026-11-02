@@ -25,7 +25,18 @@ it('does not request prediction after an accepted disable before the mirror catc
   const ctx = new Context()
   contexts.push(ctx)
   const listeners = new Set<() => void>()
-  let value: EnhancerSettings = { historyEnabled: true, optimizeEnabled: true, predictEnabled: true, rollbackEnabled: false }
+  let value: EnhancerSettings = {
+    historyEnabled: true,
+    optimizeEnabled: true,
+    predictEnabled: true,
+    rollbackEnabled: false,
+    optimizeProvider: '',
+    optimizeModel: '',
+    optimizeReasoningEffort: '',
+    predictProvider: '',
+    predictModel: '',
+    predictReasoningEffort: '',
+  }
   let revision = 1
   let snapshot: ReturnType<ConfigForm<EnhancerSettings>['getSnapshot']> = {
     status: 'ready', value, base: undefined, user: undefined, revision, writable: true,
@@ -46,13 +57,15 @@ it('does not request prediction after an accepted disable before the mirror catc
   }> = []
   ctx.provide('remote', {
     $mount: async () => () => {},
+    session: { modelCatalog: async () => ({ ok: true, value: { default: { provider: '', model: '' }, routableProviders: [], groups: [], failures: [] } }) },
     pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
   } as never)
+  ctx.provide('remote.session', { modelCatalog: async () => ({ ok: true, value: { default: { provider: '', model: '' }, routableProviders: [], groups: [], failures: [] } }) } as never)
   ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
   ctx.provide('remote.checkpointRollback', { preview: vi.fn(), execute: vi.fn() } as never)
   ctx.provide('remote.pluginInventory', { list: vi.fn() } as never)
   ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
-  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
+  ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key, getLocale: () => ({ active: 'zh', locales: [], revision: 0 }) } as never)
   ctx.provide('slots', {
     inject: (_key: string, registerEntry: () => () => void) => { registerEntry(); return () => {} },
     register: (options: { name: string; inject: (...args: never[]) => unknown }) => {
@@ -62,6 +75,10 @@ it('does not request prediction after an accepted disable before the mirror catc
   } as never)
   const invoke = vi.spyOn(composerEnhancerCall, 'invoke').mockImplementation(() => new Promise(() => {}))
   await ctx.plugin({ apply })
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
 
   const settings = registrations.find(entry => entry.name === 'settings.plugins.tab')
   const settingsForm = settings!.options.inject() as { form: ConfigForm<EnhancerSettings> }

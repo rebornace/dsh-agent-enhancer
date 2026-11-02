@@ -1,6 +1,7 @@
 import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { CheckpointUnavailable } from '../../host/checkpoint/service.ts'
+import { blockingUnavailable } from '../../host/checkpoint/availability.ts'
+import type { CheckpointRollbackScope, CheckpointUnavailable } from '../../host/checkpoint/availability.ts'
 import type { FileConflict } from '../../host/checkpoint/files.ts'
 import styles from '../styles.module.css'
 import type { RollbackActive } from './types.ts'
@@ -45,6 +46,15 @@ export function RollbackPreview({ active, t }: {
   if (active.status === 'error') return <p role="alert">{t('rollbackFailed')}</p>
   const preview = active.preview
   if (preview === undefined) return null
+  // Soft capture gaps do not block conversation-only restore — never list them under
+  // a fatal "unavailable" heading or users conclude rollback is impossible.
+  const hardUnavailable = blockingUnavailable(preview.unavailable, 'conversation', {
+    trackedFiles: preview.files.length,
+  })
+  const filesLimited = active.operation !== 'undo'
+    && blockingUnavailable(preview.unavailable, 'conversation-and-files', {
+      trackedFiles: preview.files.length,
+    }).length > hardUnavailable.length
   return <MenuSurface className={styles.rollbackPreview}>
     <section className={styles.rollbackSection} aria-label={t('rollbackMessages')}>
       <h3>{t('rollbackMessages')}</h3>
@@ -63,11 +73,15 @@ export function RollbackPreview({ active, t }: {
         </li>)}
       </ul>}
     </section>
-    {preview.unavailable.length === 0 ? null : <section className={styles.rollbackSection} aria-label={t('rollbackGaps')}>
+    {hardUnavailable.length === 0 ? null : <section className={styles.rollbackSection} aria-label={t('rollbackGaps')}>
       <h3>{t('rollbackGaps')}</h3>
-      <ul className={styles.rollbackList}>{preview.unavailable.map(reason => <li key={reason}>
+      <ul className={styles.rollbackList}>{hardUnavailable.map(reason => <li key={reason}>
         {t(UNAVAILABLE_KEYS[reason])}
       </li>)}</ul>
+    </section>}
+    {!filesLimited ? null : <section className={styles.rollbackSection} aria-label={t('rollbackFilesLimited')}>
+      <h3>{t('rollbackFilesLimited')}</h3>
+      <p>{t('rollbackFilesLimitedHint')}</p>
     </section>}
     {preview.conflicts.length === 0 ? null : <section className={styles.rollbackSection} aria-label={t('rollbackConflicts')}>
       <h3>{t('rollbackConflicts')}</h3>
@@ -82,24 +96,32 @@ export function rollbackModalCopy(
   operation: RollbackActive['operation'],
   t: TranslateNS<'composer-enhancer'>,
   turn: number,
+  scope?: CheckpointRollbackScope,
 ): {
   readonly title: string
   readonly description: string
   readonly confirm: string
+  readonly confirmConversation: string
   readonly executing: string
+  readonly executingConversation: string
 } {
   if (operation === 'undo') {
+    const conversationOnly = scope === 'conversation'
     return {
       title: t('rollbackUndoTitle', { turn }),
-      description: t('rollbackUndoScope'),
-      confirm: t('rollbackUndoConfirm'),
-      executing: t('rollbackUndoRestoring'),
+      description: t(conversationOnly ? 'rollbackUndoScopeConversation' : 'rollbackUndoScope'),
+      confirm: t(conversationOnly ? 'rollbackUndoConfirmConversation' : 'rollbackUndoConfirm'),
+      confirmConversation: t('rollbackUndoConfirmConversation'),
+      executing: t(conversationOnly ? 'rollbackUndoRestoringConversation' : 'rollbackUndoRestoring'),
+      executingConversation: t('rollbackUndoRestoringConversation'),
     }
   }
   return {
     title: t('rollbackTitle', { turn }),
     description: t('rollbackScope'),
     confirm: t('rollbackConfirm'),
+    confirmConversation: t('rollbackConfirmConversation'),
     executing: t('rollbackRestoring'),
+    executingConversation: t('rollbackRestoringConversation'),
   }
 }

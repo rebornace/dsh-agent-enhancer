@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { MessageId } from '@deepseek-ai/dsh-llm'
+import { MessageId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, Session, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -92,6 +92,73 @@ function appendTurn(session: Session, turn: number, prompt: string, answer: stri
   session.append('turn/end', { turn, reason: { kind: 'completed' } })
 }
 
+function appendTurnWithTool(
+  session: Session,
+  turn: number,
+  prompt: string,
+  callId: string,
+  toolOutput: string,
+  answer: string,
+): void {
+  const step = 1
+  session.append('turn/start', { turn })
+  session.append('step/start', { turn, step })
+  session.append('user/message', {
+    id: MessageId(`user-${turn}`),
+    role: 'user',
+    content: [{ type: 'text', text: prompt }],
+    source: { kind: 'user' },
+  }, { surfaceOp: 'append' })
+  const toolCallId = ToolCallId(callId)
+  session.append('assistant/message', {
+    turn,
+    step,
+    message: {
+      id: MessageId(`assistant-${turn}-call`),
+      role: 'assistant',
+      content: [{
+        type: 'tool-call',
+        id: toolCallId,
+        name: 'test-tool',
+        arguments: '{"ok":true}',
+      }],
+      source: { kind: 'model', provider: 'test', model: 'test' },
+    },
+    stream: [],
+  }, { surfaceOp: 'append' })
+  session.append('tool/call', {
+    turn,
+    step,
+    callId: toolCallId,
+    name: 'test-tool',
+    arguments: '{"ok":true}',
+  })
+  session.append('tool/result', {
+    turn,
+    step,
+    message: {
+      id: MessageId(`tool-${turn}`),
+      role: 'tool',
+      source: { kind: 'tool', callId: toolCallId },
+      toolCallId,
+      content: [{ type: 'text', text: toolOutput }],
+    },
+  }, { surfaceOp: 'append' })
+  session.append('assistant/message', {
+    turn,
+    step,
+    message: {
+      id: MessageId(`assistant-${turn}`),
+      role: 'assistant',
+      content: [{ type: 'text', text: answer }],
+      source: { kind: 'model', provider: 'test', model: 'test' },
+    },
+    stream: [],
+  }, { surfaceOp: 'append' })
+  session.append('step/end', { turn, step })
+  session.append('turn/end', { turn, reason: { kind: 'completed' } })
+}
+
 function checkpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
   return {
     schemaVersion: 1,
@@ -124,14 +191,17 @@ interface Harness {
 
 function harness(options: {
   session?: Session
+  seedTurns?: boolean
   operations?: CheckpointFileOperations
   synchronize?: (signal: AbortSignal) => Promise<void>
   createId?: () => string
 } = {}): Harness {
   const session = options.session ?? makeSession()
-  appendSystem(session)
-  appendTurn(session, 1, 'first prompt', 'first answer')
-  appendTurn(session, 2, 'second prompt', 'second answer')
+  if (options.seedTurns !== false) {
+    appendSystem(session)
+    appendTurn(session, 1, 'first prompt', 'first answer')
+    appendTurn(session, 2, 'second prompt', 'second answer')
+  }
   const store = new CheckpointStore(storageRoot)
   let status: 'idle' | 'running' = 'idle'
   let allowed = true
@@ -240,14 +310,170 @@ describe('CheckpointRollbackService preview', () => {
     await expect(h.service.execute({ sessionId, turn: 2 })).rejects.toMatchObject({ code: 'ROLLBACK_UNAVAILABLE' })
   })
 
-  it('rejects a first-turn boundary even when a stored checkpoint names it', async () => {
+  it('allows conversation restore before turn 1 when atSeq is after the system message', async () => {
     const h = harness()
-    await seedCheckpoint(h, checkpoint({ turn: 1, atSeq: 0, prompt: 'first prompt' }))
+    // session/end-seed@0, system@1, turn/start@2 → capture stores atSeq 1
+    await seedCheckpoint(h, checkpoint({
+      id: 'checkpoint-1',
+      turn: 1,
+      atSeq: 1,
+      prompt: 'first prompt',
+      files: [],
+      coverage: 'partial',
+      gaps: [{ type: 'workspace', reason: 'capture-failed' }],
+    }))
 
     const preview = await h.service.preview({ sessionId, turn: 1 })
+    expect(preview.unavailable).not.toContain('first-turn')
+    expect(preview.unavailable).toEqual(expect.arrayContaining([
+      'incomplete-checkpoint',
+      'workspace-capture-failed',
+    ]))
+    await expect(h.service.execute({ sessionId, turn: 1, scope: 'conversation' })).resolves.toEqual({
+      sessionId,
+      turn: 1,
+      draft: 'first prompt',
+    })
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system', expect.stringContaining('turn 1'),
+    ])
+  })
 
-    expect(preview.unavailable).toContain('first-turn')
-    await expect(h.service.execute({ sessionId, turn: 1 })).rejects.toMatchObject({ code: 'ROLLBACK_UNAVAILABLE' })
+  it('allows restore when atSeq is 0 after session/end-seed with no system message', async () => {
+    const session = makeSession()
+    appendTurn(session, 1, 'lonely prompt', 'lonely answer')
+    const h = harness({ session, seedTurns: false })
+    // end-seed@0, turn/start@1 → atSeq 0
+    await seedCheckpoint(h, checkpoint({
+      id: 'checkpoint-1',
+      turn: 1,
+      atSeq: 0,
+      prompt: 'lonely prompt',
+      files: [],
+      coverage: 'complete',
+      gaps: [],
+    }))
+
+    const preview = await h.service.preview({ sessionId, turn: 1 })
+    expect(preview.unavailable).not.toContain('first-turn')
+    expect(preview.unavailable).not.toContain('unknown-surface')
+    await expect(h.service.execute({ sessionId, turn: 1, scope: 'conversation' })).resolves.toEqual({
+      sessionId,
+      turn: 1,
+      draft: 'lonely prompt',
+    })
+  })
+
+  it('restores a completed first-turn knowledge prompt even when stored atSeq is stale', async () => {
+    const prompt = '请用两句话介绍版本控制的作用，只作公开知识说明，不修改任何文件。'
+    const session = makeSession()
+    appendSystem(session)
+    appendTurn(session, 1, prompt, '版本控制用于追踪变更并协作。')
+    const h = harness({ session, seedTurns: false })
+    // Live layout: end-seed@0, system@1, turn/start@2 → real cut is 1.
+    // A stale atSeq=0 used to miss the turn/start and leave confirms looking stuck.
+    await seedCheckpoint(h, checkpoint({
+      id: 'checkpoint-1',
+      turn: 1,
+      atSeq: 0,
+      prompt,
+      files: [],
+      coverage: 'complete',
+      gaps: [],
+    }))
+
+    const preview = await h.service.preview({ sessionId, turn: 1 })
+    expect(preview.unavailable).toEqual([])
+    expect(preview.messages.some(message => message.text === prompt)).toBe(true)
+    await expect(h.service.execute({ sessionId, turn: 1, scope: 'conversation' })).resolves.toEqual({
+      sessionId,
+      turn: 1,
+      draft: prompt,
+    })
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system',
+      expect.stringContaining('turn 1'),
+    ])
+  })
+
+  it('keeps the protected system prompt when Desktop appends it after turn/start', async () => {
+    const prompt = '请用两句话介绍版本控制的作用，只作公开知识说明，不修改任何文件。'
+    const session = makeSession()
+    // Real Desktop order: turn/start first, then system prompt during step prep.
+    session.append('turn/start', { turn: 1 })
+    appendSystem(session)
+    session.append('user/message', {
+      id: MessageId('user-1'),
+      role: 'user',
+      content: [{ type: 'text', text: prompt }],
+      source: { kind: 'user' },
+    }, { surfaceOp: 'append' })
+    session.append('assistant/message', {
+      turn: 1,
+      step: 0,
+      message: {
+        id: MessageId('assistant-1'),
+        role: 'assistant',
+        content: [{ type: 'text', text: '版本控制用于追踪变更并协作。' }],
+        source: { kind: 'model', provider: 'test', model: 'test' },
+      },
+      stream: [],
+    }, { surfaceOp: 'append' })
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const h = harness({ session, seedTurns: false })
+    await seedCheckpoint(h, checkpoint({
+      id: 'checkpoint-1',
+      turn: 1,
+      atSeq: 0,
+      prompt,
+      files: [],
+      coverage: 'complete',
+      gaps: [],
+    }))
+
+    const preview = await h.service.preview({ sessionId, turn: 1 })
+    expect(preview.unavailable).toEqual([])
+    expect(preview.messages.some(message => message.type === 'system/message')).toBe(false)
+    expect(preview.messages.some(message => message.text === prompt)).toBe(true)
+    await expect(h.service.execute({ sessionId, turn: 1, scope: 'conversation' })).resolves.toEqual({
+      sessionId,
+      turn: 1,
+      draft: prompt,
+    })
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system',
+      expect.stringContaining('turn 1'),
+    ])
+  })
+
+  it('synthesizes a soft checkpoint for a cancelled first turn with no store entry', async () => {
+    const session = makeSession()
+    appendSystem(session)
+    session.append('turn/start', { turn: 1 })
+    session.append('user/message', {
+      id: MessageId('user-1'),
+      role: 'user',
+      content: [{ type: 'text', text: 'stopped mid-thought' }],
+      source: { kind: 'user' },
+    }, { surfaceOp: 'append' })
+    session.append('turn/end', { turn: 1, reason: { kind: 'cancelled' } })
+    const h = harness({ session, seedTurns: false })
+
+    const preview = await h.service.preview({ sessionId, turn: 1 })
+    expect(preview.unavailable).not.toContain('checkpoint-not-found')
+    expect(preview.unavailable).not.toContain('first-turn')
+    expect(preview.unavailable).not.toContain('incomplete-checkpoint')
+    expect(preview.unavailable).not.toContain('workspace-capture-failed')
+    expect(preview.files).toEqual([])
+    expect(preview.messages.some(message => message.type === 'user/message')).toBe(true)
+    await expect(h.service.execute({ sessionId, turn: 1, scope: 'conversation' })).resolves.toEqual({
+      sessionId,
+      turn: 1,
+      draft: 'stopped mid-thought',
+    })
   })
 
   it('shows incomplete checkpoint gaps and refuses execution', async () => {
@@ -264,7 +490,7 @@ describe('CheckpointRollbackService preview', () => {
     await expect(h.service.execute({ sessionId, turn: 2 })).rejects.toMatchObject({ code: 'ROLLBACK_UNAVAILABLE' })
   })
 
-  it('refuses compaction, subagent Sessions, and unknown boundary structures', async () => {
+  it('reports compaction but still allows conversation-only restore', async () => {
     const compacted = harness()
     await seedCheckpoint(compacted)
     compacted.session.append('developer/message', {
@@ -282,15 +508,43 @@ describe('CheckpointRollbackService preview', () => {
     })
     await expect(compacted.service.preview({ sessionId, turn: 2 }))
       .resolves.toMatchObject({ unavailable: expect.arrayContaining(['compacted-surface']) })
+    await expect(compacted.service.execute({ sessionId, turn: 2, scope: 'conversation' }))
+      .resolves.toEqual({ sessionId, turn: 2, draft: 'second prompt' })
+  })
 
+  it('ignores plugin version and preset drift for restore eligibility', async () => {
+    const h = harness()
+    await seedCheckpoint(h, checkpoint({
+      pluginVersion: '0.0.1',
+      session: { format: SESSION_FORMAT_VERSION, preset: 'other-preset' },
+      files: [],
+    }))
+    const preview = await h.service.preview({ sessionId, turn: 2 })
+    expect(preview.unavailable).not.toContain('incompatible-session')
+    await expect(h.service.execute({ sessionId, turn: 2, scope: 'conversation' }))
+      .resolves.toEqual({ sessionId, turn: 2, draft: 'second prompt' })
+  })
+
+  it('allows conversation restore without workspace permission', async () => {
+    const h = harness()
+    await seedCheckpoint(h, checkpoint({ files: [] }))
+    h.setPermission(false)
+    const preview = await h.service.preview({ sessionId, turn: 2 })
+    expect(preview.unavailable).toContain('permission-denied')
+    await expect(h.service.execute({ sessionId, turn: 2, scope: 'conversation' }))
+      .resolves.toEqual({ sessionId, turn: 2, draft: 'second prompt' })
+  })
+
+  it('refuses subagent Sessions and unknown boundary structures', async () => {
     const child = harness({ session: makeSession('subagent') })
     await seedCheckpoint(child)
     await expect(child.service.preview({ sessionId, turn: 2 }))
       .resolves.toMatchObject({ unavailable: expect.arrayContaining(['subagent-session']) })
 
     const unknown = harness()
-    await seedCheckpoint(unknown, checkpoint({ atSeq: 3 }))
-    await expect(unknown.service.preview({ sessionId, turn: 2 }))
+    // Checkpoint claims a turn that has no turn/start in the live log.
+    await seedCheckpoint(unknown, checkpoint({ turn: 99, atSeq: 3, prompt: 'ghost' }))
+    await expect(unknown.service.preview({ sessionId, turn: 99 }))
       .resolves.toMatchObject({ unavailable: expect.arrayContaining(['unknown-surface']) })
   })
 })
@@ -305,9 +559,10 @@ describe('CheckpointRollbackService execute', () => {
       },
       remove: path => rm(path, { force: true }),
     }
+    const syncDepths: number[] = []
     const h = harness({
       operations,
-      synchronize: async () => { expect(maintenanceDepth).toBe(1) },
+      synchronize: async () => { syncDepths.push(maintenanceDepth) },
     })
     h.adapter.runMaintenance = async task => {
       maintenanceDepth += 1
@@ -322,6 +577,7 @@ describe('CheckpointRollbackService execute', () => {
     await h.service.execute({ sessionId, turn: 2 })
 
     expect(maintenanceDepth).toBe(0)
+    expect(syncDepths).toEqual([1, 0])
   })
 
   it('restores files and model-visible surface and returns only the plain-text draft', async () => {
@@ -350,6 +606,30 @@ describe('CheckpointRollbackService execute', () => {
     })
     expect(events.filter(event => event.type === 'user/message')).toHaveLength(3)
     await expect(h.store.recoverJournal()).resolves.toEqual([])
+  })
+
+  it('still commits while maintenance flips agent status away from idle', async () => {
+    const h = harness()
+    await seedCheckpoint(h)
+    const outer = h.adapter.runMaintenance.bind(h.adapter)
+    h.adapter.runMaintenance = async task => outer(async signal => {
+      h.setStatus('running')
+      try {
+        return await task(signal)
+      } finally {
+        h.setStatus('idle')
+      }
+    })
+
+    await expect(h.service.execute({ sessionId, turn: 2, scope: 'conversation' })).resolves.toEqual({
+      sessionId,
+      turn: 2,
+      draft: 'second prompt',
+    })
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system', 'first prompt', 'first answer', expect.stringContaining('turn 2'),
+    ])
   })
 
   it('does not append a surface event when a file restore step fails', async () => {
@@ -494,7 +774,8 @@ describe('CheckpointRollbackService undo', () => {
       .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
       'system', 'first prompt', 'first answer', 'second prompt', 'second answer',
     ])
-    expect(h.adapter.readEvents()).toHaveLength(originalLength + 3)
+    // marker + turn/start + step/start + user copy + assistant copy + step/end + turn/end
+    expect(h.adapter.readEvents()).toHaveLength(originalLength + 7)
     expect(h.adapter.readEvents().filter(event => event.type === 'user/message')).toHaveLength(4)
     await expect(h.store.recoverJournal()).resolves.toEqual([])
   })
@@ -520,6 +801,71 @@ describe('CheckpointRollbackService undo', () => {
     await expect(changed.service.execute({ sessionId, turn: 2, operation: 'undo' }))
       .rejects.toMatchObject({ code: 'ROLLBACK_UNAVAILABLE' })
     await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('before')
+  })
+
+  it('allows full restore when checkpoint has soft gaps but no tracked files', async () => {
+    const h = harness()
+    await seedCheckpoint(h, checkpoint({
+      files: [],
+      coverage: 'partial',
+      gaps: [
+        { type: 'workspace', reason: 'capture-failed' },
+        { type: 'prompt', reason: 'non-text-content' },
+      ],
+      prompt: '',
+    }))
+    await expect(h.service.preview({ sessionId, turn: 2 })).resolves.toMatchObject({
+      files: [],
+      unavailable: expect.arrayContaining([
+        'incomplete-checkpoint',
+        'workspace-capture-failed',
+        'prompt-non-text-content',
+      ]),
+      conflicts: [],
+    })
+    await expect(h.service.execute({ sessionId, turn: 2, scope: 'conversation-and-files' }))
+      .resolves.toEqual({ sessionId, turn: 2, draft: '' })
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system', 'first prompt', 'first answer', expect.stringContaining('turn 2'),
+    ])
+  })
+
+  it('supports conversation-only rollback and undo without touching tracked files', async () => {
+    const h = harness()
+    await seedCheckpoint(h)
+    await writeFile(join(workspaceRoot, 'file.txt'), 'external edit', 'utf8')
+
+    await expect(h.service.execute({ sessionId, turn: 2, scope: 'conversation-and-files' }))
+      .rejects.toMatchObject({ code: 'ROLLBACK_CONFLICT' })
+    await expect(h.service.execute({ sessionId, turn: 2, scope: 'conversation' })).resolves.toEqual({
+      sessionId,
+      turn: 2,
+      draft: 'second prompt',
+    })
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('external edit')
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system', 'first prompt', 'first answer', expect.stringContaining('rolled back the conversation to before turn 2'),
+    ])
+
+    const undoPreview = await h.service.preview({ sessionId, turn: 2, operation: 'undo' })
+    expect(undoPreview).toMatchObject({
+      operation: 'undo',
+      scope: 'conversation',
+      conflicts: [{ reason: 'hash-mismatch' }],
+      unavailable: [],
+    })
+    await expect(h.service.execute({ sessionId, turn: 2, operation: 'undo' })).resolves.toEqual({
+      sessionId,
+      turn: 2,
+      draft: '',
+    })
+    await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('external edit')
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system', 'first prompt', 'first answer', 'second prompt', 'second answer',
+    ])
   })
 
   it('supports consecutive rollbacks, undo of only the latest rollback, and a fresh rollback after undo', async () => {
@@ -551,6 +897,51 @@ describe('CheckpointRollbackService undo', () => {
     ])
   })
 
+  it('restores tool calls with synthetic tool/call rows so the log reloads', async () => {
+    const session = makeSession()
+    appendSystem(session)
+    appendTurn(session, 1, 'first prompt', 'first answer')
+    appendTurnWithTool(session, 2, 'use the tool', 'call-undo-1', 'tool output', 'second answer')
+    const turnStart = session.snapshotEvents().find(event => (
+      event.type === 'turn/start' && event.data.turn === 2
+    ))
+    expect(turnStart).toBeDefined()
+    const h = harness({ session, seedTurns: false })
+    await seedCheckpoint(h, checkpoint({
+      atSeq: Number(turnStart!.seq),
+      prompt: 'use the tool',
+    }))
+    await h.service.execute({ sessionId, turn: 2 })
+    await h.service.execute({ sessionId, turn: 2, operation: 'undo' })
+
+    const events = h.adapter.readEvents()
+    const undoAssistant = events.find(event => (
+      event.type === 'assistant/message'
+      && event.data.message.id.startsWith('dsh-composer-enhancer:undo:')
+      && event.data.message.content.some(block => block.type === 'tool-call')
+    ))
+    expect(undoAssistant?.type).toBe('assistant/message')
+    const undoStart = Number(undoAssistant!.seq)
+    const undoToolCall = events.find(event => (
+      event.type === 'tool/call'
+      && Number(event.seq) > undoStart
+      && event.data.callId === ToolCallId('call-undo-1')
+    ))
+    const undoToolResult = events.find(event => (
+      event.type === 'tool/result'
+      && Number(event.seq) > undoStart
+      && event.data.message.toolCallId === ToolCallId('call-undo-1')
+      && event.data.message.id.startsWith('dsh-composer-enhancer:undo:')
+    ))
+    expect(undoToolCall).toBeDefined()
+    expect(undoToolResult).toBeDefined()
+    expect(Number(undoToolCall!.seq)).toBeLessThan(Number(undoToolResult!.seq))
+    expect(h.session.deriveMessages().map(message => message.content
+      .flatMap(block => block.type === 'text' ? [block.text] : []).join(''))).toEqual([
+      'system', 'first prompt', 'first answer', 'use the tool', '', 'tool output', 'second answer',
+    ])
+  })
+
   it('resumes a partially appended undo during journal recovery', async () => {
     const h = harness({ createId: () => 'restore-1' })
     await seedCheckpoint(h)
@@ -560,7 +951,8 @@ describe('CheckpointRollbackService undo', () => {
     vi.spyOn(h.session, 'append').mockImplementation(((...args: unknown[]) => {
       appends += 1
       const event = Reflect.apply(append, h.session, args) as SessionEvent
-      if (appends === 2) throw new Error('append persisted before the failure')
+      // Fail after turn/start + step/start + first undo copy are persisted.
+      if (appends === 3) throw new Error('append persisted before the failure')
       return event
     }) as Session['append'])
 

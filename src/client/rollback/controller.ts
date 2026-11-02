@@ -4,7 +4,9 @@ import type {
   CheckpointRollbackPreview,
   CheckpointRollbackRequest,
   CheckpointRollbackResult,
+  CheckpointRollbackScope,
 } from '../../host/checkpoint/service.ts'
+import { confirmBlocked, scopeLabel } from './scope.ts'
 import type {
   RollbackActive,
   RollbackControllerOptions,
@@ -42,7 +44,8 @@ export class RollbackController {
     if (this.disposed) return
     const enabled = this.options.enabled()
     if (!enabled) {
-      this.close()
+      this.cancelOperation()
+      this.publish()
       return
     }
     if (this.snapshot.enabled) return
@@ -70,36 +73,93 @@ export class RollbackController {
 
   close(turn?: number): void {
     if (this.disposed || (turn !== undefined && this.operation?.turn !== turn)) return
+    // Never abort an in-flight restore: surface replacement can unmount entry UI mid-flight.
+    if (this.operation?.status === 'executing') return
     this.cancelOperation()
     this.publish()
   }
 
-  async confirm(actions: RollbackDraftActions): Promise<void> {
+  async confirm(
+    actions: RollbackDraftActions,
+    scope: CheckpointRollbackScope = 'conversation-and-files',
+  ): Promise<void> {
     const active = this.operation
-    if (this.disposed || active?.status !== 'ready' || active.preview === undefined
-      || active.preview.unavailable.length > 0 || active.preview.conflicts.length > 0) return
-    const { turn, version, operation } = active
+    if (this.disposed || active?.status !== 'ready' || active.preview === undefined) return
+    const effectiveScope = active.operation === 'undo'
+      ? scopeLabel(active.preview.scope)
+      : scope
+    if (confirmBlocked(
+      active.preview.unavailable,
+      active.preview.conflicts,
+      effectiveScope,
+      active.preview.files.length,
+    )) return
+    const { turn, operation } = active
+    const preview = active.preview
     const request: CheckpointRollbackRequest = {
       sessionId: this.options.sessionId,
       turn,
       operation,
+      scope: effectiveScope,
     }
     const controller = new AbortController()
-    this.operation = { ...active, status: 'executing', controller }
+    this.operation = { ...active, status: 'executing', scope: effectiveScope, controller }
     this.publish()
     let result: CheckpointRollbackResult
     try {
       result = await this.options.remote.execute(request, controller.signal)
-    } catch {
-      if (this.current(version, request)) {
-        this.operation = { ...this.operation!, status: 'error', error: 'execute' }
-        this.publish()
+    } catch (error) {
+      if (this.disposed || !this.options.enabled()) return
+      // Never fail silently: even if close/abort raced, reopen an error state.
+      if ((controller.signal.aborted || (error instanceof Error && error.name === 'AbortError'))
+        && !this.options.enabled()) return
+      this.operation = {
+        turn,
+        operation,
+        status: 'error',
+        error: 'execute',
+        version: this.version,
+        controller: new AbortController(),
+        preview,
+        scope: effectiveScope,
       }
+      this.publish()
       return
     }
-    if (!this.current(version, request, result)) return
-    actions.setDraft(result.draft)
-    actions.persistDraft()
+    if (this.disposed || !this.options.enabled()) return
+    if (result === null || typeof result !== 'object'
+      || result.sessionId !== request.sessionId || result.turn !== request.turn
+      || typeof result.draft !== 'string') {
+      this.operation = {
+        turn,
+        operation,
+        status: 'error',
+        error: 'execute',
+        version: this.version,
+        controller: new AbortController(),
+        preview,
+        scope: effectiveScope,
+      }
+      this.publish()
+      return
+    }
+    try {
+      actions.setDraft(result.draft)
+      actions.persistDraft()
+    } catch {
+      this.operation = {
+        turn,
+        operation,
+        status: 'error',
+        error: 'execute',
+        version: this.version,
+        controller: new AbortController(),
+        preview,
+        scope: effectiveScope,
+      }
+      this.publish()
+      return
+    }
     this.operation = null
     this.publish()
   }
@@ -138,6 +198,7 @@ export class RollbackController {
         status: this.operation.status,
         version: this.operation.version,
         ...(this.operation.preview === undefined ? {} : { preview: this.operation.preview }),
+        ...(this.operation.scope === undefined ? {} : { scope: this.operation.scope }),
         ...(this.operation.error === undefined ? {} : { error: this.operation.error }),
       },
     }

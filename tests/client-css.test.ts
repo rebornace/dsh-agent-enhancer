@@ -18,7 +18,7 @@ interface ClientDefinition {
         pluginInventory: { list: () => Promise<never> }
       }
       configForms: { get: () => object; whileServed: () => Disposer }
-      locale: { register: () => Disposer; bind: () => (key: string) => string }
+      locale: { register: () => Disposer; bind: () => (key: string) => string; getLocale: () => { active: string; locales: readonly unknown[]; revision: number } }
       slots: { inject: () => Disposer }
     }) => void
   }
@@ -54,7 +54,7 @@ it('installs and removes compiled CSS through the client effect', async () => {
       get: () => ({ getSnapshot: () => ({ value: {} }), subscribe: () => () => {} }),
       whileServed: () => () => {},
     },
-    locale: { register: () => () => {}, bind: () => (key: string) => key },
+    locale: { register: () => () => {}, bind: () => (key: string) => key, getLocale: () => ({ active: 'en', locales: [], revision: 0 }) },
     slots: { inject: () => () => {} },
   })
 
@@ -86,4 +86,17 @@ it('aligns composer overlays with the input width', async () => {
     expect(declaration.getPropertyValue('max-width'), className).toBe('none')
     expect(declaration.getPropertyValue('box-sizing'), className).toBe('border-box')
   }
+})
+
+it('keeps user message bubbles right-aligned like the native user row', async () => {
+  const dom = new JSDOM('<head></head>')
+  const style = dom.window.document.createElement('style')
+  style.textContent = await readFile('src/client/styles.module.css', 'utf8')
+  dom.window.document.head.append(style)
+  const rules = Array.from(style.sheet?.cssRules ?? [])
+  const row = rules.find(candidate => candidate instanceof dom.window.CSSStyleRule &&
+    candidate.selectorText === '.userMessageRow') as CSSStyleRule | undefined
+  expect(row).toBeDefined()
+  expect(row!.style.getPropertyValue('align-items')).toBe('flex-end')
+  expect(row!.style.getPropertyValue('flex-direction')).toBe('column')
 })

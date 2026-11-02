@@ -2,9 +2,11 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
 import { AuxiliaryError } from '../errors.ts'
+import { buildAuxiliaryModelCatalog } from './catalog.ts'
 import { DshCheckpointSessions } from './checkpoint/dsh.ts'
 import { DshCheckpointCaptureSwitch } from './checkpoint/live.ts'
 import { CheckpointRollbackError, CheckpointRollbackService } from './checkpoint/service.ts'
@@ -22,7 +24,14 @@ export const Config = z.object({
   historyEnabled: z.boolean().default(true).volatile(),
   optimizeEnabled: z.boolean().default(true).volatile(),
   predictEnabled: z.boolean().default(true).volatile(),
-  rollbackEnabled: z.boolean().default(false).volatile(),
+  rollbackEnabled: z.boolean().default(true).volatile(),
+  // Empty provider/model = follow the current Desktop session model.
+  optimizeProvider: z.string().default('').volatile(),
+  optimizeModel: z.string().default('').volatile(),
+  optimizeReasoningEffort: z.string().default('').volatile(),
+  predictProvider: z.string().default('').volatile(),
+  predictModel: z.string().default('').volatile(),
+  predictReasoningEffort: z.string().default('').volatile(),
 })
 export type Config = ReturnType<typeof Config>
 
@@ -40,16 +49,32 @@ export class ComposerEnhancerService extends TypertRemoteService {
     super(ctx, 'composerEnhancer')
   }
 
-  async call(payload: RpcPayload, signal: AbortSignal): Promise<AuxiliaryResult | null> {
+  private assertOwner(): void {
     if (this.ctx.invocation?.peer.principal.kind !== 'owner') {
       throw new RemoteError('composer-enhancer/forbidden', 'Only the desktop owner may use Composer Enhance', {})
     }
+  }
+
+  async call(payload: RpcPayload, signal: AbortSignal): Promise<AuxiliaryResult | null> {
+    this.assertOwner()
     try {
       return await this.models.generate(payload.data, signal)
     } catch (error) {
       if (signal.aborted) throw error
       const code = error instanceof AuxiliaryError ? error.code : 'MODEL_FAILED'
       throw new RemoteError('composer-enhancer/failed', 'Composer Enhance request failed', { code })
+    }
+  }
+
+  /** Same Desktop catalog the official model selector uses (`llm` registry). */
+  async listCatalog(): Promise<ModelCatalog> {
+    // Listing is read-only; do not require the owner gate used by generate.
+    try {
+      return await buildAuxiliaryModelCatalog(this.ctx)
+    } catch {
+      throw new RemoteError('composer-enhancer/failed', 'Composer Enhance catalog failed', {
+        code: 'MODEL_UNAVAILABLE',
+      })
     }
   }
 }
@@ -61,7 +86,14 @@ declare module '@deepseek-ai/cordis' {
 }
 
 export function apply(ctx: Context, config: Config): void {
-  const models = new AuxiliaryModels(ctx)
+  const models = new AuxiliaryModels(ctx, () => ({
+    optimizeProvider: config.optimizeProvider.get(),
+    optimizeModel: config.optimizeModel.get(),
+    optimizeReasoningEffort: config.optimizeReasoningEffort.get(),
+    predictProvider: config.predictProvider.get(),
+    predictModel: config.predictModel.get(),
+    predictReasoningEffort: config.predictReasoningEffort.get(),
+  }))
   new ComposerEnhancerService(ctx, models)
   ctx.effect(() => ctx.typert.register(hostContribution))
 
@@ -72,19 +104,20 @@ export function apply(ctx: Context, config: Config): void {
   const store = new CheckpointStore(storageRoot)
   const sessions = new DshCheckpointSessions(ctx)
   let rollbackEnabled = config.rollbackEnabled.get()
+  const captures = new DshCheckpointCaptureSwitch(ctx, { store, pluginVersion: '0.1.5' })
   const rollback = new CheckpointRollbackService({
     store,
     storageRoot,
     pluginVersion: '0.1.5',
     resolveSession: sessions.resolveSession,
     isEnabled: () => rollbackEnabled,
+    awaitCaptures: () => captures.awaitPending(),
   })
   applyCheckpointRollback(ctx, rollback)
   void rollback.recover().catch(() => {
     ctx.logger.warn('Checkpoint rollback recovery is still pending')
   })
 
-  const captures = new DshCheckpointCaptureSwitch(ctx, { store, pluginVersion: '0.1.5' })
   ctx.effect(() => {
     const unsubscribe = ctx.on('internal/update', (updated, _noSave, next) => {
       rollbackEnabled = (updated as Config).rollbackEnabled.get()

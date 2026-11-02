@@ -27,13 +27,22 @@ function fixture() {
   session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
   const runMaintenance = vi.fn(async <T,>(task: (signal: AbortSignal) => Promise<T>) =>
     task(new AbortController().signal))
-  const agent = { id: sessionId, session, status: 'idle' as const, runMaintenance }
+  const setPhase = vi.fn()
+  const agent = {
+    id: sessionId,
+    session,
+    status: 'idle' as const,
+    runMaintenance,
+    phase: { kind: 'idle' as const, lastTurn: 1 },
+    setPhase,
+  }
   const flush = vi.fn(async () => true)
   const snapshot = vi.fn(() => ({ asOfSeq: 2, values: {} }))
+  const stateOf = vi.fn(() => ({ lastTurn: 1 }))
   ctx.provide('sessions', { get: vi.fn(() => session), flush } as never)
   ctx.provide('agents', { get: vi.fn(() => agent) } as never)
-  ctx.provide('sessionProjections', { snapshot } as never)
-  return { ctx, session, agent, runMaintenance, flush, snapshot }
+  ctx.provide('sessionProjections', { snapshot, stateOf } as never)
+  return { ctx, session, agent, runMaintenance, setPhase, stateOf, flush, snapshot }
 }
 
 afterEach(async () => {
@@ -72,6 +81,21 @@ describe('DshCheckpointSessions', () => {
     await adapter.synchronize(signal)
     expect(h.snapshot).toHaveBeenCalledWith(h.session)
     expect(h.flush).toHaveBeenCalledWith(h.session)
+    expect(h.snapshot).toHaveBeenCalledTimes(2)
     expect(h.snapshot.mock.invocationCallOrder[0]).toBeLessThan(h.flush.mock.invocationCallOrder[0]!)
+    expect(h.flush.mock.invocationCallOrder[0]).toBeLessThan(h.snapshot.mock.invocationCallOrder[1]!)
+
+    h.flush.mockResolvedValueOnce(false)
+    await expect(adapter.synchronize(signal)).resolves.toBeUndefined()
+    expect(h.snapshot).toHaveBeenCalledTimes(4)
+  })
+
+  it('refreshes Agent lastTurn from turnBoundary after maintenance so undo shells do not collide', async () => {
+    const h = fixture()
+    h.stateOf.mockReturnValue({ lastTurn: 2 })
+    const adapter = new DshCheckpointSessions(h.ctx).resolveSession(sessionId)!
+
+    await adapter.runMaintenance(async () => 'ok')
+    expect(h.setPhase).toHaveBeenCalledWith({ kind: 'idle', lastTurn: 2 })
   })
 })

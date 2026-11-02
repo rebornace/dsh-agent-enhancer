@@ -107,13 +107,17 @@ export class DshCheckpointCapture {
     )
   }
 
+  awaitPending(): Promise<void> {
+    return Promise.allSettled([...this.pending]).then(() => undefined)
+  }
+
   async close(): Promise<void> {
     if (this.closed) return
     this.closed = true
     for (const dispose of this.disposers.splice(0)) dispose()
     this.turns.clear()
     this.actors.clear()
-    await Promise.allSettled([...this.pending])
+    await this.awaitPending()
   }
 
   private finish(turn: PendingTurn, turnEnd: SessionEvent<'turn/end'>): void {
@@ -216,6 +220,10 @@ export class DshCheckpointCaptureSwitch {
       return
     }
     this.stop()
+  }
+
+  awaitPending(): Promise<void> {
+    return this.capture?.awaitPending() ?? Promise.resolve()
   }
 
   async close(): Promise<void> {

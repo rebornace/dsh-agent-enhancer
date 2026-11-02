@@ -7,6 +7,32 @@ import type { CheckpointServiceSession } from './service.ts'
 
 type LiveAgent = NonNullable<ReturnType<Context['agents']['get']>>
 
+type IdlePhaseAgent = LiveAgent & {
+  phase?: { kind: string, lastTurn?: number }
+  setPhase?(phase: { kind: 'idle', lastTurn: number }): void
+}
+
+/**
+ * `Agent.runMaintenance` freezes `phase.lastTurn` for the whole job and restores
+ * it afterward. Undo appends a fresh `turn/start` inside that job, so the
+ * turnBoundary projection advances while the Agent still believes the older
+ * lastTurn — the next user prompt then reopens the undo shell's turn id and
+ * Chat's by-turn index collapses the restored reply. Re-sync from the
+ * projection once maintenance releases the Agent.
+ */
+function syncIdleLastTurnFromProjection(ctx: Context, agent: LiveAgent): void {
+  if (agent.status !== 'idle') return
+  const lastTurn = ctx.sessionProjections.stateOf(agent.session, 'turnBoundary')?.lastTurn
+  if (typeof lastTurn !== 'number') return
+  const live = agent as IdlePhaseAgent
+  if (live.phase?.kind !== 'idle' || live.phase.lastTurn === lastTurn) return
+  if (typeof live.setPhase === 'function') {
+    live.setPhase({ kind: 'idle', lastTurn })
+    return
+  }
+  live.phase = { kind: 'idle', lastTurn }
+}
+
 export class DshCheckpointSessions {
   private readonly adapters = new Map<SessionId, { agent: LiveAgent, adapter: CheckpointServiceSession }>()
 
@@ -27,12 +53,21 @@ export class DshCheckpointSessions {
       get status() { return agent.status },
       get canRestore() { return workspaceRoot !== '' },
       readEvents: () => agent.session.snapshotEvents(),
-      runMaintenance: task => agent.runMaintenance(task),
+      runMaintenance: async task => {
+        const result = await agent.runMaintenance(task)
+        syncIdleLastTurnFromProjection(this.ctx, agent)
+        return result
+      },
       synchronize: async signal => {
         signal.throwIfAborted()
+        // Drive projections from the in-memory append, persist, then re-read so
+        // client views observe the committed surface before execute returns.
+        // flush() === false means the Session was already durable (common during
+        // startup journal recovery); only a thrown error is a real sync failure.
         this.ctx.sessionProjections.snapshot(agent.session)
         await (this.ctx.get('sessions') as unknown as SessionStore).flush(agent.session)
         signal.throwIfAborted()
+        this.ctx.sessionProjections.snapshot(agent.session)
       },
     }
     this.adapters.set(sessionId, { agent, adapter })

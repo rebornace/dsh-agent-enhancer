@@ -1,12 +1,18 @@
 import { randomUUID } from 'node:crypto'
-import { MessageId } from '@deepseek-ai/dsh-llm'
+import { MessageId, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
+import { blockingUnavailable } from './availability.ts'
+import type { CheckpointRollbackScope, CheckpointUnavailable } from './availability.ts'
+import { resolveRollbackCut, synthesizeCheckpoint } from './capture.ts'
 import { CheckpointFileError, CheckpointFiles } from './files.ts'
 import type { CheckpointFileOperations, FileConflict, RestoreDirection } from './files.ts'
 import type { CheckpointStore } from './store.ts'
 import type { Checkpoint } from './types.ts'
+
+export type { CheckpointRollbackScope, CheckpointUnavailable } from './availability.ts'
+export { blockingUnavailable, isConversationSoftUnavailable } from './availability.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -26,25 +32,11 @@ type SurfaceMessageEvent = SessionEvent<'system/message' | 'developer/message' |
 
 export type CheckpointRollbackOperation = 'rollback' | 'undo'
 
-export type CheckpointUnavailable =
-  | 'checkpoint-not-found'
-  | 'incomplete-checkpoint'
-  | 'prompt-non-text-content'
-  | 'workspace-capture-failed'
-  | 'session-changed'
-  | 'session-running'
-  | 'permission-denied'
-  | 'rollback-disabled'
-  | 'first-turn'
-  | 'incompatible-session'
-  | 'compacted-surface'
-  | 'subagent-session'
-  | 'unknown-surface'
-
 export interface CheckpointRollbackRequest {
   readonly sessionId: SessionId
   readonly turn: number
   readonly operation?: CheckpointRollbackOperation
+  readonly scope?: CheckpointRollbackScope
 }
 
 export interface CheckpointMessagePreview {
@@ -105,10 +97,14 @@ export interface CheckpointRollbackServiceOptions {
   readonly operations?: CheckpointFileOperations
   readonly createId?: () => string
   readonly now?: () => number
+  /** Wait for in-flight turn captures before reading the checkpoint store. */
+  readonly awaitCaptures?: () => Promise<void>
 }
 
 interface RollbackSurface {
   readonly operation: 'rollback'
+  /** Checkpoint turn the user restored to — stable across later undo shells. */
+  readonly turn: number
   readonly nodes: readonly SessionSeq[]
 }
 
@@ -125,12 +121,28 @@ interface Evaluation {
   readonly preview: CheckpointRollbackPreview
 }
 
-function rollbackMarkerId(turn: number, journalId: string): MessageId {
-  return MessageId(`${ROLLBACK_PREFIX}${turn}:${journalId}`)
+function rollbackMarkerId(turn: number, journalId: string, scope: CheckpointRollbackScope): MessageId {
+  const tag = scope === 'conversation' ? 'c:' : ''
+  return MessageId(`${ROLLBACK_PREFIX}${turn}:${tag}${journalId}`)
 }
 
 function undoCopyId(journalId: string, index: number): MessageId {
   return MessageId(`${UNDO_PREFIX}${journalId}:${index}`)
+}
+
+function rollbackIdOf(id: string): string {
+  const start = id.indexOf(ROLLBACK_PREFIX)
+  return start >= 0 ? id.slice(start) : id
+}
+
+function scopeOfMarkerId(id: string): CheckpointRollbackScope {
+  return new RegExp(`^${ROLLBACK_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\d+:c:`).test(rollbackIdOf(id))
+    ? 'conversation'
+    : 'conversation-and-files'
+}
+
+function scopeOfMarker(event: SessionEvent<'user/message'>): CheckpointRollbackScope {
+  return scopeOfMarkerId(event.data.id)
 }
 
 function isRollbackMarker(event: SessionEvent | undefined, turn?: number): event is SessionEvent<'user/message'> {
@@ -175,6 +187,22 @@ function isOwnReplacement(event: SessionEvent): boolean {
   return isRollbackMarker(event) || isUndoCopy(event)
 }
 
+/**
+ * Desktop appends the protected system prompt after `turn/start` (during step prep).
+ * Session forbids replacing that node with a user/message marker — rolling it back
+ * always fails with a surface-replace error. Keep system prompts on the surface.
+ */
+function isProtectedSystemMessage(event: SessionEvent | undefined): boolean {
+  return event?.type === 'system/message'
+}
+
+function rollbackSurfaceNodes(
+  events: readonly SessionEvent[],
+  candidates: readonly SessionSeq[],
+): SessionSeq[] {
+  return candidates.filter(node => !isProtectedSystemMessage(events[node]))
+}
+
 function abortError(): DOMException {
   return new DOMException('Checkpoint rollback was cancelled', 'AbortError')
 }
@@ -194,6 +222,10 @@ function textOf(event: SessionEvent): string {
 
 function operationOf(request: CheckpointRollbackRequest): CheckpointRollbackOperation {
   return request.operation ?? 'rollback'
+}
+
+function scopeOf(request: CheckpointRollbackRequest): CheckpointRollbackScope {
+  return request.scope ?? 'conversation-and-files'
 }
 
 function directionOf(operation: CheckpointRollbackOperation): RestoreDirection {
@@ -220,12 +252,186 @@ function sourceEvents(
   return sources
 }
 
+/**
+ * Session format requires monotonic turn ids. Re-opening the rolled-back turn
+ * fails on reload (`turn/start does not open the expected turn`). Undo opens
+ * the next unused turn instead.
+ */
+function nextTurnNumber(events: readonly SessionEvent[]): number {
+  let max = 0
+  for (const event of events) {
+    if (event.type === 'turn/start') max = Math.max(max, event.data.turn)
+  }
+  return max + 1
+}
+
+/** Turn opened for a partially appended undo (recovery resumes inside it). */
+function undoTurnAfterMarker(
+  events: readonly SessionEvent[],
+  markerSeq: SessionSeq,
+): number {
+  for (const event of events) {
+    if (Number(event.seq) > Number(markerSeq) && event.type === 'turn/start') {
+      return event.data.turn
+    }
+  }
+  throw new Error('Partial undo is missing its turn/start')
+}
+
+function isUndoTurnChrome(event: SessionEvent): boolean {
+  return event.type === 'turn/start' || event.type === 'turn/end'
+    || event.type === 'step/start' || event.type === 'step/end'
+}
+
+interface UndoToolCall {
+  readonly callId: ToolCallId
+  readonly name: string
+  readonly arguments: string
+}
+
+function toolCallsOf(event: SessionEvent<'assistant/message'>): readonly UndoToolCall[] {
+  const calls: UndoToolCall[] = []
+  for (const block of event.data.message.content) {
+    if (block.type !== 'tool-call') continue
+    calls.push({ callId: block.id, name: block.name, arguments: block.arguments })
+  }
+  return calls
+}
+
+/**
+ * V4 format tracks tool lifecycle across the physical log: assistant advertises
+ * a call, `tool/call` marks it started, `tool/result` settles it. Undo only
+ * re-copies surface messages, so without synthetic `tool/call` rows a restored
+ * `tool/result` looks like a not-started repair and fails reload validation
+ * (`not-started error requires an object`).
+ */
+function appendUndoToolCalls(
+  session: Session,
+  calls: readonly UndoToolCall[],
+  turn: number,
+  step: number,
+  openCalls: Map<string, UndoToolCall>,
+): void {
+  for (const call of calls) {
+    session.append('tool/call', {
+      turn,
+      step,
+      callId: call.callId,
+      name: call.name,
+      arguments: call.arguments,
+    })
+    openCalls.set(String(call.callId), call)
+  }
+}
+
+function settleOpenUndoToolCalls(
+  session: Session,
+  journalId: string,
+  turn: number,
+  step: number,
+  openCalls: Map<string, UndoToolCall>,
+): void {
+  for (const call of openCalls.values()) {
+    session.append('tool/result', {
+      turn,
+      step,
+      message: {
+        id: MessageId(`${UNDO_PREFIX}${journalId}:orphan:${call.callId}`),
+        role: 'tool',
+        source: { kind: 'tool', callId: call.callId },
+        toolCallId: call.callId,
+        isError: true,
+        content: [{
+          type: 'text',
+          text: 'The tool call was restored without a recorded result.',
+        }],
+      },
+      error: {
+        name: 'UndoOrphanToolCall',
+        code: 'UNDO_ORPHAN_TOOL_CALL',
+        reason: 'Restored assistant tool call had no matching tool/result in the rollback surface.',
+      },
+    }, { surfaceOp: 'append' })
+  }
+  openCalls.clear()
+}
+
+/**
+ * After a crash mid-undo, assistant copies may already advertise tool calls
+ * without their synthetic `tool/call` rows. Emit any missing starts before
+ * resuming so the next `tool/result` copy is not treated as not-started.
+ */
+function ensureCopiedAssistantToolCalls(
+  session: Session,
+  events: readonly SessionEvent[],
+  journalId: string,
+  completed: number,
+  turn: number,
+  step: number,
+  openCalls: Map<string, UndoToolCall>,
+): void {
+  const first = events.find(event => isUndoCopyAt(event, undoCopyId(journalId, 0)))
+  if (first === undefined) return
+  const undoStart = Number(first.seq)
+  const started = new Set<string>()
+  const settled = new Set<string>()
+  for (const event of events) {
+    if (Number(event.seq) < undoStart) continue
+    if (event.type === 'tool/call') started.add(String(event.data.callId))
+    if (event.type === 'tool/result') settled.add(String(event.data.message.toolCallId))
+  }
+  for (let index = 0; index < completed; index += 1) {
+    const event = events.find(candidate => isUndoCopyAt(candidate, undoCopyId(journalId, index)))
+    if (event?.type !== 'assistant/message') continue
+    const calls = toolCallsOf(event)
+    appendUndoToolCalls(
+      session,
+      calls.filter(call => !started.has(String(call.callId))),
+      turn,
+      step,
+      openCalls,
+    )
+    for (const call of calls) {
+      if (!settled.has(String(call.callId))) openCalls.set(String(call.callId), call)
+    }
+  }
+}
+
+/** Count contiguous undo copies from `first`, allowing synthetic `tool/call` gaps. */
+function countPartialUndoCopies(
+  events: readonly SessionEvent[],
+  first: SessionEvent,
+  journalId: string,
+  tip: number,
+): number {
+  let completed = 0
+  let cursor = Number(first.seq)
+  while (cursor <= tip) {
+    const event = events[SessionSeq(cursor)]
+    if (event === undefined) throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
+    if (isUndoCopyAt(event, undoCopyId(journalId, completed))) {
+      completed += 1
+      cursor += 1
+      continue
+    }
+    if (event.type === 'tool/call' && completed > 0) {
+      cursor += 1
+      continue
+    }
+    throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
+  }
+  return completed
+}
+
 function appendUndoCopy(
   session: Session,
   source: SurfaceMessageEvent,
   journalId: string,
   index: number,
   markerSeq: SessionSeq,
+  turn: number,
+  step: number,
+  openCalls: Map<string, UndoToolCall>,
 ): SessionEvent {
   const copyId = MessageId(`${undoCopyId(journalId, index)}:${source.seq}`)
   const id = isRollbackMarker(source) ? MessageId(`${copyId}:${source.data.id}`) : copyId
@@ -240,26 +446,39 @@ function appendUndoCopy(
   }
   if (index === 0) throw new Error('The first restored surface event must be a user message')
   switch (source.type) {
-    case 'assistant/message':
-      return session.append('assistant/message', {
+    case 'assistant/message': {
+      const event = session.append('assistant/message', {
         ...source.data,
+        turn,
+        step,
         message: { ...source.data.message, id },
       }, { surfaceOp: 'append' })
+      appendUndoToolCalls(session, toolCallsOf(source), turn, step, openCalls)
+      return event
+    }
     case 'system/message':
       return session.append('system/message', {
         ...source.data,
+        turn,
+        step,
         message: { ...source.data.message, id },
       }, { surfaceOp: 'append', sourceEventSeqs: [source.seq] })
     case 'developer/message':
       return session.append('developer/message', {
         ...source.data,
+        turn,
+        step,
         message: { ...source.data.message, id },
       }, { surfaceOp: 'append', sourceEventSeqs: [source.seq] })
-    case 'tool/result':
+    case 'tool/result': {
+      openCalls.delete(String(source.data.message.toolCallId))
       return session.append('tool/result', {
         ...source.data,
+        turn,
+        step,
         message: { ...source.data.message, id },
       }, { surfaceOp: 'append', sourceEventSeqs: [source.seq] })
+    }
   }
 }
 
@@ -354,15 +573,18 @@ export class CheckpointRollbackService {
       await this.recover()
       linked.signal.throwIfAborted()
       const initial = await this.evaluate(request)
-      this.assertExecutable(initial)
+      const initialScope = this.effectiveScope(request, initial)
+      this.assertExecutable(initial, initialScope)
       const adapter = initial.adapter!
-      return await adapter.runMaintenance(async maintenanceSignal => {
+      const result = await adapter.runMaintenance(async maintenanceSignal => {
         const maintenance = this.linkedSignal([linked.signal, maintenanceSignal])
         try {
           maintenance.signal.throwIfAborted()
-          const current = await this.evaluate(request)
-          this.assertExecutable(current)
-          if (current.adapter !== adapter || current.surface === null) {
+          // Inside maintenance the agent is often not "idle"; skip the running check.
+          const current = await this.evaluate(request, { withinMaintenance: true })
+          const scope = this.effectiveScope(request, current)
+          this.assertExecutable(current, scope)
+          if (current.adapter?.session !== adapter.session || current.surface === null) {
             throw new CheckpointRollbackError('ROLLBACK_UNAVAILABLE', ['session-changed'])
           }
           const checkpoint = current.checkpoint!
@@ -372,15 +594,23 @@ export class CheckpointRollbackService {
           const expectedNodes = [...session.surface.nodes]
           const journalId = (this.options.createId ?? randomUUID)()
           const files = this.files(adapter, checkpoint, journalId)
-          await files.runTransaction(checkpoint.files, async () => {
+          const filesToRestore = scope === 'conversation' ? [] : checkpoint.files
+          await files.runTransaction(filesToRestore, async () => {
             if (maintenance.signal.aborted) return { appended: false, synchronized: false }
             const latest = this.options.resolveSession(request.sessionId)
-            if (latest !== adapter || !this.stillIdle(adapter) || session.seq !== expectedSeq
+            // Same Session id can still mean a replaced Session object — compare by reference.
+            if (latest?.session !== session || !this.canCommit(adapter, scope) || session.seq !== expectedSeq
               || session.surface.nodes.length !== expectedNodes.length
               || session.surface.nodes.some((node, index) => node !== expectedNodes[index])) {
               return { appended: false, synchronized: false }
             }
-            return this.appendAndSynchronize(adapter, current.surface!, journalId, maintenance.signal)
+            const restored = await this.appendAndSynchronize(
+              adapter, current.surface!, journalId, scope, maintenance.signal,
+            )
+            // Preserve the real append flag: a sync failure must leave the journal
+            // pending (files-restored) instead of compensating away a committed surface.
+            const appended = restored.appended && this.appendOccurred(adapter, journalId)
+            return { appended, synchronized: appended && restored.synchronized }
           }, directionOf(operation))
           return {
             sessionId: request.sessionId,
@@ -393,6 +623,15 @@ export class CheckpointRollbackService {
           maintenance.cleanup()
         }
       })
+      // Re-project after the maintenance lock drops so client views are not held back.
+      // The surface is already committed; a late projection miss must not undo success.
+      linked.signal.throwIfAborted()
+      try {
+        await adapter.synchronize(linked.signal)
+      } catch {
+        if (linked.signal.aborted) throw this.sanitize(abortError(), linked.signal)
+      }
+      return result
     } catch (error) {
       throw this.sanitize(error, linked.signal)
     } finally {
@@ -404,10 +643,11 @@ export class CheckpointRollbackService {
     adapter: CheckpointServiceSession,
     surface: RollbackSurface | UndoSurface,
     journalId: string,
+    scope: CheckpointRollbackScope,
     signal: AbortSignal,
   ): Promise<{ appended: boolean, synchronized: boolean }> {
     try {
-      if (surface.operation === 'rollback') this.appendRollback(adapter, surface, journalId)
+      if (surface.operation === 'rollback') this.appendRollback(adapter, surface, journalId, scope)
       else this.appendUndo(adapter.session, surface.marker, surface.sources, journalId)
     } catch {
       return { appended: this.appendOccurred(adapter, journalId), synchronized: false }
@@ -424,18 +664,24 @@ export class CheckpointRollbackService {
     adapter: CheckpointServiceSession,
     surface: RollbackSurface,
     journalId: string,
+    scope: CheckpointRollbackScope,
   ): void {
-    const checkpointTurn = this.turnForMarker(adapter, surface.nodes)
-    const summary = `Conversation and tracked files rolled back before turn ${checkpointTurn}`
+    const checkpointTurn = surface.turn
+    const conversationOnly = scope === 'conversation'
+    const summary = conversationOnly
+      ? `Conversation rolled back before turn ${checkpointTurn}`
+      : `Conversation and tracked files rolled back before turn ${checkpointTurn}`
+    const detail = conversationOnly
+      ? `The user rolled back the conversation to before turn ${checkpointTurn}. `
+        + 'Later events remain in the append-only log but are no longer active model context. '
+        + 'Tracked files were not restored.'
+      : `The user rolled back the conversation and tracked files to before turn ${checkpointTurn}. `
+        + 'Later events remain in the append-only log but are no longer active model context. '
+        + 'Re-read tracked files before relying on their contents.'
     adapter.session.append('user/message', {
-      id: rollbackMarkerId(checkpointTurn, journalId),
+      id: rollbackMarkerId(checkpointTurn, journalId, scope),
       role: 'user',
-      content: [{
-        type: 'text',
-        text: `The user rolled back the conversation and tracked files to before turn ${checkpointTurn}. `
-          + 'Later events remain in the append-only log but are no longer active model context. '
-          + 'Re-read tracked files before relying on their contents.',
-      }],
+      content: [{ type: 'text', text: detail }],
       source: { kind: 'checkpoint-rollback', form: 'notice', summary },
     }, {
       surfaceOp: {
@@ -447,26 +693,33 @@ export class CheckpointRollbackService {
     })
   }
 
-  private turnForMarker(adapter: CheckpointServiceSession, nodes: readonly SessionSeq[]): number {
-    const events = adapter.readEvents()
-    const first = nodes[0]!
-    for (let seq = Number(first); seq >= 0; seq -= 1) {
-      const event = events[seq]
-      if (event?.type === 'turn/start') return event.data.turn
-    }
-    throw new Error('Rollback surface has no owning turn')
-  }
-
   private appendUndo(
     session: Session,
     marker: SessionEvent<'user/message'>,
     sources: readonly SurfaceMessageEvent[],
     journalId: string,
     start = 0,
+    openCalls = new Map<string, UndoToolCall>(),
   ): void {
-    for (let index = start; index < sources.length; index += 1) {
-      appendUndoCopy(session, sources[index]!, journalId, index, marker.seq)
+    // Chat binds assistants to turn/step coordinates. Format validation also requires
+    // an open step for assistant/message. Re-using the rolled-back turn id fails on
+    // reload — always open the next monotonic turn with step 1.
+    // Agent.runMaintenance freezes lastTurn across this append; DshCheckpointSessions
+    // re-syncs idle lastTurn from turnBoundary afterward so the next prompt does not
+    // reopen this shell's turn id (which would collapse the restored reply in Chat).
+    const events = session.snapshotEvents()
+    const turn = start === 0 ? nextTurnNumber(events) : undoTurnAfterMarker(events, marker.seq)
+    const step = 1
+    if (start === 0) {
+      session.append('turn/start', { turn })
+      session.append('step/start', { turn, step })
     }
+    for (let index = start; index < sources.length; index += 1) {
+      appendUndoCopy(session, sources[index]!, journalId, index, marker.seq, turn, step, openCalls)
+    }
+    settleOpenUndoToolCalls(session, journalId, turn, step, openCalls)
+    session.append('step/end', { turn, step })
+    session.append('turn/end', { turn, reason: { kind: 'completed' } })
   }
 
   private async runRecovery(): Promise<void> {
@@ -522,69 +775,95 @@ export class CheckpointRollbackService {
     if (!isRollbackMarker(marker)) throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
     const sources = sourceEvents(events, marker)
     if (sources === null) throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
-    let completed = 0
-    while (events.some(event => isUndoCopyAt(event, undoCopyId(journalId, completed)))) completed += 1
-    for (let index = 0; index < completed; index += 1) {
-      if (!isUndoCopyAt(events[SessionSeq(first.seq + index)]!, undoCopyId(journalId, index))) {
-        throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
-      }
-    }
-    if (Number(adapter.session.seq) - 1 !== first.seq + completed - 1) {
-      throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
-    }
-    this.appendUndo(adapter.session, marker, sources, journalId, completed)
+    const tip = Number(adapter.session.seq) - 1
+    const completed = countPartialUndoCopies(events, first, journalId, tip)
+    const openCalls = new Map<string, UndoToolCall>()
+    const turn = undoTurnAfterMarker(events, marker.seq)
+    const step = 1
+    ensureCopiedAssistantToolCalls(
+      adapter.session, events, journalId, completed, turn, step, openCalls,
+    )
+    this.appendUndo(adapter.session, marker, sources, journalId, completed, openCalls)
   }
 
-  private async evaluate(request: CheckpointRollbackRequest): Promise<Evaluation> {
+  private async evaluate(
+    request: CheckpointRollbackRequest,
+    options: { readonly withinMaintenance?: boolean } = {},
+  ): Promise<Evaluation> {
     const operation = operationOf(request)
+    await this.options.awaitCaptures?.()
     const checkpoints = await this.options.store.list(request.sessionId)
-    const stored = checkpoints.find(checkpoint => checkpoint.turn === request.turn) ?? null
+    let stored = checkpoints.find(checkpoint => checkpoint.turn === request.turn) ?? null
     const adapter = this.options.resolveSession(request.sessionId) ?? null
+    // Cancelled / raced turns often have no store entry yet — synthesize a soft
+    // conversation checkpoint from the closed turn so restore stays available.
+    if (stored === null && adapter !== null && operation === 'rollback') {
+      stored = synthesizeCheckpoint({
+        sessionId: request.sessionId,
+        session: {
+          format: adapter.session.header.version,
+          preset: adapter.session.header.agentPreset ?? null,
+        },
+        pluginVersion: this.options.pluginVersion,
+        turn: request.turn,
+        events: adapter.readEvents(),
+        createId: this.options.createId,
+        now: this.options.now,
+      })
+    }
     const unavailable: CheckpointUnavailable[] = []
     if (stored === null) unavailable.push('checkpoint-not-found')
     if (adapter === null) unavailable.push('session-changed')
     if (this.options.isEnabled !== undefined && !this.options.isEnabled()) unavailable.push('rollback-disabled')
     if (adapter !== null) {
-      if (adapter.status !== 'idle') unavailable.push('session-running')
+      // Only an actively running agent blocks restore. Other non-idle statuses
+      // (stopping / settling after cancel) must not disable confirm buttons.
+      if (!options.withinMaintenance && adapter.status === 'running') unavailable.push('session-running')
       if (!adapter.canRestore) unavailable.push('permission-denied')
       if (adapter.session.header.origin === 'subagent' || (adapter.session.header.delegationDepth ?? 0) > 0) {
         unavailable.push('subagent-session')
       }
     }
     if (stored !== null) {
-      if (stored.atSeq <= 0) unavailable.push('first-turn')
       if (stored.coverage !== 'complete' || stored.gaps.length > 0) unavailable.push('incomplete-checkpoint')
       for (const gap of stored.gaps) {
         unavailable.push(gap.type === 'prompt' ? 'prompt-non-text-content' : 'workspace-capture-failed')
       }
-      if (adapter !== null && (stored.session.format !== adapter.session.header.version
-        || stored.session.preset !== (adapter.session.header.agentPreset ?? null)
-        || stored.pluginVersion !== this.options.pluginVersion)) {
+      // Only the Session format is a hard structural incompatibility. Plugin
+      // version and agent preset drift are common after upgrades and must not
+      // strand conversation restore.
+      if (adapter !== null && stored.session.format !== adapter.session.header.version) {
         unavailable.push('incompatible-session')
       }
     }
     let messages: CheckpointMessagePreview[] = []
     let surface: RollbackSurface | UndoSurface | null = null
-    if (stored !== null && adapter !== null && stored.atSeq > 0) {
+    if (stored !== null && adapter !== null && stored.atSeq >= 0) {
       const events = adapter.readEvents()
-      const boundary = events[stored.atSeq + 1]
-      if (boundary?.type !== 'turn/start' || boundary.data.turn !== stored.turn
-        || events.some((event, index) => event.seq !== index)) {
+      const cut = resolveRollbackCut(events, stored.turn, stored.atSeq)
+      if (cut === null) {
         unavailable.push('unknown-surface')
       } else if (operation === 'rollback') {
-        if (events.some(event => event.seq > stored.atSeq && typeof event.surfaceOp === 'object'
+        if (events.some(event => Number(event.seq) > cut.cutSeq && typeof event.surfaceOp === 'object'
           && !isOwnReplacement(event))) {
           unavailable.push('compacted-surface')
         }
-        const nodes = adapter.session.surface.nodes.filter(node => logicalSeq(events[node]!) > stored.atSeq)
-        const first = nodes.length === 0 ? undefined : events[nodes[0]!]
-        if (nodes.length === 0 || first?.type !== 'user/message'
-          || nodes.some(node => events[node] === undefined || !surfaceEventTypes.has(events[node]!.type))) {
+        const fromSurface = adapter.session.surface.nodes
+          .filter(node => Number(logicalSeq(events[node]!)) > cut.cutSeq)
+        const fromLog = events
+          .filter(event => Number(event.seq) > cut.cutSeq && surfaceEventTypes.has(event.type))
+          .map(event => SessionSeq(event.seq))
+        const candidates = (fromSurface.length > 0
+          && fromSurface.every(node => events[node] !== undefined && surfaceEventTypes.has(events[node]!.type))
+          ? fromSurface.map(node => SessionSeq(node))
+          : fromLog)
+        // Never include the protected system prompt — Desktop injects it after turn/start.
+        const nodes = rollbackSurfaceNodes(events, candidates)
+        if (nodes.length === 0) {
           unavailable.push('unknown-surface')
         } else {
-          const typedNodes = nodes.map(node => SessionSeq(node))
-          surface = { operation, nodes: typedNodes }
-          messages = typedNodes.map(node => ({
+          surface = { operation, turn: stored.turn, nodes }
+          messages = nodes.map(node => ({
             seq: node,
             type: events[node]!.type,
             text: textOf(events[node]!),
@@ -597,12 +876,18 @@ export class CheckpointRollbackService {
         const origin = marker?.surfaceOp === 'append' && marker.sourceEventSeqs?.length === 1
           ? events[marker.sourceEventSeqs[0]!] : marker
         if (!isRollbackMarker(marker, stored.turn) || !isRollbackMarker(origin, stored.turn)
-          || currentNodes.slice(0, -1).some(node => logicalSeq(events[node]!) > stored.atSeq)
-          || events.slice(Number(origin.seq) + 1).some(event => !isRollbackMarker(event) && !isUndoCopy(event))) {
+          || currentNodes.slice(0, -1).some(node => {
+            const event = events[node]
+            if (isProtectedSystemMessage(event)) return false
+            return Number(logicalSeq(event!)) > cut.cutSeq
+          })
+          || events.slice(Number(origin.seq) + 1).some(event => !isRollbackMarker(event)
+            && !isUndoCopy(event)
+            && !isUndoTurnChrome(event))) {
           unavailable.push('session-changed')
         } else {
           const sources = sourceEvents(events, marker)
-          if (sources === null || sources.some(event => event.seq <= stored.atSeq)) {
+          if (sources === null || sources.some(event => Number(event.seq) <= cut.cutSeq)) {
             unavailable.push('unknown-surface')
           } else {
             surface = { operation, marker, sources }
@@ -620,6 +905,7 @@ export class CheckpointRollbackService {
         else throw error
       }
     }
+    const markerScope = surface?.operation === 'undo' ? scopeOfMarker(surface.marker) : undefined
     return {
       checkpoint: stored,
       adapter,
@@ -628,6 +914,7 @@ export class CheckpointRollbackService {
         sessionId: request.sessionId,
         turn: request.turn,
         ...(operation === 'undo' ? { operation } : {}),
+        ...(markerScope === undefined ? {} : { scope: markerScope }),
         messages,
         files: stored?.files.map(file => ({ path: file.path, change: file.change })) ?? [],
         conflicts,
@@ -636,18 +923,33 @@ export class CheckpointRollbackService {
     }
   }
 
-  private assertExecutable(evaluation: Evaluation): void {
-    if (evaluation.preview.unavailable.length > 0 || evaluation.surface === null) {
-      throw new CheckpointRollbackError('ROLLBACK_UNAVAILABLE', evaluation.preview.unavailable)
+  private effectiveScope(
+    request: CheckpointRollbackRequest,
+    evaluation: Evaluation,
+  ): CheckpointRollbackScope {
+    if (operationOf(request) === 'undo') {
+      return evaluation.preview.scope ?? 'conversation-and-files'
     }
-    if (evaluation.preview.conflicts.length > 0) {
+    return scopeOf(request)
+  }
+
+  private assertExecutable(evaluation: Evaluation, scope: CheckpointRollbackScope): void {
+    const unavailable = blockingUnavailable(evaluation.preview.unavailable, scope, {
+      trackedFiles: evaluation.preview.files.length,
+    })
+    if (unavailable.length > 0 || evaluation.surface === null) {
+      throw new CheckpointRollbackError('ROLLBACK_UNAVAILABLE',
+        unavailable.length > 0 ? unavailable : evaluation.preview.unavailable)
+    }
+    if (scope === 'conversation-and-files' && evaluation.preview.conflicts.length > 0) {
       throw new CheckpointRollbackError('ROLLBACK_CONFLICT', [], evaluation.preview.conflicts)
     }
   }
 
-  private stillIdle(adapter: CheckpointServiceSession): boolean {
-    return adapter.status === 'idle' && adapter.canRestore
-      && (this.options.isEnabled?.() ?? true)
+  private canCommit(adapter: CheckpointServiceSession, scope: CheckpointRollbackScope): boolean {
+    if (!(this.options.isEnabled?.() ?? true)) return false
+    // Conversation-only restore does not touch the workspace.
+    return scope === 'conversation' || adapter.canRestore
   }
 
   private files(adapter: CheckpointServiceSession, checkpoint: Checkpoint, journalId: string): CheckpointFiles {

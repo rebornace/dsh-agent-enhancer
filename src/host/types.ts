@@ -2,6 +2,7 @@ import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 export type AuxiliaryOperation = 'optimize' | 'predict'
+export type UiLocale = 'zh' | 'en'
 export interface ModelRoute { readonly provider: string; readonly model: string }
 export interface RecentExchange {
   readonly turn: number
@@ -20,6 +21,8 @@ export interface OptimizeRequest {
   readonly source: string
   readonly references: readonly OptimizeReference[]
   readonly context: readonly RecentExchange[]
+  /** Desktop UI language; Host prompt pack follows this when present. */
+  readonly uiLocale?: UiLocale
 }
 export interface PredictRequest extends Omit<OptimizeRequest, 'operation' | 'source' | 'references'> {
   readonly operation: 'predict'

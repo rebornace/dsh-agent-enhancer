@@ -34,6 +34,15 @@ export const clientRemoteInfo = {
     }],
     cancellation: { parameter: 'signal' },
     result: codec('dsh-composer-enhancer#AuxiliaryResult|null'),
+  }, {
+    id: 'dsh-composer-enhancer#composerEnhancer/listCatalog',
+    service: 'composerEnhancer',
+    namespace: 'composerEnhancer',
+    method: 'listCatalog',
+    implementation: 'listCatalog',
+    invocation: { kind: 'direct' },
+    parameters: [],
+    result: codec('dsh-composer-enhancer#ModelCatalog'),
   }, ...checkpointClientRemoteInfo.descriptors],
 } satisfies TypertRemoteContribution
 

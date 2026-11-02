@@ -30,14 +30,39 @@ export interface CaptureCheckpointOptions {
 }
 
 function directText(prompt: CaptureCheckpointOptions['prompt']): string | null {
-  if (prompt.source.kind !== 'user' || prompt.content.length !== 1) return null
-  const content = prompt.content[0]!
-  return content.type === 'text' ? content.text : null
+  if (prompt.source.kind !== 'user' || prompt.content.length === 0) return null
+  if (prompt.content.some(block => block.type !== 'text')) return null
+  return prompt.content.map(block => block.type === 'text' ? block.text : '').join('')
+}
+
+/** Inclusive keep-prefix end seq for a turn/start (never negative — store schema). */
+export function checkpointAtSeq(turnStartSeq: number): number {
+  return Math.max(0, turnStartSeq - 1)
+}
+
+/**
+ * Exclusive cut for restore: events with seq > cut are rolled back.
+ * Always resolve from the live `turn/start` for `turn` — stored `atSeq` is only a
+ * hint. When turn/start is the first log event, cut is -1 (empty keep-prefix).
+ * When turn/start is seq 1 after `session/end-seed`, cut is 0.
+ */
+export function resolveRollbackCut(
+  events: readonly SessionEvent[],
+  turn: number,
+  _atSeq?: number,
+): { readonly cutSeq: number } | null {
+  const turnStart = events.find(
+    (event): event is SessionEvent<'turn/start'> =>
+      event.type === 'turn/start' && event.data.turn === turn,
+  )
+  if (turnStart === undefined) return null
+  return { cutSeq: Number(turnStart.seq) - 1 }
 }
 
 export async function captureCheckpoint(options: CaptureCheckpointOptions): Promise<Checkpoint | null> {
   options.onStage?.('preparing')
-  if (options.turnStart.seq <= 0 || options.turnEnd === undefined
+  // turn/start may be seq 0 when it is the first Session event (no end-seed/system).
+  if (options.turnStart.seq < 0 || options.turnEnd === undefined
     || options.turnEnd.data.turn !== options.turnStart.data.turn) return null
 
   const prompt = directText(options.prompt)
@@ -63,7 +88,7 @@ export async function captureCheckpoint(options: CaptureCheckpointOptions): Prom
     sessionId: options.sessionId,
     session: options.session,
     turn: options.turnStart.data.turn,
-    atSeq: options.turnStart.seq - 1,
+    atSeq: checkpointAtSeq(options.turnStart.seq),
     prompt: prompt ?? '',
     createdAt: (options.now ?? Date.now)(),
     stage: 'committed',
@@ -74,4 +99,58 @@ export async function captureCheckpoint(options: CaptureCheckpointOptions): Prom
   await options.store.save(checkpoint)
   options.onStage?.('committed')
   return checkpoint
+}
+
+export interface SynthesizeCheckpointOptions {
+  readonly sessionId: SessionId
+  readonly session: CheckpointSession
+  readonly pluginVersion: string
+  readonly turn: number
+  readonly events: readonly SessionEvent[]
+  readonly createId?: () => string
+  readonly now?: () => number
+}
+
+/**
+ * Build a conversation-only checkpoint from a closed turn when live capture missed
+ * (cancelled turns, race before store commit, capture errors).
+ */
+export function synthesizeCheckpoint(options: SynthesizeCheckpointOptions): Checkpoint | null {
+  const turnStart = options.events.find(
+    (event): event is SessionEvent<'turn/start'> =>
+      event.type === 'turn/start' && event.data.turn === options.turn,
+  )
+  const turnEnd = options.events.find(
+    (event): event is SessionEvent<'turn/end'> =>
+      event.type === 'turn/end' && event.data.turn === options.turn,
+  )
+  if (turnStart === undefined || turnEnd === undefined || turnStart.seq < 0) return null
+  if (options.events.some((event, index) => Number(event.seq) !== index)) return null
+
+  const user = options.events.find(
+    (event): event is SessionEvent<'user/message'> =>
+      event.type === 'user/message' && event.seq > turnStart.seq && event.seq < turnEnd.seq,
+  )
+  const prompt = user === undefined ? null : directText(user.data)
+  // No tracked files were observed; treat as a complete empty-files checkpoint so
+  // UI does not scare users with soft "incomplete" gaps for conversation restore.
+  const gaps: CheckpointGap[] = prompt === null
+    ? [{ type: 'prompt', reason: 'non-text-content' }]
+    : []
+
+  return {
+    schemaVersion: CHECKPOINT_SCHEMA_VERSION,
+    pluginVersion: options.pluginVersion,
+    id: (options.createId ?? randomUUID)(),
+    sessionId: options.sessionId,
+    session: options.session,
+    turn: options.turn,
+    atSeq: checkpointAtSeq(turnStart.seq),
+    prompt: prompt ?? '',
+    createdAt: (options.now ?? Date.now)(),
+    stage: 'committed',
+    coverage: gaps.length === 0 ? 'complete' : 'partial',
+    gaps,
+    files: [],
+  }
 }

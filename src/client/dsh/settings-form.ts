@@ -3,7 +3,8 @@ import type { EnhancerSettings } from '../../config.ts'
 
 export type SettingsForm = Pick<ConfigForm<EnhancerSettings>, 'getSnapshot' | 'subscribe' | 'set'>
 type Field = keyof EnhancerSettings
-type Accepted = { readonly value: boolean; readonly revision: number | undefined }
+type FieldValue = EnhancerSettings[Field]
+type Accepted = { readonly value: FieldValue; readonly revision: number | undefined }
 
 export class AcceptedSettingsForm implements SettingsForm {
   private readonly listeners = new Set<() => void>()
@@ -30,11 +31,12 @@ export class AcceptedSettingsForm implements SettingsForm {
     }
   }
 
-  async set(field: Field, value: boolean): Promise<boolean> {
+  async set(field: string, value: unknown): Promise<boolean> {
+    const key = field as Field
     const revision = this.form.getSnapshot().revision
-    const accepted = await this.form.set(field, value)
+    const accepted = await this.form.set(key, value)
     if (accepted) {
-      this.accepted.set(field, { value, revision })
+      this.accepted.set(key, { value: value as FieldValue, revision })
       this.refresh()
       for (const listener of this.listeners) listener()
     }
@@ -43,7 +45,7 @@ export class AcceptedSettingsForm implements SettingsForm {
 
   private refresh(): void {
     const current = this.form.getSnapshot()
-    const value = { ...current.value } as Record<Field, boolean | undefined>
+    const value = { ...current.value } as Record<Field, FieldValue | undefined>
     let overridden = false
     for (const [field, accepted] of this.accepted) {
       if (current.value?.[field] === accepted.value ||

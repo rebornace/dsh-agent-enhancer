@@ -172,7 +172,18 @@ function fixtureSessions(
 }
 
 function configForm() {
-  let value: EnhancerSettings = { historyEnabled: true, optimizeEnabled: true, predictEnabled: true, rollbackEnabled: false }
+  let value: EnhancerSettings = {
+    historyEnabled: true,
+    optimizeEnabled: true,
+    predictEnabled: true,
+    rollbackEnabled: false,
+    optimizeProvider: '',
+    optimizeModel: '',
+    optimizeReasoningEffort: '',
+    predictProvider: '',
+    predictModel: '',
+    predictReasoningEffort: '',
+  }
   const listeners = new Set<() => void>()
   const form: ConfigForm<EnhancerSettings> = {
     getSnapshot: () => ({

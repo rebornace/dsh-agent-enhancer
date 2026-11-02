@@ -75,8 +75,7 @@ export function RollbackUserNode(props: RollbackUserNodeProps) {
     ...(data.skillNames === undefined ? {} : { skillNames: data.skillNames }),
   }), [data.referenceLabels, data.skillNames])
   const turn = turnOf(props.node.location)
-  const chat = props.useChat(state => state)
-  const isUndoTip = isRollbackMarkerMessage(data.source, messageId) && chat.order.at(-1) === props.node.key
+  const isMarker = isRollbackMarkerMessage(data.source, messageId)
   const rollbackTurn = turnFromRollbackMarkerId(messageId) ?? turn?.turn
   const rollbackEnabled = useSyncExternalStore(props.rollback.subscribe, props.rollback.getSnapshot).enabled
 
@@ -89,10 +88,14 @@ export function RollbackUserNode(props: RollbackUserNodeProps) {
     })}
     <div className={styles.userMessageActions} data-clock="start">
       <UserCopyAction text={prepared.text} tChat={props.tChat} />
-      {rollbackEnabled && turn !== null && rollbackTurn !== undefined && !isRollbackMarkerMessage(data.source, messageId)
-        ? <RollbackMessageActions {...props} t={props.tEnhancer} turn={turn} operation="rollback" /> : null}
-      {rollbackEnabled && turn !== null && rollbackTurn !== undefined && isUndoTip
-        ? <RollbackMessageActions {...props} t={props.tEnhancer} turn={{ ...turn, turn: rollbackTurn }} operation="undo" /> : null}
+      {rollbackEnabled && turn !== null && rollbackTurn !== undefined && !isMarker
+        ? <RollbackMessageActions
+          rollback={props.rollback}
+          t={props.tEnhancer}
+          turn={turn}
+          useSession={props.useSession}
+          useAccess={props.useAccess}
+        /> : null}
     </div>
   </div>
 }

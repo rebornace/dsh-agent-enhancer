@@ -51,6 +51,24 @@
   font-weight: 600;
 }
 
+.settingControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.modelPill {
+  max-width: 168px;
+}
+
+.modelPillLabel {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .privacy {
   display: grid;
   gap: 8px;
@@ -150,12 +168,17 @@
   border-radius: var(--dsw-radius-sm);
 }
 
+/* Official Modal cards must size against the overlay padding box (`max-height: 100%`),
+   not the viewport — otherwise the flex footer is clipped by `overflow: hidden` and
+   restore confirms look present in the description but cannot be clicked. */
 .rollbackDialog {
-  width: min(680px, calc(100vw - 32px));
-  max-height: min(760px, calc(100vh - 48px));
+  width: min(680px, 100%);
+  max-height: 100%;
+  min-height: 0;
 }
 
 .rollbackContent {
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
 }
@@ -224,14 +247,16 @@
 .userMessageRow {
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
   min-width: 0;
 }
 
 .userMessageActions {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
-  margin-top: 6px;
 }
 
 .userMessageAction {
