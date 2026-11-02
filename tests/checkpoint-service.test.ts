@@ -747,19 +747,18 @@ describe('checkpoint rollback Host Remote', () => {
     expect((rejection as Error).message).not.toContain('private concurrent contents')
   })
 
-  it('registers and disposes the independent Host contribution', async () => {
+  it('exposes the rollback Remote service without a second package-face typert register', async () => {
     const h = harness()
     const ctx = new Context()
     contexts.push(ctx)
-    const unregister = vi.fn()
-    const register = vi.fn(() => unregister)
+    const register = vi.fn(() => () => {})
     ctx.provide('typert', { register } as never)
 
     applyCheckpointRollback(ctx, h.service)
 
-    expect(register).toHaveBeenCalledWith(checkpointHostContribution)
+    expect(register).not.toHaveBeenCalled()
     expect(ctx.checkpointRollback).toBeInstanceOf(CheckpointRollbackRemoteService)
+    expect(checkpointHostContribution.invocations).toEqual(checkpointRemoteInfo.descriptors)
     await ctx.fiber.dispose()
-    expect(unregister).toHaveBeenCalledTimes(1)
   })
 })

@@ -58,7 +58,7 @@ export function apply(ctx: Context): void {
     }
   })
 
-  const applyMounted = (mountedCtx: Context) => {
+  const applyComposerMounted = (mountedCtx: Context) => {
     const switches: ModuleSwitches = {
       history: () => resolveSettings(form.getSnapshot().value).historyEnabled,
       optimize: () => resolveSettings(form.getSnapshot().value).optimizeEnabled,
@@ -98,7 +98,9 @@ export function apply(ctx: Context): void {
       locale: 'composer-enhancer',
       inject: sessionId => ({ session: sessionFor(sessionId), hints }),
     }, ComposerOverlay))
+  }
 
+  const applyRollbackMounted = (mountedCtx: Context) => {
     const rollbackRemote: RollbackRemote = {
       preview: (request, signal) => checkpointRollbackRemote.preview(mountedCtx.remote, request, signal),
       execute: (request, signal) => checkpointRollbackRemote.execute(mountedCtx.remote, request, signal),
@@ -107,10 +109,6 @@ export function apply(ctx: Context): void {
     const rollbackRetentions = new Map<SessionId, () => void>()
     const tEnhancer = mountedCtx.locale.bind('composer-enhancer')
     const tChat = mountedCtx.locale.bind('chat')
-    const rollbackUserNode = (props: ChatNodeViewProps<'user'>) => createElement(
-      RollbackUserNode,
-      { ...props, rollback: rollbackFor(props.sessionId), tEnhancer, tChat },
-    )
     const rollbackFor = (sessionId: SessionId) => {
       let rollback = rollbackSessions.get(sessionId)
       if (rollback === undefined) {
@@ -132,6 +130,10 @@ export function apply(ctx: Context): void {
       }
       return rollback
     }
+    const rollbackUserNode = (props: ChatNodeViewProps<'user'>) => createElement(
+      RollbackUserNode,
+      { ...props, rollback: rollbackFor(props.sessionId), tEnhancer, tChat },
+    )
     let disposeRollbackSlot: (() => void) | undefined
     const disableRollback = () => {
       const dispose = disposeRollbackSlot
@@ -165,13 +167,19 @@ export function apply(ctx: Context): void {
 
   ctx.effect(async () => {
     const unmount = await ctx.remote.$mount(clientRemoteInfo)
-    const fiber = await ctx.plugin({
+    const composerFiber = await ctx.plugin({
       name: 'composer-enhancer-mounted',
-      inject: ['remote.composerEnhancer', 'remote.checkpointRollback'],
-      apply: applyMounted,
+      inject: ['remote.composerEnhancer'],
+      apply: applyComposerMounted,
+    })
+    const rollbackFiber = await ctx.plugin({
+      name: 'composer-enhancer-rollback-mounted',
+      inject: ['remote.checkpointRollback'],
+      apply: applyRollbackMounted,
     })
     return async () => {
-      await fiber.dispose()
+      await rollbackFiber.dispose()
+      await composerFiber.dispose()
       await unmount()
     }
   })

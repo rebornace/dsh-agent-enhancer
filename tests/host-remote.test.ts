@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply, ComposerEnhancerService, Config, hostContribution, inject } from '../src/host/index.ts'
 import { AuxiliaryError } from '../src/errors.ts'
 import { AuxiliaryModels } from '../src/host/model.ts'
-import { remoteInfo, rpcPayloadSchema } from '../src/host/rpc.ts'
+import { checkpointRemoteInfo, remoteInfo, rpcPayloadSchema } from '../src/host/rpc.ts'
 import type { RpcPayload } from '../src/host/rpc.ts'
 
 const contexts: Context[] = []
@@ -72,7 +72,7 @@ describe('composer configuration and Remote metadata', () => {
       face: 'host',
       schemas: [],
       model: { services: [], events: [], objects: [] },
-      invocations: remoteInfo.descriptors,
+      invocations: [...remoteInfo.descriptors, ...checkpointRemoteInfo.descriptors],
     })
     const method = remoteInfo.methods['composerEnhancer/call']!
     const parser = method.input({ strict: true }).create()
@@ -242,11 +242,18 @@ describe('host composition', () => {
     ctx.provide('sessionProjections', { stateOf: vi.fn() } as never)
     ctx.provide('agentDefaultModel', { currentSelection: vi.fn() } as never)
     ctx.provide('typert', { register } as never)
+    ctx.provide('agents', { get: vi.fn() } as never)
+    ctx.provide('fs', {} as never)
+    ctx.provide('tools', {} as never)
     apply(ctx, Config({}))
+    expect(register).toHaveBeenCalledTimes(1)
     expect(register).toHaveBeenCalledWith(hostContribution)
+    expect(hostContribution.invocations.map(entry => entry.namespace)).toEqual([
+      'composerEnhancer', 'checkpointRollback', 'checkpointRollback',
+    ])
     expect(ctx.composerEnhancer).toBeInstanceOf(ComposerEnhancerService)
     await ctx.fiber.dispose()
-    expect(unregister).toHaveBeenCalledTimes(2)
+    expect(unregister).toHaveBeenCalledTimes(1)
   })
 
   it('constructs the single model entry used by the Remote service', () => {

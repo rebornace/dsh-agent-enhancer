@@ -54,11 +54,12 @@ it('assembles the guarded rollback service beside the model Remote and disposes 
 
   apply(ctx, Config({ rollbackEnabled: false }))
 
+  expect(register).toHaveBeenCalledTimes(1)
   expect(register).toHaveBeenCalledWith(hostContribution)
-  expect(register).toHaveBeenCalledWith(checkpointHostContribution)
+  expect(hostContribution.invocations).toEqual(expect.arrayContaining(checkpointHostContribution.invocations))
   expect(ctx.checkpointRollback).toBeInstanceOf(CheckpointRollbackRemoteService)
   await ctx.fiber.dispose()
-  expect(unregister).toHaveBeenCalledTimes(2)
+  expect(unregister).toHaveBeenCalledTimes(1)
 })
 
 async function captureFixture(

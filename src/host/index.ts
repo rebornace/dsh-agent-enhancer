@@ -26,12 +26,13 @@ export const Config = z.object({
 })
 export type Config = ReturnType<typeof Config>
 
+/** Single Host package-face contribution. Typert rejects a second register for the same package#face. */
 export const hostContribution = {
   package: 'dsh-composer-enhancer',
   face: 'host',
   schemas: [],
   model: { services: [], events: [], objects: [] },
-  invocations: remoteInfo.descriptors,
+  invocations: [...remoteInfo.descriptors, ...checkpointRemoteInfo.descriptors],
 } as const
 
 export class ComposerEnhancerService extends TypertRemoteService {
@@ -99,6 +100,7 @@ export function apply(ctx: Context, config: Config): void {
   })
 }
 
+/** @deprecated Checkpoint invocations live on hostContribution; kept for test imports. */
 export const checkpointHostContribution = {
   package: 'dsh-composer-enhancer',
   face: 'host',
@@ -151,6 +153,5 @@ declare module '@deepseek-ai/cordis' {
 
 export function applyCheckpointRollback(ctx: Context, rollback: CheckpointRollbackService): void {
   new CheckpointRollbackRemoteService(ctx, rollback)
-  ctx.effect(() => ctx.typert.register(checkpointHostContribution))
   ctx.effect(() => async () => { await rollback.close() })
 }
