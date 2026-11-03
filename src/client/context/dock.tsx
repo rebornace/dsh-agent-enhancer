@@ -10,7 +10,7 @@ export interface ContextInspectDockProps extends PropsRuntime<'conversation.comp
   readonly t: TranslateNS<'agent-enhancer'>
 }
 
-/** Invisible dock resident: wires drill-down onto the official context meter. */
+/** Invisible dock resident: wires context drill-down onto the official meter rows. */
 export function ContextInspectDock(props: ContextInspectDockProps) {
   const sessionId = props.sessionId as SessionId | undefined
   useEffect(() => installContextMeterEnhance({

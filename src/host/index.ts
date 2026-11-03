@@ -21,13 +21,36 @@ import { DshCheckpointCaptureSwitch } from './checkpoint/live.ts'
 import { CheckpointRollbackError, CheckpointRollbackService } from './checkpoint/service.ts'
 import type { CheckpointRollbackRequest } from './checkpoint/service.ts'
 import { CheckpointStore } from './checkpoint/store.ts'
-import type { Session } from '@deepseek-ai/dsh-session'
+import type { Session, SessionStore } from '@deepseek-ai/dsh-session'
 import { compactContextNow, resolveCompactRouteOverride } from './context-compact.ts'
 import type { CompactRouteOverride, ContextCompactRequest, ContextCompactResult } from './context-compact.ts'
 import { inspectContextCategory, pressureFromProjection } from './context-inspect.ts'
 import type { ContextInspectRequest, ContextInspectResult } from './context-inspect.ts'
 import { installAutoSessionRoute } from './auto-route/session-hook.ts'
 import { AuxiliaryModels } from './model.ts'
+import {
+  DEFAULT_BALANCE_REFRESH_MS,
+  loadProviderBalances,
+  ProviderBalancesCache,
+} from './usage/balance.ts'
+import type {
+  AccountClientMetadata,
+  CredentialsResolver,
+  DeepSeekAccountBalance,
+} from './usage/balance.ts'
+import { mergeUsageCalls, sessionUsageFromSessions } from './usage/history.ts'
+import { UsageLedger } from './usage/ledger.ts'
+import { installUsageObserver } from './usage/observe.ts'
+import { withUsageSource } from './usage/source.ts'
+import { summarizeUsage } from './usage/summarize.ts'
+import type {
+  ProviderBalances,
+  ProviderBalancesRequest,
+  UsageCall,
+  UsageRange,
+  UsageSummary,
+  UsageSummaryReader,
+} from './usage/types.ts'
 import { checkpointRemoteInfo, remoteInfo } from './rpc.ts'
 import type { RpcPayload } from './rpc.ts'
 import type { AuxiliaryResult } from './types.ts'
@@ -96,6 +119,21 @@ export class AgentEnhancerService extends TypertRemoteService {
       session: Session,
       signal: AbortSignal,
     ) => Promise<CompactRouteOverride | undefined>,
+    private readonly usage: UsageSummaryReader = {
+      async summarize(range: UsageRange): Promise<UsageSummary> {
+        return summarizeUsage([], range, Date.now())
+      },
+    },
+    private readonly balances: {
+      get(force?: boolean, locale?: string): Promise<ProviderBalances>
+    } = {
+      async get() {
+        return {
+          account: { source: 'account', status: 'signed-out' },
+          apiKey: { source: 'api-key', status: 'no-key' },
+        }
+      },
+    },
   ) {
     super(ctx, 'agentEnhancer')
   }
@@ -166,13 +204,13 @@ export class AgentEnhancerService extends TypertRemoteService {
       })
     }
     try {
-      return await compactContextNow({
+      return await withUsageSource('compact', async () => compactContextNow({
         commands: this.ctx.commands,
         agent,
         sessionId: request.sessionId,
         signal,
         route: await this.compactRoute(agent.session, signal),
-      })
+      }))
     } catch (error) {
       if (signal.aborted) throw error
       const code = error instanceof AuxiliaryError ? error.code : 'COMPACT_FAILED'
@@ -183,6 +221,17 @@ export class AgentEnhancerService extends TypertRemoteService {
   /** Read-only version probe — same gate policy as `listCatalog` (settings-safe). */
   async checkUpdate(): Promise<UpdateCheckResult> {
     return checkPluginUpdateForHost()
+  }
+
+  async usageSummary(range: UsageRange): Promise<UsageSummary> {
+    this.assertOwner()
+    return this.usage.summarize(range)
+  }
+
+  /** Per Models-card balances — account login and API key are independent. */
+  async providerBalances(request: ProviderBalancesRequest = {}): Promise<ProviderBalances> {
+    this.assertOwner()
+    return this.balances.get(request.force === true, request.locale)
   }
 
   async applyUpdate(): Promise<ApplyUpdateResult> {
@@ -223,6 +272,39 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+function softService<T extends object>(
+  ctx: Context,
+  name: string,
+  method: string,
+): T | undefined {
+  // Soft lookup: `ctx.<name>` / Reflect.get throws without an inject
+  // declaration. Official adapters use `ctx.get(...)` for optional seams.
+  try {
+    const value = ctx.get(name) as unknown
+    if (typeof value !== 'object' || value === null) return undefined
+    if (typeof Reflect.get(value, method) !== 'function') return undefined
+    return value as T
+  } catch {
+    return undefined
+  }
+}
+
+function credentialsOf(ctx: Context): CredentialsResolver | undefined {
+  return softService<CredentialsResolver>(ctx, 'credentials', 'resolve')
+}
+
+function deepSeekAccountOf(ctx: Context): DeepSeekAccountBalance | undefined {
+  return softService<DeepSeekAccountBalance>(ctx, 'deepseekAccount', 'getBalance')
+}
+
+function accountClientMetadata(locale?: string): AccountClientMetadata {
+  return {
+    version: PACKAGE_VERSION,
+    locale: locale !== undefined && locale.trim() !== '' ? locale.trim() : 'zh-CN',
+    timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60,
+  }
+}
+
 function readSettings(config: Config): EnhancerSettings {
   return resolveSettings({
     historyEnabled: config.historyEnabled.get(),
@@ -259,12 +341,56 @@ export function apply(ctx: Context, config: Config): void {
   const settings = () => readSettings(config)
   const models = new AuxiliaryModels(ctx, settings)
   installAutoSessionRoute(ctx, { settings })
+  const storageRoot = resolveCheckpointRoot(process.env.DSH_HOME ?? join(homedir(), '.dsh'))
+  const usage = new UsageLedger(join(storageRoot, '..', 'usage'), message => {
+    ctx.logger.warn(message)
+  })
+  const balancesFacade = (() => {
+    let locale = 'zh-CN'
+    const cache = new ProviderBalancesCache(
+      DEFAULT_BALANCE_REFRESH_MS,
+      async () => loadProviderBalances({
+        credentials: credentialsOf(ctx),
+        account: deepSeekAccountOf(ctx),
+        client: accountClientMetadata(locale),
+      }),
+    )
+    return {
+      async get(force = false, nextLocale?: string): Promise<ProviderBalances> {
+        if (nextLocale !== undefined && nextLocale.trim() !== '') locale = nextLocale.trim()
+        try {
+          return await cache.get(force)
+        } catch (error) {
+          ctx.logger.warn(`agent-enhancer: provider balances failed: ${String(error)}`)
+          return {
+            account: { source: 'account', status: 'unavailable' },
+            apiKey: { source: 'api-key', status: 'unavailable' },
+          }
+        }
+      },
+    }
+  })()
+  installUsageObserver(ctx, usage)
   new AgentEnhancerService(ctx, models, (session, signal) =>
     resolveCompactRouteOverride(ctx, settings(), session, signal),
+    {
+      async summarize(range) {
+        const stored = await usage.listCalls()
+        let history: UsageCall[] = []
+        try {
+          const store = ctx.get('sessions') as unknown as SessionStore
+          history = sessionUsageFromSessions(store.list())
+        } catch {
+          history = []
+        }
+        // Models cards own live balance; bill keeps estimate only.
+        return summarizeUsage(mergeUsageCalls(stored, history), range, Date.now())
+      },
+    },
+    balancesFacade,
   )
   ctx.effect(() => ctx.typert.register(hostContribution))
 
-  const storageRoot = resolveCheckpointRoot(process.env.DSH_HOME ?? join(homedir(), '.dsh'))
   const store = new CheckpointStore(storageRoot)
   const sessions = new DshCheckpointSessions(ctx)
   let rollbackEnabled = config.rollbackEnabled.get()

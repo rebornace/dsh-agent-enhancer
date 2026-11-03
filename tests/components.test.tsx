@@ -15,11 +15,14 @@ import { readSelection, restoreSelection } from '../src/client/dsh/editor.ts'
 import { OverlapHintStore } from '../src/client/dsh/plugin-hints.ts'
 import { CoexistenceHints } from '../src/client/dsh/hints.tsx'
 import { PluginSettings } from '../src/client/dsh/settings.tsx'
+import { UsagePanel } from '../src/client/dsh/usage-panel.tsx'
+import { ProviderBalanceChip } from '../src/client/dsh/provider-balance-chip.tsx'
 import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import { resolveSettings } from '../src/config.ts'
 import type { EnhancerSettings } from '../src/config.ts'
 import type { ApplyUpdateResult, UpdateCheckResult } from '../src/host/update/types.ts'
+import type { UsageRange, UsageSummary } from '../src/host/usage/types.ts'
 import { AuxiliaryError } from '../src/errors.ts'
 
 const translations: Record<string, string> = {
@@ -54,6 +57,75 @@ const translations: Record<string, string> = {
   reasoningDefault: 'Default',
   settingsBack: 'Back',
   settingsConfigure: 'Configure',
+  usageTitle: 'Model bill',
+  usageNote: 'Provider-reported tokens, not currency.',
+  usageMeterOpen: 'View bill',
+  usageBuckets: 'Token buckets',
+  usageBucketInput: 'Input',
+  usageBucketOutput: 'Output',
+  usageBucketCacheRead: 'Cache read',
+  usageBucketCacheWrite: 'Cache write',
+  usageReasoningNote: 'including {tokens} reasoning',
+  usageChartSources: 'By feature',
+  usageChartModels: 'By model',
+  usageChartTotal: 'tokens',
+  usageChartEmpty: 'No tokens to chart in this range.',
+  usageHeatmap: 'Usage heat',
+  usageHeatmapHint: 'Darker cells used more that day. Hover for exact counts.',
+  usageHeatmapHourHint: 'Darker cells used more that hour. Hover for exact counts.',
+  usageShareBar: 'Feature share',
+  usageTotalLabel: 'Total tokens',
+  usageEstimateLabel: '≈ ¥{amount}',
+  usageEstimateHint: 'Estimated from official rates, not a provider invoice',
+  usageUnpriced: '{count} calls have no price row and are excluded from cost',
+  usageBalanceLabel: 'Balance ¥{amount}',
+  usageBalanceDetail: 'Granted {granted} · Topped up {toppedUp}',
+  usageBalanceStale: 'Balance from the last successful check',
+  usageBalanceNoKey: 'No DeepSeek API key found, so balance is unavailable (uses Desktop model credentials; this plugin ships no keys)',
+  usageBalanceUnavailable: 'Balance is temporarily unavailable. Try Refresh.',
+  providerBalanceLabel: 'Balance ¥{amount}',
+  providerBalanceDetail: 'Granted {granted} · Topped up {toppedUp}',
+  providerBalanceStale: 'From the last successful check',
+  providerBalanceLoading: 'Reading balance…',
+  providerBalanceNoKey: 'No API key configured, so balance is unavailable',
+  providerBalanceSignedOut: 'Not signed in, so balance is unavailable',
+  providerBalanceUnavailable: 'Balance is temporarily unavailable. Click to retry',
+  providerBalanceRefreshHint: 'Click to refresh balance',
+  usageRecordModel: 'Model {model}',
+  usageRecordProvider: 'Route {provider}',
+  usageRecordEffort: 'Effort {effort}',
+  usageRecordInput: 'In {tokens}',
+  usageRecordOutput: 'Out {tokens}',
+  usageRecordCacheRead: 'Cache read {tokens}',
+  usageRecordCacheWrite: 'Cache write {tokens}',
+  usageModelRouteEffort: '{provider} / {model} · {effort}',
+  usageBack: 'Back',
+  usageRecordsOpen: 'All',
+  usageRecordsHint: 'Latest session and plugin calls, newest first. Numbers are tokens for that call.',
+  usageRecordsEmpty: 'No calls yet.',
+  usageLoading: 'Reading the bill…',
+  usageLoadFailed: 'Could not read the bill. Try again.',
+  usageRetry: 'Try again',
+  usageRefresh: 'Refresh',
+  usageUnavailable: 'The bill is not available yet. Try again later.',
+  usageEmpty: 'No reported calls yet.',
+  usageRangeLabel: 'Time range',
+  usageRange_today: 'Today',
+  usageRange_7d: '7 days',
+  usageRange_30d: '30 days',
+  usageRange_all: 'All',
+  usageRecent: 'Calls',
+  usageRetention: 'Stored locally, no prompt text. Plugin features keep up to 90 days / 2000 calls.',
+  usageCalls: '{count} calls',
+  usageModelRoute: '{provider} / {model}',
+  usageSource_optimize: 'Prompt optimize',
+  usageSource_predict: 'Next-prompt prediction',
+  usageSource_compact: 'Context compact',
+  usageSource_autoClassifier: 'Auto classifier',
+  usageSource_session: 'Desktop session',
+  usageSource_compaction: 'Official compact',
+  usageSource_sessionTitle: 'Session title',
+  usageSource_other: 'Other calls',
   autoRouting: 'Auto routing',
   autoRoutingDescription: 'Sessions and helpers can pick Auto; configure tier mappings here',
   autoClassifier: 'Use a small model to help Auto classify',
@@ -1177,6 +1249,160 @@ describe('PluginSettings', () => {
     command: 'dsh plugin --profile desktop add dsh-agent-enhancer@0.2.1',
   }
 
+  it('charts tokens by feature and model, and opens call records on a second page', async () => {
+    const summary: UsageSummary = {
+      range: '7d',
+      calls: 2,
+      inputTokens: 800,
+      outputTokens: 120,
+      cacheReadTokens: 40,
+      cacheWriteTokens: 0,
+      reasoningTokens: 30,
+      sources: [
+        {
+          source: 'optimize',
+          calls: 2,
+          inputTokens: 800,
+          outputTokens: 120,
+          cacheReadTokens: 40,
+          cacheWriteTokens: 0,
+          reasoningTokens: 30,
+          models: [{
+            provider: 'deepseek-official',
+            model: 'deepseek-v4-flash',
+            reasoningEffort: 'high',
+            calls: 2,
+            inputTokens: 800,
+            outputTokens: 120,
+            cacheReadTokens: 40,
+            cacheWriteTokens: 0,
+            reasoningTokens: 30,
+          }],
+        },
+        {
+          source: 'predict',
+          calls: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          reasoningTokens: 0,
+          models: [],
+        },
+        {
+          source: 'compact',
+          calls: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          reasoningTokens: 0,
+          models: [],
+        },
+        {
+          source: 'autoClassifier',
+          calls: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          reasoningTokens: 0,
+          models: [],
+        },
+        {
+          source: 'session',
+          calls: 1,
+          inputTokens: 5000,
+          outputTokens: 900,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          reasoningTokens: 0,
+          models: [{
+            provider: 'deepseek-official',
+            model: 'deepseek-v4-pro',
+            reasoningEffort: 'high',
+            calls: 1,
+            inputTokens: 5000,
+            outputTokens: 900,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            reasoningTokens: 0,
+          }],
+        },
+      ],
+      heatmap: {
+        grain: 'day',
+        cells: [
+          { key: '2026-11-02', label: '11/2', at: Date.UTC(2026, 10, 2), tokens: 0, calls: 0 },
+          { key: '2026-11-03', label: '11/3', at: Date.UTC(2026, 10, 3), tokens: 6860, calls: 2 },
+        ],
+      },
+      money: {
+        currency: 'CNY',
+        estimatedCost: 1.2345,
+        pricedCalls: 3,
+        unpricedCalls: 1,
+      },
+      balanceStatus: 'ready',
+      balance: {
+        available: true,
+        currency: 'CNY',
+        total: '88.00',
+        granted: '8.00',
+        toppedUp: '80.00',
+        checkedAt: Date.UTC(2026, 10, 3, 12),
+      },
+      recent: [{
+        at: Date.UTC(2026, 10, 3, 8, 30),
+        source: 'optimize',
+        provider: 'deepseek-official',
+        model: 'deepseek-v4-flash',
+        reasoningEffort: 'high',
+        inputTokens: 500,
+        outputTokens: 80,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        reasoningTokens: 0,
+      }],
+    }
+    const loadUsage = vi.fn(async (range: UsageRange) => ({ ...summary, range }))
+    const t: TranslateNS<'agent-enhancer'> = (key, params) => formatTranslation(translations[key] ?? key, params)
+    render(<UsagePanel t={t} loadUsage={loadUsage} />)
+    expect(await screen.findByLabelText('Token buckets')).toBeTruthy()
+    expect(screen.getByText('800')).toBeTruthy()
+    expect(screen.getByText('120')).toBeTruthy()
+    expect(screen.getByText('40')).toBeTruthy()
+    expect(screen.getByText(/including 30 reasoning/)).toBeTruthy()
+    expect(screen.getByLabelText('Usage heat')).toBeTruthy()
+    expect(screen.getByLabelText('Feature share')).toBeTruthy()
+    expect(screen.getByLabelText('By model')).toBeTruthy()
+    expect(screen.getByLabelText('Usage heat').querySelectorAll('button').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Desktop session').length).toBeGreaterThan(0)
+    expect(screen.getByText('Total tokens')).toBeTruthy()
+    expect(screen.getByText('≈ ¥1.2345')).toBeTruthy()
+    expect(screen.getByText(/Estimated from official rates/)).toBeTruthy()
+    expect(screen.getByText(/1 calls have no price row/)).toBeTruthy()
+    expect(screen.queryByText('Balance ¥88.00')).toBeNull()
+    expect(screen.getByText(/deepseek-v4-flash · high/)).toBeTruthy()
+    expect(screen.queryByRole('switch')).toBeNull()
+    expect(screen.queryByText(/not currency/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Calls/ }))
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeTruthy()
+    expect(screen.getAllByText('Prompt optimize').length).toBeGreaterThan(0)
+    expect(screen.getByText('Model deepseek-v4-flash')).toBeTruthy()
+    expect(screen.getByText('Effort high')).toBeTruthy()
+    expect(screen.getByText('In 500')).toBeTruthy()
+    expect(screen.getByText('Out 80')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(await screen.findByLabelText('Usage heat')).toBeTruthy()
+    const beforeRefresh = loadUsage.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await waitFor(() => { expect(loadUsage.mock.calls.length).toBeGreaterThan(beforeRefresh) })
+    expect(loadUsage).toHaveBeenLastCalledWith('7d')
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }))
+    await waitFor(() => { expect(loadUsage).toHaveBeenCalledWith('today') })
+  })
+
   it('shows check failure (not up to date) when registry latest is null', async () => {
     const checkUpdate = vi.fn(async () => ({
       ...npmCheck,
@@ -1235,5 +1461,34 @@ describe('CoexistenceHints', () => {
     nextRelease.accept([{ moduleName: 'dsh-input-assistant', enabled: true }])
     expect(nextRelease.getSnapshot()).toEqual(['history', 'optimize', 'predict'])
     for (const key of Object.keys(localStorage)) expect(localStorage.getItem(key)).not.toContain('Needle one')
+  })
+
+  it('shows Models-card balance states for account and API key', async () => {
+    const t: TranslateNS<'agent-enhancer'> = (key, params) => formatTranslation(translations[key] ?? key, params)
+    const loadAccount = vi.fn(async () => ({
+      source: 'account' as const,
+      status: 'ready' as const,
+      balance: {
+        available: true,
+        currency: 'CNY',
+        total: '25.00',
+        granted: '5.00',
+        toppedUp: '20.00',
+        checkedAt: 1,
+      },
+    }))
+    const loadKey = vi.fn(async () => ({
+      source: 'api-key' as const,
+      status: 'no-key' as const,
+    }))
+    const { rerender } = render(
+      <ProviderBalanceChip source="account" t={t} load={loadAccount} />,
+    )
+    expect(await screen.findByText('Balance ¥25.00')).toBeTruthy()
+    expect(screen.getByText(/Granted 5.00/)).toBeTruthy()
+    fireEvent.click(screen.getByTitle('Click to refresh balance'))
+    await waitFor(() => expect(loadAccount.mock.calls.length).toBeGreaterThanOrEqual(2))
+    rerender(<ProviderBalanceChip source="api-key" t={t} load={loadKey} />)
+    expect(await screen.findByText('No API key configured, so balance is unavailable')).toBeTruthy()
   })
 })

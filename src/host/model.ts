@@ -27,6 +27,7 @@ import { sessionTurnHint } from './auto-route/session-turn-hint.ts'
 import { resolveAutoRoute } from './auto-route/router.ts'
 import type { AutoTierRoute } from './auto-route/types.ts'
 import { AuxiliaryError } from '../errors.ts'
+import { stampUsageSource, withUsageSource } from './usage/source.ts'
 import {
   auxiliaryUserInput,
   optimizeSystemPrompt,
@@ -293,62 +294,65 @@ export class AuxiliaryModels {
       sessionRequests.add(controller)
       this.requests.set(session.id, sessionRequests)
       const operation = request.operation
-      const routeText = operation === 'optimize' ? request.source : ''
-      const resolved = await this.route(session, operation, routeText)
-      const route: ModelRoute = { provider: resolved.provider, model: resolved.model }
-      const masked = operation === 'optimize' ? maskReferences(request.source, request.references) : undefined
-      const maxTokens = operation === 'optimize' ? 1200 : 120
-      const uiLocale = resolveUiLocale(request.uiLocale)
-      const system = operation === 'optimize'
-        ? optimizeSystemPrompt(uiLocale)
-        : predictSystemPrompt(uiLocale)
-      const call = await this.ctx.llm.prepareCall({ ...route, maxTokens }, controller.signal, (controls, info) => {
-        const reasoningEffort = pickReasoningEffort(info, resolved.preferredEffort)
-        return reasoningEffort === undefined ? controls : { ...controls, reasoningEffort }
-      })
-      controller.signal.throwIfAborted()
-      this.assertCurrent(session)
-      const options: GenerateOptions = {
-        ...call.config,
-        system,
-        messages: [{
-          role: 'user',
-          content: [{ type: 'text', text: auxiliaryUserInput(request, uiLocale, masked?.source) }],
-        }],
-        tools: [],
-        sessionId: session.id,
-        signal: controller.signal,
-      }
-      appendPluginRecord(session, 'plugin:agent-enhancer/request', {
-        operation,
-        requestId: request.requestId,
-        route,
-        system,
-        messages: options.messages,
-        maxTokens,
-      })
-      controller.signal.throwIfAborted()
-      const assembler = new BlockAssembler()
-      for await (const chunk of call.stream(options)) {
+      return await withUsageSource(operation, async () => {
+        const routeText = operation === 'optimize' ? request.source : ''
+        const resolved = await this.route(session, operation, routeText)
+        const route: ModelRoute = { provider: resolved.provider, model: resolved.model }
+        const masked = operation === 'optimize' ? maskReferences(request.source, request.references) : undefined
+        const maxTokens = operation === 'optimize' ? 1200 : 120
+        const uiLocale = resolveUiLocale(request.uiLocale)
+        const system = operation === 'optimize'
+          ? optimizeSystemPrompt(uiLocale)
+          : predictSystemPrompt(uiLocale)
+        const call = await this.ctx.llm.prepareCall({ ...route, maxTokens }, controller.signal, (controls, info) => {
+          const reasoningEffort = pickReasoningEffort(info, resolved.preferredEffort)
+          return reasoningEffort === undefined ? controls : { ...controls, reasoningEffort }
+        })
         controller.signal.throwIfAborted()
         this.assertCurrent(session)
-        if (chunk.type === 'tool-call-delta') throw new AuxiliaryError('INVALID_OUTPUT')
-        assembler.push(chunk)
-      }
-      controller.signal.throwIfAborted()
-      this.assertCurrent(session)
-      if (assembler.finish.kind !== 'stop') throw new AuxiliaryError('INVALID_OUTPUT')
-      const text = outputText(assembler)
-      if (masked === undefined || request.operation === 'predict') {
-        return { requestId: request.requestId, text, route }
-      }
-      const restored = unmaskReferences(text, masked.placeholders, request.references)
-      return {
-        requestId: request.requestId,
-        text: restored.text,
-        ...(request.references.length === 0 ? {} : { segments: restored.segments }),
-        route,
-      }
+        const options: GenerateOptions = {
+          ...call.config,
+          system,
+          messages: [{
+            role: 'user',
+            content: [{ type: 'text', text: auxiliaryUserInput(request, uiLocale, masked?.source) }],
+          }],
+          tools: [],
+          sessionId: session.id,
+          signal: controller.signal,
+        }
+        stampUsageSource(options, operation)
+        appendPluginRecord(session, 'plugin:agent-enhancer/request', {
+          operation,
+          requestId: request.requestId,
+          route,
+          system,
+          messages: options.messages,
+          maxTokens,
+        })
+        controller.signal.throwIfAborted()
+        const assembler = new BlockAssembler()
+        for await (const chunk of call.stream(options)) {
+          controller.signal.throwIfAborted()
+          this.assertCurrent(session)
+          if (chunk.type === 'tool-call-delta') throw new AuxiliaryError('INVALID_OUTPUT')
+          assembler.push(chunk)
+        }
+        controller.signal.throwIfAborted()
+        this.assertCurrent(session)
+        if (assembler.finish.kind !== 'stop') throw new AuxiliaryError('INVALID_OUTPUT')
+        const text = outputText(assembler)
+        if (masked === undefined || request.operation === 'predict') {
+          return { requestId: request.requestId, text, route }
+        }
+        const restored = unmaskReferences(text, masked.placeholders, request.references)
+        return {
+          requestId: request.requestId,
+          text: restored.text,
+          ...(request.references.length === 0 ? {} : { segments: restored.segments }),
+          route,
+        }
+      })
     } catch (error) {
       if (controller.signal.aborted) throw controller.signal.reason
       if (error instanceof AuxiliaryError) throw error

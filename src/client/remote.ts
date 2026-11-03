@@ -11,6 +11,12 @@ function auxiliaryCode(value: unknown, fallback: AuxiliaryErrorCode): AuxiliaryE
 import type { ContextCompactRequest, ContextCompactResult } from '../host/context-compact.ts'
 import type { ContextInspectRequest, ContextInspectResult } from '../host/context-inspect.ts'
 import type { ApplyUpdateResult, UpdateCheckResult } from '../host/update/types.ts'
+import type {
+  ProviderBalances,
+  ProviderBalancesRequest,
+  UsageRange,
+  UsageSummary,
+} from '../host/usage/types.ts'
 import type { RpcPayload } from '../host/rpc.ts'
 import type { AuxiliaryResult } from '../host/types.ts'
 import { checkpointClientRemoteInfo } from './rollback/remote.ts'
@@ -101,6 +107,34 @@ export const clientRemoteInfo = {
     invocation: { kind: 'direct' },
     parameters: [],
     result: codec('dsh-agent-enhancer#ApplyUpdateResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/usageSummary',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'usageSummary',
+    implementation: 'usageSummary',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'range',
+      wire: 'range',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#UsageRange'),
+    }],
+    result: codec('dsh-agent-enhancer#UsageSummary'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/providerBalances',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'providerBalances',
+    implementation: 'providerBalances',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#ProviderBalancesRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#ProviderBalances'),
   }, ...checkpointClientRemoteInfo.descriptors],
 } satisfies TypertRemoteContribution
 
@@ -206,6 +240,70 @@ export const agentEnhancerCheckUpdate = {
     if (!result.ok) {
       throw new AuxiliaryError('MODEL_FAILED')
     }
+    return result.value
+  },
+}
+
+type UsageSummaryCall = (range: UsageRange) => Promise<RemoteResult<UsageSummary>>
+
+export const agentEnhancerUsageSummary = {
+  async invoke(remote: unknown, range: UsageRange) {
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    let namespace: object
+    try {
+      const face = Reflect.get(remote, 'agentEnhancer')
+      if (face === null || face === undefined || typeof face !== 'object') {
+        throw new AuxiliaryError('MODEL_FAILED')
+      }
+      namespace = face as object
+    } catch (error) {
+      if (error instanceof AuxiliaryError) throw error
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    const call = Reflect.get(namespace, 'usageSummary') as UsageSummaryCall | undefined
+    if (typeof call !== 'function') throw new AuxiliaryError('MODEL_FAILED')
+    let result: RemoteResult<UsageSummary>
+    try {
+      result = await call.call(namespace, range)
+    } catch {
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    if (!result.ok) throw new AuxiliaryError('MODEL_FAILED')
+    return result.value
+  },
+}
+
+type ProviderBalancesCall = (
+  request: ProviderBalancesRequest,
+) => Promise<RemoteResult<ProviderBalances>>
+
+export const agentEnhancerProviderBalances = {
+  async invoke(remote: unknown, request: ProviderBalancesRequest = {}) {
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    let namespace: object
+    try {
+      const face = Reflect.get(remote, 'agentEnhancer')
+      if (face === null || face === undefined || typeof face !== 'object') {
+        throw new AuxiliaryError('MODEL_FAILED')
+      }
+      namespace = face as object
+    } catch (error) {
+      if (error instanceof AuxiliaryError) throw error
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    const call = Reflect.get(namespace, 'providerBalances') as ProviderBalancesCall | undefined
+    if (typeof call !== 'function') throw new AuxiliaryError('MODEL_FAILED')
+    let result: RemoteResult<ProviderBalances>
+    try {
+      result = await call.call(namespace, request)
+    } catch {
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    if (!result.ok) throw new AuxiliaryError('MODEL_FAILED')
     return result.value
   },
 }

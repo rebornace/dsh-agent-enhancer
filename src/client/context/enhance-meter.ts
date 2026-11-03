@@ -16,7 +16,8 @@ function cls(value: string | undefined): string {
   return value ?? ''
 }
 
-function findOpenMeterPanel(): HTMLElement | null {
+/** Official context composition panel: System / Tools / Messages (not Token 用量). */
+export function findOpenContextMeterPanel(): HTMLElement | null {
   const dock = document.querySelector('[data-composer-dock]')
   if (!(dock instanceof HTMLElement)) return null
   const trigger = dock.querySelector('button[aria-haspopup="dialog"][aria-expanded="true"]')
@@ -32,10 +33,10 @@ function findOpenMeterPanel(): HTMLElement | null {
 }
 
 function enhancePanel(panel: HTMLElement, options: ContextMeterEnhanceOptions): void {
-  if (panel.getAttribute(ENHANCED_ATTR) === '1') return
-  panel.setAttribute(ENHANCED_ATTR, '1')
+  if (!options.enabled() || panel.getAttribute(ENHANCED_ATTR) === '1') return
   const rows = [...panel.querySelectorAll(':scope > dl > div')]
   if (rows.length !== 3) return
+  panel.setAttribute(ENHANCED_ATTR, '1')
 
   rows.forEach((row, index) => {
     if (!(row instanceof HTMLElement)) return
@@ -78,9 +79,10 @@ function enhancePanel(panel: HTMLElement, options: ContextMeterEnhanceOptions): 
   })
 }
 
+/** Drill System / Tools / Messages into context details. Does not own the bill entry. */
 export function installContextMeterEnhance(options: ContextMeterEnhanceOptions): () => void {
   const scan = () => {
-    const panel = findOpenMeterPanel()
+    const panel = findOpenContextMeterPanel()
     if (panel !== null) enhancePanel(panel, options)
   }
   const observer = new MutationObserver(scan)

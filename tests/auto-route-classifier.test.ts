@@ -33,7 +33,7 @@ describe('parseClassifierTier', () => {
 describe('createClassifier', () => {
   const route = { provider: 'p', model: 'flash', reasoningEffort: '' }
 
-  it('calls prepareCall with classifier route and maxTokens 8', async () => {
+  it('calls prepareCall with classifier route and a short maxTokens budget', async () => {
     const stream = vi.fn((_options: GenerateOptions) => iterable(textChunks('pro')))
     const prepareCall = vi.fn(async (config: LlmCallConfig) => ({
       config: { provider: config.provider, model: config.model, maxTokens: config.maxTokens },
@@ -42,11 +42,12 @@ describe('createClassifier', () => {
     const classify = createClassifier({ prepareCall: prepareCall as never }, route)
     await expect(classify('long task')).resolves.toBe('pro')
     expect(prepareCall).toHaveBeenCalledWith(
-      { provider: 'p', model: 'flash', maxTokens: 8 },
+      { provider: 'p', model: 'flash', maxTokens: 16 },
       expect.any(AbortSignal),
     )
     expect(stream.mock.calls[0]?.[0].system).toMatch(/instant.*thinking.*pro/i)
-    expect(stream.mock.calls[0]?.[0].maxTokens).toBe(8)
+    expect(stream.mock.calls[0]?.[0].system).toMatch(/中文同样适用/)
+    expect(stream.mock.calls[0]?.[0].maxTokens).toBe(16)
   })
 
   it('throws when output cannot be parsed', async () => {

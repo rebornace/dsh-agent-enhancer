@@ -5,6 +5,7 @@ import { z } from 'zod'
 import type { AuxiliaryErrorCode } from '../errors.ts'
 import type { CheckpointRollbackErrorCode } from './checkpoint/service.ts'
 import { APPLY_UPDATE_CODES } from './update/types.ts'
+import { USAGE_RANGES, USAGE_SOURCES } from './usage/types.ts'
 
 const sessionIdSchema = z.string().min(1).transform(value => value as SessionId)
 const recentExchangeSchema = z.strictObject({
@@ -170,6 +171,95 @@ export const applyUpdateResultSchema = z.strictObject({
 const updateCheckResultCodec = codec('dsh-agent-enhancer#UpdateCheckResult', updateCheckResultSchema)
 const applyUpdateResultCodec = codec('dsh-agent-enhancer#ApplyUpdateResult', applyUpdateResultSchema)
 
+const usageTokenFields = {
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  cacheReadTokens: z.number().int().nonnegative(),
+  cacheWriteTokens: z.number().int().nonnegative(),
+  reasoningTokens: z.number().int().nonnegative(),
+}
+const usageRangeSchema = z.enum(USAGE_RANGES)
+const usageCallSchema = z.object({
+  at: z.number().int().nonnegative(),
+  source: z.enum(USAGE_SOURCES),
+  provider: z.string(),
+  model: z.string(),
+  reasoningEffort: z.string(),
+  ...usageTokenFields,
+}).strict()
+const usageModelLineSchema = z.object({
+  provider: z.string(),
+  model: z.string(),
+  reasoningEffort: z.string(),
+  calls: z.number().int().nonnegative(),
+  ...usageTokenFields,
+}).strict()
+const usageSourceLineSchema = z.object({
+  source: z.enum(USAGE_SOURCES),
+  calls: z.number().int().nonnegative(),
+  models: z.array(usageModelLineSchema),
+  ...usageTokenFields,
+}).strict()
+const usageHeatCellSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  at: z.number().int().nonnegative(),
+  tokens: z.number().int().nonnegative(),
+  calls: z.number().int().nonnegative(),
+}).strict()
+const usageHeatmapSchema = z.object({
+  grain: z.enum(['hour', 'day']),
+  cells: z.array(usageHeatCellSchema),
+}).strict()
+const usageMoneySchema = z.object({
+  currency: z.literal('CNY'),
+  estimatedCost: z.number().nonnegative(),
+  pricedCalls: z.number().int().nonnegative(),
+  unpricedCalls: z.number().int().nonnegative(),
+}).strict()
+const usageBalanceSchema = z.object({
+  available: z.boolean(),
+  currency: z.string(),
+  total: z.string(),
+  granted: z.string(),
+  toppedUp: z.string(),
+  checkedAt: z.number().int().nonnegative(),
+  stale: z.boolean().optional(),
+}).strict()
+const usageBalanceStatusSchema = z.enum(['ready', 'no-key', 'unavailable'])
+export const usageSummarySchema = z.object({
+  range: usageRangeSchema,
+  calls: z.number().int().nonnegative(),
+  sources: z.array(usageSourceLineSchema),
+  heatmap: usageHeatmapSchema,
+  money: usageMoneySchema,
+  balanceStatus: usageBalanceStatusSchema,
+  balance: usageBalanceSchema.optional(),
+  recent: z.array(usageCallSchema),
+  ...usageTokenFields,
+}).strict()
+const providerBalanceStatusSchema = z.enum(['ready', 'no-key', 'signed-out', 'unavailable'])
+const providerBalanceSnapshotSchema = z.object({
+  source: z.enum(['account', 'api-key']),
+  status: providerBalanceStatusSchema,
+  balance: usageBalanceSchema.optional(),
+}).strict()
+export const providerBalancesSchema = z.object({
+  account: providerBalanceSnapshotSchema,
+  apiKey: providerBalanceSnapshotSchema,
+}).strict()
+export const providerBalancesRequestSchema = z.object({
+  force: z.boolean().optional(),
+  locale: z.string().optional(),
+}).strict()
+const usageRangeCodec = codec('dsh-agent-enhancer#UsageRange', usageRangeSchema)
+const usageSummaryCodec = codec('dsh-agent-enhancer#UsageSummary', usageSummarySchema)
+const providerBalancesCodec = codec('dsh-agent-enhancer#ProviderBalances', providerBalancesSchema)
+const providerBalancesRequestCodec = codec(
+  'dsh-agent-enhancer#ProviderBalancesRequest',
+  providerBalancesRequestSchema,
+)
+
 export const remoteInfo = createTypertRemoteInfo({
   package: 'dsh-agent-enhancer',
   methods: {
@@ -233,6 +323,30 @@ export const remoteInfo = createTypertRemoteInfo({
       invocation: { kind: 'direct' },
       parameters: [],
       result: applyUpdateResultCodec,
+    },
+    'agentEnhancer/usageSummary': {
+      service: 'agentEnhancer',
+      implementation: 'usageSummary',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'range',
+        source: 'json',
+        codec: usageRangeCodec,
+        strictCodec: usageRangeCodec,
+      }],
+      result: usageSummaryCodec,
+    },
+    'agentEnhancer/providerBalances': {
+      service: 'agentEnhancer',
+      implementation: 'providerBalances',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: providerBalancesRequestCodec,
+        strictCodec: providerBalancesRequestCodec,
+      }],
+      result: providerBalancesCodec,
     },
   },
 }, z)

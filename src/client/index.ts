@@ -4,11 +4,17 @@ import type { ClientRemote, PluginInventorySnapshot, RemoteResult } from '@deeps
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings-models/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { resolveSettings } from '../config.ts'
 import type { EnhancerSettings } from '../config.ts'
 import { resolveUiLocale } from '../host/prompts.ts'
 import type { AuxiliaryRequest, AuxiliaryResult, UiLocale } from '../host/types.ts'
+import type { ProviderBalanceSource, UsageRange } from '../host/usage/types.ts'
+import {
+  PROVIDER_BALANCE_ACCOUNT_KEY,
+  PROVIDER_BALANCE_API_KEY_KEY,
+} from '../host/usage/balance.ts'
 import { PromptSession } from './prompt/session.ts'
 import type { ModuleSwitches } from './prompt/types.ts'
 import { AgentControls } from './dsh/controls.tsx'
@@ -22,19 +28,25 @@ import type { ModelCatalogLoaders } from './dsh/model-catalog.ts'
 import { AcceptedSettingsForm } from './dsh/settings-form.ts'
 import { PluginSettings } from './dsh/settings.tsx'
 import { ContextInspectDock } from './context/dock.tsx'
-import { openContextInspectTab } from './context/open-tab.ts'
+import { openContextInspectTab, openUsageTab } from './context/open-tab.ts'
 import { ContextInspectRightTab, ContextInspectRightTabTitle } from './context/right-tab.tsx'
 import { CONTEXT_INSPECT_TAB_ID, CONTEXT_INSPECT_TAB_KIND } from './context/tab.ts'
+import { UsageMeterDock } from './dsh/usage-dock.tsx'
+import { UsageRightTab, UsageRightTabTitle } from './dsh/usage-tab.tsx'
+import { USAGE_TAB_ID, USAGE_TAB_KIND } from './dsh/usage-kind.ts'
 import type { ContextInspectCategory } from '../host/context-inspect.ts'
 import { agentLocales } from './locales.ts'
 import {
   agentEnhancerApplyUpdate,
   agentEnhancerCall,
   agentEnhancerCheckUpdate,
+  agentEnhancerUsageSummary,
+  agentEnhancerProviderBalances,
   agentEnhancerCompactContext,
   agentEnhancerInspectContext,
   clientRemoteInfo,
 } from './remote.ts'
+import { ProviderBalanceChip } from './dsh/provider-balance-chip.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { RollbackController } from './rollback/controller.ts'
 import type { RollbackRemote } from './rollback/controller.ts'
@@ -120,6 +132,23 @@ export function apply(ctx: Context): void {
   )
   const checkUpdate = () => withAgentRemote(remote => agentEnhancerCheckUpdate.invoke(remote))
   const applyUpdate = () => withAgentRemote(remote => agentEnhancerApplyUpdate.invoke(remote))
+  const loadUsage = (range: UsageRange) => withAgentRemote(
+    remote => agentEnhancerUsageSummary.invoke(remote, range),
+  )
+  const desktopLocale = (): string => {
+    try {
+      return ctx.locale.getLocale().active
+    } catch {
+      return 'zh-CN'
+    }
+  }
+  const loadProviderSnapshot = (source: ProviderBalanceSource) => async (force = false) => {
+    const all = await withAgentRemote(remote => agentEnhancerProviderBalances.invoke(remote, {
+      force,
+      locale: desktopLocale(),
+    }))
+    return source === 'account' ? all.account : all.apiKey
+  }
   const SettingsTab = (props: { readonly form: typeof form; readonly t: typeof t }) => (
     createElement(PluginSettings, {
       form: props.form,
@@ -134,6 +163,24 @@ export function apply(ctx: Context): void {
     label: () => t('settingsTitle'), locale: 'agent-enhancer',
     inject: () => ({ form }),
   }, SettingsTab)))
+  const AccountBalanceChip = () => createElement(ProviderBalanceChip, {
+    source: 'account',
+    t,
+    load: loadProviderSnapshot('account'),
+  })
+  const ApiKeyBalanceChip = () => createElement(ProviderBalanceChip, {
+    source: 'api-key',
+    t,
+    load: loadProviderSnapshot('api-key'),
+  })
+  ctx.effect(() => ctx.slots.inject('settings.models.provider-card', () => ctx.slots.register({
+    name: 'settings.models.provider-card',
+    key: PROVIDER_BALANCE_ACCOUNT_KEY,
+  }, AccountBalanceChip)))
+  ctx.effect(() => ctx.slots.inject('settings.models.provider-card', () => ctx.slots.register({
+    name: 'settings.models.provider-card',
+    key: PROVIDER_BALANCE_API_KEY_KEY,
+  }, ApiKeyBalanceChip)))
   const hints = new OverlapHintStore()
   ctx.effect(() => {
     let active = true
@@ -221,6 +268,13 @@ export function apply(ctx: Context): void {
       },
       t: tContext,
     })
+    const BillDock = (props: PropsRuntime<'conversation.composer.dock'>) => createElement(UsageMeterDock, {
+      ...props,
+      open: () => {
+        openUsageTab(mountedCtx.sidebarRight)
+      },
+      t: tContext,
+    })
     const ContextRightTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(ContextInspectRightTab, {
       ...props,
       inspect: inspectContext,
@@ -231,6 +285,42 @@ export function apply(ctx: Context): void {
       ContextInspectRightTabTitle,
       { ...props, t: tContext },
     )
+    const BillRightTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(UsageRightTab, {
+      ...props,
+      loadUsage,
+      t: tContext,
+    })
+    const BillRightTitle = (props: PropsRuntime<'sidebar.right.pane.tab.title'>) => createElement(
+      UsageRightTabTitle,
+      { ...props, t: tContext },
+    )
+    mountedCtx.effect(() => {
+      const disposers = [
+        mountedCtx.sidebarRightTabs.register({
+          id: USAGE_TAB_ID,
+          kind: USAGE_TAB_KIND,
+          priority: 'extension',
+          title: () => tContext('usageTitle'),
+        }),
+        mountedCtx.slots.inject('sidebar.right.pane.tab', () => mountedCtx.slots.register({
+          name: 'sidebar.right.pane.tab',
+          key: USAGE_TAB_ID,
+          locale: 'agent-enhancer',
+        }, BillRightTab)),
+        mountedCtx.slots.inject('sidebar.right.pane.tab.title', () => mountedCtx.slots.register({
+          name: 'sidebar.right.pane.tab.title',
+          key: USAGE_TAB_ID,
+          locale: 'agent-enhancer',
+        }, BillRightTitle)),
+        mountedCtx.slots.inject('conversation.composer.dock', () => mountedCtx.slots.register({
+          name: 'conversation.composer.dock', id: 'agent-enhancer-usage', order: 40,
+          locale: 'agent-enhancer',
+        }, BillDock)),
+      ]
+      return () => {
+        while (disposers.length > 0) disposers.pop()?.()
+      }
+    })
     mountedCtx.effect(() => {
       const disposers: Array<() => void> = []
       const synchronize = () => {

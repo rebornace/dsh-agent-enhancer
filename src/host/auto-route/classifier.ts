@@ -1,10 +1,23 @@
 import { BlockAssembler } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmRuntime } from '@deepseek-ai/dsh-llm'
+import { stampUsageSource, withUsageSource } from '../usage/source.ts'
 import type { AutoTier, AutoTierRoute } from './types.ts'
 
-const CLASSIFIER_MAX_TOKENS = 8
+const CLASSIFIER_MAX_TOKENS = 16
 const CLASSIFIER_TIMEOUT_MS = 4000
-const CLASSIFIER_SYSTEM = 'Output only one word: instant, thinking, or pro.'
+/**
+ * Bilingual agentic rubric: routine engineering stays at thinking;
+ * only hard reasoning / high-risk work escalates to pro.
+ */
+const CLASSIFIER_SYSTEM = [
+  'You route coding-agent turns. Reply with exactly one word: instant, thinking, or pro.',
+  'instant — trivial lookup, short rewrite, yes/no, or a single obvious edit; no tools needed.',
+  'thinking — normal engineering: multi-file edits, installs, standard debugging, tools, refactors of moderate scope.',
+  'pro — hardest work: deep root-cause, architecture trade-offs, concurrency/security-critical changes, long multi-step plans.',
+  'Do not overuse pro for routine agent work. Prefer thinking when unsure.',
+  '中文同样适用：短问答/简单改写→instant；常规改代码/排错/用工具→thinking；疑难根因/架构权衡/高风险改动→pro。',
+  'Output only: instant | thinking | pro',
+].join('\n')
 const TIER_WORD = /\b(instant|thinking|pro)\b/i
 
 export function parseClassifierTier(raw: string): AutoTier | undefined {
@@ -43,7 +56,7 @@ export function createClassifier(
   if (route.provider === '' || route.model === '') {
     return async () => { throw new Error('Classifier route unavailable') }
   }
-  return async (text, signal) => {
+  return async (text, signal) => withUsageSource('autoClassifier', async () => {
     const timeout = new AbortController()
     const timer = setTimeout(() => { timeout.abort() }, CLASSIFIER_TIMEOUT_MS)
     const unlink = signal === undefined ? undefined : linkAbortSignal(signal, timeout)
@@ -62,6 +75,7 @@ export function createClassifier(
         tools: [],
         signal: timeout.signal,
       }
+      stampUsageSource(options, 'autoClassifier')
       for await (const chunk of call.stream(options)) {
         timeout.signal.throwIfAborted()
         if (chunk.type === 'tool-call-delta') continue
@@ -79,5 +93,5 @@ export function createClassifier(
       clearTimeout(timer)
       unlink?.()
     }
-  }
+  })
 }

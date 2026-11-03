@@ -545,7 +545,6 @@ function PluginSettingsBody({ form, t, loadCatalog, checkUpdate, applyUpdate }: 
     loadCatalog === undefined ? 'idle' : 'loading',
   )
   const [catalogError, setCatalogError] = useState<string | null>(null)
-
   const refreshCatalog = () => {
     if (loadCatalog === undefined) return
     setCatalogStatus(current => current === 'ready' ? current : 'loading')

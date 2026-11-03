@@ -1,16 +1,16 @@
 import type { ContextInspectCategory } from '../../host/context-inspect.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { USAGE_TAB_KIND } from '../dsh/usage-kind.ts'
 import { CONTEXT_INSPECT_TAB_KIND } from './tab.ts'
-import type { ContextInspectTabParams } from './tab.ts'
 
 export interface SidebarRightOpenTab {
-  openTab(kind: string, options?: { readonly params?: ContextInspectTabParams }): void
+  openTab(kind: string, options?: { readonly params?: object }): void
 }
 
-/** Open the context-inspect page; poll briefly until the rightbar session surface is mounted. */
-export function openContextInspectTab(
+function openRightTab(
   sidebarRight: SidebarRightOpenTab | undefined,
-  params: { readonly sessionId: SessionId, readonly category: ContextInspectCategory, readonly itemId?: string },
+  kind: string,
+  params: object,
 ): () => void {
   let cancelled = false
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -38,7 +38,7 @@ export function openContextInspectTab(
       return
     }
     try {
-      sidebarRight.openTab(CONTEXT_INSPECT_TAB_KIND, { params })
+      sidebarRight.openTab(kind, { params })
       finish()
     } catch {
       if (attempts >= maxAttempts) return finish()
@@ -48,4 +48,17 @@ export function openContextInspectTab(
 
   run()
   return finish
+}
+
+/** Open the context-inspect page; poll briefly until the rightbar session surface is mounted. */
+export function openContextInspectTab(
+  sidebarRight: SidebarRightOpenTab | undefined,
+  params: { readonly sessionId: SessionId, readonly category: ContextInspectCategory, readonly itemId?: string },
+): () => void {
+  return openRightTab(sidebarRight, CONTEXT_INSPECT_TAB_KIND, params)
+}
+
+/** Open the model bill; poll briefly until the rightbar session surface is mounted. */
+export function openUsageTab(sidebarRight: SidebarRightOpenTab | undefined): () => void {
+  return openRightTab(sidebarRight, USAGE_TAB_KIND, {})
 }
