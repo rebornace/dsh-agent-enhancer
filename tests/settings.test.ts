@@ -12,6 +12,7 @@ import { AUTO_MODEL, AUTO_PROVIDER } from '../src/host/auto-route/sentinel.ts'
 import { KNOWN_OVERLAPS, overlapHints } from '../src/client/dsh/plugin-hints.ts'
 import {
   decodeModelSelection,
+  encodeAutoSelection,
   encodeEffortSelection,
   encodeFollowSelection,
   encodeModelSelection,
@@ -175,6 +176,7 @@ describe('composer settings', () => {
     expect(parseModelOptionValue('')).toBeNull()
     expect(parseModelOptionValue('missing-separator')).toBeNull()
     expect(decodeModelSelection(encodeFollowSelection())).toEqual({ kind: 'follow' })
+    expect(decodeModelSelection(encodeAutoSelection())).toEqual({ kind: 'auto' })
     expect(decodeModelSelection(encodeModelSelection('deepseek', 'deepseek-chat'))).toEqual({
       kind: 'model',
       provider: 'deepseek',

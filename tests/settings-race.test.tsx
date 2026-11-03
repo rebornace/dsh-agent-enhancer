@@ -11,6 +11,7 @@ import { agentEnhancerCall } from '../src/client/remote.ts'
 import { PluginSettings } from '../src/client/dsh/settings.tsx'
 import type { AgentControlsProps } from '../src/client/dsh/controls.tsx'
 import type { EnhancerSettings } from '../src/config.ts'
+import { DEFAULT_SETTINGS, resolveSettings } from '../src/config.ts'
 
 vi.mock('../src/client/styles.module.css', () => ({ default: {}, installCss: () => () => {} }))
 
@@ -25,22 +26,10 @@ it('does not request prediction after an accepted disable before the mirror catc
   const ctx = new Context()
   contexts.push(ctx)
   const listeners = new Set<() => void>()
-  let value: EnhancerSettings = {
-    historyEnabled: true,
-    optimizeEnabled: true,
-    predictEnabled: true,
+  let value: EnhancerSettings = resolveSettings({
+    ...DEFAULT_SETTINGS,
     rollbackEnabled: false,
-    contextInspectEnabled: true,
-    optimizeProvider: '',
-    optimizeModel: '',
-    optimizeReasoningEffort: '',
-    predictProvider: '',
-    predictModel: '',
-    predictReasoningEffort: '',
-      compactProvider: '',
-      compactModel: '',
-      compactReasoningEffort: '',
-  }
+  })
   let revision = 1
   let snapshot: ReturnType<ConfigForm<EnhancerSettings>['getSnapshot']> = {
     status: 'ready', value, base: undefined, user: undefined, revision, writable: true,

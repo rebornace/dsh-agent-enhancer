@@ -8,17 +8,79 @@ import type { ErrorInfo, ReactNode } from 'react'
 import {
   MODULES,
   auxiliaryModelOf,
+  isAutoModel,
   isFollowSessionModel,
   resolveSettings,
 } from '../../config.ts'
 import type { AuxiliaryFeature, AuxiliaryModelSettings, EnhancerSettings, ModuleName } from '../../config.ts'
+import { AUTO_MODEL, AUTO_PROVIDER } from '../../host/auto-route/sentinel.ts'
 import styles from '../styles.module.css'
 import {
   decodeModelSelection,
+  encodeAutoSelection,
   encodeEffortSelection,
   encodeFollowSelection,
   encodeModelSelection,
 } from './model-catalog.ts'
+
+type AutoRouteTier = 'instant' | 'thinking' | 'pro' | 'classifier'
+
+const AUTO_TIER_LABELS: Record<AutoRouteTier, 'autoTier_instant' | 'autoTier_thinking' | 'autoTier_pro' | 'autoTier_classifier'> = {
+  instant: 'autoTier_instant',
+  thinking: 'autoTier_thinking',
+  pro: 'autoTier_pro',
+  classifier: 'autoTier_classifier',
+}
+
+function autoTierSelection(settings: EnhancerSettings, tier: AutoRouteTier): AuxiliaryModelSettings {
+  switch (tier) {
+    case 'instant':
+      return {
+        provider: settings.autoInstantProvider,
+        model: settings.autoInstantModel,
+        reasoningEffort: settings.autoInstantReasoningEffort,
+      }
+    case 'thinking':
+      return {
+        provider: settings.autoThinkingProvider,
+        model: settings.autoThinkingModel,
+        reasoningEffort: settings.autoThinkingReasoningEffort,
+      }
+    case 'pro':
+      return {
+        provider: settings.autoProProvider,
+        model: settings.autoProModel,
+        reasoningEffort: settings.autoProReasoningEffort,
+      }
+    case 'classifier':
+      return {
+        provider: settings.autoClassifierProvider,
+        model: settings.autoClassifierModel,
+        reasoningEffort: settings.autoClassifierReasoningEffort,
+      }
+    default: {
+      const _exhaustive: never = tier
+      return _exhaustive
+    }
+  }
+}
+
+function autoTierFieldPrefix(tier: AutoRouteTier): 'autoInstant' | 'autoThinking' | 'autoPro' | 'autoClassifier' {
+  switch (tier) {
+    case 'instant':
+      return 'autoInstant'
+    case 'thinking':
+      return 'autoThinking'
+    case 'pro':
+      return 'autoPro'
+    case 'classifier':
+      return 'autoClassifier'
+    default: {
+      const _exhaustive: never = tier
+      return _exhaustive
+    }
+  }
+}
 
 type SettingsForm = Pick<ConfigForm<EnhancerSettings>, 'getSnapshot' | 'subscribe' | 'set'>
 
@@ -74,7 +136,9 @@ function pillLabel(
   selection: AuxiliaryModelSettings,
   groups: readonly ModelProviderGroup[],
   followLabel: string,
+  autoLabel: string,
 ): string {
+  if (isAutoModel(selection)) return autoLabel
   if (isFollowSessionModel(selection)) return followLabel
   const model = findModel(groups, selection.provider, selection.model)
   const name = model?.name ?? selection.model
@@ -86,9 +150,15 @@ function pillLabel(
 function catalogMenuItems(
   groups: readonly ModelProviderGroup[],
   followLabel: string,
+  autoLabel: string,
   defaultEffortLabel: string,
+  includeSessionOptions: boolean,
 ): MenuEntry[] {
-  const items: MenuEntry[] = [{ id: encodeFollowSelection(), label: followLabel }]
+  const items: MenuEntry[] = []
+  if (includeSessionOptions) {
+    items.push({ id: encodeFollowSelection(), label: followLabel })
+    items.push({ id: encodeAutoSelection(), label: autoLabel })
+  }
   for (const group of groups) {
     items.push({ type: 'separator', id: `sep:${group.id}` })
     items.push({ type: 'label', id: `label:${group.id}`, text: group.name })
@@ -120,6 +190,7 @@ function selectedMenuId(
   selection: AuxiliaryModelSettings,
   groups: readonly ModelProviderGroup[],
 ): string {
+  if (isAutoModel(selection)) return encodeAutoSelection()
   if (isFollowSessionModel(selection)) return encodeFollowSelection()
   const model = findModel(groups, selection.provider, selection.model)
   if ((model?.reasoning?.efforts.length ?? 0) > 0) {
@@ -129,34 +200,43 @@ function selectedMenuId(
 }
 
 interface ModelPillProps {
-  readonly feature: AuxiliaryFeature
   readonly selection: AuxiliaryModelSettings
   readonly groups: readonly ModelProviderGroup[]
   readonly catalogStatus: 'idle' | 'loading' | 'ready' | 'error'
   readonly disabled: boolean
   readonly t: TranslateNS<'agent-enhancer'>
+  readonly ariaLabel: string
+  readonly includeSessionOptions: boolean
   readonly onOpen: () => void
-  readonly onSelect: (feature: AuxiliaryFeature, id: string) => void
+  readonly onSelect: (id: string) => void
 }
 
 function ModelPill({
-  feature,
   selection,
   groups,
   catalogStatus,
   disabled,
   t,
+  ariaLabel,
+  includeSessionOptions,
   onOpen,
   onSelect,
 }: ModelPillProps) {
   const [open, setOpen] = useState(false)
   const followLabel = t('modelFollowSession')
+  const autoLabel = t('modelAuto')
   const label = catalogStatus === 'loading'
     ? t('modelCatalogLoading')
     : catalogStatus === 'error'
       ? t('modelCatalogError')
-      : pillLabel(selection, groups, followLabel)
-  const items = catalogMenuItems(groups, followLabel, t('reasoningDefault'))
+      : pillLabel(selection, groups, followLabel, autoLabel)
+  const items = catalogMenuItems(
+    groups,
+    followLabel,
+    autoLabel,
+    t('reasoningDefault'),
+    includeSessionOptions,
+  )
   const active = !isFollowSessionModel(selection)
 
   return <Menu
@@ -168,16 +248,20 @@ function ModelPill({
     compact
     dense
     selectedId={selectedMenuId(selection, groups)}
-    items={catalogStatus === 'ready' ? items : [{ id: encodeFollowSelection(), label: followLabel }]}
+    items={catalogStatus === 'ready'
+      ? items
+      : includeSessionOptions
+        ? [{ id: encodeFollowSelection(), label: followLabel }, { id: encodeAutoSelection(), label: autoLabel }]
+        : [{ id: encodeFollowSelection(), label: followLabel }]}
     onSelect={id => {
       setOpen(false)
-      onSelect(feature, id)
+      onSelect(id)
     }}
     anchor={<Pill
       active={active || open}
       disabled={disabled}
       className={styles.modelPill}
-      aria-label={`${t(feature === 'compact' ? 'contextInspectCompact' : LABELS[feature])} ${t('modelLabel')}`}
+      aria-label={ariaLabel}
       title={label}
       onClick={() => {
         if (disabled) return
@@ -308,12 +392,46 @@ function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
       ])
       return
     }
+    if (decoded.kind === 'auto') {
+      await saveFields([
+        [`${feature}Provider`, AUTO_PROVIDER],
+        [`${feature}Model`, AUTO_MODEL],
+        [`${feature}ReasoningEffort`, ''],
+      ])
+      return
+    }
     await saveFields([
       [`${feature}Provider`, decoded.provider],
       [`${feature}Model`, decoded.model],
       [`${feature}ReasoningEffort`, decoded.reasoningEffort],
     ])
   }
+
+  const onAutoTierMenuSelect = async (tier: AutoRouteTier, id: string) => {
+    const decoded = decodeModelSelection(id)
+    if (decoded === null || decoded.kind !== 'model') return
+    const prefix = autoTierFieldPrefix(tier)
+    await saveFields([
+      [`${prefix}Provider`, decoded.provider],
+      [`${prefix}Model`, decoded.model],
+      [`${prefix}ReasoningEffort`, decoded.reasoningEffort],
+    ])
+  }
+
+  const onClassifierToggle = async (checked: boolean) => {
+    setSaving('autoClassifierEnabled')
+    setError(false)
+    try {
+      const accepted = await form.set('autoClassifierEnabled', checked)
+      if (!accepted) setError(true)
+    } catch {
+      setError(true)
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const autoTiers: readonly AutoRouteTier[] = ['instant', 'thinking', 'pro', 'classifier']
 
   const busy = !writable || saving !== null
   const groups = catalog?.groups ?? []
@@ -334,14 +452,15 @@ function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
         <div className={styles.settingControls}>
           {modelFeature !== null && selection !== null && (
             <ModelPill
-              feature={modelFeature}
               selection={selection}
               groups={groups}
               catalogStatus={catalogStatus}
               disabled={busy || (module === 'contextInspect' && !settings.contextInspectEnabled)}
               t={t}
+              ariaLabel={`${t(modelFeature === 'compact' ? 'contextInspectCompact' : LABELS[modelFeature])} ${t('modelLabel')}`}
+              includeSessionOptions
               onOpen={refreshCatalog}
-              onSelect={(feature, id) => { void onModelMenuSelect(feature, id) }}
+              onSelect={id => { void onModelMenuSelect(modelFeature, id) }}
             />
           )}
           <Switch
@@ -353,6 +472,46 @@ function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
         </div>
       </div>
     })}
+
+    <div className={styles.settingRow}>
+      <div className={styles.settingText}>
+        <h3>{t('autoClassifier')}</h3>
+        <p className={styles.settingDescription}>{t('autoClassifierDescription')}</p>
+      </div>
+      <div className={styles.settingControls}>
+        <Switch
+          label={t('autoClassifier')}
+          checked={settings.autoClassifierEnabled}
+          disabled={busy}
+          onChange={checked => { void onClassifierToggle(checked) }}
+        />
+      </div>
+    </div>
+
+    <div aria-label={t('autoMappingTitle')} className={styles.autoMappingSection}>
+      <h3>{t('autoMappingTitle')}</h3>
+      {autoTiers.map(tier => {
+        const tierSelection = autoTierSelection(settings, tier)
+        return <div key={tier} className={styles.settingRow}>
+          <div className={styles.settingText}>
+            <h3>{t(AUTO_TIER_LABELS[tier])}</h3>
+          </div>
+          <div className={styles.settingControls}>
+            <ModelPill
+              selection={tierSelection}
+              groups={groups}
+              catalogStatus={catalogStatus}
+              disabled={busy}
+              t={t}
+              ariaLabel={`${t(AUTO_TIER_LABELS[tier])} ${t('modelLabel')}`}
+              includeSessionOptions={false}
+              onOpen={refreshCatalog}
+              onSelect={id => { void onAutoTierMenuSelect(tier, id) }}
+            />
+          </div>
+        </div>
+      })}
+    </div>
 
     {error && <p role="status">{t('settingsError')}</p>}
     {catalogStatus === 'error' && catalogError !== null && (

@@ -47,7 +47,15 @@ const translations: Record<string, string> = {
   modelCatalogError: 'Unavailable',
   modelLabel: 'Model',
   modelFollowSession: 'Follow session',
+  modelAuto: 'Auto',
   reasoningDefault: 'Default',
+  autoClassifier: 'Smart routing classifier',
+  autoClassifierDescription: 'When Auto is selected, classify each request into instant, thinking, or pro tiers',
+  autoMappingTitle: 'Auto tier model map',
+  autoTier_instant: 'Instant',
+  autoTier_thinking: 'Thinking',
+  autoTier_pro: 'Pro',
+  autoTier_classifier: 'Classifier',
   rollback: 'Conversation and file rollback',
   rollbackDescription: 'Preview and restore conversation and tracked files at eligible turn boundaries',
   contextInspect: 'Context details',
@@ -112,23 +120,14 @@ function settingsHarness(
 ) {
   let snapshot: ConfigFormSnapshot<EnhancerSettings> = {
     status: 'ready',
-    value: {
+    value: resolveSettings({
       historyEnabled: true,
       optimizeEnabled: true,
       predictEnabled: true,
       rollbackEnabled: true,
       contextInspectEnabled: true,
-      optimizeProvider: '',
-      optimizeModel: '',
-      optimizeReasoningEffort: '',
-      predictProvider: '',
-      predictModel: '',
-      predictReasoningEffort: '',
-      compactProvider: '',
-      compactModel: '',
-      compactReasoningEffort: '',
       ...initial,
-    },
+    }),
     base: undefined,
     user: undefined,
     revision: 0,
@@ -911,9 +910,10 @@ describe('PluginSettings', () => {
     expect(screen.getByText('Optimize the draft or selection, with one-click undo')).toBeTruthy()
     expect(screen.getByText('One suggestion after a reply; Tab to accept')).toBeTruthy()
     expect(screen.getByText('Click System / Tools / Messages on the official context meter to open details in the right sidebar')).toBeTruthy()
-    expect(screen.getAllByRole('switch')).toHaveLength(5)
+    expect(screen.getAllByRole('switch')).toHaveLength(6)
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-label'))).toEqual([
       'Prompt history', 'Optimize prompt', 'Next-prompt prediction', 'Conversation and file rollback', 'Context details',
+      'Smart routing classifier',
     ])
     expect(screen.getByRole('switch', { name: 'Conversation and file rollback' }).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByRole('switch', { name: 'Context details' }).getAttribute('aria-checked')).toBe('true')
@@ -1003,6 +1003,37 @@ describe('PluginSettings', () => {
     })
     expect(screen.getByRole('button', { name: 'Optimize prompt Model' }).textContent).toContain('DeepSeek Chat · High')
   })
+
+  it('offers Auto in auxiliary model menus and persists the sentinel provider/model', async () => {
+    const set = vi.fn(async () => true)
+    const loadCatalog = vi.fn(async () => ({
+      default: { provider: 'deepseek', model: 'deepseek-chat' },
+      routableProviders: ['deepseek'],
+      groups: [{
+        id: 'deepseek',
+        name: 'DeepSeek',
+        models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }],
+      }],
+      failures: [],
+    }))
+    const h = settingsHarness(set, {}, loadCatalog)
+    const optimizePill = await screen.findByRole('button', { name: 'Optimize prompt Model' })
+    fireEvent.click(optimizePill)
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Auto' }))
+    await waitFor(() => {
+      expect(set.mock.calls).toEqual(expect.arrayContaining([
+        ['optimizeProvider', 'agent-enhancer'],
+        ['optimizeModel', 'auto'],
+        ['optimizeReasoningEffort', ''],
+      ]))
+    })
+    h.accept({
+      optimizeProvider: 'agent-enhancer',
+      optimizeModel: 'auto',
+      optimizeReasoningEffort: '',
+    })
+    expect(screen.getByRole('button', { name: 'Optimize prompt Model' }).textContent).toContain('Auto')
+  })
 })
 
 describe('CoexistenceHints', () => {
@@ -1025,7 +1056,7 @@ describe('CoexistenceHints', () => {
     expect(store.getSnapshot()).toEqual(['optimize', 'predict'])
     expect(set).not.toHaveBeenCalled()
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-checked'))).toEqual([
-      'true', 'true', 'true', 'true', 'true',
+      'true', 'true', 'true', 'true', 'true', 'false',
     ])
 
     const reopened = new OverlapHintStore(localStorage, 'test-release')

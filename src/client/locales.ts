@@ -8,7 +8,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'settingsTitle' | 'settingsSubtitle' | 'history' | 'historyDescription' | 'optimizeDescription' |
       'predict' | 'predictDescription' | 'privacyTitle' | 'privacy' | 'coexistence' | 'settingsError' |
       'modelCatalogLoading' | 'modelCatalogError' |
-      'modelLabel' | 'modelFollowSession' | 'reasoningDefault' |
+      'modelLabel' | 'modelFollowSession' | 'modelAuto' | 'reasoningDefault' |
+      'autoClassifier' | 'autoClassifierDescription' | 'autoMappingTitle' |
+      'autoTier_instant' | 'autoTier_thinking' | 'autoTier_pro' | 'autoTier_classifier' |
       'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'dismissHint' |
       'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackUndoAction' |
       'rollbackUndoCommandDescription' |
@@ -73,7 +75,15 @@ export const agentLocales = {
     modelCatalogError: '模型不可用',
     modelLabel: '模型',
     modelFollowSession: '跟随会话',
+    modelAuto: 'Auto',
     reasoningDefault: '默认',
+    autoClassifier: '智能分类路由',
+    autoClassifierDescription: '为 Auto 模式按任务复杂度选择 instant / thinking / pro 档位（分类请求会额外调用分类模型）',
+    autoMappingTitle: 'Auto 档位模型映射',
+    autoTier_instant: '即时',
+    autoTier_thinking: '思考',
+    autoTier_pro: '专业',
+    autoTier_classifier: '分类器',
     privacyTitle: '数据与隐私',
     privacy: '优化、预测与上下文压缩会把相关内容发送给所选模型提供商（默认跟随当前会话模型）；历史不请求模型；不采集提示词内容或采纳率遥测。',
     coexistence: '检测到官方或第三方同类能力时仅提示，不会自动停用。',
@@ -208,7 +218,15 @@ export const agentLocales = {
     modelCatalogError: 'Unavailable',
     modelLabel: 'Model',
     modelFollowSession: 'Follow session',
+    modelAuto: 'Auto',
     reasoningDefault: 'Default',
+    autoClassifier: 'Smart routing classifier',
+    autoClassifierDescription: 'When Auto is selected, classify each request into instant, thinking, or pro tiers (classification may call the classifier model)',
+    autoMappingTitle: 'Auto tier model map',
+    autoTier_instant: 'Instant',
+    autoTier_thinking: 'Thinking',
+    autoTier_pro: 'Pro',
+    autoTier_classifier: 'Classifier',
     privacyTitle: 'Data and privacy',
     privacy: 'Optimize, predict, and context compact send related content to the selected model provider (defaults to the current session model). History never requests a model. No prompt content or acceptance-rate telemetry is collected.',
     coexistence: 'Similar official or third-party features are only reported; they are never disabled automatically.',

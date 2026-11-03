@@ -22,6 +22,7 @@ import { act, fireEvent } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { expect, it, vi } from 'vitest'
 import type { EnhancerSettings } from '../src/config.ts'
+import { DEFAULT_SETTINGS, resolveSettings } from '../src/config.ts'
 
 function rollbackUserNodeEntries(ctx: Context) {
   return ctx.slots.entries('conversation.chat.node').filter(entry => entry.options.key === 'user'
@@ -172,22 +173,10 @@ function fixtureSessions(
 }
 
 function configForm() {
-  let value: EnhancerSettings = {
-    historyEnabled: true,
-    optimizeEnabled: true,
-    predictEnabled: true,
+  let value: EnhancerSettings = resolveSettings({
+    ...DEFAULT_SETTINGS,
     rollbackEnabled: false,
-    contextInspectEnabled: true,
-    optimizeProvider: '',
-    optimizeModel: '',
-    optimizeReasoningEffort: '',
-    predictProvider: '',
-    predictModel: '',
-    predictReasoningEffort: '',
-      compactProvider: '',
-      compactModel: '',
-      compactReasoningEffort: '',
-  }
+  })
   const listeners = new Set<() => void>()
   const form: ConfigForm<EnhancerSettings> = {
     getSnapshot: () => ({
