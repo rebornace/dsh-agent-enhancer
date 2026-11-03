@@ -3,7 +3,7 @@ import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ModelCatalog, ModelProviderGroup } from '@deepseek-ai/dsh-api-session-controller/types'
 import { Menu, Pill, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
-import { Component, useEffect, useState, useSyncExternalStore } from 'react'
+import { Component, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import {
   MODULES,
@@ -13,6 +13,7 @@ import {
   resolveSettings,
 } from '../../config.ts'
 import type { AuxiliaryFeature, AuxiliaryModelSettings, EnhancerSettings, ModuleName } from '../../config.ts'
+import type { ApplyUpdateResult, UpdateCheckResult } from '../../host/update/types.ts'
 import { AUTO_MODEL, AUTO_PROVIDER } from '../../host/auto-route/sentinel.ts'
 import styles from '../styles.module.css'
 import {
@@ -96,6 +97,213 @@ export interface PluginSettingsProps {
   readonly form: SettingsForm
   readonly t: TranslateNS<'agent-enhancer'>
   readonly loadCatalog?: () => Promise<ModelCatalog>
+  readonly checkUpdate?: () => Promise<UpdateCheckResult>
+  readonly applyUpdate?: () => Promise<ApplyUpdateResult>
+}
+
+type UpdateUiState =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'checking' }
+  | { readonly kind: 'upToDate'; readonly result: UpdateCheckResult }
+  | { readonly kind: 'available'; readonly result: UpdateCheckResult }
+  | { readonly kind: 'applying'; readonly result: UpdateCheckResult }
+  | { readonly kind: 'success'; readonly result: UpdateCheckResult }
+  | {
+    readonly kind: 'blocked'
+    readonly result: UpdateCheckResult
+    readonly reason: 'link' | 'manual'
+  }
+  | { readonly kind: 'checkError' }
+  | {
+    readonly kind: 'applyError'
+    readonly result: UpdateCheckResult
+    readonly command: string
+  }
+
+function resolveBlockedReason(result: UpdateCheckResult): 'link' | 'manual' {
+  return result.installKind === 'link' ? 'link' : 'manual'
+}
+
+function resolveCheckState(result: UpdateCheckResult): UpdateUiState {
+  if (!result.updateAvailable) return { kind: 'upToDate', result }
+  if (result.canAutoApply) return { kind: 'available', result }
+  return { kind: 'blocked', result, reason: resolveBlockedReason(result) }
+}
+
+function resolveApplyState(
+  result: UpdateCheckResult,
+  apply: ApplyUpdateResult,
+): UpdateUiState {
+  if (apply.ok) {
+    if (apply.message === 'restart') return { kind: 'success', result }
+    if (apply.message === 'link') return { kind: 'blocked', result, reason: 'link' }
+    if (apply.message === 'manual') return { kind: 'blocked', result, reason: 'manual' }
+    if (apply.message === 'none') return resolveCheckState(result)
+    if (apply.message === 'failed') {
+      return {
+        kind: 'applyError',
+        result,
+        command: apply.command ?? result.command,
+      }
+    }
+  }
+  return {
+    kind: 'applyError',
+    result,
+    command: apply.command ?? result.command,
+  }
+}
+
+interface SettingsUpdateSectionProps {
+  readonly checkUpdate: () => Promise<UpdateCheckResult>
+  readonly applyUpdate?: () => Promise<ApplyUpdateResult>
+  readonly t: TranslateNS<'agent-enhancer'>
+}
+
+function SettingsUpdateSection({ checkUpdate, applyUpdate, t }: SettingsUpdateSectionProps) {
+  const [state, setState] = useState<UpdateUiState>({ kind: 'idle' })
+  const [copied, setCopied] = useState(false)
+
+  const runCheck = useCallback(async () => {
+    setState({ kind: 'checking' })
+    try {
+      const result = await checkUpdate()
+      setState(resolveCheckState(result))
+    } catch {
+      setState({ kind: 'checkError' })
+    }
+  }, [checkUpdate])
+
+  useEffect(() => {
+    void runCheck()
+  }, [runCheck])
+
+  const onApply = async () => {
+    if (applyUpdate === undefined || state.kind !== 'available') return
+    const result = state.result
+    setState({ kind: 'applying', result })
+    try {
+      const apply = await applyUpdate()
+      setState(resolveApplyState(result, apply))
+    } catch {
+      setState({ kind: 'applyError', result, command: result.command })
+    }
+  }
+
+  const onCopy = async (command: string) => {
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopied(true)
+      window.setTimeout(() => { setCopied(false) }, 2000)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  const checking = state.kind === 'checking'
+  const applying = state.kind === 'applying'
+  const busy = checking || applying
+  const result = state.kind === 'idle' || state.kind === 'checkError'
+    ? null
+    : 'result' in state
+      ? state.result
+      : null
+
+  let status: ReactNode = null
+  switch (state.kind) {
+    case 'idle':
+      break
+    case 'checking':
+      status = <p className={styles.settingsUpdateStatus} role="status">{t('updateChecking')}</p>
+      break
+    case 'upToDate':
+      status = <p className={styles.settingsUpdateStatus} role="status">{t('updateLatest')}</p>
+      break
+    case 'available':
+      status = <p className={styles.settingsUpdateStatus} role="status">
+        {t('updateAvailable', { version: state.result.latest ?? state.result.current })}
+      </p>
+      break
+    case 'applying':
+      status = <p className={styles.settingsUpdateStatus} role="status">{t('updateApplying')}</p>
+      break
+    case 'success':
+      status = <p className={styles.settingsUpdateStatus} role="status">{t('updateRestart')}</p>
+      break
+    case 'blocked':
+      status = <p className={styles.settingsUpdateStatus} role="status">
+        {state.reason === 'link' ? t('updateLinkBlocked') : t('updateManual')}
+      </p>
+      break
+    case 'checkError':
+      status = <p className={styles.settingsUpdateStatus} role="status">{t('updateCheckFailed')}</p>
+      break
+    case 'applyError':
+      status = <p className={styles.settingsUpdateStatus} role="status">{t('updateFailed')}</p>
+      break
+    default: {
+      const _exhaustive: never = state
+      return _exhaustive
+    }
+  }
+
+  return <div className={styles.settingsUpdate} aria-label={t('updateTitle')}>
+    <div className={styles.settingRow}>
+      <div className={styles.settingText}>
+        <h3>{t('updateTitle')}</h3>
+        {result !== null && (
+          <p className={styles.settingDescription}>
+            {t('updateCurrent', { version: result.current })}
+          </p>
+        )}
+      </div>
+      <div className={styles.settingControls}>
+        {state.kind === 'available' && applyUpdate !== undefined && (
+          <button
+            type="button"
+            className={styles.settingsConfigure}
+            disabled={busy}
+            onClick={() => { void onApply() }}
+          >
+            {t('updateApply', { version: state.result.latest ?? state.result.current })}
+          </button>
+        )}
+        <button
+          type="button"
+          className={styles.settingsConfigure}
+          disabled={busy}
+          onClick={() => { void runCheck() }}
+        >
+          {checking ? t('updateChecking') : t('updateCheck')}
+        </button>
+      </div>
+    </div>
+    {status}
+    {state.kind === 'blocked' && (
+      <>
+        <pre className={styles.updateCommand}>{state.result.command}</pre>
+        <button
+          type="button"
+          className={styles.settingsConfigure}
+          onClick={() => { void onCopy(state.result.command) }}
+        >
+          {copied ? t('updateCopied') : t('updateCopy')}
+        </button>
+      </>
+    )}
+    {state.kind === 'applyError' && (
+      <>
+        <pre className={styles.updateCommand}>{state.command}</pre>
+        <button
+          type="button"
+          className={styles.settingsConfigure}
+          onClick={() => { void onCopy(state.command) }}
+        >
+          {copied ? t('updateCopied') : t('updateCopy')}
+        </button>
+      </>
+    )}
+  </div>
 }
 
 const LABELS = {
@@ -316,7 +524,7 @@ function featureDetailTitle(
   }
 }
 
-function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
+function PluginSettingsBody({ form, t, loadCatalog, checkUpdate, applyUpdate }: PluginSettingsProps) {
   const formState = useSyncExternalStore(
     listener => form.subscribe(listener),
     () => form.getSnapshot(),
@@ -630,6 +838,10 @@ function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
         </button>
       </div>
     </div>
+
+    {checkUpdate !== undefined && (
+      <SettingsUpdateSection checkUpdate={checkUpdate} applyUpdate={applyUpdate} t={t} />
+    )}
 
     {statusBlock}
     <aside aria-label={t('privacyTitle')} className={styles.privacy}>

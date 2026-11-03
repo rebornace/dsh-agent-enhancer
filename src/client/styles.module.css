@@ -116,6 +116,28 @@
   border-radius: var(--dsw-radius-sm);
 }
 
+.settingsUpdate {
+  display: grid;
+  gap: 8px;
+}
+
+.settingsUpdateStatus {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.updateCommand {
+  margin: 0;
+  padding: 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-sm-12, var(--dsw-font-sm-14));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
 .autoMappingSection {
   display: grid;
   gap: 12px;

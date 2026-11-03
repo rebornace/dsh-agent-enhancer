@@ -75,6 +75,41 @@ const translations: Record<string, string> = {
   overlapOptimize: 'Another prompt-optimization feature is enabled. Agent Enhance optimization remains enabled.',
   overlapPredict: 'Another reply-suggestion feature is enabled. Agent Enhance prediction remains enabled.',
   dismissHint: 'Dismiss coexistence notice',
+  updateTitle: 'Plugin update',
+  updateCurrent: 'Current version v{version}',
+  updateCheck: 'Check for updates',
+  updateChecking: 'Checking…',
+  updateLatest: "You're up to date",
+  updateAvailable: 'Update available: v{version}',
+  updateApply: 'Update to v{version}',
+  updateApplying: 'Updating…',
+  updateRestart: 'Updated. Fully quit and restart Desktop.',
+  updateLinkBlocked: 'This install is a linked dev folder. Run pnpm build locally; do not overwrite via npm.',
+  updateManual: 'Cannot update automatically. Quit Desktop, then run:',
+  updateFailed: 'Update failed. Quit Desktop, then run:',
+  updateCheckFailed: 'Could not check for updates. Try again later.',
+  updateCopy: 'Copy command',
+  updateCopied: 'Copied',
+}
+
+function formatTranslation(template: string, params?: Record<string, string>): string {
+  if (params === undefined) return template
+  return template.replace(/\{(\w+)\}/g, (_, key: string) => params[key] ?? `{${key}}`)
+}
+
+const defaultCheckUpdate = vi.fn(async () => ({
+  current: '0.2.0',
+  latest: '0.2.0',
+  updateAvailable: false,
+  installKind: 'npm' as const,
+  canAutoApply: true,
+  command: 'dsh plugin --profile desktop add dsh-agent-enhancer@0.2.0',
+}))
+
+interface SettingsHarnessExtras {
+  readonly checkUpdate?: typeof defaultCheckUpdate
+  readonly applyUpdate?: ReturnType<typeof vi.fn>
+  readonly translations?: Record<string, string>
 }
 
 function deferred<T>() {
@@ -123,6 +158,7 @@ function settingsHarness(
   set: ConfigForm<EnhancerSettings>['set'] = async () => true,
   initial: Partial<EnhancerSettings> = {},
   loadCatalog?: () => Promise<ModelCatalog>,
+  extras?: SettingsHarnessExtras,
 ) {
   let snapshot: ConfigFormSnapshot<EnhancerSettings> = {
     status: 'ready',
@@ -150,8 +186,21 @@ function settingsHarness(
     unset: async () => true,
     mutate: async () => true,
   }
-  const t = (key: string) => translations[key] ?? key
-  const view = render(<PluginSettings form={form} t={t} loadCatalog={loadCatalog} />)
+  const t = (key: string, params?: Record<string, string>) => {
+    const template = { ...translations, ...extras?.translations }[key] ?? key
+    return formatTranslation(template, params)
+  }
+  const checkUpdate = extras?.checkUpdate
+  const applyUpdate = extras?.applyUpdate
+  const view = render(
+    <PluginSettings
+      form={form}
+      t={t}
+      loadCatalog={loadCatalog}
+      checkUpdate={checkUpdate}
+      applyUpdate={applyUpdate}
+    />,
+  )
   return {
     form,
     view,
@@ -1090,6 +1139,37 @@ describe('PluginSettings', () => {
       autoInstantReasoningEffort: '',
     })
     expect(screen.getByRole('button', { name: 'Instant Model' }).textContent).toContain('Not set')
+  })
+
+  it('auto-checks on mount and shows update action when newer', async () => {
+    const checkUpdate = vi.fn(async () => ({
+      current: '0.2.0',
+      latest: '0.2.1',
+      updateAvailable: true,
+      installKind: 'npm' as const,
+      canAutoApply: true,
+      command: 'dsh plugin --profile desktop add dsh-agent-enhancer@0.2.1',
+    }))
+    const applyUpdate = vi.fn(async () => ({ ok: true, message: 'restart' as const }))
+    settingsHarness(undefined, {}, undefined, { checkUpdate, applyUpdate })
+    expect(await screen.findByText(/Update available: v0\.2\.1/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Update to v0\.2\.1/ }))
+    await waitFor(() => { expect(applyUpdate).toHaveBeenCalled() })
+    expect(await screen.findByText(/Fully quit and restart Desktop/)).toBeTruthy()
+  })
+
+  it('shows copyable command when auto apply is blocked', async () => {
+    const checkUpdate = vi.fn(async () => ({
+      current: '0.2.0',
+      latest: '0.2.1',
+      updateAvailable: true,
+      installKind: 'link' as const,
+      canAutoApply: false,
+      command: 'dsh plugin --profile desktop add dsh-agent-enhancer@0.2.1',
+    }))
+    settingsHarness(undefined, {}, undefined, { checkUpdate, applyUpdate: vi.fn() })
+    expect(await screen.findByText(/linked dev folder/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Copy command' })).toBeTruthy()
   })
 })
 

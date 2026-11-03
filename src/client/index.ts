@@ -28,7 +28,9 @@ import { CONTEXT_INSPECT_TAB_ID, CONTEXT_INSPECT_TAB_KIND } from './context/tab.
 import type { ContextInspectCategory } from '../host/context-inspect.ts'
 import { agentLocales } from './locales.ts'
 import {
+  agentEnhancerApplyUpdate,
   agentEnhancerCall,
+  agentEnhancerCheckUpdate,
   agentEnhancerCompactContext,
   agentEnhancerInspectContext,
   clientRemoteInfo,
@@ -79,8 +81,16 @@ export function apply(ctx: Context): void {
   const loadCatalog = () => Promise.resolve().then(
     () => loadDesktopModelCatalog(catalogLoaders),
   )
+  const checkUpdate = () => agentEnhancerCheckUpdate.invoke(ctx.remote)
+  const applyUpdate = () => agentEnhancerApplyUpdate.invoke(ctx.remote)
   const SettingsTab = (props: { readonly form: typeof form; readonly t: typeof t }) => (
-    createElement(PluginSettings, { form: props.form, t: props.t, loadCatalog })
+    createElement(PluginSettings, {
+      form: props.form,
+      t: props.t,
+      loadCatalog,
+      checkUpdate,
+      applyUpdate,
+    })
   )
   ctx.effect(() => ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
     name: 'settings.plugins.tab', id: 'agent-enhancer', order: 120,

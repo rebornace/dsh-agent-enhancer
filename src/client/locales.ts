@@ -10,6 +10,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'modelCatalogLoading' | 'modelCatalogError' |
       'modelLabel' | 'modelFollowSession' | 'modelAuto' | 'modelUnconfigured' | 'reasoningDefault' |
       'settingsBack' | 'settingsConfigure' |
+      'updateTitle' | 'updateCurrent' | 'updateCheck' | 'updateChecking' | 'updateLatest' |
+      'updateAvailable' | 'updateApply' | 'updateApplying' | 'updateRestart' | 'updateLinkBlocked' |
+      'updateManual' | 'updateFailed' | 'updateCheckFailed' | 'updateCopy' | 'updateCopied' |
       'autoRouting' | 'autoRoutingDescription' |
       'autoClassifier' | 'autoClassifierDescription' | 'autoMappingTitle' |
       'autoTier_instant' | 'autoTier_thinking' | 'autoTier_pro' | 'autoTier_classifier' |
@@ -82,6 +85,21 @@ export const agentLocales = {
     reasoningDefault: '默认',
     settingsBack: '返回',
     settingsConfigure: '配置',
+    updateTitle: '插件更新',
+    updateCurrent: '当前版本 v{version}',
+    updateCheck: '检查更新',
+    updateChecking: '正在检查…',
+    updateLatest: '已是最新版本',
+    updateAvailable: '发现 v{version}',
+    updateApply: '更新到 v{version}',
+    updateApplying: '正在更新…',
+    updateRestart: '已更新，请完全退出并重启 Desktop',
+    updateLinkBlocked: '当前为开发目录链接，请在本地执行 pnpm build，勿用 npm 覆盖。',
+    updateManual: '无法自动更新，请退出 Desktop 后运行：',
+    updateFailed: '更新失败。请退出 Desktop 后运行：',
+    updateCheckFailed: '检查更新失败，请稍后重试。',
+    updateCopy: '复制命令',
+    updateCopied: '已复制',
     autoRouting: 'Auto 路由',
     autoRoutingDescription: '会话与辅助功能可选 Auto；在此配置档位映射，以及可选的小模型分类',
     autoClassifier: '用小模型协助 Auto 分类',
@@ -230,6 +248,21 @@ export const agentLocales = {
     reasoningDefault: 'Default',
     settingsBack: 'Back',
     settingsConfigure: 'Configure',
+    updateTitle: 'Plugin update',
+    updateCurrent: 'Current version v{version}',
+    updateCheck: 'Check for updates',
+    updateChecking: 'Checking…',
+    updateLatest: "You're up to date",
+    updateAvailable: 'Update available: v{version}',
+    updateApply: 'Update to v{version}',
+    updateApplying: 'Updating…',
+    updateRestart: 'Updated. Fully quit and restart Desktop.',
+    updateLinkBlocked: 'This install is a linked dev folder. Run pnpm build locally; do not overwrite via npm.',
+    updateManual: 'Cannot update automatically. Quit Desktop, then run:',
+    updateFailed: 'Update failed. Quit Desktop, then run:',
+    updateCheckFailed: 'Could not check for updates. Try again later.',
+    updateCopy: 'Copy command',
+    updateCopied: 'Copied',
     autoRouting: 'Auto routing',
     autoRoutingDescription: 'Sessions and helpers can pick Auto; configure tier mappings and an optional small-model classifier here',
     autoClassifier: 'Use a small model to help Auto classify',
