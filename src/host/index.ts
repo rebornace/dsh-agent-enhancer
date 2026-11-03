@@ -54,6 +54,20 @@ export const Config = z.object({
   compactProvider: z.string().default('').volatile(),
   compactModel: z.string().default('').volatile(),
   compactReasoningEffort: z.string().default('').volatile(),
+
+  autoClassifierEnabled: z.boolean().default(false).volatile(),
+  autoInstantProvider: z.string().default('').volatile(),
+  autoInstantModel: z.string().default('').volatile(),
+  autoInstantReasoningEffort: z.string().default('').volatile(),
+  autoThinkingProvider: z.string().default('').volatile(),
+  autoThinkingModel: z.string().default('').volatile(),
+  autoThinkingReasoningEffort: z.string().default('').volatile(),
+  autoProProvider: z.string().default('').volatile(),
+  autoProModel: z.string().default('').volatile(),
+  autoProReasoningEffort: z.string().default('').volatile(),
+  autoClassifierProvider: z.string().default('').volatile(),
+  autoClassifierModel: z.string().default('').volatile(),
+  autoClassifierReasoningEffort: z.string().default('').volatile(),
 })
 export type Config = ReturnType<typeof Config>
 

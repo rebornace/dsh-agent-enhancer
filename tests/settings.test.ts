@@ -3,9 +3,12 @@ import {
   DEFAULT_SETTINGS,
   MODULES,
   auxiliaryModelOf,
+  autoRouteMapOf,
+  isAutoModel,
   isFollowSessionModel,
   resolveSettings,
 } from '../src/config.ts'
+import { AUTO_MODEL, AUTO_PROVIDER } from '../src/host/auto-route/sentinel.ts'
 import { KNOWN_OVERLAPS, overlapHints } from '../src/client/dsh/plugin-hints.ts'
 import {
   decodeModelSelection,
@@ -20,6 +23,7 @@ import {
 describe('composer settings', () => {
   it('enables history, optimize, predict, and rollback by default', () => {
     expect(MODULES).toEqual(['history', 'optimize', 'predict', 'rollback', 'contextInspect'])
+    expect(DEFAULT_SETTINGS.autoClassifierEnabled).toBe(false)
     expect(DEFAULT_SETTINGS).toEqual({
       historyEnabled: true,
       optimizeEnabled: true,
@@ -35,6 +39,19 @@ describe('composer settings', () => {
       compactProvider: '',
       compactModel: '',
       compactReasoningEffort: '',
+      autoClassifierEnabled: false,
+      autoInstantProvider: '',
+      autoInstantModel: '',
+      autoInstantReasoningEffort: '',
+      autoThinkingProvider: '',
+      autoThinkingModel: '',
+      autoThinkingReasoningEffort: '',
+      autoProProvider: '',
+      autoProModel: '',
+      autoProReasoningEffort: '',
+      autoClassifierProvider: '',
+      autoClassifierModel: '',
+      autoClassifierReasoningEffort: '',
     })
     expect(resolveSettings(undefined)).toEqual(DEFAULT_SETTINGS)
   })
@@ -60,6 +77,19 @@ describe('composer settings', () => {
       compactProvider: '',
       compactModel: '',
       compactReasoningEffort: '',
+      autoClassifierEnabled: false,
+      autoInstantProvider: '',
+      autoInstantModel: '',
+      autoInstantReasoningEffort: '',
+      autoThinkingProvider: '',
+      autoThinkingModel: '',
+      autoThinkingReasoningEffort: '',
+      autoProProvider: '',
+      autoProModel: '',
+      autoProReasoningEffort: '',
+      autoClassifierProvider: '',
+      autoClassifierModel: '',
+      autoClassifierReasoningEffort: '',
     })
   })
 
@@ -80,6 +110,19 @@ describe('composer settings', () => {
       compactProvider: '',
       compactModel: '',
       compactReasoningEffort: '',
+      autoClassifierEnabled: false,
+      autoInstantProvider: '',
+      autoInstantModel: '',
+      autoInstantReasoningEffort: '',
+      autoThinkingProvider: '',
+      autoThinkingModel: '',
+      autoThinkingReasoningEffort: '',
+      autoProProvider: '',
+      autoProModel: '',
+      autoProReasoningEffort: '',
+      autoClassifierProvider: '',
+      autoClassifierModel: '',
+      autoClassifierReasoningEffort: '',
     })
     for (const forbidden of ['completion', 'template', 'strength', 'candidate']) {
       expect(serialized).not.toContain(forbidden)
@@ -101,6 +144,29 @@ describe('composer settings', () => {
       reasoningEffort: 'low',
     })
     expect(isFollowSessionModel(auxiliaryModelOf(configured, 'predict'))).toBe(true)
+  })
+
+  it('detects Auto sentinel separately from follow-session empty selection', () => {
+    expect(isAutoModel({ provider: AUTO_PROVIDER, model: AUTO_MODEL })).toBe(true)
+    expect(isAutoModel({ provider: 'deepseek', model: 'deepseek-chat' })).toBe(false)
+    expect(isFollowSessionModel({ provider: AUTO_PROVIDER, model: AUTO_MODEL, reasoningEffort: '' })).toBe(false)
+    expect(isFollowSessionModel({ provider: '', model: '', reasoningEffort: '' })).toBe(true)
+  })
+
+  it('assembles auto route tiers from settings', () => {
+    const settings = resolveSettings({
+      autoInstantProvider: 'openai',
+      autoInstantModel: 'gpt-4o-mini',
+      autoInstantReasoningEffort: 'low',
+      autoClassifierProvider: 'deepseek',
+      autoClassifierModel: 'deepseek-chat',
+    })
+    expect(autoRouteMapOf(settings)).toEqual({
+      instant: { provider: 'openai', model: 'gpt-4o-mini', reasoningEffort: 'low' },
+      thinking: { provider: '', model: '', reasoningEffort: '' },
+      pro: { provider: '', model: '', reasoningEffort: '' },
+      classifier: { provider: 'deepseek', model: 'deepseek-chat', reasoningEffort: '' },
+    })
   })
 
   it('round-trips catalog option values without colliding on provider names', () => {
