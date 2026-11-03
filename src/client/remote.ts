@@ -181,11 +181,25 @@ type CheckUpdateCall = () => Promise<RemoteResult<UpdateCheckResult>>
 
 export const agentEnhancerCheckUpdate = {
   async invoke(remote: unknown) {
-    const namespace = Reflect.get(remote as object, 'agentEnhancer') as object
-    const call = Reflect.get(namespace, 'checkUpdate') as CheckUpdateCall
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    let namespace: object
+    try {
+      const face = Reflect.get(remote, 'agentEnhancer')
+      if (face === null || face === undefined || typeof face !== 'object') {
+        throw new AuxiliaryError('MODEL_FAILED')
+      }
+      namespace = face as object
+    } catch (error) {
+      if (error instanceof AuxiliaryError) throw error
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    const call = Reflect.get(namespace, 'checkUpdate') as CheckUpdateCall | undefined
+    if (typeof call !== 'function') throw new AuxiliaryError('MODEL_FAILED')
     let result: RemoteResult<UpdateCheckResult>
     try {
-      result = await call.apply(namespace, [])
+      result = await call.call(namespace)
     } catch {
       throw new AuxiliaryError('MODEL_FAILED')
     }
@@ -200,11 +214,25 @@ type ApplyUpdateCall = () => Promise<RemoteResult<ApplyUpdateResult>>
 
 export const agentEnhancerApplyUpdate = {
   async invoke(remote: unknown) {
-    const namespace = Reflect.get(remote as object, 'agentEnhancer') as object
-    const call = Reflect.get(namespace, 'applyUpdate') as ApplyUpdateCall
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    let namespace: object
+    try {
+      const face = Reflect.get(remote, 'agentEnhancer')
+      if (face === null || face === undefined || typeof face !== 'object') {
+        throw new AuxiliaryError('MODEL_FAILED')
+      }
+      namespace = face as object
+    } catch (error) {
+      if (error instanceof AuxiliaryError) throw error
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    const call = Reflect.get(namespace, 'applyUpdate') as ApplyUpdateCall | undefined
+    if (typeof call !== 'function') throw new AuxiliaryError('MODEL_FAILED')
     let result: RemoteResult<ApplyUpdateResult>
     try {
-      result = await call.apply(namespace, [])
+      result = await call.call(namespace)
     } catch {
       throw new AuxiliaryError('MODEL_FAILED')
     }

@@ -180,8 +180,8 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
   }
 
+  /** Read-only version probe — same gate policy as `listCatalog` (settings-safe). */
   async checkUpdate(): Promise<UpdateCheckResult> {
-    this.assertOwner()
     return checkPluginUpdateForHost()
   }
 

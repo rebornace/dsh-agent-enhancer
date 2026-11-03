@@ -266,7 +266,7 @@ function SettingsUpdateSection({ checkUpdate, applyUpdate, t }: SettingsUpdateSe
         {state.kind === 'available' && applyUpdate !== undefined && (
           <button
             type="button"
-            className={styles.settingsConfigure}
+            className={styles.settingsActionPrimary}
             disabled={busy}
             onClick={() => { void onApply() }}
           >
@@ -275,7 +275,7 @@ function SettingsUpdateSection({ checkUpdate, applyUpdate, t }: SettingsUpdateSe
         )}
         <button
           type="button"
-          className={styles.settingsConfigure}
+          className={styles.settingsActionPrimary}
           disabled={busy}
           onClick={() => { void runCheck() }}
         >

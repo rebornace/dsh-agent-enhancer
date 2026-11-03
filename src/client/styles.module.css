@@ -75,25 +75,57 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.settingsConfigure {
+.settingsConfigure,
+.settingsActionPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin: 0;
-  padding: 4px 8px;
+  min-height: 28px;
+  padding: 0 10px;
   border: 0;
   border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
   font: inherit;
+  font-weight: 600;
+  line-height: 16px;
   cursor: pointer;
   white-space: nowrap;
 }
 
-.settingsConfigure:hover:not(:disabled) {
+/* Secondary action — Configure / Copy (readable as a control, not plain text). */
+.settingsConfigure {
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-layer-2);
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-primary);
+}
+
+.settingsConfigure:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .settingsConfigure:disabled {
   opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary action — Check for updates / Update to… (match compact CTA weight). */
+.settingsActionPrimary {
+  color: #fff;
+  background: #3b7ded;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #3b7ded 55%, transparent);
+}
+
+.settingsActionPrimary:hover:not(:disabled) {
+  background: #2f6fe0;
+}
+
+.settingsActionPrimary:focus-visible {
+  outline: 2px solid color-mix(in srgb, #3b7ded 70%, white);
+  outline-offset: 2px;
+}
+
+.settingsActionPrimary:disabled {
+  opacity: 0.55;
   cursor: not-allowed;
 }
 

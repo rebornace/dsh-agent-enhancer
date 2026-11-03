@@ -8,7 +8,7 @@ import { apply, inject } from '../src/client/index.ts'
 import type { PromptSession } from '../src/client/prompt/session.ts'
 import { AgentControls } from '../src/client/dsh/controls.tsx'
 import type { AgentControlsProps } from '../src/client/dsh/controls.tsx'
-import { clientRemoteInfo, agentEnhancerCall } from '../src/client/remote.ts'
+import { agentEnhancerCall, clientRemoteInfo } from '../src/client/remote.ts'
 
 vi.mock('../src/client/styles.module.css', () => ({ default: {}, installCss: () => () => {} }))
 
@@ -132,6 +132,86 @@ it('registers settings before Remote $mount settles', async () => {
   expect(mount).toHaveBeenCalledTimes(1)
   resolveMount(() => {})
   await fiber.dispose()
+})
+
+it('routes settings checkUpdate through the mounted agentEnhancer remote', async () => {
+  const ctx = new Context()
+  contexts.push(ctx)
+  const checkUpdateHost = vi.fn(async () => ({
+    ok: true as const,
+    value: {
+      current: '0.2.0',
+      latest: '0.2.0',
+      updateAvailable: false,
+      installKind: 'npm' as const,
+      canAutoApply: true,
+      command: 'dsh plugin --profile desktop add dsh-agent-enhancer@0.2.0',
+    },
+  }))
+  let settingsCheck: (() => Promise<unknown>) | undefined
+  const mount = vi.fn(async () => () => {})
+  provideSidebar(ctx)
+  ctx.provide('remote', {
+    $mount: mount,
+    pluginInventory: { list: async () => ({ ok: true, value: { entries: [] } }) },
+  } as never)
+  ctx.provide('remote.session', {
+    modelCatalog: async () => ({
+      ok: true,
+      value: { default: { provider: '', model: '' }, routableProviders: [], groups: [], failures: [] },
+    }),
+  } as never)
+  ctx.provide('configForms', {
+    get: () => ({
+      getSnapshot: () => ({ value: {}, writable: true }),
+      subscribe: () => () => {},
+    }),
+    whileServed: () => () => {},
+  } as never)
+  ctx.provide('locale', {
+    register: () => () => {},
+    bind: () => (key: string) => key,
+    getLocale: () => ({ active: 'zh', locales: [], revision: 0 }),
+  } as never)
+  ctx.provide('slots', {
+    inject: (_key: string, registerEntry: () => () => void) => {
+      registerEntry()
+      return () => {}
+    },
+    register: (
+      options: { name: string },
+      component?: (props: {
+        form: unknown
+        t: (key: string) => string
+      }) => unknown,
+    ) => {
+      if (options.name === 'settings.plugins.tab' && component !== undefined) {
+        const element = component({
+          form: {
+            getSnapshot: () => ({ value: {}, writable: true }),
+            subscribe: () => () => {},
+          },
+          t: (key: string) => key,
+        }) as { props?: { checkUpdate?: () => Promise<unknown> } }
+        settingsCheck = element?.props?.checkUpdate
+      }
+      return () => {}
+    },
+  } as never)
+  ctx.provide('remote.agentEnhancer', {
+    checkUpdate: checkUpdateHost,
+    listCatalog: vi.fn(),
+  } as never)
+  ctx.provide('remote.checkpointRollback', { preview: vi.fn(), execute: vi.fn() } as never)
+
+  await ctx.plugin({ apply })
+  await vi.waitFor(() => { expect(settingsCheck).toBeTypeOf('function') })
+
+  await vi.waitFor(async () => {
+    const result = await settingsCheck!()
+    expect(result).toMatchObject({ current: '0.2.0', latest: '0.2.0' })
+  })
+  expect(checkUpdateHost).toHaveBeenCalled()
 })
 
 it('invokes the mounted namespace through the declared Cordis injection', async () => {

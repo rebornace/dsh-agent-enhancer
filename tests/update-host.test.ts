@@ -28,8 +28,48 @@ describe('fetchLatestVersion', () => {
       fetch: fetchImpl,
       currentVersion: '0.2.0',
       timeoutMs: 1000,
+      sources: [{ kind: 'npm-dist-tag', baseUrl: 'https://registry.example.test' }],
     })).resolves.toBe('0.2.1')
     expect(fetchImpl).toHaveBeenCalled()
+    const firstCall = fetchImpl.mock.calls[0] as unknown as readonly [RequestInfo | URL] | undefined
+    expect(String(firstCall?.[0])).toContain(`registry.example.test/${PACKAGE_NAME}`)
+  })
+
+  it('falls back to the next source when the first fails', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('primary.example')) return new Response('nope', { status: 500 })
+      return new Response(JSON.stringify({ version: '0.3.0' }), { status: 200 })
+    })
+    await expect(fetchLatestVersion(PACKAGE_NAME, {
+      fetch: fetchImpl,
+      currentVersion: '0.2.0',
+      timeoutMs: 1000,
+      sources: [
+        { kind: 'npm-dist-tag', baseUrl: 'https://primary.example' },
+        { kind: 'package-json', url: 'https://cdn.example/package.json' },
+      ],
+    })).resolves.toBe('0.3.0')
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('skips non x.y.z latest tags and keeps probing', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('mirror.example')) {
+        return new Response(JSON.stringify({ 'dist-tags': { latest: '0.0.0-stage' } }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ version: '0.2.0' }), { status: 200 })
+    })
+    await expect(fetchLatestVersion(PACKAGE_NAME, {
+      fetch: fetchImpl,
+      currentVersion: '0.2.0',
+      timeoutMs: 1000,
+      sources: [
+        { kind: 'npm-dist-tag', baseUrl: 'https://mirror.example' },
+        { kind: 'package-json', url: 'https://cdn.example/package.json' },
+      ],
+    })).resolves.toBe('0.2.0')
   })
 
   it('returns null on non-ok or missing tag', async () => {
@@ -38,6 +78,7 @@ describe('fetchLatestVersion', () => {
       fetch: fetchImpl,
       currentVersion: '0.2.0',
       timeoutMs: 1000,
+      sources: [{ kind: 'npm-dist-tag', baseUrl: 'https://registry.example.test' }],
     })).resolves.toBeNull()
   })
 })

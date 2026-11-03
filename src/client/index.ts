@@ -71,18 +71,55 @@ export function apply(ctx: Context): void {
     sessionModelCatalog?: ModelCatalogLoaders['sessionModelCatalog']
     hostListCatalog?: ModelCatalogLoaders['hostListCatalog']
   } = { ...catalogLoadersFromRemote(ctx.remote) }
+  // agentEnhancer remotes only exist on the nested fiber after $mount — same as listCatalog.
+  // Capture the face object at mount time; later settings clicks run on the root fiber where
+  // `mountedCtx.remote.agentEnhancer` would fail Cordis inject checks.
+  let agentEnhancerRemote: { readonly agentEnhancer: object } | undefined
+  const agentRemoteWaiters: Array<(remote: { readonly agentEnhancer: object }) => void> = []
   const adoptCatalogLoaders = (remote: unknown) => {
     const next = catalogLoadersFromRemote(remote)
     if (next.sessionModelCatalog) catalogLoaders.sessionModelCatalog = next.sessionModelCatalog
     if (next.hostListCatalog) catalogLoaders.hostListCatalog = next.hostListCatalog
+  }
+  const readAgentEnhancerFace = (mountedCtx: Context): object | undefined => {
+    try {
+      const injected = Reflect.get(mountedCtx as object, 'remote.agentEnhancer')
+      if (injected !== null && injected !== undefined && typeof injected === 'object') {
+        return injected as object
+      }
+    } catch { /* root-style access */ }
+    try {
+      const nested = Reflect.get(mountedCtx.remote as object, 'agentEnhancer')
+      if (nested !== null && nested !== undefined && typeof nested === 'object') {
+        return nested as object
+      }
+    } catch { /* missing face */ }
+    return undefined
+  }
+  const adoptAgentRemote = (mountedCtx: Context) => {
+    adoptCatalogLoaders(mountedCtx.remote)
+    const face = readAgentEnhancerFace(mountedCtx)
+    if (face === undefined) return
+    const remote = { agentEnhancer: face }
+    agentEnhancerRemote = remote
+    while (agentRemoteWaiters.length > 0) agentRemoteWaiters.shift()?.(remote)
+  }
+  const withAgentRemote = async <T>(
+    run: (remote: { readonly agentEnhancer: object }) => Promise<T>,
+  ): Promise<T> => {
+    if (agentEnhancerRemote !== undefined) return run(agentEnhancerRemote)
+    const remote = await new Promise<{ readonly agentEnhancer: object }>(resolve => {
+      agentRemoteWaiters.push(resolve)
+    })
+    return run(remote)
   }
   // Register settings immediately — never wait on Remote $mount, or the tab stays empty.
   // Keep inject props to `{ form }` only (slot host pattern); close over catalog loader.
   const loadCatalog = () => Promise.resolve().then(
     () => loadDesktopModelCatalog(catalogLoaders),
   )
-  const checkUpdate = () => agentEnhancerCheckUpdate.invoke(ctx.remote)
-  const applyUpdate = () => agentEnhancerApplyUpdate.invoke(ctx.remote)
+  const checkUpdate = () => withAgentRemote(remote => agentEnhancerCheckUpdate.invoke(remote))
+  const applyUpdate = () => withAgentRemote(remote => agentEnhancerApplyUpdate.invoke(remote))
   const SettingsTab = (props: { readonly form: typeof form; readonly t: typeof t }) => (
     createElement(PluginSettings, {
       form: props.form,
@@ -327,7 +364,7 @@ export function apply(ctx: Context): void {
       name: 'agent-enhancer-mounted',
       inject: ['remote.agentEnhancer'],
       apply: (mountedCtx: Context) => {
-        adoptCatalogLoaders(mountedCtx.remote)
+        adoptAgentRemote(mountedCtx)
         applyAgentMounted(mountedCtx)
       },
     })
