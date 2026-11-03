@@ -95,7 +95,7 @@
 本机已配置 `dsh` CLI、且要写入 **desktop** profile 时：
 
 ```sh
-dsh plugin --profile desktop add dsh-agent-enhancer@0.2.0
+dsh plugin --profile desktop add dsh-agent-enhancer@0.3.0
 ```
 
 也可不钉版本：`dsh plugin --profile desktop add dsh-agent-enhancer`。  

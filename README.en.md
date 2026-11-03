@@ -95,7 +95,7 @@ Then open the **Plugin Market** tab, search, and install this plugin. Some third
 When the `dsh` CLI is available and you intend to write the **desktop** profile:
 
 ```sh
-dsh plugin --profile desktop add dsh-agent-enhancer@0.2.0
+dsh plugin --profile desktop add dsh-agent-enhancer@0.3.0
 ```
 
 Or unpinned: `dsh plugin --profile desktop add dsh-agent-enhancer`.  
