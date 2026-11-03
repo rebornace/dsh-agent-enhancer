@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { fetchLatestVersion } from '../src/host/update/registry.ts'
 import { detectInstallKind } from '../src/host/update/install-kind.ts'
 import { pluginAddCommand, resolveCanAutoApply } from '../src/host/update/cli.ts'
-import { checkPluginUpdate, applyPluginUpdate } from '../src/host/update/check.ts'
+import {
+  applyPluginUpdate,
+  checkPluginUpdate,
+  resolveDesktopProfileDir,
+} from '../src/host/update/check.ts'
 import { PACKAGE_NAME } from '../src/identity.ts'
 import { mkdirSync, symlinkSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -100,6 +104,32 @@ describe('checkPluginUpdate', () => {
     expect(result.canAutoApply).toBe(false)
     expect(result.updateAvailable).toBe(true)
   })
+
+  it('keeps canAutoApply true for npm+dsh when already on latest', async () => {
+    const result = await checkPluginUpdate({
+      currentVersion: '0.2.1',
+      fetchLatest: async () => '0.2.1',
+      detectKind: () => 'npm',
+      dshAvailable: async () => true,
+      profileDir: '/fake',
+    })
+    expect(result.updateAvailable).toBe(false)
+    expect(result.canAutoApply).toBe(true)
+  })
+})
+
+describe('resolveDesktopProfileDir', () => {
+  it('uses DSH_HOME when set', () => {
+    const dshHome = join('/custom', 'dsh')
+    expect(
+      resolveDesktopProfileDir({ DSH_HOME: dshHome } as NodeJS.ProcessEnv, '/home/user'),
+    ).toBe(join(dshHome, 'profiles', 'desktop'))
+  })
+
+  it('falls back to home/.dsh', () => {
+    const home = join('/home', 'user')
+    expect(resolveDesktopProfileDir({}, home)).toBe(join(home, '.dsh', 'profiles', 'desktop'))
+  })
 })
 
 describe('applyPluginUpdate', () => {
@@ -149,5 +179,29 @@ describe('applyPluginUpdate', () => {
     })
     expect(run).toHaveBeenCalledWith('0.2.1')
     expect(result).toEqual({ ok: true, message: 'ok-restart' })
+  })
+
+  it('reports failed when runAdd returns not ok', async () => {
+    const run = vi.fn(async () => ({ ok: false, detail: 'spawn error' }))
+    const command = `dsh plugin --profile desktop add ${PACKAGE_NAME}@0.2.1`
+    const result = await applyPluginUpdate({
+      check: {
+        current: '0.2.0',
+        latest: '0.2.1',
+        updateAvailable: true,
+        installKind: 'npm',
+        canAutoApply: true,
+        command,
+      },
+      runAdd: run,
+      messages: {
+        linkBlocked: 'dev-link',
+        success: 'ok-restart',
+        failed: 'failed',
+        noUpdate: 'none',
+      },
+    })
+    expect(run).toHaveBeenCalledWith('0.2.1')
+    expect(result).toEqual({ ok: false, message: 'failed', command })
   })
 })

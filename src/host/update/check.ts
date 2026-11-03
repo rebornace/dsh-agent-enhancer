@@ -30,8 +30,7 @@ export async function checkPluginUpdate(deps: CheckPluginUpdateDeps): Promise<Up
   const updateAvailable =
     latest !== null && isNewerVersion(latest, deps.currentVersion)
   const command = pluginAddCommand(latest ?? 'latest')
-  const canAutoApply =
-    updateAvailable && resolveCanAutoApply({ installKind, dshAvailable })
+  const canAutoApply = resolveCanAutoApply({ installKind, dshAvailable })
 
   return {
     current: deps.currentVersion,
