@@ -17,6 +17,7 @@ import {
   isFollowSessionModel,
 } from '../config.ts'
 import type { AuxiliaryFeature, AuxiliaryModelSettings, EnhancerSettings } from '../config.ts'
+import { createClassifier } from './auto-route/classifier.ts'
 import { resolveAutoRoute } from './auto-route/router.ts'
 import type { AutoTierRoute } from './auto-route/types.ts'
 import { AuxiliaryError } from '../errors.ts'
@@ -189,12 +190,16 @@ export class AuxiliaryModels {
     feature: AuxiliaryFeature | 'session',
   ): Promise<ResolvedRoute> {
     const settings = this.enhancerSettings()
+    const map = autoRouteMapOf(settings)
+    const classify = settings.autoClassifierEnabled
+      ? createClassifier(this.ctx.llm, map.classifier)
+      : undefined
     const mapped = await resolveAutoRoute({
       text,
       feature,
-      map: autoRouteMapOf(settings),
+      map,
       classifierEnabled: settings.autoClassifierEnabled,
-      classify: undefined,
+      classify,
       isAvailable: (provider, model) => this.modelExists(provider, model),
       fallback: this.fallbackFromSession(session, override),
     })
