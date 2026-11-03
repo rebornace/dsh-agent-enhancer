@@ -14,6 +14,8 @@ import type { EnhancerSettings } from '../config.ts'
 import { AuxiliaryError } from '../errors.ts'
 import type { AuxiliaryErrorCode } from '../errors.ts'
 import { createClassifier } from './auto-route/classifier.ts'
+import { getSessionResolvedRouteForSession } from './auto-route/session-resolved-route.ts'
+import { projectedSessionModel } from './auto-route/session-selection.ts'
 import { resolveAutoRoute } from './auto-route/router.ts'
 import type { AutoTierRoute } from './auto-route/types.ts'
 
@@ -62,12 +64,7 @@ function sessionModelSelection(
   ctx: Context,
   session: Session,
 ): { readonly provider: string, readonly model: string, readonly reasoningEffort?: string } {
-  const logged = session.requestHeader()?.config
-  const projected = logged === undefined
-    ? ctx.sessionProjections.stateOf(session, 'modelSelection')
-    : undefined
-  return logged ?? projected?.pending ?? projected?.lastUsed
-    ?? ctx.agentDefaultModel.currentSelection()
+  return projectedSessionModel(ctx, session)
 }
 
 function tierRouteFromSelection(
@@ -139,6 +136,10 @@ export async function resolveCompactRouteOverride(
   }
   const selection = sessionModelSelection(ctx, session)
   if (isAutoModel(selection)) {
+    const cached = getSessionResolvedRouteForSession(session)
+    if (cached !== undefined) {
+      return { provider: cached.provider, model: cached.model }
+    }
     return resolveAutoRouteForCompact(ctx, settings, session, 'session', signal)
   }
   return undefined

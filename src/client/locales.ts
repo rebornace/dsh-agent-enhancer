@@ -8,7 +8,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'settingsTitle' | 'settingsSubtitle' | 'history' | 'historyDescription' | 'optimizeDescription' |
       'predict' | 'predictDescription' | 'privacyTitle' | 'privacy' | 'coexistence' | 'settingsError' |
       'modelCatalogLoading' | 'modelCatalogError' |
-      'modelLabel' | 'modelFollowSession' | 'modelAuto' | 'reasoningDefault' |
+      'modelLabel' | 'modelFollowSession' | 'modelAuto' | 'modelUnconfigured' | 'reasoningDefault' |
       'autoClassifier' | 'autoClassifierDescription' | 'autoMappingTitle' |
       'autoTier_instant' | 'autoTier_thinking' | 'autoTier_pro' | 'autoTier_classifier' |
       'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'dismissHint' |
@@ -76,6 +76,7 @@ export const agentLocales = {
     modelLabel: '模型',
     modelFollowSession: '跟随会话',
     modelAuto: 'Auto',
+    modelUnconfigured: '未设置',
     reasoningDefault: '默认',
     autoClassifier: '智能分类路由',
     autoClassifierDescription: '为 Auto 模式按任务复杂度选择 instant / thinking / pro 档位（分类请求会额外调用分类模型）',
@@ -219,6 +220,7 @@ export const agentLocales = {
     modelLabel: 'Model',
     modelFollowSession: 'Follow session',
     modelAuto: 'Auto',
+    modelUnconfigured: 'Not set',
     reasoningDefault: 'Default',
     autoClassifier: 'Smart routing classifier',
     autoClassifierDescription: 'When Auto is selected, classify each request into instant, thinking, or pro tiers (classification may call the classifier model)',

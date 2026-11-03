@@ -22,6 +22,7 @@ import {
   encodeFollowSelection,
   encodeModelSelection,
 } from './model-catalog.ts'
+import { pillLabel, isUnconfiguredAutoTierMapping, selectedPillMenuId } from './model-pill-label.ts'
 
 type AutoRouteTier = 'instant' | 'thinking' | 'pro' | 'classifier'
 
@@ -124,29 +125,6 @@ function modelFeatureOf(module: ModuleName): AuxiliaryFeature | null {
   }
 }
 
-function findModel(
-  groups: readonly ModelProviderGroup[],
-  provider: string,
-  model: string,
-): ModelCatalogModel | undefined {
-  return groups.find(group => group.id === provider)?.models.find(entry => entry.id === model)
-}
-
-function pillLabel(
-  selection: AuxiliaryModelSettings,
-  groups: readonly ModelProviderGroup[],
-  followLabel: string,
-  autoLabel: string,
-): string {
-  if (isAutoModel(selection)) return autoLabel
-  if (isFollowSessionModel(selection)) return followLabel
-  const model = findModel(groups, selection.provider, selection.model)
-  const name = model?.name ?? selection.model
-  if (selection.reasoningEffort === '') return name
-  const effort = model?.reasoning?.efforts.find(entry => entry.id === selection.reasoningEffort)
-  return `${name} · ${effort?.name ?? selection.reasoningEffort}`
-}
-
 /**
  * Official `/model` lists Auto through the host sentinel adapter
  * (`installAutoSessionRoute`). These pills already have their own Auto row,
@@ -203,14 +181,9 @@ function catalogMenuItems(
 function selectedMenuId(
   selection: AuxiliaryModelSettings,
   groups: readonly ModelProviderGroup[],
+  tierMapping: boolean,
 ): string {
-  if (isAutoModel(selection)) return encodeAutoSelection()
-  if (isFollowSessionModel(selection)) return encodeFollowSelection()
-  const model = findModel(groups, selection.provider, selection.model)
-  if ((model?.reasoning?.efforts.length ?? 0) > 0) {
-    return encodeEffortSelection(selection.provider, selection.model, selection.reasoningEffort)
-  }
-  return encodeModelSelection(selection.provider, selection.model)
+  return selectedPillMenuId(selection, groups, { tierMapping })
 }
 
 interface ModelPillProps {
@@ -239,11 +212,12 @@ function ModelPill({
   const [open, setOpen] = useState(false)
   const followLabel = t('modelFollowSession')
   const autoLabel = t('modelAuto')
+  const unconfiguredLabel = includeSessionOptions ? undefined : t('modelUnconfigured')
   const label = catalogStatus === 'loading'
     ? t('modelCatalogLoading')
     : catalogStatus === 'error'
       ? t('modelCatalogError')
-      : pillLabel(selection, groups, followLabel, autoLabel)
+      : pillLabel(selection, groups, followLabel, autoLabel, unconfiguredLabel)
   const items = catalogMenuItems(
     groups,
     followLabel,
@@ -251,7 +225,13 @@ function ModelPill({
     t('reasoningDefault'),
     includeSessionOptions,
   )
-  const active = !isFollowSessionModel(selection)
+  const tierMapping = !includeSessionOptions
+  const active = tierMapping
+    ? !isUnconfiguredAutoTierMapping(selection) && !isFollowSessionModel(selection)
+    : !isFollowSessionModel(selection)
+  const catalogFallbackItems: MenuEntry[] = includeSessionOptions
+    ? [{ id: encodeFollowSelection(), label: followLabel }, { id: encodeAutoSelection(), label: autoLabel }]
+    : [{ id: 'tier:unconfigured', label: unconfiguredLabel ?? t('modelUnconfigured') }]
 
   return <Menu
     open={open}
@@ -261,12 +241,10 @@ function ModelPill({
     portal
     compact
     dense
-    selectedId={selectedMenuId(selection, groups)}
+    selectedId={selectedMenuId(selection, groups, tierMapping)}
     items={catalogStatus === 'ready'
       ? items
-      : includeSessionOptions
-        ? [{ id: encodeFollowSelection(), label: followLabel }, { id: encodeAutoSelection(), label: autoLabel }]
-        : [{ id: encodeFollowSelection(), label: followLabel }]}
+      : catalogFallbackItems}
     onSelect={id => {
       setOpen(false)
       onSelect(id)

@@ -6,6 +6,11 @@ import { autoRouteMapOf, isAutoModel } from '../../config.ts'
 import type { EnhancerSettings } from '../../config.ts'
 import { createClassifier } from './classifier.ts'
 import { resolveAutoRoute } from './router.ts'
+import {
+  clearSessionResolvedRoute,
+  setSessionResolvedRoute,
+} from './session-resolved-route.ts'
+import { projectedSessionModel } from './session-selection.ts'
 import { AUTO_MODEL, AUTO_PROVIDER } from './sentinel.ts'
 import type { AutoTierRoute } from './types.ts'
 
@@ -29,7 +34,6 @@ import type { AutoTierRoute } from './types.ts'
  * write the resolved tier back onto the session.
  */
 const AUTO_CATALOG_NAME = 'Auto'
-const AUTO_CONTEXT_WINDOW = 1_000_000
 
 interface TurnNote {
   readonly text: string
@@ -80,7 +84,7 @@ class AutoCatalogAdapter extends LlmAdapter {
       provider,
       id: AUTO_MODEL,
       name: AUTO_CATALOG_NAME,
-      inputModalities: ['text', 'image'],
+      inputModalities: ['text'],
     }])
   }
 
@@ -89,8 +93,7 @@ class AutoCatalogAdapter extends LlmAdapter {
       provider,
       id: model,
       name: AUTO_CATALOG_NAME,
-      inputModalities: ['text', 'image'],
-      context: { contextWindow: AUTO_CONTEXT_WINDOW },
+      inputModalities: ['text'],
     })
   }
 
@@ -185,18 +188,10 @@ function concreteRoute(selection: ModelPick | undefined): AutoTierRoute | undefi
 
 /** Saved session choice: pending user selection, otherwise the last request that consumed one. */
 function projectedSelection(ctx: Context, agent: AgentFace | undefined): ModelPick | undefined {
-  const session = agent?.session
+  const session = agent?.session as { readonly id?: unknown } | undefined
   if (session === undefined) return undefined
-  const projections = ctx.sessionProjections as unknown as {
-    stateOf?: (target: unknown, key: 'modelSelection') => {
-      readonly pending: ModelPick | null
-      readonly lastUsed: ModelPick | null
-    } | undefined
-  } | undefined
-  if (projections?.stateOf === undefined) return undefined
   try {
-    const state = projections.stateOf(session, 'modelSelection')
-    return state?.pending ?? state?.lastUsed ?? undefined
+    return projectedSessionModel(ctx, session as never)
   } catch {
     return undefined
   }
@@ -254,7 +249,7 @@ export function installAutoSessionRoute(
   // `agent/request` copies the saved selection onto the call, then the loop
   // calls `prepareCall`. The admitted user batch is not in the session log
   // yet, so the latest `agent/pre-step` decision is the turn text. The map
-  // stores text only — the tier is resolved again on every call.
+  // stores text only; the resolved route for this turn is cached separately.
   const notes = new WeakMap<object, TurnNote>()
   // Same agent (or, with no agent, the config object) currently inside
   // resolve. Nested `prepareCall`s — the classifier — pass through.
@@ -264,6 +259,7 @@ export function installAutoSessionRoute(
     const decision = await next()
     switch (decision.kind) {
       case 'enter':
+        clearSessionResolvedRoute(payload.agent)
         notes.set(payload.agent, describeTurn(decision.messages, payload.step))
         return decision
       case 'reject':
@@ -302,6 +298,7 @@ export function installAutoSessionRoute(
           signal,
           fallback: fallbackRoute(ctx, asAgent(agent)),
         })
+        if (agent !== undefined) setSessionResolvedRoute(agent, mapped)
         return await inner(routeConfig(config, mapped), signal, configure)
       } finally {
         const next = (resolving.get(key) ?? 1) - 1

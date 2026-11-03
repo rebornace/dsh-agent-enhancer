@@ -3,6 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { DEFAULT_SETTINGS } from '../src/config.ts'
 import { AuxiliaryError } from '../src/errors.ts'
 import { AUTO_MODEL, AUTO_PROVIDER } from '../src/host/auto-route/sentinel.ts'
+import { setSessionResolvedRouteForSession } from '../src/host/auto-route/session-resolved-route.ts'
 import { compactContextNow, resolveCompactRouteOverride } from '../src/host/context-compact.ts'
 import { AgentEnhancerService } from '../src/host/index.ts'
 
@@ -116,6 +117,36 @@ describe('compactContextNow', () => {
       route,
     })
     expect(options).toEqual({ provider: 'session-p', model: 'session-m' })
+  })
+
+  it('reuses cached session turn route when compact follows Auto session', async () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      autoClassifierEnabled: false,
+      autoInstantProvider: 'p',
+      autoInstantModel: 'flash',
+      autoThinkingProvider: 'p',
+      autoThinkingModel: 'chat',
+    }
+    const session = { requestHeader: () => undefined } as never
+    setSessionResolvedRouteForSession(session, {
+      provider: 'p',
+      model: 'chat',
+      reasoningEffort: '',
+    })
+    const ctx = {
+      agentDefaultModel: { currentSelection: () => ({ provider: AUTO_PROVIDER, model: AUTO_MODEL }) },
+      sessionProjections: {
+        stateOf: () => ({ pending: { provider: AUTO_PROVIDER, model: AUTO_MODEL }, lastUsed: null }),
+      },
+    } as never
+    const route = await resolveCompactRouteOverride(
+      ctx,
+      settings,
+      session,
+      new AbortController().signal,
+    )
+    expect(route).toEqual({ provider: 'p', model: 'chat' })
   })
 
   it('overrides agent route while /compact runs', async () => {

@@ -40,6 +40,9 @@ export function createClassifier(
   llm: Pick<LlmRuntime, 'prepareCall'>,
   route: AutoTierRoute,
 ): (text: string, signal?: AbortSignal) => Promise<AutoTier> {
+  if (route.provider === '' || route.model === '') {
+    return async () => { throw new Error('Classifier route unavailable') }
+  }
   return async (text, signal) => {
     const timeout = new AbortController()
     const timer = setTimeout(() => { timeout.abort() }, CLASSIFIER_TIMEOUT_MS)
@@ -65,13 +68,13 @@ export function createClassifier(
         assembler.push(chunk)
       }
       timeout.signal.throwIfAborted()
+      const raw = classifierOutputText(assembler)
+      const tier = parseClassifierTier(raw)
+      if (tier !== undefined) return tier
       if (assembler.finish.kind !== 'stop') {
         throw new Error('Classifier finished without stop')
       }
-      const raw = classifierOutputText(assembler)
-      const tier = parseClassifierTier(raw)
-      if (tier === undefined) throw new Error(`Invalid classifier output: ${raw}`)
-      return tier
+      throw new Error(`Invalid classifier output: ${raw}`)
     } finally {
       clearTimeout(timer)
       unlink?.()

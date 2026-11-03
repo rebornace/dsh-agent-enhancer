@@ -9,6 +9,7 @@ import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AuxiliaryError } from '../src/errors.ts'
 import { AUTO_MODEL, AUTO_PROVIDER } from '../src/host/auto-route/sentinel.ts'
+import { setSessionResolvedRouteForSession } from '../src/host/auto-route/session-resolved-route.ts'
 import { AuxiliaryModels } from '../src/host/model.ts'
 import type { OptimizeRequest, PredictRequest } from '../src/host/types.ts'
 
@@ -163,7 +164,7 @@ afterEach(async () => {
 describe('AuxiliaryModels', () => {
   it('masks reference inputs and restores validated text and segments', async () => {
     const h = harness({
-      header: route,
+      projection: route,
       chunks: textChunks('请检查 __DSH_REF_1__ 和 __DSH_REF_2__，保留 @a.ts 字面量'),
     })
     const request = {
@@ -189,7 +190,7 @@ describe('AuxiliaryModels', () => {
   })
 
   it('adapts optimization to draft clarity and treats recent context as data', async () => {
-    const h = harness({ header: route })
+    const h = harness({ projection: route })
     await h.models.generate(optimizeRequest({
       source: '继续处理它',
       context: [{ turn: 7, prompt: '分析这个项目', response: '先查看结构。' }],
@@ -229,13 +230,13 @@ describe('AuxiliaryModels', () => {
     expect(h.stream).toHaveBeenCalledTimes(1)
   })
 
-  it('generates optimized text on the logged route and audits the exact request', async () => {
-    const h = harness({ header: route, fallback: route })
+  it('generates optimized text on the projected route and audits the exact request', async () => {
+    const h = harness({ projection: route, fallback: route })
     await expect(h.models.generate(optimizeRequest(), new AbortController().signal)).resolves.toEqual({
       requestId: 'req-1', text: '清晰的请求', route: { provider: 'deepseek', model: 'deepseek-chat' },
     })
     expect(h.prepare).toHaveBeenCalledTimes(1)
-    expect(h.stateOf).not.toHaveBeenCalled()
+    expect(h.stateOf).toHaveBeenCalled()
     expect(h.prepare.mock.calls[0]?.[0]).toEqual({ ...route, maxTokens: 1200 })
     expect(appendPluginRecord).toHaveBeenCalledWith(h.session, 'plugin:agent-enhancer/request', expect.objectContaining({
       operation: 'optimize', requestId: 'req-1', maxTokens: 1200,
@@ -275,7 +276,7 @@ describe('AuxiliaryModels', () => {
   })
 
   it('uses English prompt packs when Desktop uiLocale is en', async () => {
-    const h = harness({ header: route })
+    const h = harness({ projection: route })
     await h.models.generate(optimizeRequest({
       source: 'clarify this',
       uiLocale: 'en',
@@ -297,7 +298,7 @@ describe('AuxiliaryModels', () => {
   })
 
   it('selects the first advertised reasoning effort without accepting a client route', async () => {
-    const h = harness({ header: route })
+    const h = harness({ projection: route })
     h.prepare.mockImplementationOnce(async (config, _signal, configure) => {
       const controls = configure?.(
         { maxTokens: config.maxTokens },
@@ -323,10 +324,29 @@ describe('AuxiliaryModels', () => {
     expect(h.prepare.mock.calls[0]?.[0]).toEqual({ provider: 'p', model: 'flash', maxTokens: 1200 })
   })
 
+  it('reuses the cached session turn route when predict follows Auto session', async () => {
+    const h = harness({
+      projection: { provider: AUTO_PROVIDER, model: AUTO_MODEL },
+      settings: {
+        autoInstantProvider: 'p',
+        autoInstantModel: 'flash',
+        autoThinkingProvider: 'p',
+        autoThinkingModel: 'chat',
+      },
+    })
+    setSessionResolvedRouteForSession(h.session, {
+      provider: 'p',
+      model: 'chat',
+      reasoningEffort: '',
+    })
+    await h.models.generate(predictRequest(), new AbortController().signal)
+    expect(h.prepare.mock.calls[0]?.[0]).toEqual({ provider: 'p', model: 'chat', maxTokens: 120 })
+  })
+
   it('prefers plugin optimize route and reasoning effort over the session model', async () => {
     const override = { provider: 'cheap', model: 'lite' }
     const h = harness({
-      header: route,
+      projection: route,
       settings: {
         optimizeProvider: override.provider,
         optimizeModel: override.model,
@@ -348,7 +368,7 @@ describe('AuxiliaryModels', () => {
   })
 
   it('uses the session reasoning effort when following the session model', async () => {
-    const h = harness({ header: { ...route, reasoningEffort: 'high' } })
+    const h = harness({ projection: { ...route, reasoningEffort: 'high' } })
     h.prepare.mockImplementationOnce(async (config, _signal, configure) => {
       const controls = configure?.(
         { maxTokens: config.maxTokens },
@@ -362,7 +382,7 @@ describe('AuxiliaryModels', () => {
 
   it('falls back to the adapter default effort when the preferred effort is unavailable', async () => {
     const h = harness({
-      header: route,
+      projection: route,
       settings: {
         optimizeProvider: 'cheap',
         optimizeModel: 'lite',
@@ -381,8 +401,8 @@ describe('AuxiliaryModels', () => {
   })
 
   it.each([
-    { header: { provider: '', model: 'deepseek-chat' } },
-    { header: { provider: 'deepseek', model: '' } },
+    { projection: { provider: '', model: 'deepseek-chat' } },
+    { projection: { provider: 'deepseek', model: '' } },
     { fallback: { provider: '', model: '' } },
   ])('fails with MODEL_UNAVAILABLE when no non-empty selected route exists', async (options) => {
     const h = harness(options)

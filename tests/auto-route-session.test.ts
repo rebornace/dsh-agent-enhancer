@@ -107,7 +107,18 @@ describe('installAutoSessionRoute', () => {
     expect(registerAdapter).toHaveBeenCalledWith([AUTO_PROVIDER], expect.any(Object))
     const adapter = registerAdapter.mock.calls[0]?.[1]
     await expect(adapter?.listModels(AUTO_PROVIDER)).resolves.toEqual([
-      expect.objectContaining({ provider: AUTO_PROVIDER, id: AUTO_MODEL, name: 'Auto' }),
+      expect.objectContaining({
+        provider: AUTO_PROVIDER,
+        id: AUTO_MODEL,
+        name: 'Auto',
+        inputModalities: ['text'],
+      }),
     ])
+    await expect(adapter?.resolveModel(AUTO_PROVIDER, AUTO_MODEL)).resolves.toEqual(
+      expect.objectContaining({
+        inputModalities: ['text'],
+      }),
+    )
+    await expect(adapter?.resolveModel(AUTO_PROVIDER, AUTO_MODEL)).resolves.not.toHaveProperty('context')
   })
 })

@@ -18,6 +18,8 @@ import {
 } from '../config.ts'
 import type { AuxiliaryFeature, AuxiliaryModelSettings, EnhancerSettings } from '../config.ts'
 import { createClassifier } from './auto-route/classifier.ts'
+import { getSessionResolvedRouteForSession } from './auto-route/session-resolved-route.ts'
+import { projectedSessionModel } from './auto-route/session-selection.ts'
 import { resolveAutoRoute } from './auto-route/router.ts'
 import type { AutoTierRoute } from './auto-route/types.ts'
 import { AuxiliaryError } from '../errors.ts'
@@ -152,12 +154,17 @@ export class AuxiliaryModels {
     readonly model: string
     readonly reasoningEffort?: string
   } {
-    const logged = session.requestHeader()?.config
-    const projected = logged === undefined
-      ? this.ctx.sessionProjections.stateOf(session, 'modelSelection')
-      : undefined
-    return logged ?? projected?.pending ?? projected?.lastUsed
-      ?? this.ctx.agentDefaultModel.currentSelection()
+    return projectedSessionModel(this.ctx, session)
+  }
+
+  private resolvedRouteFromSession(session: Session, effortFallback: string): ResolvedRoute | undefined {
+    const cached = getSessionResolvedRouteForSession(session)
+    if (cached === undefined) return undefined
+    return {
+      provider: cached.provider,
+      model: cached.model,
+      preferredEffort: cached.reasoningEffort !== '' ? cached.reasoningEffort : effortFallback,
+    }
   }
 
   private tierRouteFromSelection(
@@ -225,6 +232,8 @@ export class AuxiliaryModels {
     const selection = this.sessionModelSelection(session)
     if (selection.provider === '' || selection.model === '') throw new AuxiliaryError('MODEL_UNAVAILABLE')
     if (isAutoModel(selection)) {
+      const cached = this.resolvedRouteFromSession(session, override.reasoningEffort)
+      if (cached !== undefined) return cached
       return this.resolveAutoRouteFor(session, override, text, 'session')
     }
     const preferredEffort = typeof selection.reasoningEffort === 'string'
