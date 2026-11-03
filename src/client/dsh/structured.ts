@@ -1,6 +1,6 @@
 import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { AuxiliaryError } from '../../errors.ts'
-import type { Occurrence } from '../composer/types.ts'
+import type { Occurrence } from '../prompt/types.ts'
 
 export function textSegments(
   source: string,

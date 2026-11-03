@@ -1,6 +1,6 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { AuxiliaryResult, PredictRequest, RecentExchange } from '../../host/types.ts'
-import type { ComposerInput, Coordinator } from './coordinator.ts'
+import type { PromptInput, Coordinator } from './coordinator.ts'
 
 export interface PredictionRequest {
   readonly sessionId: SessionId
@@ -36,7 +36,7 @@ let requestSequence = 0
 
 export class PredictionController {
   private readonly gate = new PredictionGate()
-  private current: { readonly input: ComposerInput; readonly turn: number } | null = null
+  private current: { readonly input: PromptInput; readonly turn: number } | null = null
   private pending: PendingPrediction | null = null
   private enabled = true
   private disposed = false
@@ -46,7 +46,7 @@ export class PredictionController {
     private readonly generate: GeneratePrediction,
   ) {}
 
-  sync(input: ComposerInput, context: readonly RecentExchange[]): void {
+  sync(input: PromptInput, context: readonly RecentExchange[]): void {
     if (this.disposed) return
     const previous = this.current
     const turn = context.at(-1)?.turn ?? 0

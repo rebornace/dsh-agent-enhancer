@@ -16,7 +16,7 @@ import { isRollbackMarkerMessage, turnFromRollbackMarkerId } from './marker.ts'
 
 export type RollbackUserNodeProps = ChatNodeViewProps<'user'> & {
   readonly rollback: RollbackController
-  readonly tEnhancer: TranslateNS<'composer-enhancer'>
+  readonly tEnhancer: TranslateNS<'agent-enhancer'>
   readonly tChat: TranslateNS<'chat'>
 }
 

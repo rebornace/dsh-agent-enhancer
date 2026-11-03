@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 - 2026-11-03
+
+### Changed
+
+- **重命名**：包名 `dsh-composer-enhancer` → `dsh-agent-enhancer`；插件 ID `composer-enhancer` → `agent-enhancer`；展示名「Composer 增强 / Composer Enhance」→「智能体增强 / Agent Enhance」。
+- 请卸载旧包后再安装新包；检查点目录会从旧 `plugin-data` 路径自动迁移；会话中的旧 rollback/undo 标记仍可识别。
+- GitHub 仓库请同步重命名为 `dsh-agent-enhancer`；awesome-dsh-plugin / npm 市场需按新包名更新条目。
+
 ## 0.1.6 - 2026-11-03
 
 ### Added

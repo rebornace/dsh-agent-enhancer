@@ -111,7 +111,7 @@ describe('composer settings', () => {
     })
   })
 
-  it('prefers session.modelCatalog and falls back to composerEnhancer.listCatalog', async () => {
+  it('prefers session.modelCatalog and falls back to agentEnhancer.listCatalog', async () => {
     const catalog = {
       default: { provider: 'deepseek', model: 'deepseek-chat' },
       routableProviders: ['deepseek'],
@@ -141,7 +141,7 @@ describe('composer settings', () => {
       get session() {
         throw new Error('cannot get property "remote.session" without inject')
       },
-      composerEnhancer: {
+      agentEnhancer: {
         listCatalog: async () => ({ ok: true as const, value: catalog }),
       },
     }

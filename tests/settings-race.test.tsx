@@ -6,10 +6,10 @@ import { act, cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { createElement } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { apply } from '../src/client/index.ts'
-import type { ComposerSession } from '../src/client/composer/session.ts'
-import { composerEnhancerCall } from '../src/client/remote.ts'
+import type { PromptSession } from '../src/client/prompt/session.ts'
+import { agentEnhancerCall } from '../src/client/remote.ts'
 import { PluginSettings } from '../src/client/dsh/settings.tsx'
-import type { ComposerControlsProps } from '../src/client/dsh/controls.tsx'
+import type { AgentControlsProps } from '../src/client/dsh/controls.tsx'
 import type { EnhancerSettings } from '../src/config.ts'
 
 vi.mock('../src/client/styles.module.css', () => ({ default: {}, installCss: () => () => {} }))
@@ -61,7 +61,7 @@ it('does not request prediction after an accepted disable before the mirror catc
     pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
   } as never)
   ctx.provide('remote.session', { modelCatalog: async () => ({ ok: true, value: { default: { provider: '', model: '' }, routableProviders: [], groups: [], failures: [] } }) } as never)
-  ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
+  ctx.provide('remote.agentEnhancer', { call: vi.fn() } as never)
   ctx.provide('remote.checkpointRollback', { preview: vi.fn(), execute: vi.fn() } as never)
   ctx.provide('remote.pluginInventory', { list: vi.fn() } as never)
   ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
@@ -73,7 +73,7 @@ it('does not request prediction after an accepted disable before the mirror catc
       return () => {}
     },
   } as never)
-  const invoke = vi.spyOn(composerEnhancerCall, 'invoke').mockImplementation(() => new Promise(() => {}))
+  const invoke = vi.spyOn(agentEnhancerCall, 'invoke').mockImplementation(() => new Promise(() => {}))
   await ctx.plugin({ apply })
   await act(async () => {
     await Promise.resolve()
@@ -82,10 +82,10 @@ it('does not request prediction after an accepted disable before the mirror catc
 
   const settings = registrations.find(entry => entry.name === 'settings.plugins.tab')
   const settingsForm = settings!.options.inject() as { form: ConfigForm<EnhancerSettings> }
-  const t = ((key: string) => key) as ComposerControlsProps['t']
+  const t = ((key: string) => key) as AgentControlsProps['t']
   render(createElement(PluginSettings, { form: settingsForm.form, t }))
   const right = registrations.find(entry => entry.name === 'conversation.input.right')
-  const session = (right!.options.inject('session-1' as never) as { session: ComposerSession }).session
+  const session = (right!.options.inject('session-1' as never) as { session: PromptSession }).session
   const sessionId = 'session-1' as SessionId
   session.attach({ replace: () => false, setDraft: () => {} })
   session.sync({ sessionId, draft: '', draftRev: 0, selection: { start: 0, end: 0 }, occurrences: [], running: false }, [], false)

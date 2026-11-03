@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { installRollbackUndoCommand } from '../src/client/rollback/command-ui.ts'
 import { RollbackController } from '../src/client/rollback/controller.ts'
 import { RollbackUndoTipStore } from '../src/client/rollback/undo-tip.ts'
-import { composerLocales } from '../src/client/locales.ts'
+import { agentLocales } from '../src/client/locales.ts'
 
 const sessionId = 'session-1' as SessionId
 
@@ -42,7 +42,7 @@ describe('installRollbackUndoCommand', () => {
       tips,
       rollbackFor: () => rollback,
       enabled: () => true,
-      t: ((key: string) => composerLocales.en[key as keyof typeof composerLocales.en]) as never,
+      t: ((key: string) => agentLocales.en[key as keyof typeof agentLocales.en]) as never,
     })
 
     expect(register).toHaveBeenCalledOnce()

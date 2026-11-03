@@ -1,8 +1,7 @@
 import type { SessionEventLikeEntry } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import { isUndoId } from '../../identity.ts'
 import { isRollbackMarkerMessage, turnFromRollbackMarkerId } from './marker.ts'
-
-const UNDO_PREFIX = 'dsh-composer-enhancer:undo:'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -24,12 +23,12 @@ function isRollbackMarkerEvent(event: SessionEvent): boolean {
 function isUndoCopyEvent(event: SessionEvent): boolean {
   switch (event.type) {
     case 'user/message':
-      return event.data.id.startsWith(UNDO_PREFIX)
+      return isUndoId(event.data.id)
     case 'system/message':
     case 'developer/message':
     case 'assistant/message':
     case 'tool/result':
-      return event.data.message.id.startsWith(UNDO_PREFIX)
+      return isUndoId(event.data.message.id)
     default:
       return false
   }

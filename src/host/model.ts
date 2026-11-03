@@ -189,7 +189,7 @@ export class AuxiliaryModels {
         sessionId: session.id,
         signal: controller.signal,
       }
-      appendPluginRecord(session, 'plugin:composer-enhancer/request', {
+      appendPluginRecord(session, 'plugin:agent-enhancer/request', {
         operation,
         requestId: request.requestId,
         route,

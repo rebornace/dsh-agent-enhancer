@@ -90,7 +90,7 @@ async function captureFixture(
   ctx.provide('fs', { processPath: (target: { absolutePath: string }) => target.absolutePath } as never)
   ctx.provide('tools', {} as never)
   const store = new CheckpointStore(join(
-    directory, 'profiles', 'desktop', 'plugin-data', 'dsh-composer-enhancer', 'checkpoint',
+    directory, 'profiles', 'desktop', 'plugin-data', 'dsh-agent-enhancer', 'checkpoint',
   ))
   await prepare?.({ store, session, workspaceRoot })
   apply(ctx, Config({ rollbackEnabled: enabled }))
@@ -149,7 +149,7 @@ it('recovers a persisted surface append during Host startup without a preview ca
   const digest = (value: string) => createHash('sha256').update(value).digest('hex')
   const h = await captureFixture(false, async ({ store, session, workspaceRoot }) => {
     const storageRoot = join(
-      process.env.DSH_HOME!, 'profiles', 'desktop', 'plugin-data', 'dsh-composer-enhancer', 'checkpoint',
+      process.env.DSH_HOME!, 'profiles', 'desktop', 'plugin-data', 'dsh-agent-enhancer', 'checkpoint',
     )
     await writeFile(join(workspaceRoot, 'file.txt'), 'before', 'utf8')
     session.append('turn/start', { turn: 1 })
@@ -157,7 +157,7 @@ it('recovers a persisted surface append during Host startup without a preview ca
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     const sourceSeq = session.surface.nodes[0]!
     session.append('user/message', {
-      id: MessageId('dsh-composer-enhancer:rollback:1:startup-restore'),
+      id: MessageId('dsh-agent-enhancer:rollback:1:startup-restore'),
       role: 'user',
       content: [{ type: 'text', text: 'Rollback notice' }],
       source: { kind: 'checkpoint-rollback', form: 'notice', summary: 'Rolled back before turn 1' },

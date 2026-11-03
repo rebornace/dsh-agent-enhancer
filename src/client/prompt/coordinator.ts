@@ -2,7 +2,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { textSegments } from '../dsh/structured.ts'
 import { PromptHistory } from './history.ts'
 import type {
-  ComposerKey,
+  PromptKey,
   DraftGuard,
   DraftSelection,
   DraftSnapshot,
@@ -13,7 +13,7 @@ import type {
   PromptEntry,
 } from './types.ts'
 
-export interface ComposerInput {
+export interface PromptInput {
   readonly sessionId: SessionId
   readonly draft: string
   readonly draftRev: number
@@ -31,14 +31,14 @@ export interface TextResult {
   readonly guard: DraftGuard
 }
 
-export interface ComposerSearchState {
+export interface PromptSearchState {
   readonly original: DraftSnapshot
   readonly query: string
   readonly entries: readonly PromptEntry[]
   readonly selectedSeq: number | null
 }
 
-type ComposerMode =
+type PromptMode =
   | { readonly kind: 'editing' }
   | { readonly kind: 'history'; original: DraftSnapshot; index: number }
   | { readonly kind: 'search'; original: DraftSnapshot; query: string }
@@ -60,8 +60,8 @@ type ExpectedWrite = {
 type CacheEntry = { readonly entries: readonly PromptEntry[]; readonly cachedAt: number }
 
 export class Coordinator {
-  private input: ComposerInput | null = null
-  private mode: ComposerMode = { kind: 'editing' }
+  private input: PromptInput | null = null
+  private mode: PromptMode = { kind: 'editing' }
   private expected: ExpectedWrite | null = null
   private optimizedEnd: number | null = null
   private historyActions: HistoryActions | null = null
@@ -85,7 +85,7 @@ export class Coordinator {
     return () => { this.listeners.delete(listener) }
   }
 
-  searchSnapshot(): ComposerSearchState | null {
+  searchSnapshot(): PromptSearchState | null {
     if (this.mode.kind !== 'search') return null
     return {
       original: this.mode.original,
@@ -127,7 +127,7 @@ export class Coordinator {
     this.resetTransient()
   }
 
-  sync(input: ComposerInput): void {
+  sync(input: PromptInput): void {
     if (this.disposed) return
     const previous = this.input
     const sessionChanged = previous !== null && previous.sessionId !== input.sessionId
@@ -236,7 +236,7 @@ export class Coordinator {
     return true
   }
 
-  handleKey(key: ComposerKey, context: KeyContext): boolean {
+  handleKey(key: PromptKey, context: KeyContext): boolean {
     if (this.disposed || context.composing || context.systemLayerOpen) return false
     if (context.officialMenuOpen) {
       if (this.mode.kind === 'history' || this.mode.kind === 'search') {
@@ -269,7 +269,7 @@ export class Coordinator {
   }
 
   private selection(): DraftSelection {
-    if (this.input === null) throw new Error('Composer is not synchronized')
+    if (this.input === null) throw new Error('Prompt session is not synchronized')
     return {
       sessionId: this.input.sessionId,
       draftRev: this.input.draftRev,
@@ -279,7 +279,7 @@ export class Coordinator {
   }
 
   private snapshot(): DraftSnapshot {
-    if (this.input === null) throw new Error('Composer is not synchronized')
+    if (this.input === null) throw new Error('Prompt session is not synchronized')
     return { ...this.selection(), text: this.input.draft }
   }
 
@@ -483,7 +483,7 @@ export class Coordinator {
   }
 }
 
-function guardOf(input: ComposerInput): DraftGuard {
+function guardOf(input: PromptInput): DraftGuard {
   return { sessionId: input.sessionId, draftRev: input.draftRev }
 }
 

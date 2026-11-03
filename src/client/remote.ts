@@ -15,14 +15,14 @@ function codec(typeSymbol: string): TypertCodec {
   }
 }
 
-const payloadCodec = codec('dsh-composer-enhancer#RpcPayload')
+const payloadCodec = codec('dsh-agent-enhancer#RpcPayload')
 
 export const clientRemoteInfo = {
-  package: 'dsh-composer-enhancer',
+  package: 'dsh-agent-enhancer',
   descriptors: [{
-    id: 'dsh-composer-enhancer#composerEnhancer/call',
-    service: 'composerEnhancer',
-    namespace: 'composerEnhancer',
+    id: 'dsh-agent-enhancer#agentEnhancer/call',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
     method: 'call',
     implementation: 'call',
     invocation: { kind: 'direct' },
@@ -33,22 +33,22 @@ export const clientRemoteInfo = {
       codec: payloadCodec,
     }],
     cancellation: { parameter: 'signal' },
-    result: codec('dsh-composer-enhancer#AuxiliaryResult|null'),
+    result: codec('dsh-agent-enhancer#AuxiliaryResult|null'),
   }, {
-    id: 'dsh-composer-enhancer#composerEnhancer/listCatalog',
-    service: 'composerEnhancer',
-    namespace: 'composerEnhancer',
+    id: 'dsh-agent-enhancer#agentEnhancer/listCatalog',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
     method: 'listCatalog',
     implementation: 'listCatalog',
     invocation: { kind: 'direct' },
     parameters: [],
-    result: codec('dsh-composer-enhancer#ModelCatalog'),
+    result: codec('dsh-agent-enhancer#ModelCatalog'),
   }, ...checkpointClientRemoteInfo.descriptors],
 } satisfies TypertRemoteContribution
 
-export const composerEnhancerCall = {
+export const agentEnhancerCall = {
   async invoke(remote: unknown, input: { readonly payload: RpcPayload }, signal?: AbortSignal) {
-    const namespace = Reflect.get(remote as object, 'composerEnhancer') as object
+    const namespace = Reflect.get(remote as object, 'agentEnhancer') as object
     const call = Reflect.get(namespace, 'call') as Call
     let result: RemoteResult<AuxiliaryResult | null>
     try {
@@ -58,7 +58,7 @@ export const composerEnhancerCall = {
       throw new AuxiliaryError('MODEL_FAILED')
     }
     if (!result.ok) {
-      const code = result.error.code === 'composer-enhancer/failed' ? result.error.details.code : 'MODEL_FAILED'
+      const code = result.error.code === 'agent-enhancer/failed' ? result.error.details.code : 'MODEL_FAILED'
       throw new AuxiliaryError(code)
     }
     return result.value

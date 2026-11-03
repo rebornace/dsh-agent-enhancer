@@ -2,10 +2,10 @@ import type { InputState } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { describe, expect, it, vi } from 'vitest'
 import type { AuxiliaryResult, OptimizeRequest, RecentExchange } from '../src/host/types.ts'
-import { Coordinator } from '../src/client/composer/coordinator.ts'
-import type { ComposerInput } from '../src/client/composer/coordinator.ts'
-import { OptimizationController, OptimizationStore } from '../src/client/composer/optimize.ts'
-import type { DraftSelection, DraftSnapshot, DraftWriter } from '../src/client/composer/types.ts'
+import { Coordinator } from '../src/client/prompt/coordinator.ts'
+import type { PromptInput } from '../src/client/prompt/coordinator.ts'
+import { OptimizationController, OptimizationStore } from '../src/client/prompt/optimize.ts'
+import type { DraftSelection, DraftSnapshot, DraftWriter } from '../src/client/prompt/types.ts'
 import { AuxiliaryError } from '../src/errors.ts'
 
 const session = (value: string): SessionId => value as SessionId
@@ -27,7 +27,7 @@ class Writer implements DraftWriter {
   readonly replacements: Array<{ text: string; selection: DraftSelection; segments?: readonly string[] }> = []
   acceptReplace = true
 
-  constructor(private readonly input: () => ComposerInput, private readonly update: (draft: string, caret: number) => void) {}
+  constructor(private readonly input: () => PromptInput, private readonly update: (draft: string, caret: number) => void) {}
 
   replace(text: string, selection: DraftSelection, segments?: readonly string[]): boolean {
     this.replacements.push({ text, selection, ...(segments === undefined ? {} : { segments }) })
@@ -53,7 +53,7 @@ interface HarnessOptions {
 }
 
 function harness(options: HarnessOptions = {}) {
-  let input: ComposerInput = {
+  let input: PromptInput = {
     sessionId: session('a'),
     draft: options.draft ?? 'source',
     draftRev: 1,
@@ -101,7 +101,7 @@ function harness(options: HarnessOptions = {}) {
     sync,
     edit,
     input: () => input,
-    setInput(value: ComposerInput) { input = value },
+    setInput(value: PromptInput) { input = value },
   }
 }
 

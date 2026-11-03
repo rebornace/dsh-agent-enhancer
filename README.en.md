@@ -1,12 +1,12 @@
-# DSH Composer Enhancer
+# DSH Agent Enhancer
 
 **中文：** [README.md](./README.md)
 
-> Make DeepSeek Harness Desktop Composer **easier to write, refine, and roll back**.  
-> Prompt history · one-click optimize · next-prompt predict · conversation & file restore — all inside the official Composer.
+> One plugin to make DeepSeek Harness Desktop **easier to write, refine, and roll back**, and to keep moving toward mainstream agent UX.  
+> Prompt history · one-click optimize · next-prompt predict · conversation & file restore — inside the official conversation input, no extra window.
 
-[![npm](https://img.shields.io/npm/v/dsh-composer-enhancer.svg)](https://www.npmjs.com/package/dsh-composer-enhancer)
-[![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5%20%3C0.3.0-blue)](https://www.npmjs.com/package/dsh-composer-enhancer)
+[![npm](https://img.shields.io/npm/v/dsh-agent-enhancer.svg)](https://www.npmjs.com/package/dsh-agent-enhancer)
+[![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5%20%3C0.3.0-blue)](https://www.npmjs.com/package/dsh-agent-enhancer)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
@@ -21,7 +21,7 @@
 | Continue after a reply | Press `Tab` to accept the gray suggestion |
 | Go back before a turn | Click **Restore to here**, then confirm in the preview |
 | Spend less on helper calls | Pick a cheaper model for optimize / predict in settings |
-| Turn a feature off | **Settings → Built-in plugins → Composer Enhance** |
+| Turn a feature off | **Settings → Built-in plugins → Agent Enhance** |
 
 Defaults: all four features on. UI language follows Desktop (`zh` / `en`).
 
@@ -38,7 +38,7 @@ Defaults: all four features on. UI language follows Desktop (`zh` / `en`).
 
 ### Settings
 
-**Settings → Built-in plugins → Composer Enhance**
+**Settings → Built-in plugins → Agent Enhance**
 
 | Toggle | Config key | Default | Effect |
 | --- | --- | --- | --- |
@@ -53,26 +53,26 @@ Model pills default to **Follow session**, or pick provider / model / reasoning 
 
 | Screen | What you see | Preview |
 | --- | --- | --- |
-| History search | `Alt+R` surface and result list | ![History search](https://raw.githubusercontent.com/rebornace/dsh-composer-enhancer/main/docs/images/prompt-history.png) |
-| Optimize & predict | Optimize control + gray suggestion after a reply | ![Optimize & predict](https://raw.githubusercontent.com/rebornace/dsh-composer-enhancer/main/docs/images/optimize-and-predict.png) |
-| Rollback entry | Restore icon; tooltip **Restore to here** | ![Rollback entry](https://raw.githubusercontent.com/rebornace/dsh-composer-enhancer/main/docs/images/rollback-entry.png) |
-| Rollback preview | Conversation to withdraw; conversation-only or + tracked files | ![Rollback preview](https://raw.githubusercontent.com/rebornace/dsh-composer-enhancer/main/docs/images/rollback-preview.png) |
-| Undo restore | After restore, open composer **+** or `/`, choose **Undo restore** | ![Undo restore](https://raw.githubusercontent.com/rebornace/dsh-composer-enhancer/main/docs/images/undo-restore.png) |
-| Settings · Composer Enhance | Four toggles, model pills, privacy blurb | ![Settings](https://raw.githubusercontent.com/rebornace/dsh-composer-enhancer/main/docs/images/settings.png) |
+| History search | `Alt+R` surface and result list | ![History search](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/prompt-history.png) |
+| Optimize & predict | Optimize control + gray suggestion after a reply | ![Optimize & predict](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/optimize-and-predict.png) |
+| Rollback entry | Restore icon; tooltip **Restore to here** | ![Rollback entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-entry.png) |
+| Rollback preview | Conversation to withdraw; conversation-only or + tracked files | ![Rollback preview](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-preview.png) |
+| Undo restore | After restore, open input **+** or `/`, choose **Undo restore** | ![Undo restore](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/undo-restore.png) |
+| Settings · Agent Enhance | Four toggles, model pills, privacy blurb | ![Settings](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/settings.png) |
 
 ---
 
 ## Install
 
 Quit every Desktop window and tray process before install, upgrade, or uninstall.  
-This plugin targets **Desktop / the `desktop` profile** (do not validate with `web`). It is listed on [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin); you can also search for `dsh-composer-enhancer` / **Composer Enhance** in third-party markets.
+This plugin targets **Desktop / the `desktop` profile** (do not validate with `web`). It is listed on [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin); you can also search for `dsh-agent-enhancer` / **Agent Enhance** in third-party markets.
 
 ### Official Desktop · in-app install (recommended)
 
 For the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) **official Desktop** (and other official builds that ship **Settings → Plugins**):
 
 1. Open **Settings → Plugins** (or the **Plugins** sidebar entry).
-2. Search for `dsh-composer-enhancer` or **Composer Enhance**, then install when prompted.
+2. Search for `dsh-agent-enhancer` or **Agent Enhance**, then install when prompted.
 3. Fully quit and restart Desktop.
 
 > Desktop manages its own profile. Do **not** install into Desktop with `dsh plugin --profile web …` — the command may succeed while writing to `profiles/web`, which Desktop never loads.
@@ -91,11 +91,12 @@ Then open the **Plugin Market** tab, search, and install this plugin. Some third
 When the `dsh` CLI is available and you intend to write the **desktop** profile:
 
 ```sh
-dsh plugin --profile desktop add dsh-composer-enhancer@0.1.6
+dsh plugin --profile desktop add dsh-agent-enhancer@0.2.0
 ```
 
-Or unpinned: `dsh plugin --profile desktop add dsh-composer-enhancer`.  
-You should then see the optimize control and **Composer Enhance** in settings.
+Or unpinned: `dsh plugin --profile desktop add dsh-agent-enhancer`.  
+If you previously installed `dsh-composer-enhancer`, remove it first, then install this package.  
+You should then see the optimize control and **Agent Enhance** in settings.
 
 ### Local directory (development)
 
@@ -120,7 +121,7 @@ Keep host-shared DSH packages in both `peerDependencies` and `devDependencies`, 
 | Optimize | Sends draft/selection + latest completed turn |
 | Predict | Sends the latest completed turn |
 | Cache | In-session memory only |
-| Audit | Local `plugin:composer-enhancer/request` (no telemetry upload) |
+| Audit | Local `plugin:agent-enhancer/request` (no telemetry upload) |
 | Coexistence | Hints only — never auto-disables third-party plugins |
 
 ---
@@ -135,8 +136,8 @@ Keep host-shared DSH packages in both `peerDependencies` and `devDependencies`, 
 
 | Install type | Action |
 | --- | --- |
-| Official Desktop / dsh-market | Uninstall or disable the plugin on the in-app **Plugins** page; or `dsh plugin --profile desktop remove dsh-composer-enhancer` |
-| CLI npm | `dsh plugin --profile desktop remove dsh-composer-enhancer` |
+| Official Desktop / dsh-market | Uninstall or disable the plugin on the in-app **Plugins** page; or `dsh plugin --profile desktop remove dsh-agent-enhancer` |
+| CLI npm | `dsh plugin --profile desktop remove dsh-agent-enhancer` |
 | Local `link:` | **Do not** `remove` / run `pnpm remove` in the profile (can delete the source repo). Follow below |
 
 1. Quit Desktop (including tray)  
@@ -147,7 +148,7 @@ Keep host-shared DSH packages in both `peerDependencies` and `devDependencies`, 
 $DshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }
 $ProfileDir = Join-Path $DshHome 'profiles\desktop'
 dsh plugin --profile desktop install
-$PluginLink = Join-Path $ProfileDir 'node_modules\dsh-composer-enhancer'
+$PluginLink = Join-Path $ProfileDir 'node_modules\dsh-agent-enhancer'
 $Item = Get-Item -LiteralPath $PluginLink -Force -ErrorAction SilentlyContinue
 if ($Item -and $Item.LinkType -in @('SymbolicLink', 'Junction')) { $Item.Delete() }
 ```
@@ -167,7 +168,7 @@ corepack pnpm check   # typecheck + test + build + pack verify
 | Path | Contents |
 | --- | --- |
 | `src/host/` | Model calls, RPC, checkpoint rollback |
-| `src/client/` | Composer UI and state machines |
+| `src/client/` | Conversation input UI and state machines |
 | `tests/` | Vitest |
 | `lib/` | Build output |
 

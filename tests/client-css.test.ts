@@ -38,7 +38,7 @@ it('installs and removes compiled CSS through the client effect', async () => {
     },
   })
   if (definition === undefined) throw new Error('Client bundle did not register its module')
-  expect(definition.id).toBe('dsh-composer-enhancer')
+  expect(definition.id).toBe('dsh-agent-enhancer')
 
   const disposers: Array<Disposer | Promise<Disposer>> = []
   definition.factory((id: string) => id === '@deepseek-ai/dsh-client-ui-primitives' ? {} : require(id)).apply({
@@ -58,13 +58,13 @@ it('installs and removes compiled CSS through the client effect', async () => {
     slots: { inject: () => () => {} },
   })
 
-  const style = dom.window.document.head.querySelector('style[data-dsh-composer-enhancer]')
+  const style = dom.window.document.head.querySelector('style[data-dsh-agent-enhancer]')
   expect(style).not.toBeNull()
   expect(style?.textContent).toContain('position: relative')
   expect(disposers.length).toBeGreaterThan(3)
   const resolved = await Promise.all(disposers)
   await resolved[0]?.()
-  expect(dom.window.document.head.querySelector('style[data-dsh-composer-enhancer]')).toBeNull()
+  expect(dom.window.document.head.querySelector('style[data-dsh-agent-enhancer]')).toBeNull()
   for (const dispose of resolved.slice(1)) await dispose()
 })
 

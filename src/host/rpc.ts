@@ -54,9 +54,9 @@ function codec(typeSymbol: string, schema: z.ZodType): TypertRemoteCodecSpec {
   return { mode: 'strict', typeSymbol, create: () => schema }
 }
 
-const payloadCodec = codec('dsh-composer-enhancer#RpcPayload', rpcPayloadSchema)
+const payloadCodec = codec('dsh-agent-enhancer#RpcPayload', rpcPayloadSchema)
 const resultCodec = codec(
-  'dsh-composer-enhancer#AuxiliaryResult|null',
+  'dsh-agent-enhancer#AuxiliaryResult|null',
   z.union([auxiliaryResultSchema, z.null()]),
 )
 
@@ -98,13 +98,13 @@ export const modelCatalogSchema = z.object({
   failures: z.array(modelCatalogFailureSchema),
 })
 export type ModelCatalogPayload = z.infer<typeof modelCatalogSchema>
-const catalogCodec = codec('dsh-composer-enhancer#ModelCatalog', modelCatalogSchema)
+const catalogCodec = codec('dsh-agent-enhancer#ModelCatalog', modelCatalogSchema)
 
 export const remoteInfo = createTypertRemoteInfo({
-  package: 'dsh-composer-enhancer',
+  package: 'dsh-agent-enhancer',
   methods: {
-    'composerEnhancer/call': {
-      service: 'composerEnhancer',
+    'agentEnhancer/call': {
+      service: 'agentEnhancer',
       implementation: 'call',
       invocation: { kind: 'direct' },
       parameters: [{
@@ -117,8 +117,8 @@ export const remoteInfo = createTypertRemoteInfo({
       result: resultCodec,
     },
     // Same shape as session/modelCatalog: no cancellation parameter.
-    'composerEnhancer/listCatalog': {
-      service: 'composerEnhancer',
+    'agentEnhancer/listCatalog': {
+      service: 'agentEnhancer',
       implementation: 'listCatalog',
       invocation: { kind: 'direct' },
       parameters: [],
@@ -129,8 +129,8 @@ export const remoteInfo = createTypertRemoteInfo({
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
-    'composer-enhancer/forbidden': {}
-    'composer-enhancer/failed': { code: AuxiliaryErrorCode }
+    'agent-enhancer/forbidden': {}
+    'agent-enhancer/failed': { code: AuxiliaryErrorCode }
   }
 }
 
@@ -195,12 +195,12 @@ const checkpointResultSchema = z.strictObject({
   turn: z.number().int().positive(),
   draft: z.string(),
 })
-const checkpointRequestCodec = codec('dsh-composer-enhancer#CheckpointRollbackRequest', checkpointRollbackRequestSchema)
-const checkpointPreviewCodec = codec('dsh-composer-enhancer#CheckpointRollbackPreview', checkpointPreviewSchema)
-const checkpointResultCodec = codec('dsh-composer-enhancer#CheckpointRollbackResult', checkpointResultSchema)
+const checkpointRequestCodec = codec('dsh-agent-enhancer#CheckpointRollbackRequest', checkpointRollbackRequestSchema)
+const checkpointPreviewCodec = codec('dsh-agent-enhancer#CheckpointRollbackPreview', checkpointPreviewSchema)
+const checkpointResultCodec = codec('dsh-agent-enhancer#CheckpointRollbackResult', checkpointResultSchema)
 
 export const checkpointRemoteInfo = createTypertRemoteInfo({
-  package: 'dsh-composer-enhancer',
+  package: 'dsh-agent-enhancer',
   methods: {
     'checkpointRollback/preview': {
       service: 'checkpointRollback',
@@ -223,6 +223,6 @@ export const checkpointRemoteInfo = createTypertRemoteInfo({
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
-    'composer-enhancer/rollback-failed': { code: CheckpointRollbackErrorCode }
+    'agent-enhancer/rollback-failed': { code: CheckpointRollbackErrorCode }
   }
 }

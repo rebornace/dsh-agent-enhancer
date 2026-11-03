@@ -9,7 +9,7 @@ import { confirmBlocked, scopeLabel } from './scope.ts'
 
 export interface RollbackModalHostProps {
   readonly rollback: RollbackController
-  readonly t: TranslateNS<'composer-enhancer'>
+  readonly t: TranslateNS<'agent-enhancer'>
   readonly inputActions: InputActions
 }
 

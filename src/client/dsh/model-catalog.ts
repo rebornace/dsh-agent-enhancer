@@ -32,7 +32,7 @@ export function catalogLoadersFromRemote(remote: unknown): ModelCatalogLoaders {
   if (remote === undefined || remote === null || typeof remote !== 'object') return {}
   return {
     sessionModelCatalog: asCatalogFn(probeRemoteFace(remote, 'session'), 'modelCatalog'),
-    hostListCatalog: asCatalogFn(probeRemoteFace(remote, 'composerEnhancer'), 'listCatalog'),
+    hostListCatalog: asCatalogFn(probeRemoteFace(remote, 'agentEnhancer'), 'listCatalog'),
   }
 }
 
@@ -54,10 +54,10 @@ export async function loadDesktopModelCatalog(
     attempts.push({ name: 'session.modelCatalog', load: loaders.sessionModelCatalog })
   }
   if (loaders.hostListCatalog) {
-    attempts.push({ name: 'composerEnhancer.listCatalog', load: loaders.hostListCatalog })
+    attempts.push({ name: 'agentEnhancer.listCatalog', load: loaders.hostListCatalog })
   }
   if (attempts.length === 0) {
-    throw new Error('no catalog RPC on remote (session/composerEnhancer missing)')
+    throw new Error('no catalog RPC on remote (session/agentEnhancer missing)')
   }
 
   const errors: string[] = []

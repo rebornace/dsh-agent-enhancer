@@ -210,7 +210,7 @@ describe('AuxiliaryModels', () => {
     expect(h.prepare).toHaveBeenCalledTimes(1)
     expect(h.stateOf).not.toHaveBeenCalled()
     expect(h.prepare.mock.calls[0]?.[0]).toEqual({ ...route, maxTokens: 1200 })
-    expect(appendPluginRecord).toHaveBeenCalledWith(h.session, 'plugin:composer-enhancer/request', expect.objectContaining({
+    expect(appendPluginRecord).toHaveBeenCalledWith(h.session, 'plugin:agent-enhancer/request', expect.objectContaining({
       operation: 'optimize', requestId: 'req-1', maxTokens: 1200,
     }))
     const audit = vi.mocked(appendPluginRecord).mock.calls[0]?.[2]!

@@ -3,7 +3,7 @@ export const AUXILIARY_ERROR_CODES = [
 ] as const
 export type AuxiliaryErrorCode = typeof AUXILIARY_ERROR_CODES[number]
 const MESSAGES: Record<AuxiliaryErrorCode, string> = {
-  MODEL_UNAVAILABLE: 'No model is available for Composer Enhance',
+  MODEL_UNAVAILABLE: 'No model is available for Agent Enhance',
   MODEL_FAILED: 'Auxiliary model request failed',
   INVALID_OUTPUT: 'Auxiliary model returned invalid output',
   SESSION_CHANGED: 'The session changed during the auxiliary request',

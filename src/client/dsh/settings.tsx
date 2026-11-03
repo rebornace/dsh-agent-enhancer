@@ -24,7 +24,7 @@ type SettingsForm = Pick<ConfigForm<EnhancerSettings>, 'getSnapshot' | 'subscrib
 
 export interface PluginSettingsProps {
   readonly form: SettingsForm
-  readonly t: TranslateNS<'composer-enhancer'>
+  readonly t: TranslateNS<'agent-enhancer'>
   readonly loadCatalog?: () => Promise<ModelCatalog>
 }
 
@@ -116,7 +116,7 @@ interface ModelPillProps {
   readonly groups: readonly ModelProviderGroup[]
   readonly catalogStatus: 'idle' | 'loading' | 'ready' | 'error'
   readonly disabled: boolean
-  readonly t: TranslateNS<'composer-enhancer'>
+  readonly t: TranslateNS<'agent-enhancer'>
   readonly onOpen: () => void
   readonly onSelect: (feature: AuxiliaryFeature, id: string) => void
 }
@@ -183,7 +183,7 @@ class SettingsErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error('composer-enhancer settings render failed', error, info.componentStack)
+    console.error('agent-enhancer settings render failed', error, info.componentStack)
   }
 
   render(): ReactNode {

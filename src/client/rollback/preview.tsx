@@ -6,7 +6,7 @@ import type { FileConflict } from '../../host/checkpoint/files.ts'
 import styles from '../styles.module.css'
 import type { RollbackActive } from './types.ts'
 
-const UNAVAILABLE_KEYS: Record<CheckpointUnavailable, Parameters<TranslateNS<'composer-enhancer'>>[0]> = {
+const UNAVAILABLE_KEYS: Record<CheckpointUnavailable, Parameters<TranslateNS<'agent-enhancer'>>[0]> = {
   'checkpoint-not-found': 'rollbackUnavailableCheckpoint',
   'incomplete-checkpoint': 'rollbackUnavailableIncomplete',
   'prompt-non-text-content': 'rollbackGapPrompt',
@@ -22,7 +22,7 @@ const UNAVAILABLE_KEYS: Record<CheckpointUnavailable, Parameters<TranslateNS<'co
   'unknown-surface': 'rollbackUnavailableUnknown',
 }
 
-const CONFLICT_KEYS: Record<FileConflict['reason'], Parameters<TranslateNS<'composer-enhancer'>>[0]> = {
+const CONFLICT_KEYS: Record<FileConflict['reason'], Parameters<TranslateNS<'agent-enhancer'>>[0]> = {
   'unsafe-path': 'rollbackConflictUnsafe',
   'symlink': 'rollbackConflictSymlink',
   'not-regular-file': 'rollbackConflictRegular',
@@ -35,7 +35,7 @@ const CONFLICT_KEYS: Record<FileConflict['reason'], Parameters<TranslateNS<'comp
 
 export function RollbackPreview({ active, t }: {
   readonly active: RollbackActive
-  readonly t: TranslateNS<'composer-enhancer'>
+  readonly t: TranslateNS<'agent-enhancer'>
 }) {
   if (active.status === 'loading' || active.status === 'executing') {
     const loadingKey = active.status === 'loading'
@@ -94,7 +94,7 @@ export function RollbackPreview({ active, t }: {
 
 export function rollbackModalCopy(
   operation: RollbackActive['operation'],
-  t: TranslateNS<'composer-enhancer'>,
+  t: TranslateNS<'agent-enhancer'>,
   turn: number,
   scope?: CheckpointRollbackScope,
 ): {

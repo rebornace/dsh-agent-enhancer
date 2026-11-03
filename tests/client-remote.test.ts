@@ -5,10 +5,10 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import { createElement } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { apply, inject } from '../src/client/index.ts'
-import type { ComposerSession } from '../src/client/composer/session.ts'
-import { ComposerControls } from '../src/client/dsh/controls.tsx'
-import type { ComposerControlsProps } from '../src/client/dsh/controls.tsx'
-import { clientRemoteInfo, composerEnhancerCall } from '../src/client/remote.ts'
+import type { PromptSession } from '../src/client/prompt/session.ts'
+import { AgentControls } from '../src/client/dsh/controls.tsx'
+import type { AgentControlsProps } from '../src/client/dsh/controls.tsx'
+import { clientRemoteInfo, agentEnhancerCall } from '../src/client/remote.ts'
 
 vi.mock('../src/client/styles.module.css', () => ({ default: {}, installCss: () => () => {} }))
 
@@ -61,7 +61,7 @@ it('mounts the shared Remote and host config entry and disposes the Remote', asy
   const remote = {
     $mount: mount,
     session: { modelCatalog: async () => ({ ok: true as const, value: emptyCatalog }) },
-    composerEnhancer: {
+    agentEnhancer: {
       call: vi.fn(),
       listCatalog: vi.fn(async () => ({ ok: true as const, value: emptyCatalog })),
     },
@@ -70,7 +70,7 @@ it('mounts the shared Remote and host config entry and disposes the Remote', asy
   }
   ctx.provide('remote', remote as never)
   ctx.provide('remote.session', remote.session as never)
-  ctx.provide('remote.composerEnhancer', remote.composerEnhancer as never)
+  ctx.provide('remote.agentEnhancer', remote.agentEnhancer as never)
   ctx.provide('remote.checkpointRollback', remote.checkpointRollback as never)
   ctx.provide('configForms', { get, whileServed: () => () => {} } as never)
   ctx.provide('locale', { register, bind: () => (key: string) => key, getLocale: () => ({ active: 'zh', locales: [], revision: 0 }) } as never)
@@ -86,7 +86,7 @@ it('mounts the shared Remote and host config entry and disposes the Remote', asy
 
   const fiber = await ctx.plugin({ apply })
 
-  expect(get).toHaveBeenCalledWith('composer-enhancer')
+  expect(get).toHaveBeenCalledWith('agent-enhancer')
   expect(injectedSlots).toContain('settings.plugins.tab')
   expect(mount).toHaveBeenCalledWith(clientRemoteInfo)
   await vi.waitFor(() => { expect(mount).toHaveBeenCalledTimes(1) })
@@ -135,8 +135,8 @@ it('invokes the mounted namespace through the declared Cordis injection', async 
     pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
   }, {
     get(target, property, receiver) {
-      if (property === 'composerEnhancer' && pluginCtx !== undefined) {
-        return Reflect.get(pluginCtx, 'remote.composerEnhancer')
+      if (property === 'agentEnhancer' && pluginCtx !== undefined) {
+        return Reflect.get(pluginCtx, 'remote.agentEnhancer')
       }
       return Reflect.get(target, property, receiver)
     },
@@ -151,12 +151,12 @@ it('invokes the mounted namespace through the declared Cordis injection', async 
   ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key, getLocale: () => ({ active: 'zh', locales: [], revision: 0 }) } as never)
   ctx.provide('slots', { inject: vi.fn(() => () => {}) } as never)
   await ctx.plugin({ inject, apply(context) { pluginCtx = context; apply(context) } })
-  ctx.provide('remote.composerEnhancer', { call } as never)
+  ctx.provide('remote.agentEnhancer', { call } as never)
   await vi.waitFor(() => { expect(pluginCtx).toBeDefined() })
 
   const payload = remotePayload()
   const signal = new AbortController().signal
-  const result = await composerEnhancerCall.invoke(pluginCtx!.remote, { payload }, signal)
+  const result = await agentEnhancerCall.invoke(pluginCtx!.remote, { payload }, signal)
 
   expect(result).toBeNull()
   expect(call).toHaveBeenCalledWith(payload, signal)
@@ -164,11 +164,11 @@ it('invokes the mounted namespace through the declared Cordis injection', async 
 
 it('rejects declared Remote failures with their sanitized auxiliary category', async () => {
   const remote = {
-    composerEnhancer: {
+    agentEnhancer: {
       call: async () => ({
         ok: false as const,
         error: {
-          code: 'composer-enhancer/failed',
+          code: 'agent-enhancer/failed',
           message: 'provider credential and private text',
           details: { code: 'INVALID_OUTPUT' },
         },
@@ -177,7 +177,7 @@ it('rejects declared Remote failures with their sanitized auxiliary category', a
   }
   const payload = remotePayload()
 
-  const rejection = await composerEnhancerCall.invoke(remote, { payload }).catch((error: unknown) => error)
+  const rejection = await agentEnhancerCall.invoke(remote, { payload }).catch((error: unknown) => error)
 
   expect(rejection).toMatchObject({ name: 'AuxiliaryError', code: 'INVALID_OUTPUT' })
   expect((rejection as Error).message).not.toContain('provider credential')
@@ -187,12 +187,12 @@ it('rethrows a real Remote cancellation rejection unchanged', async () => {
   const controller = new AbortController()
   controller.abort()
   const remote = {
-    composerEnhancer: {
+    agentEnhancer: {
       call: async () => { throw controller.signal.reason },
     },
   }
 
-  const rejection = await composerEnhancerCall.invoke(
+  const rejection = await agentEnhancerCall.invoke(
     remote,
     { payload: remotePayload() },
     controller.signal,
@@ -205,12 +205,12 @@ it('rethrows a real Remote cancellation rejection unchanged', async () => {
 it('maps an ordinary Remote rejection to a sanitized model failure', async () => {
   const cause = new Error('provider credential and private text')
   const remote = {
-    composerEnhancer: {
+    agentEnhancer: {
       call: async () => { throw cause },
     },
   }
 
-  const rejection = await composerEnhancerCall.invoke(remote, { payload: remotePayload() })
+  const rejection = await agentEnhancerCall.invoke(remote, { payload: remotePayload() })
     .catch((error: unknown) => error)
 
   expect(rejection).not.toBe(cause)
@@ -232,11 +232,11 @@ it('aborts pending optimization and hides the button on a real form notification
   }
   const registrations: Array<{
     name: string
-    inject: (sessionId: SessionId) => { session: ComposerSession }
+    inject: (sessionId: SessionId) => { session: PromptSession }
   }> = []
   const register = vi.fn((options: {
     name: string
-    inject: (sessionId: SessionId) => { session: ComposerSession }
+    inject: (sessionId: SessionId) => { session: PromptSession }
   }) => {
     registrations.push(options)
     return () => {}
@@ -255,14 +255,14 @@ it('aborts pending optimization and hides the button on a real form notification
     register,
   } as never)
   let requestSignal: AbortSignal | undefined
-  const method = composerEnhancerCall as unknown as {
+  const method = agentEnhancerCall as unknown as {
     invoke: (remote: unknown, input: unknown, signal?: AbortSignal) => Promise<never>
   }
   vi.spyOn(method, 'invoke').mockImplementation((_remote, _input, signal) => {
     requestSignal = signal
     return new Promise(() => {})
   })
-  ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
+  ctx.provide('remote.agentEnhancer', { call: vi.fn() } as never)
   ctx.provide('remote.checkpointRollback', { preview: vi.fn(), execute: vi.fn() } as never)
   await ctx.plugin({ apply })
   await vi.waitFor(() => {
@@ -274,8 +274,8 @@ it('aborts pending optimization and hides the button on a real form notification
   const session = registration!.inject(sessionId).session
   session.attach({ replace: () => false, setDraft: () => {} })
   session.sync({ sessionId, draft: 'source', draftRev: 1, selection: { start: 0, end: 0 }, occurrences: [], running: false }, [], false)
-  const t = ((key: string) => key) as ComposerControlsProps['t']
-  render(createElement(ComposerControls, { session, t }))
+  const t = ((key: string) => key) as AgentControlsProps['t']
+  render(createElement(AgentControls, { session, t }))
 
   act(() => { void session.optimize() })
   expect(screen.getByRole('button', { name: 'optimizePending' })).toBeTruthy()
@@ -322,7 +322,7 @@ it('registers user node replacement only while enabled and cleans up on unload',
   ctx.provide('remote', remote as never)
   ctx.provide('remote.session', remote.session as never)
   ctx.provide('remote.checkpointRollback', checkpointRollback as never)
-  ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
+  ctx.provide('remote.agentEnhancer', { call: vi.fn() } as never)
   ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
   ctx.provide('sessions', {
     retainInfo: () => ({
@@ -347,7 +347,7 @@ it('registers user node replacement only while enabled and cleans up on unload',
   })
   expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(0)
   expect(registrations.filter(entry => entry.name === 'conversation.chat.turnTail')).toHaveLength(0)
-  expect(registrations.filter(entry => entry.id === 'composer-enhancer-rollback')).toHaveLength(0)
+  expect(registrations.filter(entry => entry.id === 'agent-enhancer-rollback')).toHaveLength(0)
 
   act(() => {
     value = { rollbackEnabled: true }
@@ -356,8 +356,8 @@ it('registers user node replacement only while enabled and cleans up on unload',
   await vi.waitFor(() => {
     expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(1)
   })
-  expect(registrations.find(entry => entry.registrant === 'composer-enhancer-rollback-user')).toBeDefined()
-  expect(registrations.find(entry => entry.id === 'composer-enhancer-rollback')).toMatchObject({
+  expect(registrations.find(entry => entry.registrant === 'agent-enhancer-rollback-user')).toBeDefined()
+  expect(registrations.find(entry => entry.id === 'agent-enhancer-rollback')).toMatchObject({
     name: 'conversation.input.overlay',
   })
 
@@ -366,7 +366,7 @@ it('registers user node replacement only while enabled and cleans up on unload',
     for (const listener of listeners) listener()
   })
   expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(0)
-  expect(registrations.filter(entry => entry.id === 'composer-enhancer-rollback')).toHaveLength(0)
+  expect(registrations.filter(entry => entry.id === 'agent-enhancer-rollback')).toHaveLength(0)
 
   act(() => {
     value = { rollbackEnabled: true }
@@ -378,7 +378,7 @@ it('registers user node replacement only while enabled and cleans up on unload',
 
   await fiber.dispose()
   expect(registrations.filter(entry => entry.name === 'conversation.chat.node' && entry.key === 'user')).toHaveLength(0)
-  expect(registrations.filter(entry => entry.id === 'composer-enhancer-rollback')).toHaveLength(0)
+  expect(registrations.filter(entry => entry.id === 'agent-enhancer-rollback')).toHaveLength(0)
 })
 
 it('aborts in-flight rollback preview when rollback is disabled or session retention drops', async () => {
@@ -419,7 +419,7 @@ it('aborts in-flight rollback preview when rollback is disabled or session reten
   ctx.provide('remote', remote as never)
   ctx.provide('remote.session', remote.session as never)
   ctx.provide('remote.checkpointRollback', checkpointRollback as never)
-  ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
+  ctx.provide('remote.agentEnhancer', { call: vi.fn() } as never)
   ctx.provide('configForms', { get: () => form, whileServed: () => () => {} } as never)
   ctx.provide('sessions', {
     retainInfo: () => ({

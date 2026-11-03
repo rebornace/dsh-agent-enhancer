@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PromptHistory } from '../src/client/composer/history.ts'
+import { PromptHistory } from '../src/client/prompt/history.ts'
 
 describe('PromptHistory', () => {
   it('returns null for every navigation in an empty history', () => {

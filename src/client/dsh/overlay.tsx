@@ -3,28 +3,28 @@ import { Button, Input, MenuSurface } from '@deepseek-ai/dsh-client-ui-primitive
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { ComposerInput, ComposerSearchState, Coordinator } from '../composer/coordinator.ts'
-import type { ComposerSession } from '../composer/session.ts'
-import type { ComposerKey, KeyContext, PromptEntry } from '../composer/types.ts'
+import type { PromptInput, PromptSearchState, Coordinator } from '../prompt/coordinator.ts'
+import type { PromptSession } from '../prompt/session.ts'
+import type { PromptKey, KeyContext, PromptEntry } from '../prompt/types.ts'
 import styles from '../styles.module.css'
 import { latestCompletedTurn, sentPrompts } from './conversation.ts'
 import { isComposing, lineBoundary, officialMenuOpen, publicWriter, readSelection } from './editor.ts'
 import { CoexistenceHints } from './hints.tsx'
 import type { OverlapHintStore } from './plugin-hints.ts'
 
-export type ComposerOverlayProps = PropsRuntime<'conversation.input.overlay'> & {
-  readonly session: ComposerSession
+export type AgentOverlayProps = PropsRuntime<'conversation.input.overlay'> & {
+  readonly session: PromptSession
   readonly hints?: OverlapHintStore
-  readonly t: TranslateNS<'composer-enhancer'>
+  readonly t: TranslateNS<'agent-enhancer'>
 }
 
-interface ActiveComposer {
+interface ActivePrompt {
   sync(): void
   refreshHistory(): void
   dispose(): void
 }
 
-function keyOf(event: KeyboardEvent): ComposerKey | null {
+function keyOf(event: KeyboardEvent): PromptKey | null {
   if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === 'KeyR') return 'search'
   if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === 'KeyR') return 'search'
   if (event.altKey || event.ctrlKey || event.metaKey) return null
@@ -46,11 +46,11 @@ const dialogKeyContext: KeyContext = {
   atLastLine: true,
 }
 
-export function ComposerOverlay(props: ComposerOverlayProps) {
+export function AgentOverlay(props: AgentOverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const activeRef = useRef<ActiveComposer | null>(null)
+  const activeRef = useRef<ActivePrompt | null>(null)
   const coordinatorRef = useRef<Coordinator | null>(null)
-  const [search, setSearch] = useState<ComposerSearchState | null>(null)
+  const [search, setSearch] = useState<PromptSearchState | null>(null)
   const [prediction, setPrediction] = useState<string | null>(null)
   const input = props.useInput(state => state)
   const session = props.useSession(state => state)
@@ -80,7 +80,7 @@ export function ComposerOverlay(props: ComposerOverlayProps) {
     const sync = () => {
       selection = readSelection(root) ?? selection
       const current = latestRef.current
-      const facts: ComposerInput = {
+      const facts: PromptInput = {
         sessionId: props.sessionId,
         draft: current.input.draft,
         draftRev: current.input.draftRev,
@@ -134,7 +134,7 @@ export function ComposerOverlay(props: ComposerOverlayProps) {
     root.ownerDocument.addEventListener('selectionchange', sync)
     root.ownerDocument.addEventListener('pointerdown', onOfficialMenuPointer)
     root.ownerDocument.addEventListener('click', onOfficialMenuPointer)
-    const active: ActiveComposer = {
+    const active: ActivePrompt = {
       sync,
       refreshHistory,
       dispose() {
@@ -196,10 +196,10 @@ export function ComposerOverlay(props: ComposerOverlayProps) {
     if (search !== null) coordinatorRef.current?.acceptHistory(entry, search.original)
   }
 
-  return <div ref={containerRef} data-composer-enhancer-overlay="">
+  return <div ref={containerRef} data-agent-enhancer-overlay="">
     {props.hints === undefined ? null : <CoexistenceHints store={props.hints} t={props.t} />}
     {prediction === null ? null : (
-      <div className={styles.prediction} data-composer-enhancer-prediction aria-live="polite">
+      <div className={styles.prediction} data-agent-enhancer-prediction aria-live="polite">
         <span>{prediction}</span><kbd>Tab</kbd>
       </div>
     )}

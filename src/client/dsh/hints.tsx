@@ -13,7 +13,7 @@ const HINT_KEYS = {
 
 export function CoexistenceHints({ store, t }: {
   readonly store: OverlapHintStore
-  readonly t: TranslateNS<'composer-enhancer'>
+  readonly t: TranslateNS<'agent-enhancer'>
 }) {
   const hints = useSyncExternalStore(
     listener => store.subscribe(listener),
@@ -24,7 +24,7 @@ export function CoexistenceHints({ store, t }: {
       key={module}
       role="status"
       className={styles.hint}
-      data-composer-enhancer-hint={module}
+      data-agent-enhancer-hint={module}
     >
       <span>{t(HINT_KEYS[module])}</span>
       <Button

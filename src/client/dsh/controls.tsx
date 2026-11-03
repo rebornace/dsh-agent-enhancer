@@ -1,13 +1,13 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { Button, StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useSyncExternalStore } from 'react'
-import type { ComposerSession } from '../composer/session.ts'
+import type { PromptSession } from '../prompt/session.ts'
 import styles from '../styles.module.css'
 import { OptimizeIcon, UndoIcon } from './icons.tsx'
 
-export interface ComposerControlsProps {
-  readonly session: ComposerSession
-  readonly t: TranslateNS<'composer-enhancer'>
+export interface AgentControlsProps {
+  readonly session: PromptSession
+  readonly t: TranslateNS<'agent-enhancer'>
 }
 
 const OPTIMIZATION_ERROR_LOCALES = {
@@ -18,7 +18,7 @@ const OPTIMIZATION_ERROR_LOCALES = {
   SESSION_CHANGED: 'optimizeSessionChanged',
 } as const
 
-export function ComposerControls({ session, t }: ComposerControlsProps) {
+export function AgentControls({ session, t }: AgentControlsProps) {
   const state = useSyncExternalStore(
     listener => session.subscribe(listener),
     () => session.controlsSnapshot(),
@@ -35,7 +35,7 @@ export function ComposerControls({ session, t }: ComposerControlsProps) {
         variant="ghost"
         size="sm"
         className={styles.toolbarIcon}
-        data-composer-enhancer-icon={state.status}
+        data-agent-enhancer-icon={state.status}
         disabled={state.error === 'ROLLBACK_FAILED' || state.status === 'pending' || (state.status === 'optimize' && !state.canOptimize)}
         aria-label={label}
         title={tooltip}

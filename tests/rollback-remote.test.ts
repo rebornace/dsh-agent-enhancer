@@ -55,7 +55,7 @@ describe('checkpoint rollback Client Remote', () => {
         preview: async () => ({
           ok: false as const,
           error: {
-            code: 'composer-enhancer/rollback-failed',
+            code: 'agent-enhancer/rollback-failed',
             message: 'private path and provider details',
             details: { code: 'ROLLBACK_CONFLICT' },
           },

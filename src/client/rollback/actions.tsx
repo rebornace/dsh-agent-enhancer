@@ -10,7 +10,7 @@ import type { RollbackController } from './controller.ts'
 
 export interface RollbackMessageActionsProps {
   readonly rollback: RollbackController
-  readonly t: TranslateNS<'composer-enhancer'>
+  readonly t: TranslateNS<'agent-enhancer'>
   readonly turn: TurnLocation
   readonly useSession: (selector: (state: { running: boolean }) => unknown) => unknown
   readonly useAccess: (action: string) => boolean | undefined

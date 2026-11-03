@@ -12,7 +12,7 @@ import type {
 import { RollbackModalHost } from '../src/client/rollback/modal-host.tsx'
 import { RollbackUserNode } from '../src/client/rollback/user-node.tsx'
 import type { RollbackUserNodeProps } from '../src/client/rollback/user-node.tsx'
-import { composerLocales } from '../src/client/locales.ts'
+import { agentLocales } from '../src/client/locales.ts'
 import { RollbackController } from '../src/client/rollback/controller.ts'
 import type { RollbackRemote } from '../src/client/rollback/controller.ts'
 
@@ -85,7 +85,7 @@ function turnFixture(turn = 2, overrides: {
 }
 
 function translate(key: string, params?: Record<string, unknown>): string {
-  const table = composerLocales.en as unknown as Record<string, string>
+  const table = agentLocales.en as unknown as Record<string, string>
   let text = table[key] ?? key
   for (const [name, value] of Object.entries(params ?? {})) text = text.replace(`{${name}}`, String(value))
   return text
@@ -487,7 +487,7 @@ function userNodeView(options: {
         data: {
           content: [{ type: 'text', text: 'hello' }],
           source: options.marker ? { kind: 'checkpoint-rollback', form: 'notice', summary: 'Rolled back' } : { kind: 'user' },
-          ...(options.marker ? { id: 'dsh-composer-enhancer:rollback:2:journal-1' } : {}),
+          ...(options.marker ? { id: 'dsh-agent-enhancer:rollback:2:journal-1' } : {}),
         },
       },
       renderFactorySlot: vi.fn(() => null),

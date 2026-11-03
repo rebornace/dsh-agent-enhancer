@@ -34,7 +34,7 @@ export interface AuxiliaryResult {
   readonly route: ModelRoute
   readonly segments?: readonly string[]
 }
-export interface ComposerRequestAudit {
+export interface AgentRequestAudit {
   readonly operation: AuxiliaryOperation
   readonly requestId: string
   readonly route: ModelRoute
@@ -45,6 +45,6 @@ export interface ComposerRequestAudit {
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface PluginRecordMap {
-    'plugin:composer-enhancer/request': ComposerRequestAudit
+    'plugin:agent-enhancer/request': AgentRequestAudit
   }
 }

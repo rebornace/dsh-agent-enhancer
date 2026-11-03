@@ -1,28 +1,28 @@
 import type { RecentExchange } from '../../host/types.ts'
 import { Coordinator } from './coordinator.ts'
-import type { ComposerInput } from './coordinator.ts'
+import type { PromptInput } from './coordinator.ts'
 import { OptimizationController } from './optimize.ts'
 import type { GenerateOptimization, OptimizationState } from './optimize.ts'
 import { PredictionController } from './predict.ts'
 import type { GeneratePrediction } from './predict.ts'
-import type { ComposerKey, DraftSnapshot, DraftWriter, KeyContext, ModuleSwitches } from './types.ts'
+import type { PromptKey, DraftSnapshot, DraftWriter, KeyContext, ModuleSwitches } from './types.ts'
 
-export interface ComposerControlState extends OptimizationState {
+export interface PromptControlState extends OptimizationState {
   readonly enabled: boolean
   readonly canOptimize: boolean
   readonly hasChips: boolean
   readonly chipSelection: boolean
 }
 
-export class ComposerSession {
+export class PromptSession {
   readonly coordinator: Coordinator
   private readonly optimization: OptimizationController
   private readonly prediction: PredictionController
   private writer: DraftWriter | null = null
-  private input: ComposerInput | null = null
+  private input: PromptInput | null = null
   private context: readonly RecentExchange[] = []
   private hasChips = false
-  private controls: ComposerControlState
+  private controls: PromptControlState
   private disposed = false
   private readonly listeners = new Set<() => void>()
 
@@ -55,7 +55,7 @@ export class ComposerSession {
     return () => { this.listeners.delete(listener) }
   }
 
-  controlsSnapshot(): ComposerControlState {
+  controlsSnapshot(): PromptControlState {
     return this.controls
   }
 
@@ -82,7 +82,7 @@ export class ComposerSession {
     this.refreshControls()
   }
 
-  sync(input: ComposerInput, context: readonly RecentExchange[], hasChips: boolean): void {
+  sync(input: PromptInput, context: readonly RecentExchange[], hasChips: boolean): void {
     if (this.disposed) return
     this.input = { ...input, selection: { ...input.selection } }
     this.context = context
@@ -106,7 +106,7 @@ export class ComposerSession {
     return !this.disposed && this.optimization.undo()
   }
 
-  handleKey(key: ComposerKey, context: KeyContext): boolean {
+  handleKey(key: PromptKey, context: KeyContext): boolean {
     if (this.disposed) return false
     try {
       return this.coordinator.handleKey(key, context)
@@ -130,7 +130,7 @@ export class ComposerSession {
     this.listeners.clear()
   }
 
-  private snapshot(input: ComposerInput): DraftSnapshot {
+  private snapshot(input: PromptInput): DraftSnapshot {
     return {
       sessionId: input.sessionId,
       draftRev: input.draftRev,
@@ -155,7 +155,7 @@ export class ComposerSession {
     const source = input === null ? '' : selected
       ? input.draft.slice(input.selection.start, input.selection.end)
       : input.draft
-    const next: ComposerControlState = {
+    const next: PromptControlState = {
       ...state,
       enabled,
       canOptimize: this.writer !== null && enabled && !chipSelection && source.trim() !== '',

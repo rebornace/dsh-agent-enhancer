@@ -9,10 +9,10 @@ import { resolveSettings } from '../config.ts'
 import type { EnhancerSettings } from '../config.ts'
 import { resolveUiLocale } from '../host/prompts.ts'
 import type { AuxiliaryRequest, AuxiliaryResult, UiLocale } from '../host/types.ts'
-import { ComposerSession } from './composer/session.ts'
-import type { ModuleSwitches } from './composer/types.ts'
-import { ComposerControls } from './dsh/controls.tsx'
-import { ComposerOverlay } from './dsh/overlay.tsx'
+import { PromptSession } from './prompt/session.ts'
+import type { ModuleSwitches } from './prompt/types.ts'
+import { AgentControls } from './dsh/controls.tsx'
+import { AgentOverlay } from './dsh/overlay.tsx'
 import { OverlapHintStore } from './dsh/plugin-hints.ts'
 import {
   catalogLoadersFromRemote,
@@ -21,8 +21,8 @@ import {
 import type { ModelCatalogLoaders } from './dsh/model-catalog.ts'
 import { AcceptedSettingsForm } from './dsh/settings-form.ts'
 import { PluginSettings } from './dsh/settings.tsx'
-import { composerLocales } from './locales.ts'
-import { clientRemoteInfo, composerEnhancerCall } from './remote.ts'
+import { agentLocales } from './locales.ts'
+import { clientRemoteInfo, agentEnhancerCall } from './remote.ts'
 import { RollbackController } from './rollback/controller.ts'
 import type { RollbackRemote } from './rollback/controller.ts'
 import { RollbackModalHost } from './rollback/modal-host.tsx'
@@ -43,14 +43,14 @@ type InventoryRemote = ClientRemote & {
 }
 
 // session.modelCatalog needs remote.session on this fiber. Host listCatalog is
-// wired after $mount from the nested composerEnhancer fiber (root cannot inject it early).
+// wired after $mount from the nested agentEnhancer fiber (root cannot inject it early).
 export const inject = ['remote', 'remote.session', 'remote.pluginInventory', 'configForms', 'locale', 'slots']
 
 export function apply(ctx: Context): void {
   ctx.effect(installCss)
-  ctx.effect(() => ctx.locale.register('composer-enhancer', composerLocales))
-  const t = ctx.locale.bind('composer-enhancer')
-  const form = new AcceptedSettingsForm(ctx.configForms.get<EnhancerSettings>('composer-enhancer'))
+  ctx.effect(() => ctx.locale.register('agent-enhancer', agentLocales))
+  const t = ctx.locale.bind('agent-enhancer')
+  const form = new AcceptedSettingsForm(ctx.configForms.get<EnhancerSettings>('agent-enhancer'))
   const catalogLoaders: {
     sessionModelCatalog?: ModelCatalogLoaders['sessionModelCatalog']
     hostListCatalog?: ModelCatalogLoaders['hostListCatalog']
@@ -69,8 +69,8 @@ export function apply(ctx: Context): void {
     createElement(PluginSettings, { form: props.form, t: props.t, loadCatalog })
   )
   ctx.effect(() => ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
-    name: 'settings.plugins.tab', id: 'composer-enhancer', order: 120,
-    label: () => t('settingsTitle'), locale: 'composer-enhancer',
+    name: 'settings.plugins.tab', id: 'agent-enhancer', order: 120,
+    label: () => t('settingsTitle'), locale: 'agent-enhancer',
     inject: () => ({ form }),
   }, SettingsTab)))
   const hints = new OverlapHintStore()
@@ -89,7 +89,7 @@ export function apply(ctx: Context): void {
     }
   })
 
-  const applyComposerMounted = (mountedCtx: Context) => {
+  const applyAgentMounted = (mountedCtx: Context) => {
     const switches: ModuleSwitches = {
       history: () => resolveSettings(form.getSnapshot().value).historyEnabled,
       optimize: () => resolveSettings(form.getSnapshot().value).optimizeEnabled,
@@ -107,11 +107,11 @@ export function apply(ctx: Context): void {
       const data = request.operation === 'optimize'
         ? { ...request, references: [...request.references], context: [...request.context], uiLocale }
         : { ...request, context: [...request.context], uiLocale }
-      return composerEnhancerCall.invoke(mountedCtx.remote, {
+      return agentEnhancerCall.invoke(mountedCtx.remote, {
         payload: { method: 'generate', data },
       }, signal)
     }
-    const sessions = new Map<SessionId, ComposerSession>()
+    const sessions = new Map<SessionId, PromptSession>()
     mountedCtx.effect(() => form.subscribe(() => {
       for (const session of sessions.values()) session.refreshSettings()
     }))
@@ -122,21 +122,21 @@ export function apply(ctx: Context): void {
     const sessionFor = (sessionId: SessionId) => {
       let session = sessions.get(sessionId)
       if (session === undefined) {
-        session = new ComposerSession(switches, generate, generate)
+        session = new PromptSession(switches, generate, generate)
         sessions.set(sessionId, session)
       }
       return session
     }
     mountedCtx.slots.inject('conversation.input.right', () => mountedCtx.slots.register({
-      name: 'conversation.input.right', id: 'composer-enhancer', order: 120,
-      locale: 'composer-enhancer',
+      name: 'conversation.input.right', id: 'agent-enhancer', order: 120,
+      locale: 'agent-enhancer',
       inject: sessionId => ({ session: sessionFor(sessionId) }),
-    }, ComposerControls))
+    }, AgentControls))
     mountedCtx.slots.inject('conversation.input.overlay', () => mountedCtx.slots.register({
-      name: 'conversation.input.overlay', id: 'composer-enhancer', order: 120,
-      locale: 'composer-enhancer',
+      name: 'conversation.input.overlay', id: 'agent-enhancer', order: 120,
+      locale: 'agent-enhancer',
       inject: sessionId => ({ session: sessionFor(sessionId), hints }),
-    }, ComposerOverlay))
+    }, AgentOverlay))
   }
 
   const applyRollbackMounted = (mountedCtx: Context) => {
@@ -147,7 +147,7 @@ export function apply(ctx: Context): void {
     const rollbackSessions = new Map<SessionId, RollbackController>()
     const rollbackRetentions = new Map<SessionId, () => void>()
     const undoTips = new RollbackUndoTipStore()
-    const tEnhancer = mountedCtx.locale.bind('composer-enhancer')
+    const tEnhancer = mountedCtx.locale.bind('agent-enhancer')
     const tChat = mountedCtx.locale.bind('chat')
     const rollbackEnabled = () => resolveSettings(form.getSnapshot().value).rollbackEnabled
     const rollbackFor = (sessionId: SessionId) => {
@@ -196,12 +196,12 @@ export function apply(ctx: Context): void {
         } else if (disposers.length === 0) {
           disposers.push(mountedCtx.slots.inject('conversation.chat.node', () => mountedCtx.slots.register({
             name: 'conversation.chat.node', key: 'user', priority: -120,
-            registrant: 'composer-enhancer-rollback-user',
+            registrant: 'agent-enhancer-rollback-user',
           }, rollbackUserNode as never)))
           // Keep the confirm dialog outside chat nodes so surface replace cannot tear it down.
           disposers.push(mountedCtx.slots.inject('conversation.input.overlay', () => mountedCtx.slots.register({
-            name: 'conversation.input.overlay', id: 'composer-enhancer-rollback', order: 121,
-            locale: 'composer-enhancer',
+            name: 'conversation.input.overlay', id: 'agent-enhancer-rollback', order: 121,
+            locale: 'agent-enhancer',
           }, rollbackOverlay as never)))
           // Chat only renders append-origin events; reshape the loaded window so
           // surface-replaced history disappears and the rollback tip becomes visible.
@@ -229,22 +229,22 @@ export function apply(ctx: Context): void {
 
   ctx.effect(async () => {
     const unmount = await ctx.remote.$mount(clientRemoteInfo)
-    const composerFiber = await ctx.plugin({
-      name: 'composer-enhancer-mounted',
-      inject: ['remote.composerEnhancer'],
+    const agentFiber = await ctx.plugin({
+      name: 'agent-enhancer-mounted',
+      inject: ['remote.agentEnhancer'],
       apply: (mountedCtx: Context) => {
         adoptCatalogLoaders(mountedCtx.remote)
-        applyComposerMounted(mountedCtx)
+        applyAgentMounted(mountedCtx)
       },
     })
     const rollbackFiber = await ctx.plugin({
-      name: 'composer-enhancer-rollback-mounted',
+      name: 'agent-enhancer-rollback-mounted',
       inject: ['remote.checkpointRollback'],
       apply: applyRollbackMounted,
     })
     return async () => {
       await rollbackFiber.dispose()
-      await composerFiber.dispose()
+      await agentFiber.dispose()
       await unmount()
     }
   })

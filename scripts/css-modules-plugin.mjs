@@ -29,7 +29,7 @@ export function cssModulesPlugin() {
           contents: `${module.text}\nconst cssText = ${JSON.stringify(stylesheet.text)};\n` +
             'export function installCss() {\n' +
             "  const style = document.createElement('style')\n" +
-            "  style.setAttribute('data-dsh-composer-enhancer', '')\n" +
+            "  style.setAttribute('data-dsh-agent-enhancer', '')\n" +
             '  style.textContent = cssText\n' +
             '  document.head.append(style)\n' +
             '  return () => style.remove()\n' +

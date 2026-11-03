@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { apply, ComposerEnhancerService, Config, hostContribution, inject } from '../src/host/index.ts'
+import { apply, AgentEnhancerService, Config, hostContribution, inject } from '../src/host/index.ts'
 import { AuxiliaryError } from '../src/errors.ts'
 import { AuxiliaryModels } from '../src/host/model.ts'
 import { checkpointRemoteInfo, remoteInfo, rpcPayloadSchema } from '../src/host/rpc.ts'
@@ -91,30 +91,30 @@ describe('composer configuration and Remote metadata', () => {
   })
 
   it('publishes one strict cancellable call with a nullable result', () => {
-    expect(remoteInfo.package).toBe('dsh-composer-enhancer')
+    expect(remoteInfo.package).toBe('dsh-agent-enhancer')
     expect(remoteInfo.descriptors).toHaveLength(2)
     expect(remoteInfo.descriptors[0]).toMatchObject({
-      namespace: 'composerEnhancer',
+      namespace: 'agentEnhancer',
       method: 'call',
-      service: 'composerEnhancer',
+      service: 'agentEnhancer',
       implementation: 'call',
       cancellation: { parameter: 'signal' },
     })
     expect(remoteInfo.descriptors[1]).toMatchObject({
-      namespace: 'composerEnhancer',
+      namespace: 'agentEnhancer',
       method: 'listCatalog',
-      service: 'composerEnhancer',
+      service: 'agentEnhancer',
       implementation: 'listCatalog',
     })
     expect(remoteInfo.descriptors[1]).not.toHaveProperty('cancellation')
     expect(hostContribution).toEqual({
-      package: 'dsh-composer-enhancer',
+      package: 'dsh-agent-enhancer',
       face: 'host',
       schemas: [],
       model: { services: [], events: [], objects: [] },
       invocations: [...remoteInfo.descriptors, ...checkpointRemoteInfo.descriptors],
     })
-    const method = remoteInfo.methods['composerEnhancer/call']!
+    const method = remoteInfo.methods['agentEnhancer/call']!
     const parser = method.input({ strict: true }).create()
     const value = payload()
     expect(parser.parse({ payload: value })).toEqual({ payload: value })
@@ -150,7 +150,7 @@ describe('composer configuration and Remote metadata', () => {
         context: [],
       },
     })).toThrow()
-    const parser = remoteInfo.methods['composerEnhancer/call']!.result.create()
+    const parser = remoteInfo.methods['agentEnhancer/call']!.result.create()
     const result = {
       requestId: 'req-1',
       text: '分析 @a.ts',
@@ -195,7 +195,7 @@ describe('composer configuration and Remote metadata', () => {
       ...value,
       data: { ...value.data, ...extra },
     })).toThrow()
-    const parser = remoteInfo.methods['composerEnhancer/call']!.input({ strict: true }).create()
+    const parser = remoteInfo.methods['agentEnhancer/call']!.input({ strict: true }).create()
     expect(() => parser.parse({ payload: { ...value, data: { ...value.data, ...extra } } })).toThrow()
   })
 
@@ -208,12 +208,12 @@ describe('composer configuration and Remote metadata', () => {
   })
 })
 
-describe('ComposerEnhancerService', () => {
+describe('AgentEnhancerService', () => {
   it('allows only the desktop owner to generate', async () => {
     const ownerCtx = context()
     ownerCtx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
     const generate = vi.fn(async () => null)
-    const owner = new ComposerEnhancerService(ownerCtx, { generate } as never)
+    const owner = new AgentEnhancerService(ownerCtx, { generate } as never)
     const request = payload()
     const signal = new AbortController().signal
     await expect(owner.call(request, signal)).resolves.toBeNull()
@@ -221,10 +221,10 @@ describe('ComposerEnhancerService', () => {
 
     const guestCtx = context()
     guestCtx.provide('invocation', { peer: { principal: { kind: 'guest' } } } as never)
-    const guest = new ComposerEnhancerService(guestCtx, { generate } as never)
+    const guest = new AgentEnhancerService(guestCtx, { generate } as never)
     await expect(guest.call(request, signal)).rejects.toMatchObject({
-      code: 'composer-enhancer/forbidden',
-      message: 'Only the desktop owner may use Composer Enhance',
+      code: 'agent-enhancer/forbidden',
+      message: 'Only the desktop owner may use Agent Enhance',
     })
     expect(generate).toHaveBeenCalledTimes(1)
   })
@@ -232,14 +232,14 @@ describe('ComposerEnhancerService', () => {
   it('preserves auxiliary categories without exposing internal details', async () => {
     const ctx = context()
     ctx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
-    const service = new ComposerEnhancerService(ctx, {
+    const service = new AgentEnhancerService(ctx, {
       generate: vi.fn(async () => { throw new AuxiliaryError('MODEL_UNAVAILABLE') }),
     } as never)
     const rejection = await service.call(payload(), new AbortController().signal).catch((error: unknown) => error)
     expect(rejection).toBeInstanceOf(RemoteError)
     expect(rejection).toMatchObject({
-      code: 'composer-enhancer/failed',
-      message: 'Composer Enhance request failed',
+      code: 'agent-enhancer/failed',
+      message: 'Agent Enhance request failed',
       details: { code: 'MODEL_UNAVAILABLE' },
     })
     expect((rejection as Error).message).not.toContain('provider credential')
@@ -248,13 +248,13 @@ describe('ComposerEnhancerService', () => {
   it('maps ordinary errors to a sanitized model failure', async () => {
     const ctx = context()
     ctx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
-    const service = new ComposerEnhancerService(ctx, {
+    const service = new AgentEnhancerService(ctx, {
       generate: vi.fn(async () => { throw new Error('provider credential and private text') }),
     } as never)
     const rejection = await service.call(payload(), new AbortController().signal).catch((error: unknown) => error)
     expect(rejection).toMatchObject({
-      code: 'composer-enhancer/failed',
-      message: 'Composer Enhance request failed',
+      code: 'agent-enhancer/failed',
+      message: 'Agent Enhance request failed',
       details: { code: 'MODEL_FAILED' },
     })
     expect((rejection as Error).message).not.toContain('provider credential')
@@ -265,7 +265,7 @@ describe('ComposerEnhancerService', () => {
     ctx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
     const controller = new AbortController()
     controller.abort()
-    const service = new ComposerEnhancerService(ctx, {
+    const service = new AgentEnhancerService(ctx, {
       generate: vi.fn(async () => { throw controller.signal.reason }),
     } as never)
     await expect(service.call(payload(), controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
@@ -289,9 +289,9 @@ describe('host composition', () => {
     expect(register).toHaveBeenCalledTimes(1)
     expect(register).toHaveBeenCalledWith(hostContribution)
     expect(hostContribution.invocations.map(entry => entry.namespace)).toEqual([
-      'composerEnhancer', 'composerEnhancer', 'checkpointRollback', 'checkpointRollback',
+      'agentEnhancer', 'agentEnhancer', 'checkpointRollback', 'checkpointRollback',
     ])
-    expect(ctx.composerEnhancer).toBeInstanceOf(ComposerEnhancerService)
+    expect(ctx.agentEnhancer).toBeInstanceOf(AgentEnhancerService)
     await ctx.fiber.dispose()
     expect(unregister).toHaveBeenCalledTimes(1)
   })
@@ -299,7 +299,7 @@ describe('host composition', () => {
   it('constructs the single model entry used by the Remote service', () => {
     const ctx = context()
     const models = new AuxiliaryModels(ctx)
-    const service = new ComposerEnhancerService(ctx, models)
-    expect(service).toBeInstanceOf(ComposerEnhancerService)
+    const service = new AgentEnhancerService(ctx, models)
+    expect(service).toBeInstanceOf(AgentEnhancerService)
   })
 })

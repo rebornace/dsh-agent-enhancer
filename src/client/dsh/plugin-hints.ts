@@ -66,7 +66,7 @@ export class OverlapHintStore {
   }
 
   private key(module: OverlapModule): string {
-    return `dsh-composer-enhancer:overlap-hint:${this.version}:${module}`
+    return `dsh-agent-enhancer:overlap-hint:${this.version}:${module}`
   }
 
   private dismissed(module: OverlapModule): boolean {

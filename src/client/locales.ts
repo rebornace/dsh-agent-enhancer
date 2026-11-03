@@ -2,7 +2,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-slots'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    'composer-enhancer': 'historyTitle' | 'historySearch' | 'historyResults' | 'historyClose' |
+    'agent-enhancer': 'historyTitle' | 'historySearch' | 'historyResults' | 'historyClose' |
       'optimize' | 'optimizePending' | 'optimizeUndo' | 'optimizeError' | 'optimizeChips' | 'optimizeChipSelection' |
       'optimizeModelUnavailable' | 'optimizeRequestFailed' | 'optimizeInvalidOutput' | 'optimizeRollbackFailed' | 'optimizeSessionChanged' |
       'settingsTitle' | 'settingsSubtitle' | 'history' | 'historyDescription' | 'optimizeDescription' |
@@ -29,7 +29,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-export const composerLocales = {
+export const agentLocales = {
   zh: {
     historyTitle: '历史提示词',
     historySearch: '搜索历史提示词',
@@ -46,8 +46,8 @@ export const composerLocales = {
     optimizeSessionChanged: '会话已变化，请重新优化',
     optimizeChips: '保留引用，仅优化其他文字',
     optimizeChipSelection: '选区包含引用，请优化整稿或调整选区',
-    settingsTitle: 'Composer 增强',
-    settingsSubtitle: '按需开启输入辅助功能',
+    settingsTitle: '智能体增强',
+    settingsSubtitle: '一个插件补齐常用 Agent 体验，按需开关',
     history: '历史提示词',
     historyDescription: '↑↓ 回顾已发送提示词；Alt+R 搜索（可用环境兼容 Ctrl+R）',
     optimizeDescription: '优化草稿或所选内容，支持一键撤销',
@@ -62,9 +62,9 @@ export const composerLocales = {
     privacy: '优化和预测会把所选内容或近期对话发送给所选模型提供商（默认跟随当前会话模型）；历史不请求模型；不采集提示词内容或采纳率遥测。',
     coexistence: '检测到官方或第三方同类能力时仅提示，不会自动停用。',
     settingsError: '设置未保存，请重试。',
-    overlapHistory: '检测到另一个历史提示词功能。Composer 增强的历史功能仍保持开启。',
-    overlapOptimize: '检测到另一个提示词优化功能。Composer 增强的优化功能仍保持开启。',
-    overlapPredict: '检测到另一个回复建议功能。Composer 增强的预测功能仍保持开启。',
+    overlapHistory: '检测到另一个历史提示词功能。智能体增强的历史仍保持开启。',
+    overlapOptimize: '检测到另一个提示词优化功能。智能体增强的优化仍保持开启。',
+    overlapPredict: '检测到另一个回复建议功能。智能体增强的预测仍保持开启。',
     dismissHint: '关闭共存提示',
     rollback: '对话与文件恢复',
     rollbackDescription: '在合规用户消息旁预览并恢复对话与已跟踪文件',
@@ -139,8 +139,8 @@ export const composerLocales = {
     optimizeSessionChanged: 'Session changed. Optimize again.',
     optimizeChips: 'References stay unchanged; only surrounding text is optimized',
     optimizeChipSelection: 'Selection includes references. Optimize the full draft or adjust the selection.',
-    settingsTitle: 'Composer Enhance',
-    settingsSubtitle: 'Toggle input helpers as needed',
+    settingsTitle: 'Agent Enhance',
+    settingsSubtitle: 'One plugin for common agent UX — toggle features as needed',
     history: 'Prompt history',
     historyDescription: '↑↓ revisit sent prompts; Alt+R to search (Ctrl+R in compatible environments)',
     optimizeDescription: 'Optimize the draft or selection, with one-click undo',
@@ -155,9 +155,9 @@ export const composerLocales = {
     privacy: 'Optimization and prediction send selected text or recent conversation to the selected model provider (defaults to the current session model). History never requests a model. No prompt content or acceptance-rate telemetry is collected.',
     coexistence: 'Similar official or third-party features are only reported; they are never disabled automatically.',
     settingsError: 'Setting was not saved. Try again.',
-    overlapHistory: 'Another prompt-history feature is enabled. Composer Enhance history remains enabled.',
-    overlapOptimize: 'Another prompt-optimization feature is enabled. Composer Enhance optimization remains enabled.',
-    overlapPredict: 'Another reply-suggestion feature is enabled. Composer Enhance prediction remains enabled.',
+    overlapHistory: 'Another prompt-history feature is enabled. Agent Enhance history remains enabled.',
+    overlapOptimize: 'Another prompt-optimization feature is enabled. Agent Enhance optimization remains enabled.',
+    overlapPredict: 'Another reply-suggestion feature is enabled. Agent Enhance prediction remains enabled.',
     dismissHint: 'Dismiss coexistence notice',
     rollback: 'Conversation and file restore',
     rollbackDescription: 'Preview and restore conversation and tracked files from eligible user messages',

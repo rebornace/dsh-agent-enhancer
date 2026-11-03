@@ -1,11 +1,11 @@
 {
-  "name": "dsh-composer-enhancer",
-  "version": "0.1.6",
+  "name": "dsh-agent-enhancer",
+  "version": "0.2.0",
   "author": "rebornace",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rebornace/dsh-composer-enhancer.git"
+    "url": "git+https://github.com/rebornace/dsh-agent-enhancer.git"
   },
   "type": "module",
   "main": "lib/index.js",

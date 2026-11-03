@@ -1,6 +1,6 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { describe, expect, it } from 'vitest'
-import { Coordinator } from '../src/client/composer/coordinator.ts'
+import { Coordinator } from '../src/client/prompt/coordinator.ts'
 import type {
   DraftGuard,
   DraftSelection,
@@ -8,7 +8,7 @@ import type {
   KeyContext,
   ModuleSwitches,
   Occurrence,
-} from '../src/client/composer/types.ts'
+} from '../src/client/prompt/types.ts'
 
 const session = (value: string): SessionId => value as SessionId
 

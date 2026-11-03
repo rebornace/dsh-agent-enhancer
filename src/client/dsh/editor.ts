@@ -1,5 +1,5 @@
 import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { DraftWriter } from '../composer/types.ts'
+import type { DraftWriter } from '../prompt/types.ts'
 import { detectOffset, replaceAroundOccurrences } from './structured.ts'
 
 interface SelectionOffsets {

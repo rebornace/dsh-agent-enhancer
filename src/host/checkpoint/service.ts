@@ -10,6 +10,14 @@ import { CheckpointFileError, CheckpointFiles } from './files.ts'
 import type { CheckpointFileOperations, FileConflict, RestoreDirection } from './files.ts'
 import type { CheckpointStore } from './store.ts'
 import type { Checkpoint } from './types.ts'
+import {
+  indexOfRollbackPrefix,
+  isRollbackId,
+  isUndoId,
+  LEGACY_ROLLBACK_PREFIX,
+  ROLLBACK_PREFIX,
+  UNDO_PREFIX,
+} from '../../identity.ts'
 
 export type { CheckpointRollbackScope, CheckpointUnavailable } from './availability.ts'
 export { blockingUnavailable, isConversationSoftUnavailable } from './availability.ts'
@@ -24,8 +32,6 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-const ROLLBACK_PREFIX = 'dsh-composer-enhancer:rollback:'
-const UNDO_PREFIX = 'dsh-composer-enhancer:undo:'
 const surfaceEventTypes = new Set(['system/message', 'developer/message', 'user/message', 'assistant/message', 'tool/result'])
 
 type SurfaceMessageEvent = SessionEvent<'system/message' | 'developer/message' | 'user/message' | 'assistant/message' | 'tool/result'>
@@ -131,14 +137,17 @@ function undoCopyId(journalId: string, index: number): MessageId {
 }
 
 function rollbackIdOf(id: string): string {
-  const start = id.indexOf(ROLLBACK_PREFIX)
+  const start = indexOfRollbackPrefix(id)
   return start >= 0 ? id.slice(start) : id
 }
 
 function scopeOfMarkerId(id: string): CheckpointRollbackScope {
-  return new RegExp(`^${ROLLBACK_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\d+:c:`).test(rollbackIdOf(id))
-    ? 'conversation'
-    : 'conversation-and-files'
+  const rolled = rollbackIdOf(id)
+  for (const prefix of [ROLLBACK_PREFIX, LEGACY_ROLLBACK_PREFIX]) {
+    const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\d+:c:`)
+    if (pattern.test(rolled)) return 'conversation'
+  }
+  return 'conversation-and-files'
 }
 
 function scopeOfMarker(event: SessionEvent<'user/message'>): CheckpointRollbackScope {
@@ -148,11 +157,15 @@ function scopeOfMarker(event: SessionEvent<'user/message'>): CheckpointRollbackS
 function isRollbackMarker(event: SessionEvent | undefined, turn?: number): event is SessionEvent<'user/message'> {
   if (event?.type !== 'user/message' || event.data.source.kind !== 'checkpoint-rollback'
     || event.data.source.form !== 'notice' || event.data.content.length === 0) return false
-  const prefix = turn === undefined ? ROLLBACK_PREFIX : `${ROLLBACK_PREFIX}${turn}:`
-  if (event.data.id.startsWith(prefix)) return true
-  if (!event.data.id.startsWith(UNDO_PREFIX)) return false
-  const original = event.data.id.indexOf(ROLLBACK_PREFIX)
-  return original >= 0 && event.data.id.slice(original).startsWith(prefix)
+  const prefixes = turn === undefined
+    ? [ROLLBACK_PREFIX, LEGACY_ROLLBACK_PREFIX]
+    : [`${ROLLBACK_PREFIX}${turn}:`, `${LEGACY_ROLLBACK_PREFIX}${turn}:`]
+  if (prefixes.some(prefix => event.data.id.startsWith(prefix))) return true
+  if (!isUndoId(event.data.id)) return false
+  const original = indexOfRollbackPrefix(event.data.id)
+  if (original < 0) return false
+  const embedded = event.data.id.slice(original)
+  return prefixes.some(prefix => embedded.startsWith(prefix))
 }
 
 function surfaceMessageId(event: SessionEvent): MessageId | null {
@@ -167,7 +180,8 @@ function surfaceMessageId(event: SessionEvent): MessageId | null {
 }
 
 function isUndoCopy(event: SessionEvent): boolean {
-  return surfaceMessageId(event)?.startsWith(UNDO_PREFIX) ?? false
+  const id = surfaceMessageId(event)
+  return id !== null && isUndoId(id)
 }
 
 function isUndoCopyAt(event: SessionEvent, expected: MessageId): boolean {
@@ -177,7 +191,7 @@ function isUndoCopyAt(event: SessionEvent, expected: MessageId): boolean {
 
 function logicalSeq(event: SessionEvent): SessionSeq {
   if (isUndoCopy(event)) {
-    const match = surfaceMessageId(event)?.match(/:(\d+)(?::dsh-composer-enhancer:rollback:.*)?$/)
+    const match = surfaceMessageId(event)?.match(/:(\d+)(?::dsh-(?:agent|composer)-enhancer:rollback:.*)?$/)
     if (match !== null && match !== undefined) return SessionSeq(Number(match[1]))
   }
   return event.seq
@@ -968,7 +982,7 @@ export class CheckpointRollbackService {
   private appendOccurred(adapter: CheckpointServiceSession, journalId: string): boolean {
     return adapter.readEvents().some(event => {
       if (isUndoCopyAt(event, undoCopyId(journalId, 0))) return true
-      return event.type === 'user/message' && event.data.id.startsWith(ROLLBACK_PREFIX)
+      return event.type === 'user/message' && isRollbackId(event.data.id)
         && event.data.id.endsWith(`:${journalId}`)
     })
   }

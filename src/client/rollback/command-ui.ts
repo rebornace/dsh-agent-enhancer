@@ -29,7 +29,7 @@ export function installRollbackUndoCommand(options: {
   readonly tips: RollbackUndoTipStore
   readonly rollbackFor: (sessionId: SessionId) => RollbackController
   readonly enabled: () => boolean
-  readonly t: TranslateNS<'composer-enhancer'>
+  readonly t: TranslateNS<'agent-enhancer'>
 }): () => void {
   const fiber = options.ctx.inject(['commandUi'], (scope: Context) => {
     const commandUi = scope.get('commandUi') as CommandUiService | undefined
@@ -51,7 +51,7 @@ export function installRollbackUndoCommand(options: {
           options.rollbackFor(session.sessionId).open(turn, 'undo')
         },
       },
-    }), 'composer-enhancer: undo-restore command')
+    }), 'agent-enhancer: undo-restore command')
   })
 
   return () => {

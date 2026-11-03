@@ -15,12 +15,12 @@ function codec(typeSymbol: string): TypertCodec {
   }
 }
 
-const requestCodec = codec('dsh-composer-enhancer#CheckpointRollbackRequest')
+const requestCodec = codec('dsh-agent-enhancer#CheckpointRollbackRequest')
 
 export const checkpointClientRemoteInfo = {
-  package: 'dsh-composer-enhancer',
+  package: 'dsh-agent-enhancer',
   descriptors: [{
-    id: 'dsh-composer-enhancer#checkpointRollback/preview',
+    id: 'dsh-agent-enhancer#checkpointRollback/preview',
     service: 'checkpointRollback',
     namespace: 'checkpointRollback',
     method: 'preview',
@@ -28,9 +28,9 @@ export const checkpointClientRemoteInfo = {
     invocation: { kind: 'direct' },
     parameters: [{ name: 'request', wire: 'request', source: 'json', codec: requestCodec }],
     cancellation: { parameter: 'signal' },
-    result: codec('dsh-composer-enhancer#CheckpointRollbackPreview'),
+    result: codec('dsh-agent-enhancer#CheckpointRollbackPreview'),
   }, {
-    id: 'dsh-composer-enhancer#checkpointRollback/execute',
+    id: 'dsh-agent-enhancer#checkpointRollback/execute',
     service: 'checkpointRollback',
     namespace: 'checkpointRollback',
     method: 'execute',
@@ -38,7 +38,7 @@ export const checkpointClientRemoteInfo = {
     invocation: { kind: 'direct' },
     parameters: [{ name: 'request', wire: 'request', source: 'json', codec: requestCodec }],
     cancellation: { parameter: 'signal' },
-    result: codec('dsh-composer-enhancer#CheckpointRollbackResult'),
+    result: codec('dsh-agent-enhancer#CheckpointRollbackResult'),
   }],
 } satisfies TypertRemoteContribution
 
@@ -62,7 +62,7 @@ async function invoke(remote: unknown, method: 'preview' | 'execute', request: C
     throw new CheckpointRollbackClientError('ROLLBACK_FAILED')
   }
   if (!result.ok) {
-    const code = result.error.code === 'composer-enhancer/rollback-failed'
+    const code = result.error.code === 'agent-enhancer/rollback-failed'
       ? result.error.details.code : 'ROLLBACK_FAILED'
     throw new CheckpointRollbackClientError(code)
   }

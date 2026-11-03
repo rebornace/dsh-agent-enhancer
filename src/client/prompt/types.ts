@@ -16,7 +16,7 @@ export interface DraftSelection extends DraftGuard {
 export interface DraftSnapshot extends DraftSelection {
   readonly text: string
 }
-export type ComposerKey = 'up' | 'down' | 'tab' | 'enter' | 'escape' | 'search'
+export type PromptKey = 'up' | 'down' | 'tab' | 'enter' | 'escape' | 'search'
 export interface KeyContext {
   readonly composing: boolean
   readonly systemLayerOpen: boolean

@@ -82,7 +82,7 @@ describe('presentRollbackTranscript', () => {
     const marker = entry(9, {
       surfaceOp: { op: 'replace', startSeq: 5, endSeq: 8 },
       sourceEventSeqs: [5, 8],
-      id: 'dsh-composer-enhancer:rollback:2:journal-1',
+      id: 'dsh-agent-enhancer:rollback:2:journal-1',
       sourceKind: 'checkpoint-rollback',
       text: 'rolled back before turn 2',
     })
@@ -109,7 +109,7 @@ describe('presentRollbackTranscript', () => {
     const marker = entry(9, {
       surfaceOp: { op: 'replace', startSeq: 5, endSeq: 7 },
       sourceEventSeqs: [5, 7],
-      id: 'dsh-composer-enhancer:rollback:2:journal-1',
+      id: 'dsh-agent-enhancer:rollback:2:journal-1',
       sourceKind: 'checkpoint-rollback',
     })
     // Host opens the next monotonic turn (not the rolled-back id) with a step shell.
@@ -126,13 +126,13 @@ describe('presentRollbackTranscript', () => {
       entry(12, {
         surfaceOp: { op: 'replace', startSeq: 9, endSeq: 9 },
         sourceEventSeqs: [9, 5],
-        id: 'dsh-composer-enhancer:undo:restore-1:0:5',
+        id: 'dsh-agent-enhancer:undo:restore-1:0:5',
         text: 'second prompt',
       }),
       entry(13, {
         type: 'assistant/message',
         surfaceOp: 'append',
-        id: 'dsh-composer-enhancer:undo:restore-1:1:7',
+        id: 'dsh-agent-enhancer:undo:restore-1:1:7',
         text: 'second answer',
       }),
       lifecycle(14, 'step/end', { turn: 3, step: 1 }, 4),
@@ -161,7 +161,7 @@ describe('presentRollbackTranscript', () => {
     const marker = entry(9, {
       surfaceOp: { op: 'replace', startSeq: 5, endSeq: 8 },
       sourceEventSeqs: [5, 8],
-      id: 'dsh-composer-enhancer:rollback:2:journal-1',
+      id: 'dsh-agent-enhancer:rollback:2:journal-1',
       sourceKind: 'checkpoint-rollback',
     })
     expect(activeRollbackUndoTip([entry(1), marker])).toEqual({ turn: 2 })
@@ -177,7 +177,7 @@ describe('presentRollbackTranscript', () => {
     const marker = entry(9, {
       surfaceOp: { op: 'replace', startSeq: 5, endSeq: 6 },
       sourceEventSeqs: [5, 6],
-      id: 'dsh-composer-enhancer:rollback:2:journal-1',
+      id: 'dsh-agent-enhancer:rollback:2:journal-1',
       sourceKind: 'checkpoint-rollback',
     })
     const hideFrom = activeRollbackHideTurnsFrom([entry(1), marker])
@@ -206,7 +206,7 @@ describe('presentRollbackTranscript', () => {
     const marker = entry(9, {
       surfaceOp: { op: 'replace', startSeq: 4, endSeq: 8 },
       sourceEventSeqs: [5, 8],
-      id: 'dsh-composer-enhancer:rollback:1:journal-1',
+      id: 'dsh-agent-enhancer:rollback:1:journal-1',
       sourceKind: 'checkpoint-rollback',
     })
     const presented = presentRollbackTranscript([
@@ -231,7 +231,7 @@ describe('presentRollbackTranscript', () => {
     const marker = entry(9, {
       surfaceOp: { op: 'replace', startSeq: 5, endSeq: 6 },
       sourceEventSeqs: [5, 6],
-      id: 'dsh-composer-enhancer:rollback:2:journal-1',
+      id: 'dsh-agent-enhancer:rollback:2:journal-1',
       sourceKind: 'checkpoint-rollback',
       text: 'rolled back before turn 2',
     })
@@ -255,8 +255,8 @@ describe('presentRollbackTranscript', () => {
     const presented = presentRollbackTranscript([
       entry(1),
       lifecycle(10, 'turn/start', { turn: 2 }, 3),
-      entry(11, { id: 'dsh-composer-enhancer:undo:restore-1:0:5', text: 'restored prompt' }),
-      assistantAt(12, 2, 'dsh-composer-enhancer:undo:restore-1:1:7', 'restored answer', 3),
+      entry(11, { id: 'dsh-agent-enhancer:undo:restore-1:0:5', text: 'restored prompt' }),
+      assistantAt(12, 2, 'dsh-agent-enhancer:undo:restore-1:1:7', 'restored answer', 3),
       lifecycle(13, 'turn/end', { turn: 2, reason: { kind: 'completed' } }, 4),
       lifecycle(14, 'turn/start', { turn: 2 }, 5),
       entry(15, { text: 'fresh prompt' }),

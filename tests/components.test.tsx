@@ -5,11 +5,11 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AuxiliaryRequest, AuxiliaryResult } from '../src/host/types.ts'
-import { ComposerSession } from '../src/client/composer/session.ts'
-import type { Coordinator } from '../src/client/composer/coordinator.ts'
-import { ComposerControls } from '../src/client/dsh/controls.tsx'
-import type { ComposerOverlayProps } from '../src/client/dsh/overlay.tsx'
-import { ComposerOverlay } from '../src/client/dsh/overlay.tsx'
+import { PromptSession } from '../src/client/prompt/session.ts'
+import type { Coordinator } from '../src/client/prompt/coordinator.ts'
+import { AgentControls } from '../src/client/dsh/controls.tsx'
+import type { AgentOverlayProps } from '../src/client/dsh/overlay.tsx'
+import { AgentOverlay } from '../src/client/dsh/overlay.tsx'
 import { readSelection, restoreSelection } from '../src/client/dsh/editor.ts'
 import { OverlapHintStore } from '../src/client/dsh/plugin-hints.ts'
 import { CoexistenceHints } from '../src/client/dsh/hints.tsx'
@@ -36,7 +36,7 @@ const translations: Record<string, string> = {
   optimizeSessionChanged: 'Session changed. Optimize again.',
   optimizeChips: 'Optimization is unavailable with references',
   optimizeChipSelection: 'Selection includes references. Optimize the full draft or adjust the selection.',
-  settingsTitle: 'Composer Enhance',
+  settingsTitle: 'Agent Enhance',
   settingsSubtitle: 'Toggle input helpers as needed',
   history: 'Prompt history',
   historyDescription: '↑↓ revisit sent prompts; Alt+R to search (Ctrl+R in compatible environments)',
@@ -55,9 +55,9 @@ const translations: Record<string, string> = {
   privacy: 'Optimization and prediction send selected text or recent conversation to the selected model provider (defaults to the current session model). History never requests a model. No prompt content or acceptance-rate telemetry is collected.',
   coexistence: 'Similar official or third-party features are only reported; they are never disabled automatically.',
   settingsError: 'Setting was not saved. Try again.',
-  overlapHistory: 'Another prompt-history feature is enabled. Composer Enhance history remains enabled.',
-  overlapOptimize: 'Another prompt-optimization feature is enabled. Composer Enhance optimization remains enabled.',
-  overlapPredict: 'Another reply-suggestion feature is enabled. Composer Enhance prediction remains enabled.',
+  overlapHistory: 'Another prompt-history feature is enabled. Agent Enhance history remains enabled.',
+  overlapOptimize: 'Another prompt-optimization feature is enabled. Agent Enhance optimization remains enabled.',
+  overlapPredict: 'Another reply-suggestion feature is enabled. Agent Enhance prediction remains enabled.',
   dismissHint: 'Dismiss coexistence notice',
 }
 
@@ -159,7 +159,7 @@ function settingsHarness(
   }
 }
 
-const sessions: ComposerSession[] = []
+const sessions: PromptSession[] = []
 
 type Occurrence = InputState['occurrences'][number]
 
@@ -249,7 +249,7 @@ function setup(
   const generate = vi.fn(implementation ?? (async (request: AuxiliaryRequest): Promise<AuxiliaryResult> => ({
     requestId: request.requestId, text: 'optimized draft', route: { provider: 'p', model: 'm' },
   })))
-  const composer = new ComposerSession({
+  const composer = new PromptSession({
     history: () => switches.history,
     optimize: () => switches.optimize,
     predict: () => switches.predict,
@@ -264,10 +264,10 @@ function setup(
     useConversation: (selector: (value: { views: Map<string, ChatSnapshot> }) => unknown) =>
       selector({ views: new Map([['chat', chat]]) }),
     t: (key: string) => translations[key] ?? key,
-  } as unknown as ComposerOverlayProps
+  } as unknown as AgentOverlayProps
   const content = () => <>
-    <ComposerControls session={composer} t={props.t} />
-    <ComposerOverlay {...props} />
+    <AgentControls session={composer} t={props.t} />
+    <AgentOverlay {...props} />
   </>
   const view = render(content(), { container: host })
   const initialCaret = viewOptions.draft === undefined ? 8 : initialDraft.length
@@ -317,14 +317,14 @@ afterEach(() => {
   document.getSelection()?.removeAllRanges()
 })
 
-describe('ComposerControls prompt optimization', () => {
+describe('AgentControls prompt optimization', () => {
   it('keeps one accessible button through optimize, pending, undo, and cached reuse', async () => {
     const pending = deferred<AuxiliaryResult>()
     const { root, generate, refreshInput } = setup([], () => pending.promise)
     const button = screen.getByRole('button', { name: 'Optimize prompt' })
     expect(button.className).toContain('ghost')
     expect(button.className).not.toContain('_toolbar_')
-    expect(button.dataset.composerEnhancerIcon).toBe('optimize')
+    expect(button.dataset.agentEnhancerIcon).toBe('optimize')
     const icon = button.querySelector('svg')
     expect(icon && {
       viewBox: icon.getAttribute('viewBox'),
@@ -334,12 +334,12 @@ describe('ComposerControls prompt optimization', () => {
       width: icon.getAttribute('width'),
       height: icon.getAttribute('height'),
     }).toEqual({ viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', hidden: 'true', width: '16', height: '16' })
-    expect(button.getAttribute('data-composer-enhancer-icon')).toBe('optimize')
+    expect(button.getAttribute('data-agent-enhancer-icon')).toBe('optimize')
     expect([...button.childNodes].filter(node => node.nodeType === 3).map(node => node.textContent)).not.toContain('Optimize prompt')
 
     fireEvent.click(button)
     expect(screen.getByRole('button', { name: 'Optimizing prompt' })).toBe(button)
-    expect(button.getAttribute('data-composer-enhancer-icon')).toBe('pending')
+    expect(button.getAttribute('data-agent-enhancer-icon')).toBe('pending')
     expect(button).toHaveProperty('disabled', true)
     expect(root.textContent).toBe('original draft')
     expect(root.contentEditable).toBe('true')
@@ -349,7 +349,7 @@ describe('ComposerControls prompt optimization', () => {
     await waitFor(() => { expect(root.textContent).toBe('optimized draft') })
     refreshInput()
     await waitFor(() => { expect(screen.getByRole('button', { name: 'Undo optimization' })).toBe(button) })
-    expect(button.getAttribute('data-composer-enhancer-icon')).toBe('undo')
+    expect(button.getAttribute('data-agent-enhancer-icon')).toBe('undo')
 
     fireEvent.click(button)
     refreshInput()
@@ -661,17 +661,17 @@ describe('ComposerControls prompt optimization', () => {
   })
 })
 
-describe('ComposerOverlay post-reply prediction', () => {
+describe('AgentOverlay post-reply prediction', () => {
   it('requests the latest settled turn once and renders one polite gray suggestion', async () => {
     const { generate } = setup([], async (request): Promise<AuxiliaryResult> => ({
       requestId: request.requestId, text: '  next prompt  ', route: { provider: 'p', model: 'm' },
     }), { draft: '', chat: settledChatFixture() })
 
     await screen.findByText('next prompt')
-    const prediction = document.querySelector('[data-composer-enhancer-prediction]')
+    const prediction = document.querySelector('[data-agent-enhancer-prediction]')
     expect(prediction?.getAttribute('aria-live')).toBe('polite')
     expect(prediction?.textContent).toBe('next promptTab')
-    expect(document.querySelectorAll('[data-composer-enhancer-prediction]')).toHaveLength(1)
+    expect(document.querySelectorAll('[data-agent-enhancer-prediction]')).toHaveLength(1)
     expect(generate).toHaveBeenCalledTimes(1)
     expect(generate.mock.calls[0]?.[0]).toMatchObject({
       operation: 'predict',
@@ -700,7 +700,7 @@ describe('ComposerOverlay post-reply prediction', () => {
     expect(persists()).toBe(1)
     expect(submits()).toBe(0)
     expect(generate).toHaveBeenCalledTimes(1)
-    expect(document.querySelector('[data-composer-enhancer-prediction]')).toBeNull()
+    expect(document.querySelector('[data-agent-enhancer-prediction]')).toBeNull()
   })
 
   it('clears the suggestion on the first native input without generating following characters', async () => {
@@ -713,7 +713,7 @@ describe('ComposerOverlay post-reply prediction', () => {
     fireEvent.input(root)
 
     expect(root.textContent).toBe('x')
-    expect(document.querySelector('[data-composer-enhancer-prediction]')).toBeNull()
+    expect(document.querySelector('[data-agent-enhancer-prediction]')).toBeNull()
     expect(generate).toHaveBeenCalledTimes(1)
   })
 
@@ -727,7 +727,7 @@ describe('ComposerOverlay post-reply prediction', () => {
     document.body.append(menu)
 
     expect(fireEvent.keyDown(root, { key: 'Tab', code: 'Tab' })).toBe(true)
-    expect(document.querySelector('[data-composer-enhancer-prediction]')).toBeNull()
+    expect(document.querySelector('[data-agent-enhancer-prediction]')).toBeNull()
   })
 
   it.each(['menu', 'listbox'])('cancels when an unrecognized editor keydown opens an official %s afterward', async role => {
@@ -744,7 +744,7 @@ describe('ComposerOverlay post-reply prediction', () => {
     expect(fireEvent.keyDown(root, { key: 'm', code: 'KeyM' })).toBe(true)
     expect(screen.getByRole(role)).toBe(menu)
     await waitFor(() => {
-      expect(document.querySelector('[data-composer-enhancer-prediction]')).toBeNull()
+      expect(document.querySelector('[data-agent-enhancer-prediction]')).toBeNull()
     })
   })
 
@@ -756,7 +756,7 @@ describe('ComposerOverlay post-reply prediction', () => {
 
     switches.predict = false
     refreshInput()
-    expect(document.querySelector('[data-composer-enhancer-prediction]')).toBeNull()
+    expect(document.querySelector('[data-agent-enhancer-prediction]')).toBeNull()
     refreshChat(settledChatFixture(2))
     await Promise.resolve()
     expect(generate).toHaveBeenCalledTimes(1)
@@ -768,7 +768,7 @@ describe('ComposerOverlay post-reply prediction', () => {
   })
 })
 
-describe('ComposerOverlay prompt history search', () => {
+describe('AgentOverlay prompt history search', () => {
   it('opens a localized dialog, navigates real candidates, and accepts Enter into the draft', () => {
     const { root } = setup()
 

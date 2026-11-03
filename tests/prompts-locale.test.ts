@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { composerLocales } from '../src/client/locales.ts'
+import { agentLocales } from '../src/client/locales.ts'
 import {
   auxiliaryUserInput,
   optimizeSystemPrompt,
@@ -9,7 +9,7 @@ import {
 
 describe('ui locale packs', () => {
   it('keeps zh and en composer dictionaries on the same key set', () => {
-    expect(Object.keys(composerLocales.zh).sort()).toEqual(Object.keys(composerLocales.en).sort())
+    expect(Object.keys(agentLocales.zh).sort()).toEqual(Object.keys(agentLocales.en).sort())
   })
 
   it('maps Desktop locale ids onto zh/en prompt packs', () => {

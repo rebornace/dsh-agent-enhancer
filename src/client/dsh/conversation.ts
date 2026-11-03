@@ -2,7 +2,7 @@ import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/cl
 import type {
   ChatConversationViewNode, ChatSnapshot, TurnTailChatData, UserMessageNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { PromptEntry } from '../composer/types.ts'
+import type { PromptEntry } from '../prompt/types.ts'
 
 export interface CompletedTurn {
   readonly turn: number

@@ -590,7 +590,7 @@ describe('CheckpointRollbackService execute', () => {
     expect(result).toEqual({ sessionId, turn: 2, draft: 'second prompt' })
     await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('before')
     expect(h.session.deriveMessages().map(message => message.id)).toEqual([
-      'system', 'user-1', 'assistant-1', expect.stringMatching(/^dsh-composer-enhancer:rollback:2:/),
+      'system', 'user-1', 'assistant-1', expect.stringMatching(/^dsh-agent-enhancer:rollback:2:/),
     ])
     const events = h.adapter.readEvents()
     expect(events).toHaveLength(originalLength + 1)
@@ -711,7 +711,7 @@ describe('CheckpointRollbackService execute', () => {
 
     await expect(readFile(join(workspaceRoot, 'file.txt'), 'utf8')).resolves.toBe('original')
     expect(h.session.deriveMessages().map(message => message.id)).toEqual([
-      'system', expect.stringMatching(/^dsh-composer-enhancer:rollback:1:/),
+      'system', expect.stringMatching(/^dsh-agent-enhancer:rollback:1:/),
     ])
     expect(h.adapter.readEvents().filter(event => event.type === 'user/message'
       && event.data.source.kind === 'checkpoint-rollback')).toHaveLength(2)
@@ -917,7 +917,7 @@ describe('CheckpointRollbackService undo', () => {
     const events = h.adapter.readEvents()
     const undoAssistant = events.find(event => (
       event.type === 'assistant/message'
-      && event.data.message.id.startsWith('dsh-composer-enhancer:undo:')
+      && event.data.message.id.startsWith('dsh-agent-enhancer:undo:')
       && event.data.message.content.some(block => block.type === 'tool-call')
     ))
     expect(undoAssistant?.type).toBe('assistant/message')
@@ -931,7 +931,7 @@ describe('CheckpointRollbackService undo', () => {
       event.type === 'tool/result'
       && Number(event.seq) > undoStart
       && event.data.message.toolCallId === ToolCallId('call-undo-1')
-      && event.data.message.id.startsWith('dsh-composer-enhancer:undo:')
+      && event.data.message.id.startsWith('dsh-agent-enhancer:undo:')
     ))
     expect(undoToolCall).toBeDefined()
     expect(undoToolResult).toBeDefined()
@@ -1115,7 +1115,7 @@ describe('checkpoint rollback Host Remote', () => {
       unavailable: [],
     })
     await expect(guest.preview({ sessionId, turn: 2 }, signal)).rejects.toMatchObject({
-      code: 'composer-enhancer/forbidden',
+      code: 'agent-enhancer/forbidden',
     })
   })
 
@@ -1132,7 +1132,7 @@ describe('checkpoint rollback Host Remote', () => {
       .catch((error: unknown) => error)
 
     expect(rejection).toMatchObject({
-      code: 'composer-enhancer/rollback-failed',
+      code: 'agent-enhancer/rollback-failed',
       message: 'Checkpoint rollback request failed',
       details: { code: 'ROLLBACK_CONFLICT' },
     })

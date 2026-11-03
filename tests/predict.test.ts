@@ -1,11 +1,11 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AuxiliaryResult, PredictRequest, RecentExchange } from '../src/host/types.ts'
-import { Coordinator } from '../src/client/composer/coordinator.ts'
-import type { ComposerInput } from '../src/client/composer/coordinator.ts'
-import { PredictionController, PredictionGate } from '../src/client/composer/predict.ts'
-import type { PredictionRequest } from '../src/client/composer/predict.ts'
-import type { DraftWriter, KeyContext } from '../src/client/composer/types.ts'
+import { Coordinator } from '../src/client/prompt/coordinator.ts'
+import type { PromptInput } from '../src/client/prompt/coordinator.ts'
+import { PredictionController, PredictionGate } from '../src/client/prompt/predict.ts'
+import type { PredictionRequest } from '../src/client/prompt/predict.ts'
+import type { DraftWriter, KeyContext } from '../src/client/prompt/types.ts'
 
 const session = (value: string): SessionId => value as SessionId
 const exchange: RecentExchange = { turn: 1, prompt: 'first prompt', response: 'first response' }
@@ -45,13 +45,13 @@ function request(overrides: Partial<PredictionRequest> = {}): PredictionRequest 
 }
 
 interface HarnessOptions {
-  input?: Partial<ComposerInput>
+  input?: Partial<PromptInput>
   context?: readonly RecentExchange[]
   generate?: (request: PredictRequest, signal: AbortSignal) => Promise<AuxiliaryResult | null>
 }
 
 function harness(options: HarnessOptions = {}) {
-  let input: ComposerInput = {
+  let input: PromptInput = {
     sessionId: session('a'),
     draft: '',
     draftRev: 1,
@@ -90,7 +90,7 @@ function harness(options: HarnessOptions = {}) {
     switches,
     sync,
     input: () => input,
-    setInput(value: ComposerInput) { input = value },
+    setInput(value: PromptInput) { input = value },
     setContext(value: readonly RecentExchange[]) { context = value },
   }
 }

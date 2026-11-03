@@ -1,3 +1,4 @@
+import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -6,6 +7,12 @@ import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types
 import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
 import { AuxiliaryError } from '../errors.ts'
+import {
+  LEGACY_PACKAGE_NAME,
+  PACKAGE_NAME,
+  PACKAGE_VERSION,
+  PLUGIN_ID,
+} from '../identity.ts'
 import { buildAuxiliaryModelCatalog } from './catalog.ts'
 import { DshCheckpointSessions } from './checkpoint/dsh.ts'
 import { DshCheckpointCaptureSwitch } from './checkpoint/live.ts'
@@ -17,7 +24,7 @@ import { checkpointRemoteInfo, remoteInfo } from './rpc.ts'
 import type { RpcPayload } from './rpc.ts'
 import type { AuxiliaryResult } from './types.ts'
 
-export const name = 'composer-enhancer'
+export const name = PLUGIN_ID
 export const inject = ['llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel', 'fs', 'tools', 'typert', 'typertGateway']
 
 export const Config = z.object({
@@ -37,21 +44,21 @@ export type Config = ReturnType<typeof Config>
 
 /** Single Host package-face contribution. Typert rejects a second register for the same package#face. */
 export const hostContribution = {
-  package: 'dsh-composer-enhancer',
+  package: PACKAGE_NAME,
   face: 'host',
   schemas: [],
   model: { services: [], events: [], objects: [] },
   invocations: [...remoteInfo.descriptors, ...checkpointRemoteInfo.descriptors],
 } as const
 
-export class ComposerEnhancerService extends TypertRemoteService {
+export class AgentEnhancerService extends TypertRemoteService {
   constructor(ctx: Context, private readonly models: AuxiliaryModels) {
-    super(ctx, 'composerEnhancer')
+    super(ctx, 'agentEnhancer')
   }
 
   private assertOwner(): void {
     if (this.ctx.invocation?.peer.principal.kind !== 'owner') {
-      throw new RemoteError('composer-enhancer/forbidden', 'Only the desktop owner may use Composer Enhance', {})
+      throw new RemoteError('agent-enhancer/forbidden', 'Only the desktop owner may use Agent Enhance', {})
     }
   }
 
@@ -62,7 +69,7 @@ export class ComposerEnhancerService extends TypertRemoteService {
     } catch (error) {
       if (signal.aborted) throw error
       const code = error instanceof AuxiliaryError ? error.code : 'MODEL_FAILED'
-      throw new RemoteError('composer-enhancer/failed', 'Composer Enhance request failed', { code })
+      throw new RemoteError('agent-enhancer/failed', 'Agent Enhance request failed', { code })
     }
   }
 
@@ -72,16 +79,34 @@ export class ComposerEnhancerService extends TypertRemoteService {
     try {
       return await buildAuxiliaryModelCatalog(this.ctx)
     } catch {
-      throw new RemoteError('composer-enhancer/failed', 'Composer Enhance catalog failed', {
+      throw new RemoteError('agent-enhancer/failed', 'Agent Enhance catalog failed', {
         code: 'MODEL_UNAVAILABLE',
       })
     }
   }
 }
 
+function resolveCheckpointRoot(dshHome: string): string {
+  const base = join(dshHome, 'profiles', 'desktop', 'plugin-data')
+  const nextPkg = join(base, PACKAGE_NAME)
+  const next = join(nextPkg, 'checkpoint')
+  const prev = join(base, LEGACY_PACKAGE_NAME, 'checkpoint')
+  if (!existsSync(next) && existsSync(prev)) {
+    mkdirSync(nextPkg, { recursive: true })
+    renameSync(prev, next)
+    const prevPkg = join(base, LEGACY_PACKAGE_NAME)
+    try {
+      if (existsSync(prevPkg) && readdirSync(prevPkg).length === 0) rmdirSync(prevPkg)
+    } catch {
+      // Best-effort cleanup of the empty legacy package folder.
+    }
+  }
+  return next
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    composerEnhancer: ComposerEnhancerService
+    agentEnhancer: AgentEnhancerService
   }
 }
 
@@ -94,21 +119,18 @@ export function apply(ctx: Context, config: Config): void {
     predictModel: config.predictModel.get(),
     predictReasoningEffort: config.predictReasoningEffort.get(),
   }))
-  new ComposerEnhancerService(ctx, models)
+  new AgentEnhancerService(ctx, models)
   ctx.effect(() => ctx.typert.register(hostContribution))
 
-  const storageRoot = join(
-    process.env.DSH_HOME ?? join(homedir(), '.dsh'),
-    'profiles', 'desktop', 'plugin-data', 'dsh-composer-enhancer', 'checkpoint',
-  )
+  const storageRoot = resolveCheckpointRoot(process.env.DSH_HOME ?? join(homedir(), '.dsh'))
   const store = new CheckpointStore(storageRoot)
   const sessions = new DshCheckpointSessions(ctx)
   let rollbackEnabled = config.rollbackEnabled.get()
-  const captures = new DshCheckpointCaptureSwitch(ctx, { store, pluginVersion: '0.1.5' })
+  const captures = new DshCheckpointCaptureSwitch(ctx, { store, pluginVersion: PACKAGE_VERSION })
   const rollback = new CheckpointRollbackService({
     store,
     storageRoot,
-    pluginVersion: '0.1.5',
+    pluginVersion: PACKAGE_VERSION,
     resolveSession: sessions.resolveSession,
     isEnabled: () => rollbackEnabled,
     awaitCaptures: () => captures.awaitPending(),
@@ -135,7 +157,7 @@ export function apply(ctx: Context, config: Config): void {
 
 /** @deprecated Checkpoint invocations live on hostContribution; kept for test imports. */
 export const checkpointHostContribution = {
-  package: 'dsh-composer-enhancer',
+  package: PACKAGE_NAME,
   face: 'host',
   schemas: [],
   model: { services: [], events: [], objects: [] },
@@ -167,14 +189,14 @@ export class CheckpointRollbackRemoteService extends TypertRemoteService {
 
   private assertOwner(): void {
     if (this.ctx.invocation?.peer.principal.kind !== 'owner') {
-      throw new RemoteError('composer-enhancer/forbidden', 'Only the desktop owner may use checkpoint rollback', {})
+      throw new RemoteError('agent-enhancer/forbidden', 'Only the desktop owner may use checkpoint rollback', {})
     }
   }
 
   private remoteError(error: unknown, signal: AbortSignal): unknown {
     if (signal.aborted) return error
     const code = error instanceof CheckpointRollbackError ? error.code : 'ROLLBACK_FAILED'
-    return new RemoteError('composer-enhancer/rollback-failed', 'Checkpoint rollback request failed', { code })
+    return new RemoteError('agent-enhancer/rollback-failed', 'Checkpoint rollback request failed', { code })
   }
 }
 

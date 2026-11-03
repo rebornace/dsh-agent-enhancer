@@ -25,7 +25,7 @@ import type { EnhancerSettings } from '../src/config.ts'
 
 function rollbackUserNodeEntries(ctx: Context) {
   return ctx.slots.entries('conversation.chat.node').filter(entry => entry.options.key === 'user'
-    && entry.registrant === 'composer-enhancer-rollback-user')
+    && entry.registrant === 'agent-enhancer-rollback-user')
 }
 
 const staticModules: Record<string, unknown> = {
@@ -208,7 +208,7 @@ function configForm() {
 }
 
 it('loads through the official Loader without replacing the composer bar and cleans up on unload', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'composer-enhancer-composition-'))
+  const directory = await mkdtemp(join(tmpdir(), 'agent-enhancer-composition-'))
   const ctx = new Context()
   vi.spyOn(ctx.logger, 'error').mockImplementation(console.error)
   vi.stubGlobal('ResizeObserver', class {
@@ -236,7 +236,7 @@ it('loads through the official Loader without replacing the composer bar and cle
   const remote = {
     $on: vi.fn(() => () => {}),
     $mount: vi.fn(async () => {
-      ctx.provide('remote.composerEnhancer', { call: vi.fn() } as never)
+      ctx.provide('remote.agentEnhancer', { call: vi.fn() } as never)
       ctx.provide('remote.checkpointRollback', remote.checkpointRollback as never)
       return unmountRemote
     }),
@@ -355,10 +355,10 @@ it('loads through the official Loader without replacing the composer bar and cle
       expect(ctx.slots.entries(key).map(entry => ({
         id: entry.options.id,
         order: entry.options.order,
-      }))).toEqual([{ id: 'composer-enhancer', order: 120 }])
+      }))).toEqual([{ id: 'agent-enhancer', order: 120 }])
     }
     expect(ctx.slots.entries('conversation.composer.bar')[0]).toBe(officialBar)
-    expect(ctx.slots.entries('settings.plugins.tab').map(entry => entry.options.id)).toContain('composer-enhancer')
+    expect(ctx.slots.entries('settings.plugins.tab').map(entry => entry.options.id)).toContain('agent-enhancer')
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
     expect(rollbackUserNodeEntries(ctx)).toHaveLength(0)
     act(() => { settings.accept({ rollbackEnabled: true }) })
@@ -372,9 +372,9 @@ it('loads through the official Loader without replacing the composer bar and cle
       expect(rollbackUserNodeEntries(ctx)).toHaveLength(1)
     })
     expect(settings.listeners.size).toBeGreaterThan(baselineSettingsListeners)
-    expect(document.querySelector('style[data-dsh-composer-enhancer]')).not.toBeNull()
+    expect(document.querySelector('style[data-dsh-agent-enhancer]')).not.toBeNull()
     await vi.waitFor(() => {
-      expect(container.querySelector('[data-composer-enhancer-overlay]')).not.toBeNull()
+      expect(container.querySelector('[data-agent-enhancer-overlay]')).not.toBeNull()
     })
 
     const input = container.querySelector<HTMLElement>('[data-composer-input]')
@@ -421,10 +421,10 @@ it('loads through the official Loader without replacing the composer bar and cle
     expect(ctx.slots.entries('conversation.input.right')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.input.overlay')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
-    expect(ctx.slots.entries('settings.plugins.tab').map(entry => entry.options.id)).not.toContain('composer-enhancer')
+    expect(ctx.slots.entries('settings.plugins.tab').map(entry => entry.options.id)).not.toContain('agent-enhancer')
     expect(ctx.slots.entries('conversation.composer.bar')[0]).toBe(officialBar)
     await vi.waitFor(() => { expect(settings.listeners.size).toBe(baselineSettingsListeners) })
-    expect(document.querySelector('style[data-dsh-composer-enhancer]')).toBeNull()
+    expect(document.querySelector('style[data-dsh-agent-enhancer]')).toBeNull()
     const remaining = container.querySelector<HTMLElement>('[data-composer-input]')
     expect(remaining).not.toBeNull()
     expect(fireEvent.keyDown(remaining!, { key: 'ArrowUp', code: 'ArrowUp', bubbles: true })).toBe(true)
@@ -433,7 +433,7 @@ it('loads through the official Loader without replacing the composer bar and cle
       resolveInventory({ ok: true, value: { entries: [{ moduleName: 'dsh-input-assistant', enabled: true }] } })
       await inventory
     })
-    expect(container.querySelector('[data-composer-enhancer-hint]')).toBeNull()
+    expect(container.querySelector('[data-agent-enhancer-hint]')).toBeNull()
   } finally {
     if (unmount !== undefined) act(() => { unmount?.() })
     disposeRoot?.()
