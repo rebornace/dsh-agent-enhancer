@@ -141,7 +141,7 @@ describe('composer configuration and Remote metadata', () => {
 
   it('publishes one strict cancellable call with a nullable result', () => {
     expect(remoteInfo.package).toBe('dsh-agent-enhancer')
-    expect(remoteInfo.descriptors).toHaveLength(4)
+    expect(remoteInfo.descriptors).toHaveLength(6)
     expect(remoteInfo.descriptors[0]).toMatchObject({
       namespace: 'agentEnhancer',
       method: 'call',
@@ -170,6 +170,20 @@ describe('composer configuration and Remote metadata', () => {
       implementation: 'compactContext',
       cancellation: { parameter: 'signal' },
     })
+    expect(remoteInfo.descriptors[4]).toMatchObject({
+      namespace: 'agentEnhancer',
+      method: 'checkUpdate',
+      service: 'agentEnhancer',
+      implementation: 'checkUpdate',
+    })
+    expect(remoteInfo.descriptors[4]).not.toHaveProperty('cancellation')
+    expect(remoteInfo.descriptors[5]).toMatchObject({
+      namespace: 'agentEnhancer',
+      method: 'applyUpdate',
+      service: 'agentEnhancer',
+      implementation: 'applyUpdate',
+    })
+    expect(remoteInfo.descriptors[5]).not.toHaveProperty('cancellation')
     expect(hostContribution).toEqual({
       package: 'dsh-agent-enhancer',
       face: 'host',
@@ -356,6 +370,7 @@ describe('host composition', () => {
     expect(register).toHaveBeenCalledWith(hostContribution)
     expect(hostContribution.invocations.map(entry => entry.namespace)).toEqual([
       'agentEnhancer', 'agentEnhancer', 'agentEnhancer', 'agentEnhancer',
+      'agentEnhancer', 'agentEnhancer',
       'checkpointRollback', 'checkpointRollback',
     ])
     expect(ctx.agentEnhancer).toBeInstanceOf(AgentEnhancerService)

@@ -153,6 +153,22 @@ const contextCompactResultSchema = z.strictObject({
 const contextCompactRequestCodec = codec('dsh-agent-enhancer#ContextCompactRequest', contextCompactRequestSchema)
 const contextCompactResultCodec = codec('dsh-agent-enhancer#ContextCompactResult', contextCompactResultSchema)
 
+export const updateCheckResultSchema = z.strictObject({
+  current: z.string(),
+  latest: z.string().nullable(),
+  updateAvailable: z.boolean(),
+  installKind: z.enum(['npm', 'link', 'unknown']),
+  canAutoApply: z.boolean(),
+  command: z.string(),
+})
+export const applyUpdateResultSchema = z.strictObject({
+  ok: z.boolean(),
+  message: z.string(),
+  command: z.string().optional(),
+})
+const updateCheckResultCodec = codec('dsh-agent-enhancer#UpdateCheckResult', updateCheckResultSchema)
+const applyUpdateResultCodec = codec('dsh-agent-enhancer#ApplyUpdateResult', applyUpdateResultSchema)
+
 export const remoteInfo = createTypertRemoteInfo({
   package: 'dsh-agent-enhancer',
   methods: {
@@ -202,6 +218,20 @@ export const remoteInfo = createTypertRemoteInfo({
       }],
       cancellation: { parameter: 'signal' },
       result: contextCompactResultCodec,
+    },
+    'agentEnhancer/checkUpdate': {
+      service: 'agentEnhancer',
+      implementation: 'checkUpdate',
+      invocation: { kind: 'direct' },
+      parameters: [],
+      result: updateCheckResultCodec,
+    },
+    'agentEnhancer/applyUpdate': {
+      service: 'agentEnhancer',
+      implementation: 'applyUpdate',
+      invocation: { kind: 'direct' },
+      parameters: [],
+      result: applyUpdateResultCodec,
     },
   },
 }, z)

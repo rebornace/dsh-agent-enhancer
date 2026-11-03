@@ -31,6 +31,11 @@ import { AuxiliaryModels } from './model.ts'
 import { checkpointRemoteInfo, remoteInfo } from './rpc.ts'
 import type { RpcPayload } from './rpc.ts'
 import type { AuxiliaryResult } from './types.ts'
+import {
+  applyPluginUpdateForHost,
+  checkPluginUpdateForHost,
+} from './update/check.ts'
+import type { ApplyUpdateResult, UpdateCheckResult } from './update/types.ts'
 import type { CompactCommandRuntime } from './context-compact.ts'
 
 export const name = PLUGIN_ID
@@ -173,6 +178,22 @@ export class AgentEnhancerService extends TypertRemoteService {
       const code = error instanceof AuxiliaryError ? error.code : 'COMPACT_FAILED'
       throw new RemoteError('agent-enhancer/failed', 'Context compaction failed', { code })
     }
+  }
+
+  async checkUpdate(): Promise<UpdateCheckResult> {
+    this.assertOwner()
+    return checkPluginUpdateForHost()
+  }
+
+  async applyUpdate(): Promise<ApplyUpdateResult> {
+    this.assertOwner()
+    return applyPluginUpdateForHost({
+      linkBlocked: 'link',
+      success: 'restart',
+      failed: 'failed',
+      noUpdate: 'none',
+      manualOnly: 'manual',
+    })
   }
 }
 

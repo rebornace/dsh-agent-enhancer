@@ -10,6 +10,7 @@ function auxiliaryCode(value: unknown, fallback: AuxiliaryErrorCode): AuxiliaryE
 }
 import type { ContextCompactRequest, ContextCompactResult } from '../host/context-compact.ts'
 import type { ContextInspectRequest, ContextInspectResult } from '../host/context-inspect.ts'
+import type { ApplyUpdateResult, UpdateCheckResult } from '../host/update/types.ts'
 import type { RpcPayload } from '../host/rpc.ts'
 import type { AuxiliaryResult } from '../host/types.ts'
 import { checkpointClientRemoteInfo } from './rollback/remote.ts'
@@ -82,6 +83,24 @@ export const clientRemoteInfo = {
     }],
     cancellation: { parameter: 'signal' },
     result: codec('dsh-agent-enhancer#ContextCompactResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/checkUpdate',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'checkUpdate',
+    implementation: 'checkUpdate',
+    invocation: { kind: 'direct' },
+    parameters: [],
+    result: codec('dsh-agent-enhancer#UpdateCheckResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/applyUpdate',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'applyUpdate',
+    implementation: 'applyUpdate',
+    invocation: { kind: 'direct' },
+    parameters: [],
+    result: codec('dsh-agent-enhancer#ApplyUpdateResult'),
   }, ...checkpointClientRemoteInfo.descriptors],
 } satisfies TypertRemoteContribution
 
@@ -153,6 +172,44 @@ export const agentEnhancerCompactContext = {
         ? auxiliaryCode(result.error.details.code, 'COMPACT_FAILED')
         : 'COMPACT_FAILED'
       throw new AuxiliaryError(code)
+    }
+    return result.value
+  },
+}
+
+type CheckUpdateCall = () => Promise<RemoteResult<UpdateCheckResult>>
+
+export const agentEnhancerCheckUpdate = {
+  async invoke(remote: unknown) {
+    const namespace = Reflect.get(remote as object, 'agentEnhancer') as object
+    const call = Reflect.get(namespace, 'checkUpdate') as CheckUpdateCall
+    let result: RemoteResult<UpdateCheckResult>
+    try {
+      result = await call.apply(namespace, [])
+    } catch {
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    if (!result.ok) {
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    return result.value
+  },
+}
+
+type ApplyUpdateCall = () => Promise<RemoteResult<ApplyUpdateResult>>
+
+export const agentEnhancerApplyUpdate = {
+  async invoke(remote: unknown) {
+    const namespace = Reflect.get(remote as object, 'agentEnhancer') as object
+    const call = Reflect.get(namespace, 'applyUpdate') as ApplyUpdateCall
+    let result: RemoteResult<ApplyUpdateResult>
+    try {
+      result = await call.apply(namespace, [])
+    } catch {
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    if (!result.ok) {
+      throw new AuxiliaryError('MODEL_FAILED')
     }
     return result.value
   },
