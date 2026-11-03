@@ -343,6 +343,34 @@ describe('AuxiliaryModels', () => {
     expect(h.prepare.mock.calls[0]?.[0]).toEqual({ provider: 'p', model: 'chat', maxTokens: 120 })
   })
 
+  it('on cache miss, rematches follow+Auto predict from session turn text (not empty→instant)', async () => {
+    const h = harness({
+      projection: { provider: AUTO_PROVIDER, model: AUTO_MODEL },
+      settings: {
+        autoInstantProvider: 'p',
+        autoInstantModel: 'flash',
+        autoThinkingProvider: 'p',
+        autoThinkingModel: 'chat',
+        autoProProvider: 'p',
+        autoProModel: 'reasoner',
+        autoProReasoningEffort: 'high',
+      },
+    })
+    Object.assign(h.session, {
+      snapshotEvents: () => [{
+        type: 'user/message',
+        data: {
+          content: [{
+            type: 'text',
+            text: '请深入分析并仔细推理以下长文：' + 'x'.repeat(800),
+          }],
+        },
+      }],
+    })
+    await h.models.generate(predictRequest(), new AbortController().signal)
+    expect(h.prepare.mock.calls[0]?.[0]).toEqual({ provider: 'p', model: 'reasoner', maxTokens: 120 })
+  })
+
   it('prefers plugin optimize route and reasoning effort over the session model', async () => {
     const override = { provider: 'cheap', model: 'lite' }
     const h = harness({

@@ -6,7 +6,7 @@ import {
   pillLabel,
   selectedPillMenuId,
 } from '../src/client/dsh/model-pill-label.ts'
-import { encodeFollowSelection } from '../src/client/dsh/model-catalog.ts'
+import { encodeFollowSelection, encodeUnconfiguredSelection } from '../src/client/dsh/model-catalog.ts'
 
 const groups = [{
   id: 'deepseek',
@@ -32,7 +32,7 @@ describe('model pill labels', () => {
     }
     expect(isUnconfiguredAutoTierMapping(tier)).toBe(true)
     expect(pillLabel(tier, groups, 'Follow session', 'Auto', 'Not set')).toBe('Not set')
-    expect(selectedPillMenuId(tier, groups, { tierMapping: true })).toBe('')
+    expect(selectedPillMenuId(tier, groups, { tierMapping: true })).toBe(encodeUnconfiguredSelection())
     expect(selectedPillMenuId(tier, groups, { tierMapping: true })).not.toBe(encodeFollowSelection())
   })
 

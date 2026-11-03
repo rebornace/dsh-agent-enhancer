@@ -18,8 +18,12 @@ import {
 } from '../config.ts'
 import type { AuxiliaryFeature, AuxiliaryModelSettings, EnhancerSettings } from '../config.ts'
 import { createClassifier } from './auto-route/classifier.ts'
-import { getSessionResolvedRouteForSession } from './auto-route/session-resolved-route.ts'
+import {
+  getSessionResolvedRouteForSession,
+  setSessionResolvedRouteForSession,
+} from './auto-route/session-resolved-route.ts'
 import { projectedSessionModel } from './auto-route/session-selection.ts'
+import { sessionTurnHint } from './auto-route/session-turn-hint.ts'
 import { resolveAutoRoute } from './auto-route/router.ts'
 import type { AutoTierRoute } from './auto-route/types.ts'
 import { AuxiliaryError } from '../errors.ts'
@@ -195,6 +199,7 @@ export class AuxiliaryModels {
     override: AuxiliaryModelSettings,
     text: string,
     feature: AuxiliaryFeature | 'session',
+    toolHeavy?: boolean,
   ): Promise<ResolvedRoute> {
     const settings = this.enhancerSettings()
     const map = autoRouteMapOf(settings)
@@ -204,12 +209,22 @@ export class AuxiliaryModels {
     const mapped = await resolveAutoRoute({
       text,
       feature,
+      toolHeavy,
       map,
       classifierEnabled: settings.autoClassifierEnabled,
       classify,
       isAvailable: (provider, model) => this.modelExists(provider, model),
       fallback: this.fallbackFromSession(session, override),
     })
+    // Only warm the session-turn cache for follow+Auto rematches — not for
+    // a feature that selected Auto on its own (that tier is feature-local).
+    if (feature === 'session') {
+      setSessionResolvedRouteForSession(session, {
+        provider: mapped.provider,
+        model: mapped.model,
+        reasoningEffort: mapped.reasoningEffort,
+      })
+    }
     return {
       provider: mapped.provider,
       model: mapped.model,
@@ -217,10 +232,18 @@ export class AuxiliaryModels {
     }
   }
 
+  private turnTextForAuto(session: Session, preferred: string): { text: string, toolHeavy?: boolean } {
+    if (preferred !== '') return { text: preferred }
+    const hint = sessionTurnHint(session)
+    if (hint === undefined) return { text: '' }
+    return { text: hint.text, toolHeavy: hint.toolHeavy }
+  }
+
   private async route(session: Session, feature: AuxiliaryFeature, text: string): Promise<ResolvedRoute> {
     const override = this.featureSettings(feature)
     if (isAutoModel(override)) {
-      return this.resolveAutoRouteFor(session, override, text, feature)
+      const turn = this.turnTextForAuto(session, text)
+      return this.resolveAutoRouteFor(session, override, turn.text, feature, turn.toolHeavy)
     }
     if (!isFollowSessionModel(override)) {
       return {
@@ -234,7 +257,8 @@ export class AuxiliaryModels {
     if (isAutoModel(selection)) {
       const cached = this.resolvedRouteFromSession(session, override.reasoningEffort)
       if (cached !== undefined) return cached
-      return this.resolveAutoRouteFor(session, override, text, 'session')
+      const turn = this.turnTextForAuto(session, text)
+      return this.resolveAutoRouteFor(session, override, turn.text, 'session', turn.toolHeavy)
     }
     const preferredEffort = typeof selection.reasoningEffort === 'string'
       ? selection.reasoningEffort

@@ -14,8 +14,12 @@ import type { EnhancerSettings } from '../config.ts'
 import { AuxiliaryError } from '../errors.ts'
 import type { AuxiliaryErrorCode } from '../errors.ts'
 import { createClassifier } from './auto-route/classifier.ts'
-import { getSessionResolvedRouteForSession } from './auto-route/session-resolved-route.ts'
+import {
+  getSessionResolvedRouteForSession,
+  setSessionResolvedRouteForSession,
+} from './auto-route/session-resolved-route.ts'
 import { projectedSessionModel } from './auto-route/session-selection.ts'
+import { sessionTurnHint } from './auto-route/session-turn-hint.ts'
 import { resolveAutoRoute } from './auto-route/router.ts'
 import type { AutoTierRoute } from './auto-route/types.ts'
 
@@ -106,9 +110,12 @@ async function resolveAutoRouteForCompact(
   const classify = settings.autoClassifierEnabled
     ? createClassifier(ctx.llm, map.classifier)
     : undefined
+  // Prefer real turn text on cache-miss rematch (empty text + feature session → Instant).
+  const hint = sessionTurnHint(session)
   const mapped = await resolveAutoRoute({
-    text: '',
+    text: hint?.text ?? '',
     feature,
+    toolHeavy: hint?.toolHeavy,
     map,
     classifierEnabled: settings.autoClassifierEnabled,
     classify,
@@ -116,6 +123,13 @@ async function resolveAutoRouteForCompact(
     fallback: fallbackFromSession(ctx, session, override),
     signal,
   })
+  if (feature === 'session') {
+    setSessionResolvedRouteForSession(session, {
+      provider: mapped.provider,
+      model: mapped.model,
+      reasoningEffort: mapped.reasoningEffort,
+    })
+  }
   return { provider: mapped.provider, model: mapped.model }
 }
 

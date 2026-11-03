@@ -1,6 +1,6 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { ModelCatalog, ModelCatalogModel, ModelProviderGroup } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { ModelCatalog, ModelProviderGroup } from '@deepseek-ai/dsh-api-session-controller/types'
 import { Menu, Pill, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import { Component, useEffect, useState, useSyncExternalStore } from 'react'
@@ -21,6 +21,7 @@ import {
   encodeEffortSelection,
   encodeFollowSelection,
   encodeModelSelection,
+  encodeUnconfiguredSelection,
 } from './model-catalog.ts'
 import { pillLabel, isUnconfiguredAutoTierMapping, selectedPillMenuId } from './model-pill-label.ts'
 
@@ -85,6 +86,12 @@ function autoTierFieldPrefix(tier: AutoRouteTier): 'autoInstant' | 'autoThinking
 
 type SettingsForm = Pick<ConfigForm<EnhancerSettings>, 'getSnapshot' | 'subscribe' | 'set'>
 
+/** Home = feature toggles only; detail panels hold model / Auto mapping. */
+type SettingsView =
+  | { readonly kind: 'home' }
+  | { readonly kind: 'feature'; readonly feature: AuxiliaryFeature }
+  | { readonly kind: 'auto' }
+
 export interface PluginSettingsProps {
   readonly form: SettingsForm
   readonly t: TranslateNS<'agent-enhancer'>
@@ -145,11 +152,15 @@ function catalogMenuItems(
   autoLabel: string,
   defaultEffortLabel: string,
   includeSessionOptions: boolean,
+  unconfiguredLabel?: string,
 ): MenuEntry[] {
   const items: MenuEntry[] = []
   if (includeSessionOptions) {
     items.push({ id: encodeFollowSelection(), label: followLabel })
     items.push({ id: encodeAutoSelection(), label: autoLabel })
+  } else if (unconfiguredLabel !== undefined) {
+    // Auto tier maps must be clearable after a model was chosen.
+    items.push({ id: encodeUnconfiguredSelection(), label: unconfiguredLabel })
   }
   for (const group of groupsForPills(groups)) {
     items.push({ type: 'separator', id: `sep:${group.id}` })
@@ -224,6 +235,7 @@ function ModelPill({
     autoLabel,
     t('reasoningDefault'),
     includeSessionOptions,
+    unconfiguredLabel,
   )
   const tierMapping = !includeSessionOptions
   const active = tierMapping
@@ -231,7 +243,7 @@ function ModelPill({
     : !isFollowSessionModel(selection)
   const catalogFallbackItems: MenuEntry[] = includeSessionOptions
     ? [{ id: encodeFollowSelection(), label: followLabel }, { id: encodeAutoSelection(), label: autoLabel }]
-    : [{ id: 'tier:unconfigured', label: unconfiguredLabel ?? t('modelUnconfigured') }]
+    : [{ id: encodeUnconfiguredSelection(), label: unconfiguredLabel ?? t('modelUnconfigured') }]
 
   return <Menu
     open={open}
@@ -286,6 +298,24 @@ class SettingsErrorBoundary extends Component<
   }
 }
 
+function featureDetailTitle(
+  feature: AuxiliaryFeature,
+  t: TranslateNS<'agent-enhancer'>,
+): string {
+  switch (feature) {
+    case 'optimize':
+      return t('optimize')
+    case 'predict':
+      return t('predict')
+    case 'compact':
+      return t('contextInspect')
+    default: {
+      const _exhaustive: never = feature
+      return _exhaustive
+    }
+  }
+}
+
 function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
   const formState = useSyncExternalStore(
     listener => form.subscribe(listener),
@@ -294,6 +324,7 @@ function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
   )
   const settings = resolveSettings(formState?.value)
   const writable = formState?.writable !== false
+  const [view, setView] = useState<SettingsView>({ kind: 'home' })
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState(false)
   const [catalog, setCatalog] = useState<ModelCatalog | null>(null)
@@ -376,38 +407,64 @@ function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
   const onModelMenuSelect = async (feature: AuxiliaryFeature, id: string) => {
     const decoded = decodeModelSelection(id)
     if (decoded === null) return
-    if (decoded.kind === 'follow') {
-      await saveFields([
-        [`${feature}Provider`, ''],
-        [`${feature}Model`, ''],
-        [`${feature}ReasoningEffort`, ''],
-      ])
-      return
+    switch (decoded.kind) {
+      case 'follow':
+        await saveFields([
+          [`${feature}Provider`, ''],
+          [`${feature}Model`, ''],
+          [`${feature}ReasoningEffort`, ''],
+        ])
+        return
+      case 'auto':
+        await saveFields([
+          [`${feature}Provider`, AUTO_PROVIDER],
+          [`${feature}Model`, AUTO_MODEL],
+          [`${feature}ReasoningEffort`, ''],
+        ])
+        return
+      case 'unconfigured':
+        return
+      case 'model':
+        await saveFields([
+          [`${feature}Provider`, decoded.provider],
+          [`${feature}Model`, decoded.model],
+          [`${feature}ReasoningEffort`, decoded.reasoningEffort],
+        ])
+        return
+      default: {
+        const _exhaustive: never = decoded
+        return _exhaustive
+      }
     }
-    if (decoded.kind === 'auto') {
-      await saveFields([
-        [`${feature}Provider`, AUTO_PROVIDER],
-        [`${feature}Model`, AUTO_MODEL],
-        [`${feature}ReasoningEffort`, ''],
-      ])
-      return
-    }
-    await saveFields([
-      [`${feature}Provider`, decoded.provider],
-      [`${feature}Model`, decoded.model],
-      [`${feature}ReasoningEffort`, decoded.reasoningEffort],
-    ])
   }
 
   const onAutoTierMenuSelect = async (tier: AutoRouteTier, id: string) => {
     const decoded = decodeModelSelection(id)
-    if (decoded === null || decoded.kind !== 'model') return
+    if (decoded === null) return
     const prefix = autoTierFieldPrefix(tier)
-    await saveFields([
-      [`${prefix}Provider`, decoded.provider],
-      [`${prefix}Model`, decoded.model],
-      [`${prefix}ReasoningEffort`, decoded.reasoningEffort],
-    ])
+    switch (decoded.kind) {
+      case 'unconfigured':
+        await saveFields([
+          [`${prefix}Provider`, ''],
+          [`${prefix}Model`, ''],
+          [`${prefix}ReasoningEffort`, ''],
+        ])
+        return
+      case 'model':
+        await saveFields([
+          [`${prefix}Provider`, decoded.provider],
+          [`${prefix}Model`, decoded.model],
+          [`${prefix}ReasoningEffort`, decoded.reasoningEffort],
+        ])
+        return
+      case 'follow':
+      case 'auto':
+        return
+      default: {
+        const _exhaustive: never = decoded
+        return _exhaustive
+      }
+    }
   }
 
   const onClassifierToggle = async (checked: boolean) => {
@@ -427,6 +484,100 @@ function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
 
   const busy = !writable || saving !== null
   const groups = catalog?.groups ?? []
+  const goHome = () => { setView({ kind: 'home' }) }
+
+  const statusBlock = <>
+    {error && <p role="status">{t('settingsError')}</p>}
+    {catalogStatus === 'error' && catalogError !== null && (
+      <p role="status" className={styles.settingDescription} title={catalogError}>
+        {t('modelCatalogError')}: {catalogError}
+      </p>
+    )}
+  </>
+
+  if (view.kind === 'feature') {
+    const selection = auxiliaryModelOf(settings, view.feature)
+    const title = featureDetailTitle(view.feature, t)
+    return <section aria-label={title} className={styles.settings}>
+      <header className={styles.settingsHeader}>
+        <button type="button" className={styles.settingsBack} onClick={goHome}>
+          {t('settingsBack')}
+        </button>
+        <h2>{title}</h2>
+        <p>{t('modelLabel')}</p>
+      </header>
+      <div className={styles.settingRow}>
+        <div className={styles.settingText}>
+          <h3>{t('modelLabel')}</h3>
+        </div>
+        <div className={styles.settingControls}>
+          <ModelPill
+            selection={selection}
+            groups={groups}
+            catalogStatus={catalogStatus}
+            disabled={busy || (view.feature === 'compact' && !settings.contextInspectEnabled)}
+            t={t}
+            ariaLabel={`${title} ${t('modelLabel')}`}
+            includeSessionOptions
+            onOpen={refreshCatalog}
+            onSelect={id => { void onModelMenuSelect(view.feature, id) }}
+          />
+        </div>
+      </div>
+      {statusBlock}
+    </section>
+  }
+
+  if (view.kind === 'auto') {
+    return <section aria-label={t('autoRouting')} className={styles.settings}>
+      <header className={styles.settingsHeader}>
+        <button type="button" className={styles.settingsBack} onClick={goHome}>
+          {t('settingsBack')}
+        </button>
+        <h2>{t('autoRouting')}</h2>
+        <p>{t('autoRoutingDescription')}</p>
+      </header>
+      <div className={styles.settingRow}>
+        <div className={styles.settingText}>
+          <h3>{t('autoClassifier')}</h3>
+          <p className={styles.settingDescription}>{t('autoClassifierDescription')}</p>
+        </div>
+        <div className={styles.settingControls}>
+          <Switch
+            label={t('autoClassifier')}
+            checked={settings.autoClassifierEnabled}
+            disabled={busy}
+            onChange={checked => { void onClassifierToggle(checked) }}
+          />
+        </div>
+      </div>
+      <div aria-label={t('autoMappingTitle')} className={styles.autoMappingSection}>
+        <h3>{t('autoMappingTitle')}</h3>
+        {autoTiers.map(tier => {
+          const tierSelection = autoTierSelection(settings, tier)
+          return <div key={tier} className={styles.settingRow}>
+            <div className={styles.settingText}>
+              <h3>{t(AUTO_TIER_LABELS[tier])}</h3>
+            </div>
+            <div className={styles.settingControls}>
+              <ModelPill
+                selection={tierSelection}
+                groups={groups}
+                catalogStatus={catalogStatus}
+                disabled={busy}
+                t={t}
+                ariaLabel={`${t(AUTO_TIER_LABELS[tier])} ${t('modelLabel')}`}
+                includeSessionOptions={false}
+                onOpen={refreshCatalog}
+                onSelect={id => { void onAutoTierMenuSelect(tier, id) }}
+              />
+            </div>
+          </div>
+        })}
+      </div>
+      {statusBlock}
+    </section>
+  }
 
   return <section aria-label={t('settingsTitle')} className={styles.settings}>
     <header className={styles.settingsHeader}>
@@ -435,25 +586,22 @@ function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
     </header>
     {MODULES.map(module => {
       const modelFeature = modelFeatureOf(module)
-      const selection = modelFeature === null ? null : auxiliaryModelOf(settings, modelFeature)
       return <div key={module} className={styles.settingRow}>
         <div className={styles.settingText}>
           <h3>{t(LABELS[module])}</h3>
           <p className={styles.settingDescription}>{t(DESCRIPTIONS[module])}</p>
         </div>
         <div className={styles.settingControls}>
-          {modelFeature !== null && selection !== null && (
-            <ModelPill
-              selection={selection}
-              groups={groups}
-              catalogStatus={catalogStatus}
-              disabled={busy || (module === 'contextInspect' && !settings.contextInspectEnabled)}
-              t={t}
-              ariaLabel={`${t(modelFeature === 'compact' ? 'contextInspectCompact' : LABELS[modelFeature])} ${t('modelLabel')}`}
-              includeSessionOptions
-              onOpen={refreshCatalog}
-              onSelect={id => { void onModelMenuSelect(modelFeature, id) }}
-            />
+          {modelFeature !== null && (
+            <button
+              type="button"
+              className={styles.settingsConfigure}
+              disabled={busy}
+              aria-label={`${t(LABELS[module])} ${t('settingsConfigure')}`}
+              onClick={() => { setView({ kind: 'feature', feature: modelFeature }) }}
+            >
+              {t('settingsConfigure')}
+            </button>
           )}
           <Switch
             label={t(LABELS[module])}
@@ -467,50 +615,23 @@ function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
 
     <div className={styles.settingRow}>
       <div className={styles.settingText}>
-        <h3>{t('autoClassifier')}</h3>
-        <p className={styles.settingDescription}>{t('autoClassifierDescription')}</p>
+        <h3>{t('autoRouting')}</h3>
+        <p className={styles.settingDescription}>{t('autoRoutingDescription')}</p>
       </div>
       <div className={styles.settingControls}>
-        <Switch
-          label={t('autoClassifier')}
-          checked={settings.autoClassifierEnabled}
+        <button
+          type="button"
+          className={styles.settingsConfigure}
           disabled={busy}
-          onChange={checked => { void onClassifierToggle(checked) }}
-        />
+          aria-label={`${t('autoRouting')} ${t('settingsConfigure')}`}
+          onClick={() => { setView({ kind: 'auto' }) }}
+        >
+          {t('settingsConfigure')}
+        </button>
       </div>
     </div>
 
-    <div aria-label={t('autoMappingTitle')} className={styles.autoMappingSection}>
-      <h3>{t('autoMappingTitle')}</h3>
-      {autoTiers.map(tier => {
-        const tierSelection = autoTierSelection(settings, tier)
-        return <div key={tier} className={styles.settingRow}>
-          <div className={styles.settingText}>
-            <h3>{t(AUTO_TIER_LABELS[tier])}</h3>
-          </div>
-          <div className={styles.settingControls}>
-            <ModelPill
-              selection={tierSelection}
-              groups={groups}
-              catalogStatus={catalogStatus}
-              disabled={busy}
-              t={t}
-              ariaLabel={`${t(AUTO_TIER_LABELS[tier])} ${t('modelLabel')}`}
-              includeSessionOptions={false}
-              onOpen={refreshCatalog}
-              onSelect={id => { void onAutoTierMenuSelect(tier, id) }}
-            />
-          </div>
-        </div>
-      })}
-    </div>
-
-    {error && <p role="status">{t('settingsError')}</p>}
-    {catalogStatus === 'error' && catalogError !== null && (
-      <p role="status" className={styles.settingDescription} title={catalogError}>
-        {t('modelCatalogError')}: {catalogError}
-      </p>
-    )}
+    {statusBlock}
     <aside aria-label={t('privacyTitle')} className={styles.privacy}>
       <h3>{t('privacyTitle')}</h3>
       <p>{t('privacy')}</p>

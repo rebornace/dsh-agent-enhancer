@@ -48,14 +48,20 @@ const translations: Record<string, string> = {
   modelLabel: 'Model',
   modelFollowSession: 'Follow session',
   modelAuto: 'Auto',
+  modelUnconfigured: 'Not set',
   reasoningDefault: 'Default',
-  autoClassifier: 'Smart routing classifier',
-  autoClassifierDescription: 'When Auto is selected, classify each request into instant, thinking, or pro tiers',
+  settingsBack: 'Back',
+  settingsConfigure: 'Configure',
+  autoRouting: 'Auto routing',
+  autoRoutingDescription: 'Sessions and helpers can pick Auto; configure tier mappings here',
+  autoClassifier: 'Use a small model to help Auto classify',
+  autoClassifierDescription: 'When on, Auto may call a classifier; when off, heuristics only',
   autoMappingTitle: 'Auto tier model map',
   autoTier_instant: 'Instant',
   autoTier_thinking: 'Thinking',
   autoTier_pro: 'Pro',
   autoTier_classifier: 'Classifier',
+  contextInspectCompact: 'Compact summary model',
   rollback: 'Conversation and file rollback',
   rollbackDescription: 'Preview and restore conversation and tracked files at eligible turn boundaries',
   contextInspect: 'Context details',
@@ -910,11 +916,12 @@ describe('PluginSettings', () => {
     expect(screen.getByText('Optimize the draft or selection, with one-click undo')).toBeTruthy()
     expect(screen.getByText('One suggestion after a reply; Tab to accept')).toBeTruthy()
     expect(screen.getByText('Click System / Tools / Messages on the official context meter to open details in the right sidebar')).toBeTruthy()
-    expect(screen.getAllByRole('switch')).toHaveLength(6)
+    expect(screen.getAllByRole('switch')).toHaveLength(5)
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-label'))).toEqual([
       'Prompt history', 'Optimize prompt', 'Next-prompt prediction', 'Conversation and file rollback', 'Context details',
-      'Smart routing classifier',
     ])
+    expect(screen.getByRole('button', { name: 'Auto routing Configure' })).toBeTruthy()
+    expect(screen.queryByText('Use a small model to help Auto classify')).toBeNull()
     expect(screen.getByRole('switch', { name: 'Conversation and file rollback' }).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByRole('switch', { name: 'Context details' }).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByText(translations.rollbackBoundary!)).toBeTruthy()
@@ -961,7 +968,7 @@ describe('PluginSettings', () => {
     for (const toggle of screen.getAllByRole('switch')) expect(toggle).toHaveProperty('disabled', true)
   })
 
-  it('puts a model pill beside optimize/predict and saves catalog picks from the menu', async () => {
+  it('opens feature config for model pills and saves catalog picks from the menu', async () => {
     const set = vi.fn(async () => true)
     const loadCatalog = vi.fn(async () => ({
       default: { provider: 'deepseek', model: 'deepseek-chat' },
@@ -984,9 +991,10 @@ describe('PluginSettings', () => {
       failures: [],
     }))
     const h = settingsHarness(set, {}, loadCatalog)
+    expect(screen.queryByRole('button', { name: 'Optimize prompt Model' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Optimize prompt Configure' }))
     const optimizePill = await screen.findByRole('button', { name: 'Optimize prompt Model' })
     expect(optimizePill.textContent).toContain('Follow session')
-    expect(screen.getByRole('button', { name: 'Next-prompt prediction Model' })).toBeTruthy()
     fireEvent.click(optimizePill)
     fireEvent.click(await screen.findByRole('menuitem', { name: 'DeepSeek Chat · High' }))
     await waitFor(() => {
@@ -1002,6 +1010,8 @@ describe('PluginSettings', () => {
       optimizeReasoningEffort: 'high',
     })
     expect(screen.getByRole('button', { name: 'Optimize prompt Model' }).textContent).toContain('DeepSeek Chat · High')
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('button', { name: 'Next-prompt prediction Configure' })).toBeTruthy()
   })
 
   it('offers Auto in auxiliary model menus and persists the sentinel provider/model', async () => {
@@ -1017,6 +1027,7 @@ describe('PluginSettings', () => {
       failures: [],
     }))
     const h = settingsHarness(set, {}, loadCatalog)
+    fireEvent.click(screen.getByRole('button', { name: 'Optimize prompt Configure' }))
     const optimizePill = await screen.findByRole('button', { name: 'Optimize prompt Model' })
     fireEvent.click(optimizePill)
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Auto' }))
@@ -1033,6 +1044,52 @@ describe('PluginSettings', () => {
       optimizeReasoningEffort: '',
     })
     expect(screen.getByRole('button', { name: 'Optimize prompt Model' }).textContent).toContain('Auto')
+  })
+
+  it('keeps classifier and tier mapping inside Auto routing detail', async () => {
+    settingsHarness()
+    fireEvent.click(screen.getByRole('button', { name: 'Auto routing Configure' }))
+    expect(await screen.findByRole('switch', { name: 'Use a small model to help Auto classify' })).toBeTruthy()
+    expect(screen.getByText('Auto tier model map')).toBeTruthy()
+    expect(screen.getByText('Instant')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.queryByRole('switch', { name: 'Use a small model to help Auto classify' })).toBeNull()
+  })
+
+  it('can clear a configured Auto tier mapping back to Not set', async () => {
+    const set = vi.fn(async () => true)
+    const loadCatalog = vi.fn(async () => ({
+      default: { provider: 'deepseek', model: 'deepseek-chat' },
+      routableProviders: ['deepseek'],
+      groups: [{
+        id: 'deepseek',
+        name: 'DeepSeek',
+        models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }],
+      }],
+      failures: [],
+    }))
+    const h = settingsHarness(set, {
+      autoInstantProvider: 'deepseek',
+      autoInstantModel: 'deepseek-chat',
+    }, loadCatalog)
+    fireEvent.click(screen.getByRole('button', { name: 'Auto routing Configure' }))
+    const instantPill = await screen.findByRole('button', { name: 'Instant Model' })
+    expect(instantPill.textContent).toContain('DeepSeek Chat')
+    fireEvent.click(instantPill)
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Not set' }))
+    await waitFor(() => {
+      expect(set.mock.calls).toEqual(expect.arrayContaining([
+        ['autoInstantProvider', ''],
+        ['autoInstantModel', ''],
+        ['autoInstantReasoningEffort', ''],
+      ]))
+    })
+    h.accept({
+      autoInstantProvider: '',
+      autoInstantModel: '',
+      autoInstantReasoningEffort: '',
+    })
+    expect(screen.getByRole('button', { name: 'Instant Model' }).textContent).toContain('Not set')
   })
 })
 
@@ -1056,7 +1113,7 @@ describe('CoexistenceHints', () => {
     expect(store.getSnapshot()).toEqual(['optimize', 'predict'])
     expect(set).not.toHaveBeenCalled()
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-checked'))).toEqual([
-      'true', 'true', 'true', 'true', 'true', 'false',
+      'true', 'true', 'true', 'true', 'true',
     ])
 
     const reopened = new OverlapHintStore(localStorage, 'test-release')

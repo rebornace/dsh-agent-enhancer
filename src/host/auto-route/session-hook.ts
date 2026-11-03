@@ -11,6 +11,7 @@ import {
   setSessionResolvedRoute,
 } from './session-resolved-route.ts'
 import { projectedSessionModel } from './session-selection.ts'
+import { sessionTurnHint } from './session-turn-hint.ts'
 import { AUTO_MODEL, AUTO_PROVIDER } from './sentinel.ts'
 import type { AutoTierRoute } from './types.ts'
 
@@ -43,14 +44,7 @@ interface TurnNote {
 interface AgentFace {
   readonly options?: { readonly provider?: string, readonly model?: string }
   readonly status?: string
-  readonly session?: {
-    snapshotEvents?: () => readonly LoggedEvent[]
-  }
-}
-
-interface LoggedEvent {
-  readonly type: string
-  readonly data?: { readonly content?: readonly ContentBlockLike[] }
+  readonly session?: object
 }
 
 interface ContentBlockLike {
@@ -105,17 +99,6 @@ class AutoCatalogAdapter extends LlmAdapter {
   }
 }
 
-function textOf(content: readonly ContentBlockLike[] | undefined): string {
-  if (content === undefined) return ''
-  const parts: string[] = []
-  for (const block of content) {
-    if (block.type === 'text' && typeof block.text === 'string' && block.text !== '') {
-      parts.push(block.text)
-    }
-  }
-  return parts.join('\n')
-}
-
 function describeTurn(messages: readonly MessageLike[], step: number): TurnNote {
   const parts: string[] = []
   let toolHeavy = step > 1
@@ -132,40 +115,37 @@ function describeTurn(messages: readonly MessageLike[], step: number): TurnNote 
 }
 
 function loggedTurn(agent: AgentFace | undefined): TurnNote | undefined {
-  const events = agent?.session?.snapshotEvents?.()
-  if (events === undefined) return undefined
-  let text = ''
-  let toolHeavy = false
-  let saw = false
-  for (const event of events) {
-    if (event.type === 'tool/result') {
-      toolHeavy = true
-      saw = true
-    }
-    if (event.type !== 'user/message') continue
-    const next = textOf(event.data?.content)
-    if (next === '') continue
-    text = next
-    saw = true
+  return sessionTurnHint(agent?.session)
+}
+
+/** Cordis throws when reading required injects on an inactive fiber — never hard-crash Auto. */
+function softService<T>(ctx: Context, name: string): T | undefined {
+  try {
+    return ctx.get(name) as T | undefined
+  } catch {
+    return undefined
   }
-  return saw ? { text, toolHeavy } : undefined
 }
 
 function agentsOf(ctx: Context): AgentsFace | undefined {
-  return ctx.agents as unknown as AgentsFace
+  return softService<AgentsFace>(ctx, 'agents')
 }
 
 function activeAgent(ctx: Context): object | undefined {
-  const agents = agentsOf(ctx)
-  if (agents === undefined) return undefined
   try {
-    const current = agents.currentInitiator?.()
-    if (current !== undefined) return current
+    const agents = agentsOf(ctx)
+    if (agents === undefined) return undefined
+    try {
+      const current = agents.currentInitiator?.()
+      if (current !== undefined) return current
+    } catch {
+      // A disposing initiator scope throws; fall through to the live roster.
+    }
+    const running = (agents.list?.() ?? []).filter(agent => (agent as AgentFace).status === 'running')
+    return running.length === 1 ? running[0] : undefined
   } catch {
-    // A disposing initiator scope throws; fall through to the live roster.
+    return undefined
   }
-  const running = (agents.list?.() ?? []).filter(agent => (agent as AgentFace).status === 'running')
-  return running.length === 1 ? running[0] : undefined
 }
 
 function asAgent(agent: object | undefined): AgentFace | undefined {
@@ -198,14 +178,19 @@ function projectedSelection(ctx: Context, agent: AgentFace | undefined): ModelPi
 }
 
 function fallbackRoute(ctx: Context, agent: AgentFace | undefined): AutoTierRoute | undefined {
-  const options = agent?.options
-  const fromOptions = typeof options?.provider === 'string' && typeof options.model === 'string'
-    ? concreteRoute({ provider: options.provider, model: options.model })
-    : undefined
-  if (fromOptions !== undefined) return fromOptions
-  const projected = concreteRoute(projectedSelection(ctx, agent))
-  if (projected !== undefined) return projected
-  return concreteRoute(ctx.agentDefaultModel?.currentSelection?.())
+  try {
+    const options = agent?.options
+    const fromOptions = typeof options?.provider === 'string' && typeof options.model === 'string'
+      ? concreteRoute({ provider: options.provider, model: options.model })
+      : undefined
+    if (fromOptions !== undefined) return fromOptions
+    const projected = concreteRoute(projectedSelection(ctx, agent))
+    if (projected !== undefined) return projected
+    const defaults = softService<{ currentSelection?: () => ModelPick | undefined }>(ctx, 'agentDefaultModel')
+    return concreteRoute(defaults?.currentSelection?.())
+  } catch {
+    return undefined
+  }
 }
 
 function routeConfig(config: LlmCallConfig, mapped: AutoTierRoute): LlmCallConfig {
@@ -275,11 +260,12 @@ export function installAutoSessionRoute(
     const llm = ctx.llm
     const inner = llm.prepareCall.bind(llm)
     const wrapped: typeof llm.prepareCall = async (config, signal, configure) => {
+      const keyProbe = activeAgent(ctx) ?? config
+      const depth = resolving.get(keyProbe) ?? 0
+      if (depth > 0 || !isAutoModel(config)) return inner(config, signal, configure)
       const agent = activeAgent(ctx)
       const key = agent ?? config
-      const depth = resolving.get(key) ?? 0
-      if (depth > 0 || !isAutoModel(config)) return inner(config, signal, configure)
-      resolving.set(key, depth + 1)
+      resolving.set(key, (resolving.get(key) ?? 0) + 1)
       try {
         const settings = options.settings()
         const map = autoRouteMapOf(settings)

@@ -89,7 +89,7 @@ export function parseModelOptionValue(value: string): { provider: string; model:
 }
 
 /**
- * Select/menu ids must be DOM-safe (no NUL): `follow` |
+ * Select/menu ids must be DOM-safe (no NUL): `follow` | `auto` | `unconfigured` |
  * `m|provider|model` | `e|provider|model|effort`.
  * Provider/model ids from Desktop do not contain `|`.
  */
@@ -103,6 +103,11 @@ export function encodeAutoSelection(): string {
   return 'auto'
 }
 
+/** Clear an Auto tier mapping back to empty provider/model. */
+export function encodeUnconfiguredSelection(): string {
+  return 'unconfigured'
+}
+
 export function encodeModelSelection(provider: string, model: string): string {
   return `m${SEP}${provider}${SEP}${model}`
 }
@@ -114,11 +119,13 @@ export function encodeEffortSelection(provider: string, model: string, effort: s
 export type DecodedModelSelection =
   | { readonly kind: 'follow' }
   | { readonly kind: 'auto' }
+  | { readonly kind: 'unconfigured' }
   | { readonly kind: 'model'; readonly provider: string; readonly model: string; readonly reasoningEffort: string }
 
 export function decodeModelSelection(id: string): DecodedModelSelection | null {
   if (id === 'follow') return { kind: 'follow' }
   if (id === 'auto') return { kind: 'auto' }
+  if (id === 'unconfigured' || id === 'tier:unconfigured') return { kind: 'unconfigured' }
   if (id.startsWith(`m${SEP}`)) {
     const parts = id.slice(2).split(SEP)
     if (parts.length !== 2 || parts[0] === '' || parts[1] === '') return null

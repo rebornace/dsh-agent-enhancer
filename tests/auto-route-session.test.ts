@@ -121,4 +121,44 @@ describe('installAutoSessionRoute', () => {
     )
     await expect(adapter?.resolveModel(AUTO_PROVIDER, AUTO_MODEL)).resolves.not.toHaveProperty('context')
   })
+
+  it('still routes Auto when agents is unavailable (inactive context)', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    const prepare = vi.fn(async (config: LlmCallConfig) => ({ config }))
+    ctx.provide('llm', {
+      prepareCall: prepare,
+      registerAdapter: vi.fn(() => () => {}),
+      listProviders: () => [],
+    } as never)
+    ctx.provide('agents', {
+      get currentInitiator() {
+        throw new Error('cannot get required service "agents" in inactive context')
+      },
+      get list() {
+        throw new Error('cannot get required service "agents" in inactive context')
+      },
+    } as never)
+    // Make ctx.get('agents') throw the same way Cordis does on inactive fibers.
+    const originalGet = ctx.get.bind(ctx)
+    vi.spyOn(ctx, 'get').mockImplementation(((name: string) => {
+      if (name === 'agents') {
+        throw new Error('cannot get required service "agents" in inactive context')
+      }
+      return originalGet(name as never)
+    }) as never)
+    ctx.provide('sessionProjections', {
+      stateOf: () => ({ pending: { provider: AUTO_PROVIDER, model: AUTO_MODEL }, lastUsed: null }),
+    } as never)
+    ctx.provide('agentDefaultModel', {
+      currentSelection: () => ({ provider: 'fallback', model: 'default' }),
+    } as never)
+    installAutoSessionRoute(ctx, { settings: () => settings })
+    await expect(ctx.llm.prepareCall({ provider: AUTO_PROVIDER, model: AUTO_MODEL })).resolves.toBeTruthy()
+    expect(prepare).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'p', model: 'flash' }),
+      undefined,
+      undefined,
+    )
+  })
 })

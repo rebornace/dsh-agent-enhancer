@@ -149,6 +149,45 @@ describe('compactContextNow', () => {
     expect(route).toEqual({ provider: 'p', model: 'chat' })
   })
 
+  it('on cache miss, rematches follow+Auto compact from session turn text', async () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      autoClassifierEnabled: false,
+      autoInstantProvider: 'p',
+      autoInstantModel: 'flash',
+      autoThinkingProvider: 'p',
+      autoThinkingModel: 'chat',
+      autoProProvider: 'p',
+      autoProModel: 'reasoner',
+      autoProReasoningEffort: 'high',
+    }
+    const session = {
+      requestHeader: () => undefined,
+      snapshotEvents: () => [{
+        type: 'user/message',
+        data: {
+          content: [{
+            type: 'text',
+            text: '请深入分析并仔细推理以下长文：' + 'x'.repeat(800),
+          }],
+        },
+      }],
+    } as never
+    const ctx = {
+      agentDefaultModel: { currentSelection: () => ({ provider: AUTO_PROVIDER, model: AUTO_MODEL }) },
+      sessionProjections: {
+        stateOf: () => ({ pending: { provider: AUTO_PROVIDER, model: AUTO_MODEL }, lastUsed: null }),
+      },
+    } as never
+    const route = await resolveCompactRouteOverride(
+      ctx,
+      settings,
+      session,
+      new AbortController().signal,
+    )
+    expect(route).toEqual({ provider: 'p', model: 'reasoner' })
+  })
+
   it('overrides agent route while /compact runs', async () => {
     const options = { provider: 'session-p', model: 'session-m' }
     const execute = vi.fn(async (agent: { options: { provider: string, model: string } }) => {

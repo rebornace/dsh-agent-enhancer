@@ -5,6 +5,7 @@ import {
   encodeEffortSelection,
   encodeFollowSelection,
   encodeModelSelection,
+  encodeUnconfiguredSelection,
 } from './model-catalog.ts'
 
 export interface ModelCatalogModelLike {
@@ -55,7 +56,9 @@ export function selectedPillMenuId(
   options?: { readonly tierMapping?: boolean },
 ): string {
   if (isAutoModel(selection)) return encodeAutoSelection()
-  if (options?.tierMapping === true && isUnconfiguredAutoTierMapping(selection)) return ''
+  if (options?.tierMapping === true && isUnconfiguredAutoTierMapping(selection)) {
+    return encodeUnconfiguredSelection()
+  }
   if (isFollowSessionModel(selection)) return encodeFollowSelection()
   const model = findModel(groups, selection.provider, selection.model)
   if ((model?.reasoning?.efforts.length ?? 0) > 0) {

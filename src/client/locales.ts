@@ -9,6 +9,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'predict' | 'predictDescription' | 'privacyTitle' | 'privacy' | 'coexistence' | 'settingsError' |
       'modelCatalogLoading' | 'modelCatalogError' |
       'modelLabel' | 'modelFollowSession' | 'modelAuto' | 'modelUnconfigured' | 'reasoningDefault' |
+      'settingsBack' | 'settingsConfigure' |
+      'autoRouting' | 'autoRoutingDescription' |
       'autoClassifier' | 'autoClassifierDescription' | 'autoMappingTitle' |
       'autoTier_instant' | 'autoTier_thinking' | 'autoTier_pro' | 'autoTier_classifier' |
       'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'dismissHint' |
@@ -78,8 +80,12 @@ export const agentLocales = {
     modelAuto: 'Auto',
     modelUnconfigured: '未设置',
     reasoningDefault: '默认',
-    autoClassifier: '智能分类路由',
-    autoClassifierDescription: '为 Auto 模式按任务复杂度选择 instant / thinking / pro 档位（分类请求会额外调用分类模型）',
+    settingsBack: '返回',
+    settingsConfigure: '配置',
+    autoRouting: 'Auto 路由',
+    autoRoutingDescription: '会话与辅助功能可选 Auto；在此配置档位映射，以及可选的小模型分类',
+    autoClassifier: '用小模型协助 Auto 分类',
+    autoClassifierDescription: '开启后，选中 Auto 时会额外调用分类模型判定 instant / thinking / pro；关闭则仅用启发式定档',
     autoMappingTitle: 'Auto 档位模型映射',
     autoTier_instant: '即时',
     autoTier_thinking: '思考',
@@ -222,8 +228,12 @@ export const agentLocales = {
     modelAuto: 'Auto',
     modelUnconfigured: 'Not set',
     reasoningDefault: 'Default',
-    autoClassifier: 'Smart routing classifier',
-    autoClassifierDescription: 'When Auto is selected, classify each request into instant, thinking, or pro tiers (classification may call the classifier model)',
+    settingsBack: 'Back',
+    settingsConfigure: 'Configure',
+    autoRouting: 'Auto routing',
+    autoRoutingDescription: 'Sessions and helpers can pick Auto; configure tier mappings and an optional small-model classifier here',
+    autoClassifier: 'Use a small model to help Auto classify',
+    autoClassifierDescription: 'When on, Auto may call a classifier model to pick instant / thinking / pro; when off, Auto uses heuristics only',
     autoMappingTitle: 'Auto tier model map',
     autoTier_instant: 'Instant',
     autoTier_thinking: 'Thinking',
