@@ -10,15 +10,28 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'))
 
 await rm('dist', { recursive: true, force: true })
 await mkdir('dist', { recursive: true })
-const { stdout: packOutput } = await execFileAsync(process.execPath, [
-  pnpmCli,
-  'pack',
-  '--pack-destination',
-  'dist',
-  '--json',
-])
-const packed = JSON.parse(packOutput)
-const tarball = relative(process.cwd(), resolve(packed.filename))
+let tarball
+try {
+  const { stdout: packOutput } = await execFileAsync(process.execPath, [
+    pnpmCli,
+    'pack',
+    '--pack-destination',
+    'dist',
+    '--json',
+  ])
+  const packed = JSON.parse(packOutput)
+  tarball = relative(process.cwd(), resolve(packed.filename))
+} catch {
+  const { stdout: packOutput } = await execFileAsync(process.execPath, [
+    pnpmCli,
+    'pack',
+    '--pack-destination',
+    'dist',
+  ])
+  const line = packOutput.trim().split(/\r?\n/).find(entry => entry.endsWith('.tgz'))
+  if (line === undefined) throw new Error(`pnpm pack did not print tarball path: ${packOutput}`)
+  tarball = relative(process.cwd(), resolve(line.trim()))
+}
 const { stdout: fileOutput } = await execFileAsync('tar', ['-tf', tarball])
 const files = fileOutput.trim().split(/\r?\n/).filter(Boolean)
 
@@ -60,7 +73,7 @@ if (packedManifest.engines?.dsh !== '>=0.2.1-rc.5 <0.3.0-0') {
   throw new Error('Packed manifest has an invalid DSH compatibility range')
 }
 
-const absolutePath = /(?:[A-Za-z]:[\\/]|file:\/\/\/|\/Users\/|\/home\/)/
+const absolutePath = /(?:file:\/\/\/|(?:^|[^a-zA-Z])[A-Z]:[\\/]|\/Users\/|\/home\/)/
 for (const path of files.filter(path => path !== 'package/package.json' && /\.(?:js|map|ts|json|yml)$/.test(path))) {
   const contents = await readEntry(path)
   if (path.endsWith('.map')) {

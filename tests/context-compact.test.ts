@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { DEFAULT_SETTINGS } from '../src/config.ts'
 import { AuxiliaryError } from '../src/errors.ts'
@@ -6,6 +6,30 @@ import { AUTO_MODEL, AUTO_PROVIDER } from '../src/host/auto-route/sentinel.ts'
 import { setSessionResolvedRouteForSession } from '../src/host/auto-route/session-resolved-route.ts'
 import { compactContextNow, resolveCompactRouteOverride } from '../src/host/context-compact.ts'
 import { AgentEnhancerService } from '../src/host/index.ts'
+
+const compactRouteContexts: Context[] = []
+
+afterEach(async () => {
+  for (const ctx of compactRouteContexts.splice(0)) await ctx.fiber.dispose()
+})
+
+function provideCompactRouteCtx(
+  pending: { provider: string, model: string } | undefined,
+  defaultSelection: { provider: string, model: string },
+): Context {
+  const ctx = new Context()
+  compactRouteContexts.push(ctx)
+  ctx.provide('sessionProjections', {
+    stateOf: (_session: unknown, key: string) => {
+      if (key !== 'modelSelection' || pending === undefined) return undefined
+      return { pending, lastUsed: null }
+    },
+  } as never)
+  ctx.provide('agentDefaultModel', {
+    currentSelection: () => defaultSelection,
+  } as never)
+  return ctx
+}
 
 describe('compactContextNow', () => {
   it('parses official /compact success text', async () => {
@@ -134,12 +158,10 @@ describe('compactContextNow', () => {
       model: 'chat',
       reasoningEffort: '',
     })
-    const ctx = {
-      agentDefaultModel: { currentSelection: () => ({ provider: AUTO_PROVIDER, model: AUTO_MODEL }) },
-      sessionProjections: {
-        stateOf: () => ({ pending: { provider: AUTO_PROVIDER, model: AUTO_MODEL }, lastUsed: null }),
-      },
-    } as never
+    const ctx = provideCompactRouteCtx(
+      { provider: AUTO_PROVIDER, model: AUTO_MODEL },
+      { provider: AUTO_PROVIDER, model: AUTO_MODEL },
+    )
     const route = await resolveCompactRouteOverride(
       ctx,
       settings,
@@ -173,12 +195,10 @@ describe('compactContextNow', () => {
         },
       }],
     } as never
-    const ctx = {
-      agentDefaultModel: { currentSelection: () => ({ provider: AUTO_PROVIDER, model: AUTO_MODEL }) },
-      sessionProjections: {
-        stateOf: () => ({ pending: { provider: AUTO_PROVIDER, model: AUTO_MODEL }, lastUsed: null }),
-      },
-    } as never
+    const ctx = provideCompactRouteCtx(
+      { provider: AUTO_PROVIDER, model: AUTO_MODEL },
+      { provider: AUTO_PROVIDER, model: AUTO_MODEL },
+    )
     const route = await resolveCompactRouteOverride(
       ctx,
       settings,
