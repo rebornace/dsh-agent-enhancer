@@ -21,8 +21,19 @@ import {
 import type { ModelCatalogLoaders } from './dsh/model-catalog.ts'
 import { AcceptedSettingsForm } from './dsh/settings-form.ts'
 import { PluginSettings } from './dsh/settings.tsx'
+import { ContextInspectDock } from './context/dock.tsx'
+import { openContextInspectTab } from './context/open-tab.ts'
+import { ContextInspectRightTab, ContextInspectRightTabTitle } from './context/right-tab.tsx'
+import { CONTEXT_INSPECT_TAB_ID, CONTEXT_INSPECT_TAB_KIND } from './context/tab.ts'
+import type { ContextInspectCategory } from '../host/context-inspect.ts'
 import { agentLocales } from './locales.ts'
-import { clientRemoteInfo, agentEnhancerCall } from './remote.ts'
+import {
+  agentEnhancerCall,
+  agentEnhancerCompactContext,
+  agentEnhancerInspectContext,
+  clientRemoteInfo,
+} from './remote.ts'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { RollbackController } from './rollback/controller.ts'
 import type { RollbackRemote } from './rollback/controller.ts'
 import { RollbackModalHost } from './rollback/modal-host.tsx'
@@ -44,7 +55,10 @@ type InventoryRemote = ClientRemote & {
 
 // session.modelCatalog needs remote.session on this fiber. Host listCatalog is
 // wired after $mount from the nested agentEnhancer fiber (root cannot inject it early).
-export const inject = ['remote', 'remote.session', 'remote.pluginInventory', 'configForms', 'locale', 'slots']
+export const inject = [
+  'remote', 'remote.session', 'remote.pluginInventory', 'configForms', 'locale', 'slots',
+  'sidebarRightTabs', 'sidebarRight',
+]
 
 export function apply(ctx: Context): void {
   ctx.effect(installCss)
@@ -137,6 +151,76 @@ export function apply(ctx: Context): void {
       locale: 'agent-enhancer',
       inject: sessionId => ({ session: sessionFor(sessionId), hints }),
     }, AgentOverlay))
+
+    const contextInspectEnabled = () => resolveSettings(form.getSnapshot().value).contextInspectEnabled
+    const tContext = mountedCtx.locale.bind('agent-enhancer')
+    const inspectContext = (
+      sessionId: SessionId,
+      category: ContextInspectCategory,
+      signal: AbortSignal,
+    ) => agentEnhancerInspectContext.invoke(mountedCtx.remote, { sessionId, category }, signal)
+    const compactContext = (
+      sessionId: SessionId,
+      signal: AbortSignal,
+    ) => agentEnhancerCompactContext.invoke(mountedCtx.remote, { sessionId }, signal)
+    const ContextDock = (props: PropsRuntime<'conversation.composer.dock'>) => createElement(ContextInspectDock, {
+      ...props,
+      enabled: contextInspectEnabled,
+      open: (category: ContextInspectCategory) => {
+        openContextInspectTab(mountedCtx.sidebarRight, {
+          sessionId: props.sessionId,
+          category,
+        })
+      },
+      t: tContext,
+    })
+    const ContextRightTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(ContextInspectRightTab, {
+      ...props,
+      inspect: inspectContext,
+      compact: compactContext,
+      t: tContext,
+    })
+    const ContextRightTitle = (props: PropsRuntime<'sidebar.right.pane.tab.title'>) => createElement(
+      ContextInspectRightTabTitle,
+      { ...props, t: tContext },
+    )
+    mountedCtx.effect(() => {
+      const disposers: Array<() => void> = []
+      const synchronize = () => {
+        const enabled = contextInspectEnabled()
+        if (!enabled) {
+          while (disposers.length > 0) disposers.pop()?.()
+          return
+        }
+        if (disposers.length > 0) return
+        disposers.push(mountedCtx.sidebarRightTabs.register({
+          id: CONTEXT_INSPECT_TAB_ID,
+          kind: CONTEXT_INSPECT_TAB_KIND,
+          priority: 'extension',
+          title: () => tContext('contextInspectDetailTitle'),
+        }))
+        disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab', () => mountedCtx.slots.register({
+          name: 'sidebar.right.pane.tab',
+          key: CONTEXT_INSPECT_TAB_ID,
+          locale: 'agent-enhancer',
+        }, ContextRightTab)))
+        disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab.title', () => mountedCtx.slots.register({
+          name: 'sidebar.right.pane.tab.title',
+          key: CONTEXT_INSPECT_TAB_ID,
+          locale: 'agent-enhancer',
+        }, ContextRightTitle)))
+        disposers.push(mountedCtx.slots.inject('conversation.composer.dock', () => mountedCtx.slots.register({
+          name: 'conversation.composer.dock', id: 'agent-enhancer-context', order: 50,
+          locale: 'agent-enhancer',
+        }, ContextDock)))
+      }
+      const unsubscribe = form.subscribe(synchronize)
+      synchronize()
+      return () => {
+        unsubscribe()
+        while (disposers.length > 0) disposers.pop()?.()
+      }
+    })
   }
 
   const applyRollbackMounted = (mountedCtx: Context) => {

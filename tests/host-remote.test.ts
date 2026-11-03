@@ -41,58 +41,76 @@ describe('composer configuration and Remote metadata', () => {
     expect(Config.dict!.optimizeEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.predictEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.rollbackEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.contextInspectEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.optimizeProvider?.meta.volatile).toBe(true)
     expect(Config.dict!.optimizeModel?.meta.volatile).toBe(true)
     expect(Config.dict!.optimizeReasoningEffort?.meta.volatile).toBe(true)
     expect(Config.dict!.predictProvider?.meta.volatile).toBe(true)
     expect(Config.dict!.predictModel?.meta.volatile).toBe(true)
     expect(Config.dict!.predictReasoningEffort?.meta.volatile).toBe(true)
+    expect(Config.dict!.compactProvider?.meta.volatile).toBe(true)
     expect(values(Config({}))).toEqual({
       historyEnabled: true,
       optimizeEnabled: true,
       predictEnabled: true,
       rollbackEnabled: true,
+      contextInspectEnabled: true,
       optimizeProvider: '',
       optimizeModel: '',
       optimizeReasoningEffort: '',
       predictProvider: '',
       predictModel: '',
       predictReasoningEffort: '',
+      compactProvider: '',
+      compactModel: '',
+      compactReasoningEffort: '',
     })
     expect(values(Config({
       historyEnabled: false,
       optimizeEnabled: false,
       predictEnabled: false,
       rollbackEnabled: false,
+      contextInspectEnabled: true,
       optimizeProvider: 'deepseek',
       optimizeModel: 'deepseek-chat',
       optimizeReasoningEffort: 'low',
       predictProvider: 'deepseek',
       predictModel: 'deepseek-chat',
       predictReasoningEffort: 'high',
+      compactProvider: 'deepseek',
+      compactModel: 'deepseek-chat',
+      compactReasoningEffort: 'low',
     }))).toEqual({
       historyEnabled: false,
       optimizeEnabled: false,
       predictEnabled: false,
       rollbackEnabled: false,
+      contextInspectEnabled: true,
       optimizeProvider: 'deepseek',
       optimizeModel: 'deepseek-chat',
       optimizeReasoningEffort: 'low',
       predictProvider: 'deepseek',
       predictModel: 'deepseek-chat',
       predictReasoningEffort: 'high',
+      compactProvider: 'deepseek',
+      compactModel: 'deepseek-chat',
+      compactReasoningEffort: 'low',
     })
     expect(Object.keys(Config({}))).toEqual([
-      'historyEnabled', 'optimizeEnabled', 'predictEnabled', 'rollbackEnabled',
+      'historyEnabled', 'optimizeEnabled', 'predictEnabled', 'rollbackEnabled', 'contextInspectEnabled',
       'optimizeProvider', 'optimizeModel', 'optimizeReasoningEffort',
       'predictProvider', 'predictModel', 'predictReasoningEffort',
+      'compactProvider', 'compactModel', 'compactReasoningEffort',
     ])
-    expect(inject).toEqual(['llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel', 'fs', 'tools', 'typert', 'typertGateway'])
+    expect(inject).toEqual([
+      'llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel',
+      'fs', 'tools', 'tokenMeter', 'typert', 'typertGateway', 'commands',
+    ])
   })
 
   it('publishes one strict cancellable call with a nullable result', () => {
     expect(remoteInfo.package).toBe('dsh-agent-enhancer')
-    expect(remoteInfo.descriptors).toHaveLength(2)
+    expect(remoteInfo.descriptors).toHaveLength(4)
     expect(remoteInfo.descriptors[0]).toMatchObject({
       namespace: 'agentEnhancer',
       method: 'call',
@@ -107,6 +125,20 @@ describe('composer configuration and Remote metadata', () => {
       implementation: 'listCatalog',
     })
     expect(remoteInfo.descriptors[1]).not.toHaveProperty('cancellation')
+    expect(remoteInfo.descriptors[2]).toMatchObject({
+      namespace: 'agentEnhancer',
+      method: 'inspectContext',
+      service: 'agentEnhancer',
+      implementation: 'inspectContext',
+      cancellation: { parameter: 'signal' },
+    })
+    expect(remoteInfo.descriptors[3]).toMatchObject({
+      namespace: 'agentEnhancer',
+      method: 'compactContext',
+      service: 'agentEnhancer',
+      implementation: 'compactContext',
+      cancellation: { parameter: 'signal' },
+    })
     expect(hostContribution).toEqual({
       package: 'dsh-agent-enhancer',
       face: 'host',
@@ -213,7 +245,7 @@ describe('AgentEnhancerService', () => {
     const ownerCtx = context()
     ownerCtx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
     const generate = vi.fn(async () => null)
-    const owner = new AgentEnhancerService(ownerCtx, { generate } as never)
+    const owner = new AgentEnhancerService(ownerCtx, { generate } as never, () => ({ provider: '', model: '' }))
     const request = payload()
     const signal = new AbortController().signal
     await expect(owner.call(request, signal)).resolves.toBeNull()
@@ -221,7 +253,7 @@ describe('AgentEnhancerService', () => {
 
     const guestCtx = context()
     guestCtx.provide('invocation', { peer: { principal: { kind: 'guest' } } } as never)
-    const guest = new AgentEnhancerService(guestCtx, { generate } as never)
+    const guest = new AgentEnhancerService(guestCtx, { generate } as never, () => ({ provider: '', model: '' }))
     await expect(guest.call(request, signal)).rejects.toMatchObject({
       code: 'agent-enhancer/forbidden',
       message: 'Only the desktop owner may use Agent Enhance',
@@ -234,7 +266,7 @@ describe('AgentEnhancerService', () => {
     ctx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
     const service = new AgentEnhancerService(ctx, {
       generate: vi.fn(async () => { throw new AuxiliaryError('MODEL_UNAVAILABLE') }),
-    } as never)
+    } as never, () => ({ provider: '', model: '' }))
     const rejection = await service.call(payload(), new AbortController().signal).catch((error: unknown) => error)
     expect(rejection).toBeInstanceOf(RemoteError)
     expect(rejection).toMatchObject({
@@ -250,7 +282,7 @@ describe('AgentEnhancerService', () => {
     ctx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
     const service = new AgentEnhancerService(ctx, {
       generate: vi.fn(async () => { throw new Error('provider credential and private text') }),
-    } as never)
+    } as never, () => ({ provider: '', model: '' }))
     const rejection = await service.call(payload(), new AbortController().signal).catch((error: unknown) => error)
     expect(rejection).toMatchObject({
       code: 'agent-enhancer/failed',
@@ -267,7 +299,7 @@ describe('AgentEnhancerService', () => {
     controller.abort()
     const service = new AgentEnhancerService(ctx, {
       generate: vi.fn(async () => { throw controller.signal.reason }),
-    } as never)
+    } as never, () => ({ provider: '', model: '' }))
     await expect(service.call(payload(), controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
   })
 })
@@ -285,11 +317,15 @@ describe('host composition', () => {
     ctx.provide('agents', { get: vi.fn() } as never)
     ctx.provide('fs', {} as never)
     ctx.provide('tools', {} as never)
+    ctx.provide('tokenMeter', {} as never)
+    ctx.provide('typertGateway', {} as never)
+    ctx.provide('commands', { execute: vi.fn() } as never)
     apply(ctx, Config({}))
     expect(register).toHaveBeenCalledTimes(1)
     expect(register).toHaveBeenCalledWith(hostContribution)
     expect(hostContribution.invocations.map(entry => entry.namespace)).toEqual([
-      'agentEnhancer', 'agentEnhancer', 'checkpointRollback', 'checkpointRollback',
+      'agentEnhancer', 'agentEnhancer', 'agentEnhancer', 'agentEnhancer',
+      'checkpointRollback', 'checkpointRollback',
     ])
     expect(ctx.agentEnhancer).toBeInstanceOf(AgentEnhancerService)
     await ctx.fiber.dispose()
@@ -299,7 +335,7 @@ describe('host composition', () => {
   it('constructs the single model entry used by the Remote service', () => {
     const ctx = context()
     const models = new AuxiliaryModels(ctx)
-    const service = new AgentEnhancerService(ctx, models)
+    const service = new AgentEnhancerService(ctx, models, () => ({ provider: '', model: '' }))
     expect(service).toBeInstanceOf(AgentEnhancerService)
   })
 })

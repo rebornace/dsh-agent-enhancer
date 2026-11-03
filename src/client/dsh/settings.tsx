@@ -33,6 +33,7 @@ const LABELS = {
   optimize: 'optimize',
   predict: 'predict',
   rollback: 'rollback',
+  contextInspect: 'contextInspect',
 } as const
 
 const DESCRIPTIONS = {
@@ -40,9 +41,26 @@ const DESCRIPTIONS = {
   optimize: 'optimizeDescription',
   predict: 'predictDescription',
   rollback: 'rollbackDescription',
+  contextInspect: 'contextInspectDescription',
 } as const
 
-const MODEL_FEATURES = new Set<ModuleName>(['optimize', 'predict'])
+function modelFeatureOf(module: ModuleName): AuxiliaryFeature | null {
+  switch (module) {
+    case 'optimize':
+      return 'optimize'
+    case 'predict':
+      return 'predict'
+    case 'contextInspect':
+      return 'compact'
+    case 'history':
+    case 'rollback':
+      return null
+    default: {
+      const _exhaustive: never = module
+      return _exhaustive
+    }
+  }
+}
 
 function findModel(
   groups: readonly ModelProviderGroup[],
@@ -159,7 +177,7 @@ function ModelPill({
       active={active || open}
       disabled={disabled}
       className={styles.modelPill}
-      aria-label={`${t(LABELS[feature])} ${t('modelLabel')}`}
+      aria-label={`${t(feature === 'compact' ? 'contextInspectCompact' : LABELS[feature])} ${t('modelLabel')}`}
       title={label}
       onClick={() => {
         if (disabled) return
@@ -306,7 +324,7 @@ function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
       <p>{t('settingsSubtitle')}</p>
     </header>
     {MODULES.map(module => {
-      const modelFeature = MODEL_FEATURES.has(module) ? module as AuxiliaryFeature : null
+      const modelFeature = modelFeatureOf(module)
       const selection = modelFeature === null ? null : auxiliaryModelOf(settings, modelFeature)
       return <div key={module} className={styles.settingRow}>
         <div className={styles.settingText}>
@@ -320,7 +338,7 @@ function PluginSettingsBody({ form, t, loadCatalog }: PluginSettingsProps) {
               selection={selection}
               groups={groups}
               catalogStatus={catalogStatus}
-              disabled={busy}
+              disabled={busy || (module === 'contextInspect' && !settings.contextInspectEnabled)}
               t={t}
               onOpen={refreshCatalog}
               onSelect={(feature, id) => { void onModelMenuSelect(feature, id) }}

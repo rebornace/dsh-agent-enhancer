@@ -294,3 +294,576 @@
   color: var(--dsw-alias-label-tertiary);
   background: transparent;
 }
+
+.contextMeterRow {
+  cursor: pointer;
+  position: relative;
+  padding-right: 18px;
+}
+
+.contextMeterRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.contextMeterRow[data-agent-enhancer-loading='1'] {
+  opacity: 0.65;
+}
+
+.contextMeterChevron {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.contextRightPanel {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 14px;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-sm-13);
+}
+
+.contextRightHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+}
+
+.contextRightTitleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.contextRightTitle {
+  margin: 0;
+  font: var(--dsw-font-sm-14);
+  font-weight: 600;
+}
+
+.contextRightMeta {
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.contextRightSegments {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  padding: 2px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.contextRightSegment,
+.contextRightSegmentActive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  border-radius: var(--dsw-radius-sm);
+  padding: 5px 9px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.contextRightSegment:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.contextRightSegmentActive {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-primary);
+}
+
+.contextRightStatus {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.contextChart {
+  flex: none;
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.contextChartHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.contextChartTitle {
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.contextChartTotal {
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.contextChartTotalHint {
+  color: var(--dsw-alias-label-tertiary);
+  font-weight: 400;
+}
+
+.contextStackWrap {
+  position: relative;
+  display: grid;
+  gap: 0;
+}
+
+.contextStack {
+  display: flex;
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--dsw-alias-border-primary);
+}
+
+.contextStackSegment,
+.contextStackSegmentDim {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  cursor: default;
+  transition: opacity 120ms ease, filter 120ms ease;
+}
+
+.contextStackSegment {
+  opacity: 1;
+  filter: saturate(1.08);
+}
+
+.contextStackSegmentDim {
+  opacity: 0.28;
+  filter: saturate(0.55);
+}
+
+.contextChartTip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(100%, 280px);
+  padding: 5px 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-primary);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.contextChartTipSwatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.contextChartLegend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contextChartLegendItem,
+.contextChartLegendItemDim {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  font-size: 12px;
+  border-radius: var(--dsw-radius-sm);
+  padding: 2px 4px;
+  margin: 0 -4px;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+.contextChartLegendItem {
+  opacity: 1;
+  background: transparent;
+}
+
+.contextChartLegendItem:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.contextChartLegendItemDim {
+  opacity: 0.4;
+}
+
+.contextChartSwatch {
+  width: 8px;
+  height: 8px;
+  margin-top: 4px;
+  border-radius: 999px;
+}
+
+.contextChartLegendMain {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.contextChartLegendTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.contextChartLegendLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+}
+
+.contextChartLegendMeta {
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.contextChartLegendTrack {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--dsw-alias-border-primary);
+  overflow: hidden;
+}
+
+.contextChartLegendFill {
+  height: 100%;
+  border-radius: inherit;
+  opacity: 0.9;
+}
+
+.contextHeadroom {
+  display: grid;
+  gap: 4px;
+  padding-top: 2px;
+  border-top: 1px solid var(--dsw-alias-border-primary);
+}
+
+.contextHeadroomMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.contextHeadroomValue {
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.contextHeadroomTrack {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--dsw-alias-border-primary);
+  overflow: hidden;
+}
+
+.contextHeadroomFill {
+  height: 100%;
+  border-radius: inherit;
+  background: #4c8bf5;
+  opacity: 0.85;
+}
+
+.contextHeadroomHint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.contextCompactBar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: none;
+}
+
+.contextCompactButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: none;
+  min-height: 30px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+  color: #fff;
+  background: #3b7ded;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #3b7ded 55%, transparent);
+}
+
+.contextCompactButton:hover:not(:disabled) {
+  color: #fff;
+  background: #2f6fe0;
+}
+
+.contextCompactButton:focus-visible {
+  outline: 2px solid color-mix(in srgb, #3b7ded 70%, white);
+  outline-offset: 2px;
+}
+
+.contextCompactButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.contextCompactButtonLabel {
+  max-width: 9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextCompactHint,
+.contextCompactNote {
+  margin: 0;
+  min-width: 0;
+  flex: 1;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  padding-top: 5px;
+}
+
+.contextCompactNote {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.contextEventRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+}
+
+.contextEventChip,
+.contextEventChipCompact,
+.contextEventChipPrune {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.contextEventChipCompact {
+  color: var(--dsw-alias-label-primary);
+}
+
+.contextEventChipPrune {
+  color: var(--dsw-alias-label-primary);
+}
+
+.contextRightScroll,
+.contextRightListFill {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.contextRightScroll {
+  overflow: auto;
+}
+
+.contextRightListFill {
+  overflow: hidden;
+}
+
+.contextRightItem,
+.contextRightItemActive,
+.contextRightItemActiveFill {
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+}
+
+.contextRightItem:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.contextRightItemActive,
+.contextRightItemActiveFill {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.contextRightItemActiveFill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.contextRightRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: var(--dsw-radius-sm);
+  padding: 8px 8px 7px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.contextRightItemDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: none;
+  margin-top: 5px;
+}
+
+.contextRightRowMain {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+
+.contextRightRowTitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.contextRightBadge,
+.contextRightBadgeMuted {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: var(--dsw-radius-sm);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.contextRightBadgeMuted {
+  opacity: 0.9;
+}
+
+.contextRightRowPreview {
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextRightBarTrack {
+  height: 2px;
+  border-radius: 999px;
+  background: var(--dsw-alias-border-primary);
+  overflow: hidden;
+}
+
+.contextRightBarFill {
+  height: 100%;
+  background: var(--dsw-alias-label-secondary);
+}
+
+.contextRightRowTokens {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  padding-top: 1px;
+}
+
+.contextRightShare {
+  opacity: 0.85;
+}
+
+.contextRightDetail {
+  margin: 0 8px 8px 22px;
+  min-height: 0;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.contextRightItemActiveFill .contextRightDetail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.contextRightDetailBody {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.contextRightItemActiveFill .contextRightDetailBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.contextRightNote {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}

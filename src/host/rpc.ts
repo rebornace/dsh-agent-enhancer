@@ -100,6 +100,59 @@ export const modelCatalogSchema = z.object({
 export type ModelCatalogPayload = z.infer<typeof modelCatalogSchema>
 const catalogCodec = codec('dsh-agent-enhancer#ModelCatalog', modelCatalogSchema)
 
+const contextInspectCategorySchema = z.enum(['system', 'tools', 'messages'])
+export const contextInspectRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  category: contextInspectCategorySchema,
+})
+const contextInspectKindSchema = z.enum([
+  'system', 'tools', 'user', 'inject', 'assistant', 'tool', 'developer',
+])
+const contextInspectItemSchema = z.strictObject({
+  id: z.string(),
+  title: z.string(),
+  detail: z.string(),
+  body: z.string(),
+  tokens: z.number().int().nonnegative(),
+  kind: contextInspectKindSchema,
+  replaced: z.boolean(),
+})
+const contextInspectPressureSchema = z.strictObject({
+  projectedTokens: z.number().int().nonnegative().optional(),
+  contextWindow: z.number().int().positive().optional(),
+})
+const contextInspectEventKindSchema = z.enum(['compact', 'prune', 'replace'])
+const contextInspectEventMarkSchema = z.strictObject({
+  id: z.string(),
+  kind: contextInspectEventKindSchema,
+  seq: z.number().int().nonnegative(),
+  shadowed: z.number().int().nonnegative(),
+  title: z.string(),
+})
+const contextInspectResultSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  category: contextInspectCategorySchema,
+  totalTokens: z.number().int().nonnegative(),
+  approximate: z.literal(true),
+  items: z.array(contextInspectItemSchema),
+  pressure: contextInspectPressureSchema,
+  events: z.array(contextInspectEventMarkSchema),
+})
+const contextInspectRequestCodec = codec('dsh-agent-enhancer#ContextInspectRequest', contextInspectRequestSchema)
+const contextInspectResultCodec = codec('dsh-agent-enhancer#ContextInspectResult', contextInspectResultSchema)
+
+export const contextCompactRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+})
+const contextCompactResultSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  status: z.enum(['compacted', 'noop']),
+  shadowedCount: z.number().int().nonnegative(),
+  shadowedTokens: z.number().int().nonnegative(),
+})
+const contextCompactRequestCodec = codec('dsh-agent-enhancer#ContextCompactRequest', contextCompactRequestSchema)
+const contextCompactResultCodec = codec('dsh-agent-enhancer#ContextCompactResult', contextCompactResultSchema)
+
 export const remoteInfo = createTypertRemoteInfo({
   package: 'dsh-agent-enhancer',
   methods: {
@@ -123,6 +176,32 @@ export const remoteInfo = createTypertRemoteInfo({
       invocation: { kind: 'direct' },
       parameters: [],
       result: catalogCodec,
+    },
+    'agentEnhancer/inspectContext': {
+      service: 'agentEnhancer',
+      implementation: 'inspectContext',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: contextInspectRequestCodec,
+        strictCodec: contextInspectRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: contextInspectResultCodec,
+    },
+    'agentEnhancer/compactContext': {
+      service: 'agentEnhancer',
+      implementation: 'compactContext',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: contextCompactRequestCodec,
+        strictCodec: contextCompactRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: contextCompactResultCodec,
     },
   },
 }, z)

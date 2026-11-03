@@ -177,12 +177,16 @@ function configForm() {
     optimizeEnabled: true,
     predictEnabled: true,
     rollbackEnabled: false,
+    contextInspectEnabled: true,
     optimizeProvider: '',
     optimizeModel: '',
     optimizeReasoningEffort: '',
     predictProvider: '',
     predictModel: '',
     predictReasoningEffort: '',
+      compactProvider: '',
+      compactModel: '',
+      compactReasoningEffort: '',
   }
   const listeners = new Set<() => void>()
   const form: ConfigForm<EnhancerSettings> = {
@@ -269,6 +273,7 @@ it('loads through the official Loader without replacing the composer bar and cle
     ctx.provide('remoteAccess', { source: () => allowed } as never)
     ctx.provide('fileUpload', { upload: async () => { throw new Error('Unexpected file upload') } } as never)
     ctx.provide('sidebarRight', { openResource: vi.fn(), openTab: vi.fn() } as never)
+    ctx.provide('sidebarRightTabs', { register: vi.fn(() => () => {}) } as never)
     ctx.provide('uiWorkspace', uiWorkspace)
 
     const entries = [

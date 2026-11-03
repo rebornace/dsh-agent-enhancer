@@ -1,5 +1,6 @@
 export const AUXILIARY_ERROR_CODES = [
   'MODEL_UNAVAILABLE', 'MODEL_FAILED', 'INVALID_OUTPUT', 'SESSION_CHANGED', 'ROLLBACK_FAILED',
+  'COMPACT_UNAVAILABLE', 'COMPACT_BUSY', 'COMPACT_FAILED', 'COMPACT_SUMMARY', 'COMPACT_CHANGED',
 ] as const
 export type AuxiliaryErrorCode = typeof AUXILIARY_ERROR_CODES[number]
 const MESSAGES: Record<AuxiliaryErrorCode, string> = {
@@ -8,6 +9,11 @@ const MESSAGES: Record<AuxiliaryErrorCode, string> = {
   INVALID_OUTPUT: 'Auxiliary model returned invalid output',
   SESSION_CHANGED: 'The session changed during the auxiliary request',
   ROLLBACK_FAILED: 'The draft could not be restored after a failed write',
+  COMPACT_UNAVAILABLE: 'Official compaction is not available in this session',
+  COMPACT_BUSY: 'Compaction is unavailable while the agent is busy',
+  COMPACT_FAILED: 'Compaction did not finish; the conversation is unchanged or only partially updated',
+  COMPACT_SUMMARY: 'Compaction could not produce a useful summary; the conversation is unchanged',
+  COMPACT_CHANGED: 'History changed during compaction; the conversation is unchanged',
 }
 export class AuxiliaryError extends Error {
   constructor(readonly code: AuxiliaryErrorCode) {

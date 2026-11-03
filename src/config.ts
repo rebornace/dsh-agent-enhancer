@@ -1,7 +1,7 @@
-export const MODULES = ['history', 'optimize', 'predict', 'rollback'] as const
+export const MODULES = ['history', 'optimize', 'predict', 'rollback', 'contextInspect'] as const
 export type ModuleName = typeof MODULES[number]
 
-export type AuxiliaryFeature = 'optimize' | 'predict'
+export type AuxiliaryFeature = 'optimize' | 'predict' | 'compact'
 
 /** Empty provider/model means “follow the current session model”. */
 export interface AuxiliaryModelSettings {
@@ -18,6 +18,9 @@ export type EnhancerSettings = Readonly<Record<`${ModuleName}Enabled`, boolean>>
   readonly predictProvider: string
   readonly predictModel: string
   readonly predictReasoningEffort: string
+  readonly compactProvider: string
+  readonly compactModel: string
+  readonly compactReasoningEffort: string
 }
 
 export const DEFAULT_AUXILIARY_MODEL: AuxiliaryModelSettings = {
@@ -31,12 +34,16 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   optimizeEnabled: true,
   predictEnabled: true,
   rollbackEnabled: true,
+  contextInspectEnabled: true,
   optimizeProvider: '',
   optimizeModel: '',
   optimizeReasoningEffort: '',
   predictProvider: '',
   predictModel: '',
   predictReasoningEffort: '',
+  compactProvider: '',
+  compactModel: '',
+  compactReasoningEffort: '',
 }
 
 function text(value: string | undefined): string {
@@ -49,12 +56,16 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     optimizeEnabled: value?.optimizeEnabled ?? true,
     predictEnabled: value?.predictEnabled ?? true,
     rollbackEnabled: value?.rollbackEnabled ?? true,
+    contextInspectEnabled: value?.contextInspectEnabled ?? true,
     optimizeProvider: text(value?.optimizeProvider),
     optimizeModel: text(value?.optimizeModel),
     optimizeReasoningEffort: text(value?.optimizeReasoningEffort),
     predictProvider: text(value?.predictProvider),
     predictModel: text(value?.predictModel),
     predictReasoningEffort: text(value?.predictReasoningEffort),
+    compactProvider: text(value?.compactProvider),
+    compactModel: text(value?.compactModel),
+    compactReasoningEffort: text(value?.compactReasoningEffort),
   }
 }
 
@@ -62,17 +73,29 @@ export function auxiliaryModelOf(
   settings: EnhancerSettings,
   feature: AuxiliaryFeature,
 ): AuxiliaryModelSettings {
-  if (feature === 'optimize') {
-    return {
-      provider: settings.optimizeProvider,
-      model: settings.optimizeModel,
-      reasoningEffort: settings.optimizeReasoningEffort,
+  switch (feature) {
+    case 'optimize':
+      return {
+        provider: settings.optimizeProvider,
+        model: settings.optimizeModel,
+        reasoningEffort: settings.optimizeReasoningEffort,
+      }
+    case 'predict':
+      return {
+        provider: settings.predictProvider,
+        model: settings.predictModel,
+        reasoningEffort: settings.predictReasoningEffort,
+      }
+    case 'compact':
+      return {
+        provider: settings.compactProvider,
+        model: settings.compactModel,
+        reasoningEffort: settings.compactReasoningEffort,
+      }
+    default: {
+      const _exhaustive: never = feature
+      return _exhaustive
     }
-  }
-  return {
-    provider: settings.predictProvider,
-    model: settings.predictModel,
-    reasoningEffort: settings.predictReasoningEffort,
   }
 }
 

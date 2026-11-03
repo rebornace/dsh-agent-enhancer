@@ -27,6 +27,11 @@ vi.mock('../src/client/rollback/controller.ts', async (importOriginal) => {
 
 const contexts: Context[] = []
 
+function provideSidebar(ctx: Context) {
+  ctx.provide('sidebarRight', { openResource: vi.fn(), openTab: vi.fn() } as never)
+  ctx.provide('sidebarRightTabs', { register: vi.fn(() => () => {}) } as never)
+}
+
 function remotePayload() {
   return {
     method: 'generate' as const,
@@ -51,6 +56,8 @@ afterEach(async () => {
 it('mounts the shared Remote and host config entry and disposes the Remote', async () => {
   expect(inject).toContain('remote.pluginInventory')
   expect(inject).toContain('remote.session')
+  expect(inject).toContain('sidebarRightTabs')
+  expect(inject).toContain('sidebarRight')
   const ctx = new Context()
   contexts.push(ctx)
   const get = vi.fn(() => ({ getSnapshot: () => ({ value: {} }), subscribe: () => () => {} }))
@@ -68,6 +75,7 @@ it('mounts the shared Remote and host config entry and disposes the Remote', asy
     checkpointRollback: { preview: vi.fn(), execute: vi.fn() },
     pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
   }
+  provideSidebar(ctx)
   ctx.provide('remote', remote as never)
   ctx.provide('remote.session', remote.session as never)
   ctx.provide('remote.agentEnhancer', remote.agentEnhancer as never)
@@ -103,6 +111,7 @@ it('registers settings before Remote $mount settles', async () => {
   let resolveMount!: (unmount: () => void) => void
   const mount = vi.fn(() => new Promise<() => void>(resolve => { resolveMount = resolve }))
   const injectedSlots: string[] = []
+  provideSidebar(ctx)
   ctx.provide('remote', {
     $mount: mount,
     pluginInventory: { list: async () => ({ ok: true, value: { entries: [] } }) },
@@ -141,6 +150,7 @@ it('invokes the mounted namespace through the declared Cordis injection', async 
       return Reflect.get(target, property, receiver)
     },
   })
+  provideSidebar(ctx)
   ctx.provide('remote', remote as never)
   ctx.provide('remote.session', { modelCatalog: async () => ({ ok: false, error: { code: 'unavailable', message: '', details: {} } }) } as never)
   ctx.provide('remote.pluginInventory', remote.pluginInventory as never)
@@ -242,6 +252,7 @@ it('aborts pending optimization and hides the button on a real form notification
     return () => {}
   })
   const mount = vi.fn(async () => () => {})
+  provideSidebar(ctx)
   ctx.provide('remote', {
     $mount: mount,
     session: { modelCatalog: async () => ({ ok: true, value: { default: { provider: '', model: '' }, routableProviders: [], groups: [], failures: [] } }) },
@@ -319,6 +330,7 @@ it('registers user node replacement only while enabled and cleans up on unload',
     pluginInventory: { list: async () => { throw new Error('inventory unavailable') } },
     checkpointRollback,
   }
+  provideSidebar(ctx)
   ctx.provide('remote', remote as never)
   ctx.provide('remote.session', remote.session as never)
   ctx.provide('remote.checkpointRollback', checkpointRollback as never)
@@ -416,6 +428,7 @@ it('aborts in-flight rollback preview when rollback is disabled or session reten
   }
   let mainView = 1
   const retentionListeners = new Set<() => void>()
+  provideSidebar(ctx)
   ctx.provide('remote', remote as never)
   ctx.provide('remote.session', remote.session as never)
   ctx.provide('remote.checkpointRollback', checkpointRollback as never)

@@ -46,6 +46,7 @@ Defaults: all four features on. UI language follows Desktop (`zh` / `en`).
 | Prompt optimize | `optimizeEnabled` | On | Optimize / undo; model pill |
 | Next-prompt prediction | `predictEnabled` | On | Gray suggestion; model pill |
 | Conversation & file restore | `rollbackEnabled` | On | **Restore to here**; **+** / `/` menu **Undo restore** |
+| Context details | `contextInspectEnabled` | On | Official context meter → click a category for current-window items |
 
 Model pills default to **Follow session**, or pick provider / model / reasoning effort. See the UI map below for screenshots.
 

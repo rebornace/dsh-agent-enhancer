@@ -50,6 +50,8 @@ const translations: Record<string, string> = {
   reasoningDefault: 'Default',
   rollback: 'Conversation and file rollback',
   rollbackDescription: 'Preview and restore conversation and tracked files at eligible turn boundaries',
+  contextInspect: 'Context details',
+  contextInspectDescription: 'Click System / Tools / Messages on the official context meter to open details in the right sidebar',
   rollbackBoundary: 'External process, service, and untracked-file state is not restored; logs and checkpoints remain after disable.',
   privacyTitle: 'Data and privacy',
   privacy: 'Optimization and prediction send selected text or recent conversation to the selected model provider (defaults to the current session model). History never requests a model. No prompt content or acceptance-rate telemetry is collected.',
@@ -115,12 +117,16 @@ function settingsHarness(
       optimizeEnabled: true,
       predictEnabled: true,
       rollbackEnabled: true,
+      contextInspectEnabled: true,
       optimizeProvider: '',
       optimizeModel: '',
       optimizeReasoningEffort: '',
       predictProvider: '',
       predictModel: '',
       predictReasoningEffort: '',
+      compactProvider: '',
+      compactModel: '',
+      compactReasoningEffort: '',
       ...initial,
     },
     base: undefined,
@@ -898,17 +904,19 @@ describe('AgentOverlay prompt history search', () => {
 })
 
 describe('PluginSettings', () => {
-  it('renders four module switches on by default with clear rollback boundaries', () => {
+  it('renders five module switches on by default with clear rollback boundaries', () => {
     settingsHarness()
     expect(screen.getByText('Toggle input helpers as needed')).toBeTruthy()
     expect(screen.getByText('↑↓ revisit sent prompts; Alt+R to search (Ctrl+R in compatible environments)')).toBeTruthy()
     expect(screen.getByText('Optimize the draft or selection, with one-click undo')).toBeTruthy()
     expect(screen.getByText('One suggestion after a reply; Tab to accept')).toBeTruthy()
-    expect(screen.getAllByRole('switch')).toHaveLength(4)
+    expect(screen.getByText('Click System / Tools / Messages on the official context meter to open details in the right sidebar')).toBeTruthy()
+    expect(screen.getAllByRole('switch')).toHaveLength(5)
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-label'))).toEqual([
-      'Prompt history', 'Optimize prompt', 'Next-prompt prediction', 'Conversation and file rollback',
+      'Prompt history', 'Optimize prompt', 'Next-prompt prediction', 'Conversation and file rollback', 'Context details',
     ])
     expect(screen.getByRole('switch', { name: 'Conversation and file rollback' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('switch', { name: 'Context details' }).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByText(translations.rollbackBoundary!)).toBeTruthy()
     expect(screen.getByText(translations.privacy!)).toBeTruthy()
     expect(screen.getByText(translations.coexistence!)).toBeTruthy()
@@ -1017,7 +1025,7 @@ describe('CoexistenceHints', () => {
     expect(store.getSnapshot()).toEqual(['optimize', 'predict'])
     expect(set).not.toHaveBeenCalled()
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-checked'))).toEqual([
-      'true', 'true', 'true', 'true',
+      'true', 'true', 'true', 'true', 'true',
     ])
 
     const reopened = new OverlapHintStore(localStorage, 'test-release')

@@ -1,0 +1,40 @@
+---
+description: DSH desktop UI style for agent-enhancer panels — use before writing or restyling client UI
+globs: src/client/**/*.{tsx,css}
+alwaysApply: false
+---
+
+# DSH desktop UI norms (agent-enhancer)
+
+Before any client UI change: read `frontend-design` + `impeccable` (Operate mode + craft-floor). Do not ship flat, border-card, or “AI purple” looks.
+
+## Product surface
+
+- **Mode:** Operate (right sidebar / settings / composer helpers). Precision over decoration.
+- **Host tokens only:** `--dsw-alias-*`, `--dsw-radius-*`, `--dsw-font-*`. No bespoke purple/indigo themes, cream+terracotta, or newspaper layouts.
+- **One composition:** Prefer single column + shared scroll. Avoid 50/50 split panes that leave empty half-screens.
+
+## Hierarchy
+
+- Surfaces: `bg-layer-2` for grouped blocks; hover = `interactive-bg-hover`.
+- **No bordered cards for expand/collapse.** Selected rows use background only; detail uses inset `bg-layer-2`, not an outlined card.
+- Segmented controls: soft track (`bg-layer-2`) + active chip, not heavy outlined tabs.
+- Charts: encode meaning with color + share meters; legend rows beat naked swatches; headroom/occupancy must stay readable in a narrow sidebar.
+- Icons: drawn SVG or primitives icons; never emoji as chrome. Icon buttons need `aria-label` / tooltip.
+
+## Copy & i18n
+
+- Every user-visible string goes through `agent-enhancer` locales (`zh` + `en`).
+- Host may return stable English role keys; client localizes via `kind` / title patterns.
+- Errors name the problem and the next step; no apology fluff.
+
+## Motion
+
+- Prefer none, or one purposeful transition (e.g. bar width). No entrance cascades.
+
+## Checklist before finishing UI
+
+1. Looks native next to official Desktop chrome (not a separate mini-site).
+2. Light/dark both rely on `--dsw-*` (no hard-coded light-only grays for text).
+3. Empty / loading / disabled / error states exist.
+4. `pnpm check` green.

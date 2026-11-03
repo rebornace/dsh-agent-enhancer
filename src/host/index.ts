@@ -19,19 +19,31 @@ import { DshCheckpointCaptureSwitch } from './checkpoint/live.ts'
 import { CheckpointRollbackError, CheckpointRollbackService } from './checkpoint/service.ts'
 import type { CheckpointRollbackRequest } from './checkpoint/service.ts'
 import { CheckpointStore } from './checkpoint/store.ts'
+import type {} from '@deepseek-ai/dsh-token-meter'
+import { compactContextNow } from './context-compact.ts'
+import type { ContextCompactRequest, ContextCompactResult } from './context-compact.ts'
+import { inspectContextCategory, pressureFromProjection } from './context-inspect.ts'
+import type { ContextInspectRequest, ContextInspectResult } from './context-inspect.ts'
 import { AuxiliaryModels } from './model.ts'
 import { checkpointRemoteInfo, remoteInfo } from './rpc.ts'
 import type { RpcPayload } from './rpc.ts'
 import type { AuxiliaryResult } from './types.ts'
+import type { CompactCommandRuntime } from './context-compact.ts'
 
 export const name = PLUGIN_ID
-export const inject = ['llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel', 'fs', 'tools', 'typert', 'typertGateway']
+export const inject = [
+  'llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel',
+  'fs', 'tools', 'tokenMeter', 'typert', 'typertGateway',
+  // Official `/compact` runs through the command registry (not ctx.compaction).
+  'commands',
+]
 
 export const Config = z.object({
   historyEnabled: z.boolean().default(true).volatile(),
   optimizeEnabled: z.boolean().default(true).volatile(),
   predictEnabled: z.boolean().default(true).volatile(),
   rollbackEnabled: z.boolean().default(true).volatile(),
+  contextInspectEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.
   optimizeProvider: z.string().default('').volatile(),
   optimizeModel: z.string().default('').volatile(),
@@ -39,6 +51,9 @@ export const Config = z.object({
   predictProvider: z.string().default('').volatile(),
   predictModel: z.string().default('').volatile(),
   predictReasoningEffort: z.string().default('').volatile(),
+  compactProvider: z.string().default('').volatile(),
+  compactModel: z.string().default('').volatile(),
+  compactReasoningEffort: z.string().default('').volatile(),
 })
 export type Config = ReturnType<typeof Config>
 
@@ -52,7 +67,11 @@ export const hostContribution = {
 } as const
 
 export class AgentEnhancerService extends TypertRemoteService {
-  constructor(ctx: Context, private readonly models: AuxiliaryModels) {
+  constructor(
+    ctx: Context,
+    private readonly models: AuxiliaryModels,
+    private readonly compactRoute: () => { readonly provider: string, readonly model: string },
+  ) {
     super(ctx, 'agentEnhancer')
   }
 
@@ -84,6 +103,57 @@ export class AgentEnhancerService extends TypertRemoteService {
       })
     }
   }
+
+  async inspectContext(request: ContextInspectRequest, signal: AbortSignal): Promise<ContextInspectResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    const agent = this.ctx.agents.get(request.sessionId)
+    if (agent === undefined) {
+      throw new RemoteError('agent-enhancer/failed', 'Session not available for context inspect', {
+        code: 'SESSION_CHANGED',
+      })
+    }
+    try {
+      const inspected = inspectContextCategory(agent.session, request.category, this.ctx.tokenMeter)
+      const pressureView = this.ctx.sessionProjections
+        .snapshot(agent.session, ['contextPressure'])
+        .values
+        .contextPressure
+      return {
+        sessionId: request.sessionId,
+        ...inspected,
+        pressure: pressureFromProjection(pressureView),
+      }
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw new RemoteError('agent-enhancer/failed', 'Context inspect failed', { code: 'MODEL_FAILED' })
+    }
+  }
+
+  /** Trigger the official idle `/compact` command (same path as chat `/compact`). */
+  async compactContext(request: ContextCompactRequest, signal: AbortSignal): Promise<ContextCompactResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    const agent = this.ctx.agents.get(request.sessionId)
+    if (agent === undefined) {
+      throw new RemoteError('agent-enhancer/failed', 'Session not available for compaction', {
+        code: 'SESSION_CHANGED',
+      })
+    }
+    try {
+      return await compactContextNow({
+        commands: this.ctx.commands,
+        agent,
+        sessionId: request.sessionId,
+        signal,
+        route: this.compactRoute(),
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      const code = error instanceof AuxiliaryError ? error.code : 'COMPACT_FAILED'
+      throw new RemoteError('agent-enhancer/failed', 'Context compaction failed', { code })
+    }
+  }
 }
 
 function resolveCheckpointRoot(dshHome: string): string {
@@ -107,6 +177,8 @@ function resolveCheckpointRoot(dshHome: string): string {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     agentEnhancer: AgentEnhancerService
+    /** Present when `@deepseek-ai/dsh-commands` is loaded in this profile. */
+    commands: CompactCommandRuntime
   }
 }
 
@@ -119,7 +191,10 @@ export function apply(ctx: Context, config: Config): void {
     predictModel: config.predictModel.get(),
     predictReasoningEffort: config.predictReasoningEffort.get(),
   }))
-  new AgentEnhancerService(ctx, models)
+  new AgentEnhancerService(ctx, models, () => ({
+    provider: config.compactProvider.get(),
+    model: config.compactModel.get(),
+  }))
   ctx.effect(() => ctx.typert.register(hostContribution))
 
   const storageRoot = resolveCheckpointRoot(process.env.DSH_HOME ?? join(homedir(), '.dsh'))

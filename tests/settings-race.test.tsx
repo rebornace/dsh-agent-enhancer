@@ -30,12 +30,16 @@ it('does not request prediction after an accepted disable before the mirror catc
     optimizeEnabled: true,
     predictEnabled: true,
     rollbackEnabled: false,
+    contextInspectEnabled: true,
     optimizeProvider: '',
     optimizeModel: '',
     optimizeReasoningEffort: '',
     predictProvider: '',
     predictModel: '',
     predictReasoningEffort: '',
+      compactProvider: '',
+      compactModel: '',
+      compactReasoningEffort: '',
   }
   let revision = 1
   let snapshot: ReturnType<ConfigForm<EnhancerSettings>['getSnapshot']> = {
@@ -55,6 +59,8 @@ it('does not request prediction after an accepted disable before the mirror catc
     name: string
     options: { inject: (...args: never[]) => unknown }
   }> = []
+  ctx.provide('sidebarRight', { openResource: vi.fn(), openTab: vi.fn() } as never)
+  ctx.provide('sidebarRightTabs', { register: vi.fn(() => () => {}) } as never)
   ctx.provide('remote', {
     $mount: async () => () => {},
     session: { modelCatalog: async () => ({ ok: true, value: { default: { provider: '', model: '' }, routableProviders: [], groups: [], failures: [] } }) },

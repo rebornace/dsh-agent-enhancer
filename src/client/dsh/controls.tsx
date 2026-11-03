@@ -25,7 +25,10 @@ export function AgentControls({ session, t }: AgentControlsProps) {
   )
   if (!state.enabled) return null
   const label = t(state.status === 'pending' ? 'optimizePending' : state.status === 'undo' ? 'optimizeUndo' : 'optimize')
-  const errorLocale = OPTIMIZATION_ERROR_LOCALES[state.error ?? 'MODEL_FAILED']
+  const optimizeError = state.error !== null && state.error in OPTIMIZATION_ERROR_LOCALES
+    ? state.error as keyof typeof OPTIMIZATION_ERROR_LOCALES
+    : 'MODEL_FAILED'
+  const errorLocale = OPTIMIZATION_ERROR_LOCALES[optimizeError]
   const tooltip = state.chipSelection ? t('optimizeChipSelection') : state.error !== null ? t(errorLocale)
     : state.hasChips ? t('optimizeChips') : label
   return <>

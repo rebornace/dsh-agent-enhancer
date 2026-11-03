@@ -19,18 +19,22 @@ import {
 
 describe('composer settings', () => {
   it('enables history, optimize, predict, and rollback by default', () => {
-    expect(MODULES).toEqual(['history', 'optimize', 'predict', 'rollback'])
+    expect(MODULES).toEqual(['history', 'optimize', 'predict', 'rollback', 'contextInspect'])
     expect(DEFAULT_SETTINGS).toEqual({
       historyEnabled: true,
       optimizeEnabled: true,
       predictEnabled: true,
       rollbackEnabled: true,
+      contextInspectEnabled: true,
       optimizeProvider: '',
       optimizeModel: '',
       optimizeReasoningEffort: '',
       predictProvider: '',
       predictModel: '',
       predictReasoningEffort: '',
+      compactProvider: '',
+      compactModel: '',
+      compactReasoningEffort: '',
     })
     expect(resolveSettings(undefined)).toEqual(DEFAULT_SETTINGS)
   })
@@ -46,12 +50,16 @@ describe('composer settings', () => {
       optimizeEnabled: false,
       predictEnabled: false,
       rollbackEnabled: false,
+      contextInspectEnabled: true,
       optimizeProvider: '',
       optimizeModel: '',
       optimizeReasoningEffort: '',
       predictProvider: '',
       predictModel: '',
       predictReasoningEffort: '',
+      compactProvider: '',
+      compactModel: '',
+      compactReasoningEffort: '',
     })
   })
 
@@ -62,12 +70,16 @@ describe('composer settings', () => {
       optimizeEnabled: true,
       predictEnabled: true,
       rollbackEnabled: true,
+      contextInspectEnabled: true,
       optimizeProvider: '',
       optimizeModel: '',
       optimizeReasoningEffort: '',
       predictProvider: '',
       predictModel: '',
       predictReasoningEffort: '',
+      compactProvider: '',
+      compactModel: '',
+      compactReasoningEffort: '',
     })
     for (const forbidden of ['completion', 'template', 'strength', 'candidate']) {
       expect(serialized).not.toContain(forbidden)

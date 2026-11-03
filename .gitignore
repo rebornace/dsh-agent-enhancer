@@ -9,3 +9,4 @@ test-results/
 .research-rc3/
 .worktrees/
 .superpowers/
+scripts/inspect-sessions.mjs

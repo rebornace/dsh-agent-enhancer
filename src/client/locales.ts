@@ -25,7 +25,23 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'rollbackUnavailableRunning' | 'rollbackUnavailablePermission' | 'rollbackUnavailableDisabled' |
       'rollbackUnavailableFirstTurn' | 'rollbackUnavailableIncompatible' | 'rollbackUnavailableCompacted' |
       'rollbackUnavailableSubagent' | 'rollbackUnavailableUnknown' | 'rollbackConflictUnsafe' | 'rollbackConflictSymlink' |
-      'rollbackConflictRegular' | 'rollbackConflictBinary' | 'rollbackConflictLarge' | 'rollbackConflictBefore' | 'rollbackConflictHash'
+      'rollbackConflictRegular' | 'rollbackConflictBinary' | 'rollbackConflictLarge' | 'rollbackConflictBefore' | 'rollbackConflictHash' |
+      'contextInspect' | 'contextInspectDescription' | 'contextInspectDetailTitle' | 'contextInspectNote' |
+      'contextInspectEmpty' | 'contextInspectApproxTotal' | 'contextInspectApproxBadge' |
+      'contextInspectOpenCategory' | 'contextInspectCategories' | 'contextInspectItemDetail' |
+      'contextInspectLoading' | 'contextInspectLoadFailed' | 'contextInspectNoSession' |
+      'contextInspectChartOverview' | 'contextInspectChartCategory' | 'contextInspectChartMessages' |
+      'contextInspectChartOther' |
+      'contextInspectCategory_system' | 'contextInspectCategory_tools' | 'contextInspectCategory_messages' |
+      'contextInspectKind_user' | 'contextInspectKind_inject' | 'contextInspectKind_assistant' |
+      'contextInspectKind_tool' | 'contextInspectKind_developer' |
+      'contextInspectHeadroom' | 'contextInspectOccupied' | 'contextInspectEvents' |
+      'contextInspectEvent_compact' | 'contextInspectEvent_prune' | 'contextInspectEvent_replace' |
+      'contextInspectReplaced' |
+      'contextInspectCompact' | 'contextInspectCompactHint' | 'contextInspectCompacting' |
+      'contextInspectCompactDone' | 'contextInspectCompactNoop' |
+      'contextInspectCompactUnavailable' | 'contextInspectCompactBusy' | 'contextInspectCompactFailed' |
+      'contextInspectCompactSummary' | 'contextInspectCompactChanged'
   }
 }
 
@@ -59,13 +75,55 @@ export const agentLocales = {
     modelFollowSession: '跟随会话',
     reasoningDefault: '默认',
     privacyTitle: '数据与隐私',
-    privacy: '优化和预测会把所选内容或近期对话发送给所选模型提供商（默认跟随当前会话模型）；历史不请求模型；不采集提示词内容或采纳率遥测。',
+    privacy: '优化、预测与上下文压缩会把相关内容发送给所选模型提供商（默认跟随当前会话模型）；历史不请求模型；不采集提示词内容或采纳率遥测。',
     coexistence: '检测到官方或第三方同类能力时仅提示，不会自动停用。',
     settingsError: '设置未保存，请重试。',
     overlapHistory: '检测到另一个历史提示词功能。智能体增强的历史仍保持开启。',
     overlapOptimize: '检测到另一个提示词优化功能。智能体增强的优化仍保持开启。',
     overlapPredict: '检测到另一个回复建议功能。智能体增强的预测仍保持开启。',
     dismissHint: '关闭共存提示',
+    contextInspect: '上下文明细',
+    contextInspectDescription: '点击官方占用环打开右侧明细；可一键官方压缩，并单独选择压缩摘要模型',
+    contextInspectDetailTitle: '上下文明细',
+    contextInspectNote: '数字为启发式估算（约），按占用排序；用于理解当前窗口构成，非账单精确值。',
+    contextInspectEmpty: '这一类当前没有可列出的条目。',
+    contextInspectApproxTotal: '约 {tokens}',
+    contextInspectApproxBadge: '约',
+    contextInspectOpenCategory: '在右侧栏查看{category}明细',
+    contextInspectCategories: '上下文分类',
+    contextInspectItemDetail: '条目详情',
+    contextInspectLoading: '正在加载上下文明细…',
+    contextInspectLoadFailed: '上下文明细加载失败，请重试。',
+    contextInspectNoSession: '当前没有可检查的会话。',
+    contextInspectChartOverview: '窗口构成（约）',
+    contextInspectChartCategory: '本类构成（约）',
+    contextInspectChartMessages: '消息构成（约）',
+    contextInspectChartOther: '其他',
+    contextInspectCategory_system: '系统提示词',
+    contextInspectCategory_tools: '工具',
+    contextInspectCategory_messages: '消息',
+    contextInspectKind_user: '用户',
+    contextInspectKind_inject: '注入',
+    contextInspectKind_assistant: '助手',
+    contextInspectKind_tool: '工具结果',
+    contextInspectKind_developer: '开发者',
+    contextInspectHeadroom: '窗口余量',
+    contextInspectOccupied: '当前占用',
+    contextInspectEvents: '压缩与裁剪',
+    contextInspectEvent_compact: '压缩',
+    contextInspectEvent_prune: '裁剪',
+    contextInspectEvent_replace: '替换',
+    contextInspectReplaced: '经压缩',
+    contextInspectCompact: '压缩上下文',
+    contextInspectCompactHint: '调用官方 /compact，摘要较早历史并释放窗口',
+    contextInspectCompacting: '正在压缩…',
+    contextInspectCompactDone: '已压缩 {count} 项（约 {tokens}）',
+    contextInspectCompactNoop: '当前没有可安全压缩的历史。',
+    contextInspectCompactUnavailable: '当前环境未提供官方压缩能力。',
+    contextInspectCompactBusy: '智能体忙碌中，请结束后再压缩。',
+    contextInspectCompactFailed: '压缩未完成，会话可能未变化，请稍后重试。',
+    contextInspectCompactSummary: '未能生成可用摘要，会话未变化；可换模型后重试。',
+    contextInspectCompactChanged: '压缩过程中历史已变化，会话未写入；请稍后重试。',
     rollback: '对话与文件恢复',
     rollbackDescription: '在合规用户消息旁预览并恢复对话与已跟踪文件',
     rollbackBoundary: '不恢复进程、终端、后台任务、数据库、网络、部署、第三方服务或未跟踪文件；关闭后保留已有日志和检查点。',
@@ -152,13 +210,55 @@ export const agentLocales = {
     modelFollowSession: 'Follow session',
     reasoningDefault: 'Default',
     privacyTitle: 'Data and privacy',
-    privacy: 'Optimization and prediction send selected text or recent conversation to the selected model provider (defaults to the current session model). History never requests a model. No prompt content or acceptance-rate telemetry is collected.',
+    privacy: 'Optimize, predict, and context compact send related content to the selected model provider (defaults to the current session model). History never requests a model. No prompt content or acceptance-rate telemetry is collected.',
     coexistence: 'Similar official or third-party features are only reported; they are never disabled automatically.',
     settingsError: 'Setting was not saved. Try again.',
     overlapHistory: 'Another prompt-history feature is enabled. Agent Enhance history remains enabled.',
     overlapOptimize: 'Another prompt-optimization feature is enabled. Agent Enhance optimization remains enabled.',
     overlapPredict: 'Another reply-suggestion feature is enabled. Agent Enhance prediction remains enabled.',
     dismissHint: 'Dismiss coexistence notice',
+    contextInspect: 'Context details',
+    contextInspectDescription: 'Open right-sidebar details from the official meter; one-click official compact with an optional summary model',
+    contextInspectDetailTitle: 'Context details',
+    contextInspectNote: 'Counts are approximate heuristics sorted by size for understanding the current window, not billing-grade totals.',
+    contextInspectEmpty: 'Nothing to list in this category right now.',
+    contextInspectApproxTotal: '~{tokens}',
+    contextInspectApproxBadge: '~',
+    contextInspectOpenCategory: 'Open {category} details in the right sidebar',
+    contextInspectCategories: 'Context categories',
+    contextInspectItemDetail: 'Item detail',
+    contextInspectLoading: 'Loading context details…',
+    contextInspectLoadFailed: 'Failed to load context details. Try again.',
+    contextInspectNoSession: 'No session is available to inspect.',
+    contextInspectChartOverview: 'Window composition (~)',
+    contextInspectChartCategory: 'Category composition (~)',
+    contextInspectChartMessages: 'Message composition (~)',
+    contextInspectChartOther: 'Other',
+    contextInspectCategory_system: 'System',
+    contextInspectCategory_tools: 'Tools',
+    contextInspectCategory_messages: 'Messages',
+    contextInspectKind_user: 'User',
+    contextInspectKind_inject: 'Injected',
+    contextInspectKind_assistant: 'Assistant',
+    contextInspectKind_tool: 'Tool result',
+    contextInspectKind_developer: 'Developer',
+    contextInspectHeadroom: 'Headroom',
+    contextInspectOccupied: 'Occupied',
+    contextInspectEvents: 'Compaction & prune',
+    contextInspectEvent_compact: 'Compact',
+    contextInspectEvent_prune: 'Prune',
+    contextInspectEvent_replace: 'Replace',
+    contextInspectReplaced: 'Compacted',
+    contextInspectCompact: 'Compact context',
+    contextInspectCompactHint: 'Runs official /compact to summarize older history and free window space',
+    contextInspectCompacting: 'Compacting…',
+    contextInspectCompactDone: 'Compacted {count} items (~{tokens})',
+    contextInspectCompactNoop: 'No safe history range to compact yet.',
+    contextInspectCompactUnavailable: 'Official compaction is not available here.',
+    contextInspectCompactBusy: 'The agent is busy. Try again when it is idle.',
+    contextInspectCompactFailed: 'Compaction did not finish. The conversation may be unchanged; try again.',
+    contextInspectCompactSummary: 'Could not produce a useful summary; the conversation is unchanged. Try another model.',
+    contextInspectCompactChanged: 'History changed during compaction; nothing was written. Try again.',
     rollback: 'Conversation and file restore',
     rollbackDescription: 'Preview and restore conversation and tracked files from eligible user messages',
     rollbackBoundary: 'Processes, terminals, background jobs, databases, network activity, deployments, third-party state, and untracked files are not restored. Existing logs and checkpoints remain after disable.',
