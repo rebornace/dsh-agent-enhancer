@@ -1,6 +1,6 @@
 # DSH Agent Enhancer
 
-**中文：** [README.md](./README.md)
+English | [简体中文](./README.md)
 
 > One plugin to make DeepSeek Harness Desktop **easier to write, refine, roll back, and see usage & context**, and to keep moving toward mainstream agent UX.  
 > Prompt history · one-click optimize · next-prompt predict · conversation & file restore · model bill · context details · Auto routing · per-provider balance — inside the official conversation and settings, no extra window.

@@ -1,6 +1,6 @@
 # DSH Agent Enhancer
 
-**English:** [README.en.md](./README.en.md)
+[English](./README.en.md) | 简体中文
 
 > 一个插件，让 DeepSeek Harness Desktop **更好写、更好改、更好回退、更看得见用量与上下文**，并持续向主流 Agent 体验对齐。  
 > 历史回顾 · 一键优化 · 下一条预测 · 对话与文件恢复 · 模型账单 · 上下文明细 · Auto 路由 · 分账号余额 —— 嵌在官方会话与设置里，不用另开窗口。
