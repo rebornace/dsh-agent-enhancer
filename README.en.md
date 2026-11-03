@@ -7,6 +7,7 @@
 
 [![npm](https://img.shields.io/npm/v/dsh-composer-enhancer.svg)](https://www.npmjs.com/package/dsh-composer-enhancer)
 [![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5%20%3C0.3.0-blue)](https://www.npmjs.com/package/dsh-composer-enhancer)
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 ---
@@ -63,14 +64,37 @@ Model pills default to **Follow session**, or pick provider / model / reasoning 
 
 ## Install
 
-Quit every Desktop window and tray process before install, upgrade, or uninstall. Use the `desktop` profile (do not validate with `web`).
+Quit every Desktop window and tray process before install, upgrade, or uninstall.  
+This plugin targets **Desktop / the `desktop` profile** (do not validate with `web`). It is listed on [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin); you can also search for `dsh-composer-enhancer` / **Composer Enhance** in third-party markets.
 
-### npm (recommended)
+### Official Desktop · in-app install (recommended)
+
+For the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) **official Desktop** (and other official builds that ship **Settings → Plugins**):
+
+1. Open **Settings → Plugins** (or the **Plugins** sidebar entry).
+2. Search for `dsh-composer-enhancer` or **Composer Enhance**, then install when prompted.
+3. Fully quit and restart Desktop.
+
+> Desktop manages its own profile. Do **not** install into Desktop with `dsh plugin --profile web …` — the command may succeed while writing to `profiles/web`, which Desktop never loads.
+
+### dsh-market (optional)
+
+For a dedicated market UI / one-click upgrades, install the community market [dsh-market](https://github.com/dsh-market/dsh-market):
+
+- **Official Desktop:** in-app **Settings → Plugins**, search `dshmarket` and install (do not use the CLI `web` profile).
+- **Plain `dsh web`:** `dsh plugin --profile web add dshmarket`, then restart.
+
+Then open the **Plugin Market** tab, search, and install this plugin. Some third-party Desktop clients ship or recommend this market by default.
+
+### CLI · npm
+
+When the `dsh` CLI is available and you intend to write the **desktop** profile:
 
 ```sh
 dsh plugin --profile desktop add dsh-composer-enhancer@0.1.6
 ```
 
+Or unpinned: `dsh plugin --profile desktop add dsh-composer-enhancer`.  
 You should then see the optimize control and **Composer Enhance** in settings.
 
 ### Local directory (development)
@@ -111,7 +135,8 @@ Keep host-shared DSH packages in both `peerDependencies` and `devDependencies`, 
 
 | Install type | Action |
 | --- | --- |
-| npm | `dsh plugin --profile desktop remove dsh-composer-enhancer` |
+| Official Desktop / dsh-market | Uninstall or disable the plugin on the in-app **Plugins** page; or `dsh plugin --profile desktop remove dsh-composer-enhancer` |
+| CLI npm | `dsh plugin --profile desktop remove dsh-composer-enhancer` |
 | Local `link:` | **Do not** `remove` / run `pnpm remove` in the profile (can delete the source repo). Follow below |
 
 1. Quit Desktop (including tray)  

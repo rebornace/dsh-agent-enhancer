@@ -7,6 +7,7 @@
 
 [![npm](https://img.shields.io/npm/v/dsh-composer-enhancer.svg)](https://www.npmjs.com/package/dsh-composer-enhancer)
 [![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5%20%3C0.3.0-blue)](https://www.npmjs.com/package/dsh-composer-enhancer)
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 ---
@@ -63,14 +64,37 @@
 
 ## 安装
 
-安装 / 升级 / 卸载前，请退出所有 Desktop 窗口和托盘，确认旧主进程结束后再操作。请使用 `desktop` profile（不要用 `web` 验收）。
+安装 / 升级 / 卸载前，请退出所有 Desktop 窗口和托盘，确认旧主进程结束后再操作。  
+本插件面向 **Desktop / `desktop` profile**（不要用 `web` 验收）。收录于 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)，也可在第三方市场中搜索 `dsh-composer-enhancer` / **Composer 增强**。
 
-### npm（推荐）
+### 官方桌面端 · 应用内安装（推荐）
+
+适用于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) **官方桌面端**（以及同样提供「设置 → 插件」的官方发行形态）：
+
+1. 打开应用内 **设置 → 插件**（或侧边栏 **插件**）。
+2. 在已安装 / 搜索框中查找 `dsh-composer-enhancer` 或 **Composer 增强**，按提示安装。
+3. 完全退出并重启 Desktop。
+
+> 桌面端的 profile 由应用管理。不要用 `dsh plugin --profile web …` 往桌面端装插件——命令可能显示成功，但装进的是 `profiles/web`，桌面端看不到。
+
+### dsh-market（可选）
+
+需要独立的市场 UI / 一键升级时，可安装社区市场插件 [dsh-market](https://github.com/dsh-market/dsh-market)：
+
+- **官方桌面端：** 在应用内 **设置 → 插件** 搜索 `dshmarket` 并安装（不要用 CLI 的 `web` profile）。
+- **普通 `dsh web`：** `dsh plugin --profile web add dshmarket`，然后重启。
+
+装好后打开 **插件市场** 标签，搜索并安装本插件。部分第三方桌面客户端会预装或推荐此市场。
+
+### 命令行 · npm
+
+本机已配置 `dsh` CLI、且要写入 **desktop** profile 时：
 
 ```sh
 dsh plugin --profile desktop add dsh-composer-enhancer@0.1.6
 ```
 
+也可不钉版本：`dsh plugin --profile desktop add dsh-composer-enhancer`。  
 启动后应能看到 Composer 右侧优化入口，以及设置中的 **Composer 增强**。
 
 ### 本地目录（开发）
@@ -111,7 +135,8 @@ dsh plugin --profile desktop add ((Resolve-Path .).Path)
 
 | 安装方式 | 做法 |
 | --- | --- |
-| npm | `dsh plugin --profile desktop remove dsh-composer-enhancer` |
+| 官方桌面端 / dsh-market | 在应用内 **插件** 页对本插件选择卸载或禁用；或 `dsh plugin --profile desktop remove dsh-composer-enhancer` |
+| 命令行 npm | `dsh plugin --profile desktop remove dsh-composer-enhancer` |
 | 本地 `link:` | **不要** `remove` / 在 profile 里 `pnpm remove`（可能删掉源仓库）。按下面做 |
 
 1. 退出 Desktop（含托盘）  
