@@ -8,6 +8,7 @@ import type {
 import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AuxiliaryError } from '../src/errors.ts'
+import { AUTO_MODEL, AUTO_PROVIDER } from '../src/host/auto-route/sentinel.ts'
 import { AuxiliaryModels } from '../src/host/model.ts'
 import type { OptimizeRequest, PredictRequest } from '../src/host/types.ts'
 
@@ -50,6 +51,19 @@ interface HarnessOptions {
     predictProvider?: string
     predictModel?: string
     predictReasoningEffort?: string
+    autoClassifierEnabled?: boolean
+    autoInstantProvider?: string
+    autoInstantModel?: string
+    autoInstantReasoningEffort?: string
+    autoThinkingProvider?: string
+    autoThinkingModel?: string
+    autoThinkingReasoningEffort?: string
+    autoProProvider?: string
+    autoProModel?: string
+    autoProReasoningEffort?: string
+    autoClassifierProvider?: string
+    autoClassifierModel?: string
+    autoClassifierReasoningEffort?: string
   }
 }
 
@@ -100,6 +114,19 @@ function harness(options: HarnessOptions = {}) {
       predictProvider: options.settings?.predictProvider ?? '',
       predictModel: options.settings?.predictModel ?? '',
       predictReasoningEffort: options.settings?.predictReasoningEffort ?? '',
+      autoClassifierEnabled: options.settings?.autoClassifierEnabled ?? false,
+      autoInstantProvider: options.settings?.autoInstantProvider ?? '',
+      autoInstantModel: options.settings?.autoInstantModel ?? '',
+      autoInstantReasoningEffort: options.settings?.autoInstantReasoningEffort ?? '',
+      autoThinkingProvider: options.settings?.autoThinkingProvider ?? '',
+      autoThinkingModel: options.settings?.autoThinkingModel ?? '',
+      autoThinkingReasoningEffort: options.settings?.autoThinkingReasoningEffort ?? '',
+      autoProProvider: options.settings?.autoProProvider ?? '',
+      autoProModel: options.settings?.autoProModel ?? '',
+      autoProReasoningEffort: options.settings?.autoProReasoningEffort ?? '',
+      autoClassifierProvider: options.settings?.autoClassifierProvider ?? '',
+      autoClassifierModel: options.settings?.autoClassifierModel ?? '',
+      autoClassifierReasoningEffort: options.settings?.autoClassifierReasoningEffort ?? '',
     })),
     setChunks(value: readonly StreamChunk[]) { chunks = value },
     replaceCurrent(value: object) { current = value },
@@ -280,6 +307,20 @@ describe('AuxiliaryModels', () => {
     })
     await h.models.generate(optimizeRequest(), new AbortController().signal)
     expect(h.stream.mock.calls[0]?.[0].reasoningEffort).toBe('low')
+  })
+
+  it('routes optimize Auto selections through AutoRouter instant mapping', async () => {
+    const h = harness({
+      settings: {
+        optimizeProvider: AUTO_PROVIDER,
+        optimizeModel: AUTO_MODEL,
+        autoClassifierEnabled: false,
+        autoInstantProvider: 'p',
+        autoInstantModel: 'flash',
+      },
+    })
+    await h.models.generate(optimizeRequest(), new AbortController().signal)
+    expect(h.prepare.mock.calls[0]?.[0]).toEqual({ provider: 'p', model: 'flash', maxTokens: 1200 })
   })
 
   it('prefers plugin optimize route and reasoning effort over the session model', async () => {

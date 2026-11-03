@@ -10,10 +10,15 @@ import type { Session, SessionStore } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   DEFAULT_AUXILIARY_MODEL,
+  DEFAULT_SETTINGS,
   auxiliaryModelOf,
+  autoRouteMapOf,
+  isAutoModel,
   isFollowSessionModel,
 } from '../config.ts'
 import type { AuxiliaryFeature, AuxiliaryModelSettings, EnhancerSettings } from '../config.ts'
+import { resolveAutoRoute } from './auto-route/router.ts'
+import type { AutoTierRoute } from './auto-route/types.ts'
 import { AuxiliaryError } from '../errors.ts'
 import {
   auxiliaryUserInput,
@@ -27,6 +32,11 @@ import type { AuxiliaryRequest, AuxiliaryResult, ModelRoute } from './types.ts'
 export type AuxiliarySettingsReader = () => Pick<EnhancerSettings,
   | 'optimizeProvider' | 'optimizeModel' | 'optimizeReasoningEffort'
   | 'predictProvider' | 'predictModel' | 'predictReasoningEffort'
+  | 'autoClassifierEnabled'
+  | 'autoInstantProvider' | 'autoInstantModel' | 'autoInstantReasoningEffort'
+  | 'autoThinkingProvider' | 'autoThinkingModel' | 'autoThinkingReasoningEffort'
+  | 'autoProProvider' | 'autoProModel' | 'autoProReasoningEffort'
+  | 'autoClassifierProvider' | 'autoClassifierModel' | 'autoClassifierReasoningEffort'
 >
 
 interface ResolvedRoute extends ModelRoute {
@@ -72,6 +82,19 @@ export class AuxiliaryModels {
       predictProvider: DEFAULT_AUXILIARY_MODEL.provider,
       predictModel: DEFAULT_AUXILIARY_MODEL.model,
       predictReasoningEffort: DEFAULT_AUXILIARY_MODEL.reasoningEffort,
+      autoClassifierEnabled: DEFAULT_SETTINGS.autoClassifierEnabled,
+      autoInstantProvider: DEFAULT_SETTINGS.autoInstantProvider,
+      autoInstantModel: DEFAULT_SETTINGS.autoInstantModel,
+      autoInstantReasoningEffort: DEFAULT_SETTINGS.autoInstantReasoningEffort,
+      autoThinkingProvider: DEFAULT_SETTINGS.autoThinkingProvider,
+      autoThinkingModel: DEFAULT_SETTINGS.autoThinkingModel,
+      autoThinkingReasoningEffort: DEFAULT_SETTINGS.autoThinkingReasoningEffort,
+      autoProProvider: DEFAULT_SETTINGS.autoProProvider,
+      autoProModel: DEFAULT_SETTINGS.autoProModel,
+      autoProReasoningEffort: DEFAULT_SETTINGS.autoProReasoningEffort,
+      autoClassifierProvider: DEFAULT_SETTINGS.autoClassifierProvider,
+      autoClassifierModel: DEFAULT_SETTINGS.autoClassifierModel,
+      autoClassifierReasoningEffort: DEFAULT_SETTINGS.autoClassifierReasoningEffort,
     }))
     ctx.on('session/disposed', (session) => { this.cancelSession(session.id) })
     ctx.effect(() => async () => {
@@ -111,12 +134,82 @@ export class AuxiliaryModels {
     if (sessions.get(session.id) !== session) throw new AuxiliaryError('SESSION_CHANGED')
   }
 
-  private featureSettings(feature: AuxiliaryFeature): AuxiliaryModelSettings {
-    return auxiliaryModelOf(this.settings() as EnhancerSettings, feature)
+  private enhancerSettings(): EnhancerSettings {
+    return this.settings() as EnhancerSettings
   }
 
-  private route(session: Session, feature: AuxiliaryFeature): ResolvedRoute {
+  private featureSettings(feature: AuxiliaryFeature): AuxiliaryModelSettings {
+    return auxiliaryModelOf(this.enhancerSettings(), feature)
+  }
+
+  private modelExists(provider: string, model: string): boolean {
+    return provider !== '' && model !== ''
+  }
+
+  private sessionModelSelection(session: Session): {
+    readonly provider: string
+    readonly model: string
+    readonly reasoningEffort?: string
+  } {
+    const logged = session.requestHeader()?.config
+    const projected = logged === undefined
+      ? this.ctx.sessionProjections.stateOf(session, 'modelSelection')
+      : undefined
+    return logged ?? projected?.pending ?? projected?.lastUsed
+      ?? this.ctx.agentDefaultModel.currentSelection()
+  }
+
+  private tierRouteFromSelection(
+    selection: { readonly provider: string; readonly model: string; readonly reasoningEffort?: string },
+    effortFallback: string,
+  ): AutoTierRoute {
+    return {
+      provider: selection.provider,
+      model: selection.model,
+      reasoningEffort: typeof selection.reasoningEffort === 'string'
+        ? selection.reasoningEffort
+        : effortFallback,
+    }
+  }
+
+  private fallbackFromSession(session: Session, override: AuxiliaryModelSettings): AutoTierRoute | undefined {
+    const selection = this.sessionModelSelection(session)
+    if (!isAutoModel(selection) && this.modelExists(selection.provider, selection.model)) {
+      return this.tierRouteFromSelection(selection, override.reasoningEffort)
+    }
+    const fallback = this.ctx.agentDefaultModel.currentSelection()
+    if (isAutoModel(fallback) || !this.modelExists(fallback.provider, fallback.model)) return undefined
+    return this.tierRouteFromSelection(fallback, override.reasoningEffort)
+  }
+
+  private async resolveAutoRouteFor(
+    session: Session,
+    override: AuxiliaryModelSettings,
+    text: string,
+    feature: AuxiliaryFeature | 'session',
+  ): Promise<ResolvedRoute> {
+    const settings = this.enhancerSettings()
+    const mapped = await resolveAutoRoute({
+      text,
+      feature,
+      map: autoRouteMapOf(settings),
+      classifierEnabled: settings.autoClassifierEnabled,
+      classify: undefined,
+      isAvailable: (provider, model) => this.modelExists(provider, model),
+      fallback: this.fallbackFromSession(session, override),
+    })
+    return {
+      provider: mapped.provider,
+      model: mapped.model,
+      preferredEffort: mapped.reasoningEffort,
+    }
+  }
+
+  private async route(session: Session, feature: AuxiliaryFeature, text: string): Promise<ResolvedRoute> {
     const override = this.featureSettings(feature)
+    if (isAutoModel(override)) {
+      return this.resolveAutoRouteFor(session, override, text, feature)
+    }
     if (!isFollowSessionModel(override)) {
       return {
         provider: override.provider,
@@ -124,13 +217,11 @@ export class AuxiliaryModels {
         preferredEffort: override.reasoningEffort,
       }
     }
-    const logged = session.requestHeader()?.config
-    const projected = logged === undefined
-      ? this.ctx.sessionProjections.stateOf(session, 'modelSelection')
-      : undefined
-    const selection = logged ?? projected?.pending ?? projected?.lastUsed
-      ?? this.ctx.agentDefaultModel.currentSelection()
+    const selection = this.sessionModelSelection(session)
     if (selection.provider === '' || selection.model === '') throw new AuxiliaryError('MODEL_UNAVAILABLE')
+    if (isAutoModel(selection)) {
+      return this.resolveAutoRouteFor(session, override, text, 'session')
+    }
     const preferredEffort = typeof selection.reasoningEffort === 'string'
       ? selection.reasoningEffort
       : override.reasoningEffort
@@ -163,9 +254,10 @@ export class AuxiliaryModels {
       sessionRequests = this.requests.get(session.id) ?? new Set<AbortController>()
       sessionRequests.add(controller)
       this.requests.set(session.id, sessionRequests)
-      const resolved = this.route(session, request.operation)
-      const route: ModelRoute = { provider: resolved.provider, model: resolved.model }
       const operation = request.operation
+      const routeText = operation === 'optimize' ? request.source : ''
+      const resolved = await this.route(session, operation, routeText)
+      const route: ModelRoute = { provider: resolved.provider, model: resolved.model }
       const masked = operation === 'optimize' ? maskReferences(request.source, request.references) : undefined
       const maxTokens = operation === 'optimize' ? 1200 : 120
       const uiLocale = resolveUiLocale(request.uiLocale)
