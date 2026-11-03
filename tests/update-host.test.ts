@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { fetchLatestVersion } from '../src/host/update/registry.ts'
 import { detectInstallKind } from '../src/host/update/install-kind.ts'
 import { pluginAddCommand, resolveCanAutoApply } from '../src/host/update/cli.ts'
+import { checkPluginUpdate, applyPluginUpdate } from '../src/host/update/check.ts'
 import { PACKAGE_NAME } from '../src/identity.ts'
 import { mkdirSync, symlinkSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -66,5 +67,87 @@ describe('cli helpers', () => {
     expect(resolveCanAutoApply({ installKind: 'npm', dshAvailable: false })).toBe(false)
     expect(resolveCanAutoApply({ installKind: 'link', dshAvailable: true })).toBe(false)
     expect(resolveCanAutoApply({ installKind: 'unknown', dshAvailable: true })).toBe(false)
+  })
+})
+
+describe('checkPluginUpdate', () => {
+  it('marks update available and canAutoApply for npm + dsh', async () => {
+    const result = await checkPluginUpdate({
+      currentVersion: '0.2.0',
+      fetchLatest: async () => '0.2.1',
+      detectKind: () => 'npm',
+      dshAvailable: async () => true,
+      profileDir: '/fake',
+    })
+    expect(result).toEqual({
+      current: '0.2.0',
+      latest: '0.2.1',
+      updateAvailable: true,
+      installKind: 'npm',
+      canAutoApply: true,
+      command: `dsh plugin --profile desktop add ${PACKAGE_NAME}@0.2.1`,
+    })
+  })
+
+  it('disables auto apply for link even when newer', async () => {
+    const result = await checkPluginUpdate({
+      currentVersion: '0.2.0',
+      fetchLatest: async () => '0.3.0',
+      detectKind: () => 'link',
+      dshAvailable: async () => true,
+      profileDir: '/fake',
+    })
+    expect(result.canAutoApply).toBe(false)
+    expect(result.updateAvailable).toBe(true)
+  })
+})
+
+describe('applyPluginUpdate', () => {
+  it('does not spawn when canAutoApply is false', async () => {
+    const run = vi.fn()
+    const result = await applyPluginUpdate({
+      check: {
+        current: '0.2.0',
+        latest: '0.2.1',
+        updateAvailable: true,
+        installKind: 'link',
+        canAutoApply: false,
+        command: `dsh plugin --profile desktop add ${PACKAGE_NAME}@0.2.1`,
+      },
+      runAdd: run,
+      messages: {
+        linkBlocked: 'dev-link',
+        success: 'ok-restart',
+        failed: 'failed',
+        noUpdate: 'none',
+      },
+    })
+    expect(run).not.toHaveBeenCalled()
+    expect(result.ok).toBe(false)
+    expect(result.message).toBe('dev-link')
+    expect(result.command).toContain(`${PACKAGE_NAME}@0.2.1`)
+  })
+
+  it('spawns and reports success', async () => {
+    const run = vi.fn(async () => ({ ok: true, detail: '' }))
+    const result = await applyPluginUpdate({
+      check: {
+        current: '0.2.0',
+        latest: '0.2.1',
+        updateAvailable: true,
+        installKind: 'npm',
+        canAutoApply: true,
+        command: `dsh plugin --profile desktop add ${PACKAGE_NAME}@0.2.1`,
+      },
+      runAdd: run,
+      messages: {
+        linkBlocked: 'dev-link',
+        success: 'ok-restart',
+        failed: 'failed',
+        noUpdate: 'none',
+      },
+    })
+    expect(run).toHaveBeenCalledWith('0.2.1')
+    expect(result).toEqual({ ok: true, message: 'ok-restart' })
   })
 })
