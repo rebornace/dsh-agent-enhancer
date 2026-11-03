@@ -1,6 +1,21 @@
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-agent-default-model'
+import type {} from '@deepseek-ai/dsh-llm'
+import type {} from '@deepseek-ai/dsh-session-projection'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import {
+  auxiliaryModelOf,
+  autoRouteMapOf,
+  isAutoModel,
+  isFollowSessionModel,
+} from '../config.ts'
+import type { EnhancerSettings } from '../config.ts'
 import { AuxiliaryError } from '../errors.ts'
 import type { AuxiliaryErrorCode } from '../errors.ts'
+import { createClassifier } from './auto-route/classifier.ts'
+import { resolveAutoRoute } from './auto-route/router.ts'
+import type { AutoTierRoute } from './auto-route/types.ts'
 
 export interface ContextCompactRequest {
   readonly sessionId: SessionId
@@ -37,6 +52,96 @@ export interface CompactCommandRuntime {
 type AgentWithOptions = {
   readonly options?: { provider?: string, model?: string }
   status?: unknown
+}
+
+function modelExists(provider: string, model: string): boolean {
+  return provider !== '' && model !== ''
+}
+
+function sessionModelSelection(
+  ctx: Context,
+  session: Session,
+): { readonly provider: string, readonly model: string, readonly reasoningEffort?: string } {
+  const logged = session.requestHeader()?.config
+  const projected = logged === undefined
+    ? ctx.sessionProjections.stateOf(session, 'modelSelection')
+    : undefined
+  return logged ?? projected?.pending ?? projected?.lastUsed
+    ?? ctx.agentDefaultModel.currentSelection()
+}
+
+function tierRouteFromSelection(
+  selection: { readonly provider: string, readonly model: string, readonly reasoningEffort?: string },
+  effortFallback: string,
+): AutoTierRoute {
+  return {
+    provider: selection.provider,
+    model: selection.model,
+    reasoningEffort: typeof selection.reasoningEffort === 'string'
+      ? selection.reasoningEffort
+      : effortFallback,
+  }
+}
+
+function fallbackFromSession(
+  ctx: Context,
+  session: Session,
+  override: ReturnType<typeof auxiliaryModelOf>,
+): AutoTierRoute | undefined {
+  const selection = sessionModelSelection(ctx, session)
+  if (!isAutoModel(selection) && modelExists(selection.provider, selection.model)) {
+    return tierRouteFromSelection(selection, override.reasoningEffort)
+  }
+  const fallback = ctx.agentDefaultModel.currentSelection()
+  if (isAutoModel(fallback) || !modelExists(fallback.provider, fallback.model)) return undefined
+  return tierRouteFromSelection(fallback, override.reasoningEffort)
+}
+
+async function resolveAutoRouteForCompact(
+  ctx: Context,
+  settings: EnhancerSettings,
+  session: Session,
+  feature: 'compact' | 'session',
+  signal: AbortSignal,
+): Promise<CompactRouteOverride> {
+  const override = auxiliaryModelOf(settings, 'compact')
+  const map = autoRouteMapOf(settings)
+  const classify = settings.autoClassifierEnabled
+    ? createClassifier(ctx.llm, map.classifier)
+    : undefined
+  const mapped = await resolveAutoRoute({
+    text: '',
+    feature,
+    map,
+    classifierEnabled: settings.autoClassifierEnabled,
+    classify,
+    isAvailable: modelExists,
+    fallback: fallbackFromSession(ctx, session, override),
+    signal,
+  })
+  return { provider: mapped.provider, model: mapped.model }
+}
+
+/** Resolve the temporary agent route used while official `/compact` runs. */
+export async function resolveCompactRouteOverride(
+  ctx: Context,
+  settings: EnhancerSettings,
+  session: Session,
+  signal: AbortSignal,
+): Promise<CompactRouteOverride | undefined> {
+  signal.throwIfAborted()
+  const override = auxiliaryModelOf(settings, 'compact')
+  if (isAutoModel(override)) {
+    return resolveAutoRouteForCompact(ctx, settings, session, 'compact', signal)
+  }
+  if (!isFollowSessionModel(override)) {
+    return { provider: override.provider, model: override.model }
+  }
+  const selection = sessionModelSelection(ctx, session)
+  if (isAutoModel(selection)) {
+    return resolveAutoRouteForCompact(ctx, settings, session, 'session', signal)
+  }
+  return undefined
 }
 
 function applyCompactRoute(agent: AgentWithOptions, route: CompactRouteOverride | undefined): (() => void) | undefined {

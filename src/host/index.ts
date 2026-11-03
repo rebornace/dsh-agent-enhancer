@@ -21,9 +21,9 @@ import { DshCheckpointCaptureSwitch } from './checkpoint/live.ts'
 import { CheckpointRollbackError, CheckpointRollbackService } from './checkpoint/service.ts'
 import type { CheckpointRollbackRequest } from './checkpoint/service.ts'
 import { CheckpointStore } from './checkpoint/store.ts'
-import type {} from '@deepseek-ai/dsh-token-meter'
-import { compactContextNow } from './context-compact.ts'
-import type { ContextCompactRequest, ContextCompactResult } from './context-compact.ts'
+import type { Session } from '@deepseek-ai/dsh-session'
+import { compactContextNow, resolveCompactRouteOverride } from './context-compact.ts'
+import type { CompactRouteOverride, ContextCompactRequest, ContextCompactResult } from './context-compact.ts'
 import { inspectContextCategory, pressureFromProjection } from './context-inspect.ts'
 import type { ContextInspectRequest, ContextInspectResult } from './context-inspect.ts'
 import { installAutoSessionRoute } from './auto-route/session-hook.ts'
@@ -87,7 +87,10 @@ export class AgentEnhancerService extends TypertRemoteService {
   constructor(
     ctx: Context,
     private readonly models: AuxiliaryModels,
-    private readonly compactRoute: () => { readonly provider: string, readonly model: string },
+    private readonly compactRoute: (
+      session: Session,
+      signal: AbortSignal,
+    ) => Promise<CompactRouteOverride | undefined>,
   ) {
     super(ctx, 'agentEnhancer')
   }
@@ -163,7 +166,7 @@ export class AgentEnhancerService extends TypertRemoteService {
         agent,
         sessionId: request.sessionId,
         signal,
-        route: this.compactRoute(),
+        route: await this.compactRoute(agent.session, signal),
       })
     } catch (error) {
       if (signal.aborted) throw error
@@ -235,10 +238,9 @@ export function apply(ctx: Context, config: Config): void {
   const settings = () => readSettings(config)
   const models = new AuxiliaryModels(ctx, settings)
   installAutoSessionRoute(ctx, { settings })
-  new AgentEnhancerService(ctx, models, () => ({
-    provider: config.compactProvider.get(),
-    model: config.compactModel.get(),
-  }))
+  new AgentEnhancerService(ctx, models, (session, signal) =>
+    resolveCompactRouteOverride(ctx, settings(), session, signal),
+  )
   ctx.effect(() => ctx.typert.register(hostContribution))
 
   const storageRoot = resolveCheckpointRoot(process.env.DSH_HOME ?? join(homedir(), '.dsh'))

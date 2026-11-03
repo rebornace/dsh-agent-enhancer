@@ -276,7 +276,7 @@ describe('AgentEnhancerService', () => {
     const ownerCtx = context()
     ownerCtx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
     const generate = vi.fn(async () => null)
-    const owner = new AgentEnhancerService(ownerCtx, { generate } as never, () => ({ provider: '', model: '' }))
+    const owner = new AgentEnhancerService(ownerCtx, { generate } as never, async () => ({ provider: '', model: '' }))
     const request = payload()
     const signal = new AbortController().signal
     await expect(owner.call(request, signal)).resolves.toBeNull()
@@ -284,7 +284,7 @@ describe('AgentEnhancerService', () => {
 
     const guestCtx = context()
     guestCtx.provide('invocation', { peer: { principal: { kind: 'guest' } } } as never)
-    const guest = new AgentEnhancerService(guestCtx, { generate } as never, () => ({ provider: '', model: '' }))
+    const guest = new AgentEnhancerService(guestCtx, { generate } as never, async () => ({ provider: '', model: '' }))
     await expect(guest.call(request, signal)).rejects.toMatchObject({
       code: 'agent-enhancer/forbidden',
       message: 'Only the desktop owner may use Agent Enhance',
@@ -297,7 +297,7 @@ describe('AgentEnhancerService', () => {
     ctx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
     const service = new AgentEnhancerService(ctx, {
       generate: vi.fn(async () => { throw new AuxiliaryError('MODEL_UNAVAILABLE') }),
-    } as never, () => ({ provider: '', model: '' }))
+    } as never, async () => ({ provider: '', model: '' }))
     const rejection = await service.call(payload(), new AbortController().signal).catch((error: unknown) => error)
     expect(rejection).toBeInstanceOf(RemoteError)
     expect(rejection).toMatchObject({
@@ -313,7 +313,7 @@ describe('AgentEnhancerService', () => {
     ctx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
     const service = new AgentEnhancerService(ctx, {
       generate: vi.fn(async () => { throw new Error('provider credential and private text') }),
-    } as never, () => ({ provider: '', model: '' }))
+    } as never, async () => ({ provider: '', model: '' }))
     const rejection = await service.call(payload(), new AbortController().signal).catch((error: unknown) => error)
     expect(rejection).toMatchObject({
       code: 'agent-enhancer/failed',
@@ -330,7 +330,7 @@ describe('AgentEnhancerService', () => {
     controller.abort()
     const service = new AgentEnhancerService(ctx, {
       generate: vi.fn(async () => { throw controller.signal.reason }),
-    } as never, () => ({ provider: '', model: '' }))
+    } as never, async () => ({ provider: '', model: '' }))
     await expect(service.call(payload(), controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
   })
 })
@@ -366,7 +366,7 @@ describe('host composition', () => {
   it('constructs the single model entry used by the Remote service', () => {
     const ctx = context()
     const models = new AuxiliaryModels(ctx)
-    const service = new AgentEnhancerService(ctx, models, () => ({ provider: '', model: '' }))
+    const service = new AgentEnhancerService(ctx, models, async () => ({ provider: '', model: '' }))
     expect(service).toBeInstanceOf(AgentEnhancerService)
   })
 })

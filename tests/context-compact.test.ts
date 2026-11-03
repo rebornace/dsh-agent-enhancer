@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import { DEFAULT_SETTINGS } from '../src/config.ts'
 import { AuxiliaryError } from '../src/errors.ts'
-import { compactContextNow } from '../src/host/context-compact.ts'
+import { AUTO_MODEL, AUTO_PROVIDER } from '../src/host/auto-route/sentinel.ts'
+import { compactContextNow, resolveCompactRouteOverride } from '../src/host/context-compact.ts'
 import { AgentEnhancerService } from '../src/host/index.ts'
 
 describe('compactContextNow', () => {
@@ -76,6 +78,46 @@ describe('compactContextNow', () => {
     })).rejects.toEqual(expect.objectContaining({ code: 'COMPACT_SUMMARY' }) as AuxiliaryError)
   })
 
+  it('routes compact Auto selections through AutoRouter mapping during /compact', async () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      compactProvider: AUTO_PROVIDER,
+      compactModel: AUTO_MODEL,
+      autoClassifierEnabled: false,
+      autoThinkingProvider: 'think-p',
+      autoThinkingModel: 'think-m',
+    }
+    const ctx = {
+      agentDefaultModel: { currentSelection: () => ({ provider: 'd', model: 'chat' }) },
+      sessionProjections: { stateOf: () => undefined },
+    } as never
+    const session = { requestHeader: () => undefined } as never
+    const route = await resolveCompactRouteOverride(
+      ctx,
+      settings,
+      session,
+      new AbortController().signal,
+    )
+    expect(route).toEqual({ provider: 'think-p', model: 'think-m' })
+
+    const options = { provider: 'session-p', model: 'session-m' }
+    const execute = vi.fn(async (agent: { options: { provider: string, model: string } }) => {
+      expect(agent.options).toEqual({ provider: 'think-p', model: 'think-m' })
+      return {
+        commandId: 'c1',
+        result: { kind: 'success' as const, text: 'No compactable history yet.' },
+      }
+    })
+    await compactContextNow({
+      commands: { execute } as never,
+      agent: { status: 'idle', options },
+      sessionId: 's1' as never,
+      signal: new AbortController().signal,
+      route,
+    })
+    expect(options).toEqual({ provider: 'session-p', model: 'session-m' })
+  })
+
   it('overrides agent route while /compact runs', async () => {
     const options = { provider: 'session-p', model: 'session-m' }
     const execute = vi.fn(async (agent: { options: { provider: string, model: string } }) => {
@@ -123,7 +165,7 @@ describe('AgentEnhancerService.compactContext', () => {
     }))
     root.provide('commands', { execute } as never)
     root.provide('agents', {
-      get: () => ({ status: 'idle', options: {} }),
+      get: () => ({ status: 'idle', options: {}, session: { requestHeader: () => undefined } }),
     } as never)
     root.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
 
@@ -132,7 +174,11 @@ describe('AgentEnhancerService.compactContext', () => {
       name: 'agent-enhancer-compact-probe',
       inject: ['commands', 'agents'],
       apply(ctx: Context) {
-        const service = new AgentEnhancerService(ctx, {} as never, () => ({ provider: '', model: '' }))
+        const service = new AgentEnhancerService(
+          ctx,
+          {} as never,
+          async (_session, _signal) => ({ provider: '', model: '' }),
+        )
         return (async () => {
           result = await service.compactContext({ sessionId: 's1' as never }, new AbortController().signal)
         })()
