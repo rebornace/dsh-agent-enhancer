@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import type { InputActions, InputState } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -18,6 +19,7 @@ import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import { resolveSettings } from '../src/config.ts'
 import type { EnhancerSettings } from '../src/config.ts'
+import type { ApplyUpdateResult, UpdateCheckResult } from '../src/host/update/types.ts'
 import { AuxiliaryError } from '../src/errors.ts'
 
 const translations: Record<string, string> = {
@@ -92,23 +94,17 @@ const translations: Record<string, string> = {
   updateCopied: 'Copied',
 }
 
-function formatTranslation(template: string, params?: Record<string, string>): string {
+function formatTranslation(template: string, params?: Record<string, unknown>): string {
   if (params === undefined) return template
-  return template.replace(/\{(\w+)\}/g, (_, key: string) => params[key] ?? `{${key}}`)
+  return template.replace(/\{(\w+)\}/g, (_, key: string) => {
+    const value = params[key]
+    return value === undefined || value === null ? `{${key}}` : String(value)
+  })
 }
 
-const defaultCheckUpdate = vi.fn(async () => ({
-  current: '0.2.0',
-  latest: '0.2.0',
-  updateAvailable: false,
-  installKind: 'npm' as const,
-  canAutoApply: true,
-  command: 'dsh plugin --profile desktop add dsh-agent-enhancer@0.2.0',
-}))
-
 interface SettingsHarnessExtras {
-  readonly checkUpdate?: typeof defaultCheckUpdate
-  readonly applyUpdate?: ReturnType<typeof vi.fn>
+  readonly checkUpdate?: () => Promise<UpdateCheckResult>
+  readonly applyUpdate?: () => Promise<ApplyUpdateResult>
   readonly translations?: Record<string, string>
 }
 
@@ -186,7 +182,7 @@ function settingsHarness(
     unset: async () => true,
     mutate: async () => true,
   }
-  const t = (key: string, params?: Record<string, string>) => {
+  const t: TranslateNS<'agent-enhancer'> = (key, params) => {
     const template = { ...translations, ...extras?.translations }[key] ?? key
     return formatTranslation(template, params)
   }
