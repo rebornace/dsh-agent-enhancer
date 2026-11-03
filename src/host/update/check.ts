@@ -5,7 +5,12 @@ import { pluginAddCommand, probeDsh, resolveCanAutoApply, runPluginAdd } from '.
 import { detectInstallKind } from './install-kind.ts'
 import { fetchLatestVersion } from './registry.ts'
 import { isNewerVersion } from './semver.ts'
-import type { ApplyUpdateResult, InstallKind, UpdateCheckResult } from './types.ts'
+import type {
+  ApplyUpdateCode,
+  ApplyUpdateResult,
+  InstallKind,
+  UpdateCheckResult,
+} from './types.ts'
 
 export function resolveDesktopProfileDir(
   env: NodeJS.ProcessEnv = process.env,
@@ -26,7 +31,7 @@ export interface CheckPluginUpdateDeps {
 export async function checkPluginUpdate(deps: CheckPluginUpdateDeps): Promise<UpdateCheckResult> {
   const latest = await deps.fetchLatest()
   const installKind = deps.detectKind(deps.profileDir)
-  const dshAvailable = await deps.dshAvailable()
+  const dshAvailable = await deps.dshAvailable().catch(() => false)
   const updateAvailable =
     latest !== null && isNewerVersion(latest, deps.currentVersion)
   const command = pluginAddCommand(latest ?? 'latest')
@@ -43,11 +48,11 @@ export async function checkPluginUpdate(deps: CheckPluginUpdateDeps): Promise<Up
 }
 
 export interface ApplyUpdateMessages {
-  readonly linkBlocked: string
-  readonly success: string
-  readonly failed: string
-  readonly noUpdate: string
-  readonly manualOnly?: string
+  readonly linkBlocked: ApplyUpdateCode
+  readonly success: ApplyUpdateCode
+  readonly failed: ApplyUpdateCode
+  readonly noUpdate: ApplyUpdateCode
+  readonly manualOnly?: ApplyUpdateCode
 }
 
 export interface ApplyPluginUpdateInput {

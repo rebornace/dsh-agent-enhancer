@@ -125,6 +125,7 @@ function resolveBlockedReason(result: UpdateCheckResult): 'link' | 'manual' {
 }
 
 function resolveCheckState(result: UpdateCheckResult): UpdateUiState {
+  if (result.latest === null) return { kind: 'checkError' }
   if (!result.updateAvailable) return { kind: 'upToDate', result }
   if (result.canAutoApply) return { kind: 'available', result }
   return { kind: 'blocked', result, reason: resolveBlockedReason(result) }
@@ -134,23 +135,27 @@ function resolveApplyState(
   result: UpdateCheckResult,
   apply: ApplyUpdateResult,
 ): UpdateUiState {
-  if (apply.ok) {
-    if (apply.message === 'restart') return { kind: 'success', result }
-    if (apply.message === 'link') return { kind: 'blocked', result, reason: 'link' }
-    if (apply.message === 'manual') return { kind: 'blocked', result, reason: 'manual' }
-    if (apply.message === 'none') return resolveCheckState(result)
-    if (apply.message === 'failed') {
-      return {
-        kind: 'applyError',
-        result,
-        command: apply.command ?? result.command,
-      }
-    }
-  }
-  return {
+  const applyError: UpdateUiState = {
     kind: 'applyError',
     result,
     command: apply.command ?? result.command,
+  }
+  switch (apply.message) {
+    case 'restart':
+      return apply.ok ? { kind: 'success', result } : applyError
+    case 'link':
+      return { kind: 'blocked', result, reason: 'link' }
+    case 'manual':
+      return { kind: 'blocked', result, reason: 'manual' }
+    case 'none':
+      return resolveCheckState(result)
+    case 'failed':
+      return applyError
+    default: {
+      const unreachable: never = apply.message
+      void unreachable
+      return applyError
+    }
   }
 }
 

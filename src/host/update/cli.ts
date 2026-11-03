@@ -19,8 +19,20 @@ function defaultSpawn(
 const PROBE_TIMEOUT_MS = 5_000
 const RUN_ADD_TIMEOUT_MS = 120_000
 
-function dshCommand(): string {
-  return process.platform === 'win32' ? 'dsh.cmd' : 'dsh'
+/** Strict x.y.z only; the version is interpolated into a shell command line on win32. */
+const STRICT_SEMVER = /^\d+\.\d+\.\d+$/
+
+export function isStrictVersion(value: string): boolean {
+  return STRICT_SEMVER.test(value)
+}
+
+/**
+ * Node >= 22 refuses to spawn `.cmd` files without a shell (sync EINVAL), so on
+ * win32 we spawn `dsh` through the shell (cmd resolves dsh.cmd via PATHEXT).
+ */
+function dshSpawnOptions(): SpawnOptions {
+  const base: SpawnOptions = { stdio: ['ignore', 'pipe', 'pipe'] }
+  return process.platform === 'win32' ? { ...base, shell: true, windowsHide: true } : base
 }
 
 function pluginAddArgs(latest: string): string[] {
@@ -76,8 +88,12 @@ async function runDsh(
   spawnFn: SpawnLike,
   timeoutMs: number,
 ): Promise<{ ok: boolean; detail: string }> {
-  const command = dshCommand()
-  const child = spawnFn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+  let child: ChildProcess
+  try {
+    child = spawnFn('dsh', args, dshSpawnOptions())
+  } catch (err) {
+    return { ok: false, detail: err instanceof Error ? err.message : String(err) }
+  }
   return waitForExit(child, timeoutMs)
 }
 
@@ -90,5 +106,6 @@ export async function runPluginAdd(
   latest: string,
   spawnFn: SpawnLike = defaultSpawn,
 ): Promise<{ ok: boolean; detail: string }> {
+  if (!isStrictVersion(latest)) return { ok: false, detail: 'invalid version' }
   return runDsh(pluginAddArgs(latest), spawnFn, RUN_ADD_TIMEOUT_MS)
 }

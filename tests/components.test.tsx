@@ -1167,6 +1167,42 @@ describe('PluginSettings', () => {
     expect(await screen.findByText(/linked dev folder/i)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Copy command' })).toBeTruthy()
   })
+
+  const npmCheck = {
+    current: '0.2.0',
+    latest: '0.2.1',
+    updateAvailable: true,
+    installKind: 'npm' as const,
+    canAutoApply: true,
+    command: 'dsh plugin --profile desktop add dsh-agent-enhancer@0.2.1',
+  }
+
+  it('shows check failure (not up to date) when registry latest is null', async () => {
+    const checkUpdate = vi.fn(async () => ({
+      ...npmCheck,
+      latest: null,
+      updateAvailable: false,
+    }))
+    settingsHarness(undefined, {}, undefined, { checkUpdate, applyUpdate: vi.fn() })
+    expect(await screen.findByText(/Could not check for updates/)).toBeTruthy()
+    expect(screen.queryByText(/You're up to date/)).toBeNull()
+  })
+
+  it.each([
+    ['link', /linked dev folder/i],
+    ['manual', /Cannot update automatically/],
+    ['failed', /Update failed/],
+  ] as const)('maps failed apply with code %s to its own copy', async (message, pattern) => {
+    const checkUpdate = vi.fn(async () => npmCheck)
+    const applyUpdate = vi.fn(async () => ({
+      ok: false,
+      message,
+      command: npmCheck.command,
+    }))
+    settingsHarness(undefined, {}, undefined, { checkUpdate, applyUpdate })
+    fireEvent.click(await screen.findByRole('button', { name: /Update to v0\.2\.1/ }))
+    expect(await screen.findByText(pattern)).toBeTruthy()
+  })
 })
 
 describe('CoexistenceHints', () => {

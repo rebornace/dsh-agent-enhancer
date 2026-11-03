@@ -4,6 +4,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { z } from 'zod'
 import type { AuxiliaryErrorCode } from '../errors.ts'
 import type { CheckpointRollbackErrorCode } from './checkpoint/service.ts'
+import { APPLY_UPDATE_CODES } from './update/types.ts'
 
 const sessionIdSchema = z.string().min(1).transform(value => value as SessionId)
 const recentExchangeSchema = z.strictObject({
@@ -163,7 +164,7 @@ export const updateCheckResultSchema = z.strictObject({
 })
 export const applyUpdateResultSchema = z.strictObject({
   ok: z.boolean(),
-  message: z.string(),
+  message: z.enum(APPLY_UPDATE_CODES),
   command: z.string().optional(),
 })
 const updateCheckResultCodec = codec('dsh-agent-enhancer#UpdateCheckResult', updateCheckResultSchema)

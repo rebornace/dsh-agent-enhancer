@@ -9,8 +9,12 @@ export interface UpdateCheckResult {
   readonly command: string
 }
 
+export const APPLY_UPDATE_CODES = ['restart', 'link', 'manual', 'none', 'failed'] as const
+
+export type ApplyUpdateCode = (typeof APPLY_UPDATE_CODES)[number]
+
 export interface ApplyUpdateResult {
   readonly ok: boolean
-  readonly message: string
+  readonly message: ApplyUpdateCode
   readonly command?: string
 }

@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fetchLatestVersion } from '../src/host/update/registry.ts'
 import { detectInstallKind } from '../src/host/update/install-kind.ts'
-import { pluginAddCommand, resolveCanAutoApply } from '../src/host/update/cli.ts'
+import {
+  isStrictVersion,
+  pluginAddCommand,
+  probeDsh,
+  resolveCanAutoApply,
+  runPluginAdd,
+  type SpawnLike,
+} from '../src/host/update/cli.ts'
 import {
   applyPluginUpdate,
   checkPluginUpdate,
@@ -71,6 +78,54 @@ describe('cli helpers', () => {
     expect(resolveCanAutoApply({ installKind: 'npm', dshAvailable: false })).toBe(false)
     expect(resolveCanAutoApply({ installKind: 'link', dshAvailable: true })).toBe(false)
     expect(resolveCanAutoApply({ installKind: 'unknown', dshAvailable: true })).toBe(false)
+  })
+})
+
+describe('dsh spawn hardening', () => {
+  const throwingSpawn: SpawnLike = () => {
+    throw Object.assign(new Error('spawn EINVAL'), { code: 'EINVAL' })
+  }
+
+  it('probeDsh returns false when spawn throws synchronously', async () => {
+    await expect(probeDsh(throwingSpawn)).resolves.toBe(false)
+  })
+
+  it('runPluginAdd does not throw when spawn throws synchronously', async () => {
+    const result = await runPluginAdd('0.2.1', throwingSpawn)
+    expect(result.ok).toBe(false)
+    expect(result.detail).toContain('EINVAL')
+  })
+
+  it('runPluginAdd rejects non-strict versions without spawning', async () => {
+    const spawnFn = vi.fn()
+    for (const bad of ['latest', '0.2.1-beta.1', '0.2.1 & calc', '1.2', '']) {
+      const result = await runPluginAdd(bad, spawnFn as unknown as SpawnLike)
+      expect(result.ok).toBe(false)
+    }
+    expect(spawnFn).not.toHaveBeenCalled()
+    expect(isStrictVersion('10.20.30')).toBe(true)
+    expect(isStrictVersion('1.2.3\n')).toBe(false)
+  })
+
+  it('spawns `dsh` and uses a shell on win32 only', async () => {
+    const spawnFn = vi.fn(throwingSpawn)
+    await probeDsh(spawnFn)
+    const [command, args, options] = spawnFn.mock.calls[0]!
+    expect(command).toBe('dsh')
+    expect(args).toEqual(['--version'])
+    expect(options?.shell === true).toBe(process.platform === 'win32')
+  })
+
+  it('checkPluginUpdate still returns latest when the dsh probe rejects', async () => {
+    const result = await checkPluginUpdate({
+      currentVersion: '0.2.0',
+      fetchLatest: async () => '0.2.1',
+      detectKind: () => 'npm',
+      dshAvailable: async () => { throw new Error('boom') },
+      profileDir: '/fake',
+    })
+    expect(result.latest).toBe('0.2.1')
+    expect(result.canAutoApply).toBe(false)
   })
 })
 
@@ -146,15 +201,15 @@ describe('applyPluginUpdate', () => {
       },
       runAdd: run,
       messages: {
-        linkBlocked: 'dev-link',
-        success: 'ok-restart',
+        linkBlocked: 'link',
+        success: 'restart',
         failed: 'failed',
         noUpdate: 'none',
       },
     })
     expect(run).not.toHaveBeenCalled()
     expect(result.ok).toBe(false)
-    expect(result.message).toBe('dev-link')
+    expect(result.message).toBe('link')
     expect(result.command).toContain(`${PACKAGE_NAME}@0.2.1`)
   })
 
@@ -171,14 +226,14 @@ describe('applyPluginUpdate', () => {
       },
       runAdd: run,
       messages: {
-        linkBlocked: 'dev-link',
-        success: 'ok-restart',
+        linkBlocked: 'link',
+        success: 'restart',
         failed: 'failed',
         noUpdate: 'none',
       },
     })
     expect(run).toHaveBeenCalledWith('0.2.1')
-    expect(result).toEqual({ ok: true, message: 'ok-restart' })
+    expect(result).toEqual({ ok: true, message: 'restart' })
   })
 
   it('reports failed when runAdd returns not ok', async () => {
@@ -195,8 +250,8 @@ describe('applyPluginUpdate', () => {
       },
       runAdd: run,
       messages: {
-        linkBlocked: 'dev-link',
-        success: 'ok-restart',
+        linkBlocked: 'link',
+        success: 'restart',
         failed: 'failed',
         noUpdate: 'none',
       },
