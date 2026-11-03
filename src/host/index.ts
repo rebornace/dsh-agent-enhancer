@@ -6,6 +6,8 @@ import z from '@deepseek-ai/schemastery'
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
+import { resolveSettings } from '../config.ts'
+import type { EnhancerSettings } from '../config.ts'
 import { AuxiliaryError } from '../errors.ts'
 import {
   LEGACY_PACKAGE_NAME,
@@ -24,6 +26,7 @@ import { compactContextNow } from './context-compact.ts'
 import type { ContextCompactRequest, ContextCompactResult } from './context-compact.ts'
 import { inspectContextCategory, pressureFromProjection } from './context-inspect.ts'
 import type { ContextInspectRequest, ContextInspectResult } from './context-inspect.ts'
+import { installAutoSessionRoute } from './auto-route/session-hook.ts'
 import { AuxiliaryModels } from './model.ts'
 import { checkpointRemoteInfo, remoteInfo } from './rpc.ts'
 import type { RpcPayload } from './rpc.ts'
@@ -196,14 +199,22 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-export function apply(ctx: Context, config: Config): void {
-  const models = new AuxiliaryModels(ctx, () => ({
+function readSettings(config: Config): EnhancerSettings {
+  return resolveSettings({
+    historyEnabled: config.historyEnabled.get(),
+    optimizeEnabled: config.optimizeEnabled.get(),
+    predictEnabled: config.predictEnabled.get(),
+    rollbackEnabled: config.rollbackEnabled.get(),
+    contextInspectEnabled: config.contextInspectEnabled.get(),
     optimizeProvider: config.optimizeProvider.get(),
     optimizeModel: config.optimizeModel.get(),
     optimizeReasoningEffort: config.optimizeReasoningEffort.get(),
     predictProvider: config.predictProvider.get(),
     predictModel: config.predictModel.get(),
     predictReasoningEffort: config.predictReasoningEffort.get(),
+    compactProvider: config.compactProvider.get(),
+    compactModel: config.compactModel.get(),
+    compactReasoningEffort: config.compactReasoningEffort.get(),
     autoClassifierEnabled: config.autoClassifierEnabled.get(),
     autoInstantProvider: config.autoInstantProvider.get(),
     autoInstantModel: config.autoInstantModel.get(),
@@ -217,7 +228,13 @@ export function apply(ctx: Context, config: Config): void {
     autoClassifierProvider: config.autoClassifierProvider.get(),
     autoClassifierModel: config.autoClassifierModel.get(),
     autoClassifierReasoningEffort: config.autoClassifierReasoningEffort.get(),
-  }))
+  })
+}
+
+export function apply(ctx: Context, config: Config): void {
+  const settings = () => readSettings(config)
+  const models = new AuxiliaryModels(ctx, settings)
+  installAutoSessionRoute(ctx, { settings })
   new AgentEnhancerService(ctx, models, () => ({
     provider: config.compactProvider.get(),
     model: config.compactModel.get(),

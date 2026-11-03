@@ -147,6 +147,20 @@ function pillLabel(
   return `${name} · ${effort?.name ?? selection.reasoningEffort}`
 }
 
+/**
+ * Official `/model` lists Auto through the host sentinel adapter
+ * (`installAutoSessionRoute`). These pills already have their own Auto row,
+ * so the catalog copy of that sentinel is hidden here.
+ */
+function groupsForPills(groups: readonly ModelProviderGroup[]): readonly ModelProviderGroup[] {
+  return groups.flatMap(group => {
+    const models = group.models.filter(model => !isAutoModel({ provider: group.id, model: model.id }))
+    if (models.length === 0) return []
+    if (models.length === group.models.length) return [group]
+    return [{ ...group, models }]
+  })
+}
+
 function catalogMenuItems(
   groups: readonly ModelProviderGroup[],
   followLabel: string,
@@ -159,7 +173,7 @@ function catalogMenuItems(
     items.push({ id: encodeFollowSelection(), label: followLabel })
     items.push({ id: encodeAutoSelection(), label: autoLabel })
   }
-  for (const group of groups) {
+  for (const group of groupsForPills(groups)) {
     items.push({ type: 'separator', id: `sep:${group.id}` })
     items.push({ type: 'label', id: `label:${group.id}`, text: group.name })
     for (const model of group.models) {
