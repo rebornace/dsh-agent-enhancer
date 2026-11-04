@@ -61,12 +61,12 @@ function call(partial: Partial<UsageCall> & Pick<UsageCall, 'at' | 'source'>): U
 
 describe('model bill attribution', () => {
   it('prefers the plugin feature over the request purpose', async () => {
-    const options = request({ purpose: 'compaction' })
+    const options = request({ purpose: 'compaction' as never })
     expect(classifyUsageSource(options)).toBe('compaction')
     await withUsageSource('compact', async () => {
       expect(classifyUsageSource(options)).toBe('compact')
     })
-    expect(classifyUsageSource(request({ purpose: 'session-title' }))).toBe('sessionTitle')
+    expect(classifyUsageSource(request({ purpose: 'session-title' as never }))).toBe('sessionTitle')
   })
 
   it('keeps a stamped plugin source after ALS ends', () => {
@@ -89,7 +89,7 @@ describe('model bill attribution', () => {
       yield { type: 'usage' as const, usage: { inputTokens: -1, outputTokens: 1 } }
     }
     const seen: string[] = []
-    const options = request({ purpose: 'session-title' })
+    const options = request({ purpose: 'session-title' as never })
     for await (const chunk of observeModelStream(
       options,
       chunks(),

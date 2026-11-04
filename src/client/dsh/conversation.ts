@@ -20,13 +20,22 @@ function turnOf(node: ChatConversationViewNode): number | undefined {
     : undefined
 }
 
+function isDirectUserPrompt(data: UserMessageNode): boolean {
+  // Rollback notices / injects / tool-authored user bubbles are also `kind: 'user'`
+  // in chat — only keep prompts the human actually sent.
+  const source = (data as { source?: { kind?: string } }).source
+  return source?.kind === 'user'
+}
+
 export function sentPrompts(chat: ChatSnapshot | undefined): readonly PromptEntry[] {
   if (chat === undefined) return []
   return chat.order.flatMap((key) => {
     const node = chat.nodes.get(key)
     if (node?.kind !== 'user') return []
-    const text = textOf(node.data as UserMessageNode)
-    return text.trim() === '' ? [] : [{ seq: (node.data as UserMessageNode).seq, text }]
+    const data = node.data as UserMessageNode
+    if (!isDirectUserPrompt(data)) return []
+    const text = textOf(data)
+    return text.trim() === '' ? [] : [{ seq: data.seq, text }]
   })
 }
 

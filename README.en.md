@@ -6,7 +6,7 @@ English | [简体中文](./README.md)
 > Prompt history · one-click optimize · next-prompt predict · conversation & file restore · model bill · context details · Auto routing · per-provider balance — inside the official conversation and settings, no extra window.
 
 [![npm](https://img.shields.io/npm/v/dsh-agent-enhancer.svg)](https://www.npmjs.com/package/dsh-agent-enhancer)
-[![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5%20%3C0.3.0-blue)](https://www.npmjs.com/package/dsh-agent-enhancer)
+[![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.2--rc.1%20%3C0.3.0-blue)](https://www.npmjs.com/package/dsh-agent-enhancer)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
@@ -17,7 +17,7 @@ English | [简体中文](./README.md)
 | Category | You want to… | Do this |
 | --- | --- | --- |
 | **Write** | Revisit / clarify / continue | `↑↓` or `Alt+R`; **Optimize** on the right; after a reply, `Tab` for the gray suggestion |
-| **Restore** | Go back before a turn | **Restore to here** → confirm in preview; **Undo restore** via **+** / `/` when available |
+| **Restore** | Go back before a turn | **Checkpoint timeline** / **Restore to here** → confirm in preview; **Undo restore** via **+** / `/` when available |
 | **Usage & cost** | See tokens spent and remaining credit | **Token usage** → **Model bill**; **Settings → Models** for per-account balance; helpers can use a cheaper model or Auto |
 | **Context** | See how full the window is | Context meter → right-pane details; optional **Compress context** |
 | **Routing** | Let the session pick a strength tier | Choose **Auto** in the model list; map Instant / Thinking / Pro in settings |
@@ -34,7 +34,7 @@ Grouped by capability; screenshots share a row so new features extend the matchi
 | Category | Includes | How to use | Notes |
 | --- | --- | --- | --- |
 | **Write** | History · Optimize · Predict | First/last-line `↑↓`; `Alt+R` (`Ctrl+R` where available); Optimize on the right (undo; selection-only when selected); gray suggestion after a reply, `Tab` to accept | Current loaded session only; `Enter` fills without sending; chip drafts ignore history keys; vague drafts gain detail, specific drafts stay lean; at most one prediction per turn |
-| **Restore** | Restore to here · Undo restore | Restore on the message → preview conversation-only or + tracked files; after restore open **+** / `/` → **Undo restore** (while a tip remains) | No processes / terminals / untracked files |
+| **Restore** | Checkpoint timeline · Restore to here · Undo restore | Open session stats from the composer “N turns / M steps” pill, then click the **Session statistics** title row; or the **Checkpoint timeline** icon on a user message; restore from the timeline or **Restore to here** → preview conversation-only or + tracked files; after restore open **+** / `/` → **Undo restore** (while a tip remains) | No processes / terminals / untracked files; existing checkpoints stay if you turn the switch off |
 | **Usage & cost** | Token usage · Model bill · Per-provider balance | Open the bill from the usage title (today / 7d / 30d / all); **Settings → Models** for DeepSeek account / API-key balances | Local input / output / cache-read totals, heatmap, feature share; “≈ ¥” from official rates (not an invoice); account uses Platform wallets, API key uses `/user/balance`; two decimal places |
 | **Context** | Meter · Details · Compact | Open the meter into the right pane; drill into categories; one-click official `/compact` | System / tools / messages breakdown; numbers are heuristic estimates, not bill-precise |
 | **Routing** | Auto · Tier maps · Optional classifier | Pick **Auto** in the model list; map Instant / Thinking / Pro; optional small-model classifier | Bilingual heuristic by default; classifier failures fall back; optimize / predict may also use Auto or a fixed model |
@@ -46,7 +46,7 @@ Grouped by capability; screenshots share a row so new features extend the matchi
 | Category | Toggles / config | Default | Effect |
 | --- | --- | --- | --- |
 | **Write** | `historyEnabled` · `optimizeEnabled` · `predictEnabled` | All on | `↑↓` / `Alt+R`; optimize & undo (model pill); gray predict (model pill) |
-| **Restore** | `rollbackEnabled` | On | **Restore to here**; **+** / `/` **Undo restore** |
+| **Restore** | `rollbackEnabled` | On | Checkpoint timeline; **Restore to here**; **+** / `/` **Undo restore** |
 | **Context** | `contextInspectEnabled` | On | Context meter → right-pane details |
 | **Routing** | `autoClassifierEnabled`, etc. | Classifier off | Session / helpers may use Auto; tier maps; optional classifier |
 | **Maintenance** | Plugin updates | — | Check/apply for npm installs; link installs show guidance only |
@@ -58,7 +58,7 @@ Model pills default to **Follow session**, or pick provider / model / reasoning 
 | Category | What you see | Preview |
 | --- | --- | --- |
 | **Write** | History search; optimize control and gray prediction | ![History search](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/prompt-history.png) ![Optimize & predict](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/optimize-and-predict.png) |
-| **Restore** | Entry → preview scope → undo restore | ![Rollback entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-entry.png) ![Rollback preview](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-preview.png) ![Undo restore](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/undo-restore.png) |
+| **Restore** | Session-stats / message timeline entry → restore → preview → undo | ![Session stats entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/checkpoint-session-stats-entry.png) ![Checkpoint timeline entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/checkpoint-timeline-entry.png) ![Rollback entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-entry.png) ![Rollback preview](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-preview.png) ![Undo restore](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/undo-restore.png) |
 | **Usage & cost** | Token usage entry, model bill, per-provider balance | ![Token usage](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/token-usage-meter.png) ![Model bill](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/model-bill.png) ![Provider balance](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/provider-balance.png) |
 | **Context** | Meter summary and right-pane details / compact | ![Context meter](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/context-meter.png) ![Context details](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/context-details.png) |
 | **Routing** | Auto in the model list; tier maps and optional classifier | ![Auto picker](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/auto-model-picker.png) ![Auto routing](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/auto-routing-settings.png) |
@@ -95,7 +95,7 @@ Then open the **Plugin Market** tab, search, and install this plugin. Some third
 When the `dsh` CLI is available and you intend to write the **desktop** profile:
 
 ```sh
-dsh plugin --profile desktop add dsh-agent-enhancer@0.3.0
+dsh plugin --profile desktop add dsh-agent-enhancer@0.3.1
 ```
 
 Or unpinned: `dsh plugin --profile desktop add dsh-agent-enhancer`.  
@@ -104,12 +104,24 @@ You should then see the optimize control and **Agent Enhance** in settings.
 
 ### Local directory (development)
 
-`dsh plugin` forwards arguments to pnpm inside the profile directory. Pass an **absolute path** so the profile stores `link:<path>` and adds the bundle:
+**Do not** run `dsh plugin --profile desktop add <absolute-path>` against this repo: some Desktop / CLI builds rewrite the plugin's `package.json` into `@deepseek-ai/dsh-desktop-runtime` dependencies and break the tree. Link manually instead:
 
 ```powershell
 corepack pnpm install --frozen-lockfile
 corepack pnpm build
-dsh plugin --profile desktop add ((Resolve-Path .).Path)
+
+$Repo = (Resolve-Path .).Path -replace '\\','/'
+$ProfileDir = if ($env:DSH_HOME) { Join-Path $env:DSH_HOME 'profiles\desktop' } else { Join-Path $env:USERPROFILE '.dsh\profiles\desktop' }
+$ProfilePkg = Join-Path $ProfileDir 'package.json'
+$json = Get-Content -LiteralPath $ProfilePkg -Raw | ConvertFrom-Json
+if (-not $json.dependencies) { $json | Add-Member -NotePropertyName dependencies -NotePropertyValue ([pscustomobject]@{}) }
+$json.dependencies | Add-Member -NotePropertyName 'dsh-agent-enhancer' -NotePropertyValue "link:$Repo" -Force
+$bundles = @($json.dsh.profile.bundles)
+if ($bundles -notcontains 'dsh-agent-enhancer') {
+  $json.dsh.profile.bundles = @($bundles + 'dsh-agent-enhancer')
+}
+($json | ConvertTo-Json -Depth 20) | Set-Content -LiteralPath $ProfilePkg -Encoding utf8
+dsh plugin --profile desktop install
 ```
 
 Fully quit and restart Desktop afterward. Later code changes only need `corepack pnpm build` (Desktop loads `lib/`).  
@@ -134,7 +146,7 @@ Keep host-shared DSH packages in both `peerDependencies` and `devDependencies`, 
 
 ## Compatibility
 
-- **DSH:** `>=0.2.1-rc.5 <0.3.0-0` (`0.2.1-rc.3` fails to load)
+- **DSH:** `>=0.2.2-rc.1 <0.3.0-0` (Desktop `0.2.2-rc.1`+)
 
 ---
 

@@ -19,7 +19,10 @@ import { buildAuxiliaryModelCatalog } from './catalog.ts'
 import { DshCheckpointSessions } from './checkpoint/dsh.ts'
 import { DshCheckpointCaptureSwitch } from './checkpoint/live.ts'
 import { CheckpointRollbackError, CheckpointRollbackService } from './checkpoint/service.ts'
-import type { CheckpointRollbackRequest } from './checkpoint/service.ts'
+import type {
+  CheckpointRollbackRequest,
+  CheckpointSummariesRequest,
+} from './checkpoint/service.ts'
 import { CheckpointStore } from './checkpoint/store.ts'
 import type { Session, SessionStore } from '@deepseek-ai/dsh-session'
 import { compactContextNow, resolveCompactRouteOverride } from './context-compact.ts'
@@ -409,10 +412,11 @@ export function apply(ctx: Context, config: Config): void {
   })
 
   ctx.effect(() => {
-    const unsubscribe = ctx.on('internal/update', (updated, _noSave, next) => {
-      rollbackEnabled = (updated as Config).rollbackEnabled.get()
+    // Cordis 4.1: internal/update is (resolvedConfig, next); noSave moved to Fiber.update.
+    const unsubscribe = ctx.on('internal/update', (resolvedConfig, next) => {
+      rollbackEnabled = (resolvedConfig as Config).rollbackEnabled.get()
       captures.setEnabled(rollbackEnabled)
-      next()
+      return next()
     })
     captures.setEnabled(rollbackEnabled)
     return async () => {
@@ -450,6 +454,15 @@ export class CheckpointRollbackRemoteService extends TypertRemoteService {
     this.assertOwner()
     try {
       return await this.rollback.execute(request, signal)
+    } catch (error) {
+      throw this.remoteError(error, signal)
+    }
+  }
+
+  async summaries(request: CheckpointSummariesRequest, signal: AbortSignal) {
+    this.assertOwner()
+    try {
+      return await this.rollback.summaries(request, signal)
     } catch (error) {
       throw this.remoteError(error, signal)
     }

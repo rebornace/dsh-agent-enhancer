@@ -10,8 +10,8 @@ import {
 const request: CheckpointRollbackRequest = { sessionId: 'session-1' as SessionId, turn: 2 }
 
 describe('checkpoint rollback Client Remote', () => {
-  it('declares only preview and execute with cancellation and strict result codecs', () => {
-    expect(checkpointClientRemoteInfo.descriptors).toHaveLength(2)
+  it('declares preview, execute, and summaries with cancellation and strict result codecs', () => {
+    expect(checkpointClientRemoteInfo.descriptors).toHaveLength(3)
     expect(checkpointClientRemoteInfo.descriptors).toEqual(expect.arrayContaining([
       expect.objectContaining({
         namespace: 'checkpointRollback', method: 'preview', service: 'checkpointRollback',
@@ -19,6 +19,10 @@ describe('checkpoint rollback Client Remote', () => {
       }),
       expect.objectContaining({
         namespace: 'checkpointRollback', method: 'execute', service: 'checkpointRollback',
+        cancellation: { parameter: 'signal' },
+      }),
+      expect.objectContaining({
+        namespace: 'checkpointRollback', method: 'summaries', service: 'checkpointRollback',
         cancellation: { parameter: 'signal' },
       }),
     ]))
@@ -38,15 +42,37 @@ describe('checkpoint rollback Client Remote', () => {
       ok: true as const,
       value: { sessionId: request.sessionId, turn: 2, draft: 'editable prompt' },
     }))
-    const remote = { checkpointRollback: { preview, execute } }
+    const summaries = vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        sessionId: request.sessionId,
+        turns: [{
+          turn: 2,
+          coverage: 'complete' as const,
+          fileCount: 1,
+          createdAt: 1,
+          atSeq: 5,
+          prompt: 'hi',
+          promptPreview: 'hi',
+          files: [{ path: 'a.ts', change: 'modify' as const }],
+          gaps: [],
+          rolledBack: false,
+          tip: false,
+        }],
+      },
+    }))
+    const remote = { checkpointRollback: { preview, execute, summaries } }
     const signal = new AbortController().signal
 
     await expect(checkpointRollbackRemote.preview(remote, request, signal)).resolves.toMatchObject({ turn: 2 })
     await expect(checkpointRollbackRemote.execute(remote, request, signal)).resolves.toEqual({
       sessionId: request.sessionId, turn: 2, draft: 'editable prompt',
     })
+    await expect(checkpointRollbackRemote.summaries(remote, { sessionId: request.sessionId }, signal))
+      .resolves.toMatchObject({ turns: [{ turn: 2, fileCount: 1 }] })
     expect(preview).toHaveBeenCalledWith(request, signal)
     expect(execute).toHaveBeenCalledWith(request, signal)
+    expect(summaries).toHaveBeenCalledWith({ sessionId: request.sessionId }, signal)
   })
 
   it('preserves stable rollback categories and hides transport details', async () => {

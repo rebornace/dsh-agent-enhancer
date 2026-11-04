@@ -33,8 +33,21 @@ import type { AutoTierRoute } from './types.ts'
  * `agent/request` copies it onto the next call config. The `prepareCall`
  * wrapper below reroutes only that sentinel, once per call, and does not
  * write the resolved tier back onto the session.
+ *
+ * DSH 0.2.2 freezes the step model before prompt assembly / pre-step and asks
+ * plugins to prefer `agent.model` over mutating `agent/request`. Remapping the
+ * Auto sentinel inside `prepareCall` still runs before the provider stream and
+ * keeps the session seat on the sentinel (so the picker stays on Auto).
  */
 const AUTO_CATALOG_NAME = 'Auto'
+/**
+ * Compaction (compaction-basic) rejects `selectModel` when the target route has
+ * no positive `context.contextWindow`. Auto never streams, but switching onto
+ * the sentinel still runs that preflight — advertise a generous capacity so
+ * the picker can land on Auto; `prepareCall` remaps to a concrete tier before
+ * the provider call, where the real model's window applies.
+ */
+const AUTO_CONTEXT_WINDOW = 524_288
 
 interface TurnNote {
   readonly text: string
@@ -88,6 +101,7 @@ class AutoCatalogAdapter extends LlmAdapter {
       id: model,
       name: AUTO_CATALOG_NAME,
       inputModalities: ['text'],
+      context: { contextWindow: AUTO_CONTEXT_WINDOW },
     })
   }
 

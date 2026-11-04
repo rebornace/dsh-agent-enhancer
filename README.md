@@ -6,7 +6,7 @@
 > 历史回顾 · 一键优化 · 下一条预测 · 对话与文件恢复 · 模型账单 · 上下文明细 · Auto 路由 · 分账号余额 —— 嵌在官方会话与设置里，不用另开窗口。
 
 [![npm](https://img.shields.io/npm/v/dsh-agent-enhancer.svg)](https://www.npmjs.com/package/dsh-agent-enhancer)
-[![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.5%20%3C0.3.0-blue)](https://www.npmjs.com/package/dsh-agent-enhancer)
+[![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.2--rc.1%20%3C0.3.0-blue)](https://www.npmjs.com/package/dsh-agent-enhancer)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
@@ -17,7 +17,7 @@
 | 类别 | 你想… | 怎么做 |
 | --- | --- | --- |
 | **写提示** | 找回 / 改清楚 / 接着问 | `↑↓` 或 `Alt+R`；右侧 **优化**；回复后 `Tab` 采纳灰字 |
-| **回退** | 回到某一轮之前 | **恢复到这里** → 预览确认；需要时用 **+** / `/` **撤销恢复** |
+| **回退** | 回到某一轮之前 | **检查点时间线** / **恢复到这里** → 预览确认；需要时用 **+** / `/` **撤销恢复** |
 | **用量与成本** | 看 token 花多少、账号还剩多少 | **Token 用量** → **模型账单**；**设置 → 模型** 看分账号余额；辅助模型可单独选更便宜档或 Auto |
 | **上下文** | 看窗口占了多少 | 占用环 → 右侧栏明细；可 **压缩上下文** |
 | **模型路由** | 让会话自己选强弱档 | 模型列表选 **Auto**；设置里映射 Instant / Thinking / Pro |
@@ -34,7 +34,7 @@
 | 类别 | 包含 | 怎么用 | 要点 |
 | --- | --- | --- | --- |
 | **写提示** | 历史 · 优化 · 预测 | 首/末行 `↑↓`；`Alt+R`（兼容 `Ctrl+R`）；右侧优化（可撤销，有选区只改选区）；回复后灰字，`Tab` 采纳 | 仅当前已加载会话；`Enter` 只填不发；chip 草稿不误触历史；模糊稿补全、明确稿少改；预测每轮最多一条 |
-| **回退** | 恢复到这里 · 撤销恢复 | 消息旁恢复 → 预览选仅对话或含已跟踪文件；恢复后 **+** / `/` 选 **撤销恢复**（有 tip 时） | 不恢复进程 / 终端 / 未跟踪文件等 |
+| **回退** | 检查点时间线 · 恢复到这里 · 撤销恢复 | 底部「N 轮 M 步」打开会话统计，点标题行 **会话统计**；或用户消息旁 **检查点时间线** 图标；时间线 / 消息旁 **恢复到这里** → 预览仅对话或含已跟踪文件；恢复后 **+** / `/` **撤销恢复**（有 tip 时） | 不恢复进程 / 终端 / 未跟踪文件等；关闭开关后保留已有检查点 |
 | **用量与成本** | Token 用量 · 模型账单 · 分账号余额 | 点用量标题进右侧栏账单（今天 / 7 天 / 30 天 / 全部）；**设置 → 模型** 看 DeepSeek 账号 / API Key 余额 | 本地汇总输入 / 输出 / 缓存读、热力与功能占比；「约 ¥」按官方价估算非发票；账号走 Platform 钱包、API Key 走 `/user/balance`；金额两位小数 |
 | **上下文** | 占用环 · 上下文明细 · 压缩 | 点占用环进右侧栏；可跳转分项明细；一键调用官方 `/compact` | 拆分系统提示 / 工具 / 消息；数字为启发式约值，非账单精确值 |
 | **模型路由** | Auto · 档位映射 · 可选分类器 | 模型列表选 **Auto**；设置映射 Instant / Thinking / Pro；可选开小模型分类 | 默认中英双语启发式；分类失败回退启发式；优化 / 预测也可选 Auto 或指定模型 |
@@ -46,7 +46,7 @@
 | 类别 | 开关 / 配置 | 默认 | 作用 |
 | --- | --- | --- | --- |
 | **写提示** | `historyEnabled` · `optimizeEnabled` · `predictEnabled` | 均开 | `↑↓` / `Alt+R`；优化与撤销（旁有模型药丸）；灰字预测（旁有模型药丸） |
-| **回退** | `rollbackEnabled` | 开 | 「恢复到这里」；`+` / `/`「撤销恢复」 |
+| **回退** | `rollbackEnabled` | 开 | 检查点时间线；「恢复到这里」；`+` / `/`「撤销恢复」 |
 | **上下文** | `contextInspectEnabled` | 开 | 占用环 → 右侧栏明细 |
 | **模型路由** | `autoClassifierEnabled` 等 | 分类器关 | 会话 / 辅助可选 Auto；档位映射；可选小模型分类 |
 | **维护** | 插件更新 | — | npm 安装可检查更新；链接安装仅说明 |
@@ -58,7 +58,7 @@
 | 类别 | 说明 | 预览 |
 | --- | --- | --- |
 | **写提示** | 历史搜索；优化入口与灰字预测 | ![历史搜索](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/prompt-history.png) ![优化与预测](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/optimize-and-predict.png) |
-| **回退** | 恢复入口 → 预览范围 → 撤销恢复 | ![回滚入口](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-entry.png) ![回滚预览](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-preview.png) ![撤销恢复](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/undo-restore.png) |
+| **回退** | 会话统计 / 消息旁时间线入口 → 恢复 → 预览 → 撤销 | ![会话统计入口](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/checkpoint-session-stats-entry.png) ![检查点时间线入口](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/checkpoint-timeline-entry.png) ![回滚入口](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-entry.png) ![回滚预览](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-preview.png) ![撤销恢复](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/undo-restore.png) |
 | **用量与成本** | Token 用量入口、模型账单、分账号余额 | ![Token 用量](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/token-usage-meter.png) ![模型账单](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/model-bill.png) ![分账号余额](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/provider-balance.png) |
 | **上下文** | 占用摘要与右侧栏明细 / 压缩 | ![上下文占用](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/context-meter.png) ![上下文明细](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/context-details.png) |
 | **模型路由** | 模型列表 Auto；档位映射与可选分类器 | ![Auto 选择](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/auto-model-picker.png) ![Auto 路由](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/auto-routing-settings.png) |
@@ -95,7 +95,7 @@
 本机已配置 `dsh` CLI、且要写入 **desktop** profile 时：
 
 ```sh
-dsh plugin --profile desktop add dsh-agent-enhancer@0.3.0
+dsh plugin --profile desktop add dsh-agent-enhancer@0.3.1
 ```
 
 也可不钉版本：`dsh plugin --profile desktop add dsh-agent-enhancer`。  
@@ -104,12 +104,24 @@ dsh plugin --profile desktop add dsh-agent-enhancer@0.3.0
 
 ### 本地目录（开发）
 
-`dsh plugin` 会把参数原样转给 profile 目录里的 pnpm。对本地仓库要用**绝对路径**，这样会写入 `link:<路径>` 并加入 bundles：
+**不要**对本地仓库执行 `dsh plugin --profile desktop add <绝对路径>`：部分 Desktop / CLI 会把仓库里的 `package.json` 改写成 `@deepseek-ai/dsh-desktop-runtime` 依赖，破坏开发树。请手动 `link:`：
 
 ```powershell
 corepack pnpm install --frozen-lockfile
 corepack pnpm build
-dsh plugin --profile desktop add ((Resolve-Path .).Path)
+
+$Repo = (Resolve-Path .).Path -replace '\\','/'
+$ProfileDir = if ($env:DSH_HOME) { Join-Path $env:DSH_HOME 'profiles\desktop' } else { Join-Path $env:USERPROFILE '.dsh\profiles\desktop' }
+$ProfilePkg = Join-Path $ProfileDir 'package.json'
+$json = Get-Content -LiteralPath $ProfilePkg -Raw | ConvertFrom-Json
+if (-not $json.dependencies) { $json | Add-Member -NotePropertyName dependencies -NotePropertyValue ([pscustomobject]@{}) }
+$json.dependencies | Add-Member -NotePropertyName 'dsh-agent-enhancer' -NotePropertyValue "link:$Repo" -Force
+$bundles = @($json.dsh.profile.bundles)
+if ($bundles -notcontains 'dsh-agent-enhancer') {
+  $json.dsh.profile.bundles = @($bundles + 'dsh-agent-enhancer')
+}
+($json | ConvertTo-Json -Depth 20) | Set-Content -LiteralPath $ProfilePkg -Encoding utf8
+dsh plugin --profile desktop install
 ```
 
 然后完全退出并重启 Desktop。之后改代码只需再执行 `corepack pnpm build`（加载的是 `lib/`）。  
@@ -134,7 +146,7 @@ dsh plugin --profile desktop add ((Resolve-Path .).Path)
 
 ## 兼容
 
-- **DSH：** `>=0.2.1-rc.5 <0.3.0-0`（`0.2.1-rc.3` 无法加载）
+- **DSH：** `>=0.2.2-rc.1 <0.3.0-0`（Desktop `0.2.2-rc.1`+）
 
 ---
 

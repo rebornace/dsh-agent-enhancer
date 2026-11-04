@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Auto 切模**：为 `agent-enhancer/auto` 哨兵补上 `context.contextWindow`，避免 Desktop `0.2.2` compaction-basic 报 `no context capacity for agent-enhancer/auto` 而无法选中 Auto。
+
+### Docs
+
+- README 中英文补齐 **检查点** 入口：会话统计弹层「会话统计」行、用户消息旁「检查点时间线」图标；截图见 `docs/images/checkpoint-session-stats-entry.png`、`checkpoint-timeline-entry.png`。
+
+## 0.3.1 - 2026-11-04
+
+### Changed
+
+- 兼容 **DSH Desktop `0.2.2-rc.1`**：peer/dev 依赖升至 `0.2.2-rc.1`，Cordis `4.1.0`；`engines.dsh` 改为 `>=0.2.2-rc.1 <0.3.0-0`。
+- 适配 Cordis 4.1 `internal/update(resolvedConfig, next)`；composer `InputActions.insertQuote`；投影 `stateOf` 的 `unknown` 返回类型与用量 `purpose` 扩展点。
+
 ## 0.3.0 - 2026-11-04
 
 ### Added

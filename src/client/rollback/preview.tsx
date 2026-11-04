@@ -4,6 +4,12 @@ import { blockingUnavailable } from '../../host/checkpoint/availability.ts'
 import type { CheckpointRollbackScope, CheckpointUnavailable } from '../../host/checkpoint/availability.ts'
 import type { FileConflict } from '../../host/checkpoint/files.ts'
 import styles from '../styles.module.css'
+import { rollbackFailureMessageKey } from './failure.ts'
+import {
+  previewMessageRole,
+  truncatePreviewText,
+  type PreviewMessageRole,
+} from './format.ts'
 import type { RollbackActive } from './types.ts'
 
 const UNAVAILABLE_KEYS: Record<CheckpointUnavailable, Parameters<TranslateNS<'agent-enhancer'>>[0]> = {
@@ -15,11 +21,12 @@ const UNAVAILABLE_KEYS: Record<CheckpointUnavailable, Parameters<TranslateNS<'ag
   'session-running': 'rollbackUnavailableRunning',
   'permission-denied': 'rollbackUnavailablePermission',
   'rollback-disabled': 'rollbackUnavailableDisabled',
-  'first-turn': 'rollbackUnavailableFirstTurn',
   'incompatible-session': 'rollbackUnavailableIncompatible',
   'compacted-surface': 'rollbackUnavailableCompacted',
   'subagent-session': 'rollbackUnavailableSubagent',
   'unknown-surface': 'rollbackUnavailableUnknown',
+  'already-restored': 'rollbackUnavailableAlready',
+  'covered-by-earlier-restore': 'rollbackUnavailableCovered',
 }
 
 const CONFLICT_KEYS: Record<FileConflict['reason'], Parameters<TranslateNS<'agent-enhancer'>>[0]> = {
@@ -33,9 +40,18 @@ const CONFLICT_KEYS: Record<FileConflict['reason'], Parameters<TranslateNS<'agen
   'hash-mismatch': 'rollbackConflictHash',
 }
 
-export function RollbackPreview({ active, t }: {
+const ROLE_KEYS: Record<PreviewMessageRole, Parameters<TranslateNS<'agent-enhancer'>>[0]> = {
+  user: 'rollbackRole_user',
+  assistant: 'rollbackRole_assistant',
+  tool: 'rollbackRole_tool',
+  system: 'rollbackRole_system',
+  other: 'rollbackRole_other',
+}
+
+export function RollbackPreview({ active, t, onOpenTimeline }: {
   readonly active: RollbackActive
   readonly t: TranslateNS<'agent-enhancer'>
+  readonly onOpenTimeline?: (turn: number) => void
 }) {
   if (active.status === 'loading' || active.status === 'executing') {
     const loadingKey = active.status === 'loading'
@@ -43,7 +59,9 @@ export function RollbackPreview({ active, t }: {
       : active.operation === 'undo' ? 'rollbackUndoRestoring' : 'rollbackRestoring'
     return <p role="status">{t(loadingKey)}</p>
   }
-  if (active.status === 'error') return <p role="alert">{t('rollbackFailed')}</p>
+  if (active.status === 'error') {
+    return <p role="alert">{t(rollbackFailureMessageKey(active.errorCode))}</p>
+  }
   const preview = active.preview
   if (preview === undefined) return null
   // Soft capture gaps do not block conversation-only restore — never list them under
@@ -55,14 +73,44 @@ export function RollbackPreview({ active, t }: {
     && blockingUnavailable(preview.unavailable, 'conversation-and-files', {
       trackedFiles: preview.files.length,
     }).length > hardUnavailable.length
+  const alreadyRestored = active.operation !== 'undo'
+    && preview.unavailable.includes('already-restored')
+  const coveredByEarlier = active.operation !== 'undo'
+    && preview.unavailable.includes('covered-by-earlier-restore')
+  const tipTurn = preview.tipTurn
   return <MenuSurface className={styles.rollbackPreview}>
+    <div className={styles.rollbackSummaryRow}>
+      <p className={styles.rollbackSummary} aria-label={t('rollbackSummaryLabel')}>
+        {t('rollbackSummary', { messages: preview.messages.length, files: preview.files.length })}
+      </p>
+      {onOpenTimeline === undefined || active.operation === 'undo' ? null
+        : <button
+          type="button"
+          className={styles.rollbackTimelineLink}
+          onClick={() => { onOpenTimeline(active.turn) }}
+        >
+          {t('rollbackTimelineOpen')}
+        </button>}
+    </div>
+    {alreadyRestored
+      ? <p className={styles.rollbackAlready} role="status">{t('rollbackAlreadyRestored')}</p>
+      : null}
+    {coveredByEarlier
+      ? <p className={styles.rollbackAlready} role="status">
+        {t('rollbackCoveredByEarlier', { tipTurn: tipTurn ?? active.turn })}
+      </p>
+      : null}
     <section className={styles.rollbackSection} aria-label={t('rollbackMessages')}>
       <h3>{t('rollbackMessages')}</h3>
       {preview.messages.length === 0 ? <p>{t('rollbackNoMessages')}</p> : <ul className={styles.rollbackList}>
-        {preview.messages.map(message => <li key={message.seq} className={styles.rollbackMessage}>
-          <span className={styles.rollbackMeta}>{message.type} · {message.seq}</span>
-          <span>{message.text}</span>
-        </li>)}
+        {preview.messages.map(message => {
+          const role = previewMessageRole(message.type)
+          const text = truncatePreviewText(message.text)
+          return <li key={message.seq} className={styles.rollbackMessage}>
+            <span className={styles.rollbackMeta}>{t(ROLE_KEYS[role])}</span>
+            <span>{text.length === 0 ? t('rollbackMessageEmpty') : text}</span>
+          </li>
+        })}
       </ul>}
     </section>
     <section className={styles.rollbackSection} aria-label={t('rollbackFiles')}>
@@ -86,7 +134,11 @@ export function RollbackPreview({ active, t }: {
     {preview.conflicts.length === 0 ? null : <section className={styles.rollbackSection} aria-label={t('rollbackConflicts')}>
       <h3>{t('rollbackConflicts')}</h3>
       <ul className={styles.rollbackList}>{preview.conflicts.map(conflict => <li key={`${conflict.path}:${conflict.reason}`}>
-        <span>{conflict.path}</span><span className={styles.rollbackConflict}>{t(CONFLICT_KEYS[conflict.reason])}</span>
+        <span>{conflict.path}</span>
+        <span className={styles.rollbackConflict}>
+          {t(CONFLICT_KEYS[conflict.reason])}
+          {conflict.reason === 'hash-mismatch' ? ` · ${t('rollbackConflictHashHint')}` : null}
+        </span>
       </li>)}</ul>
     </section>}
   </MenuSurface>
@@ -97,6 +149,8 @@ export function rollbackModalCopy(
   t: TranslateNS<'agent-enhancer'>,
   turn: number,
   scope?: CheckpointRollbackScope,
+  alreadyRestored = false,
+  coveredByEarlier = false,
 ): {
   readonly title: string
   readonly description: string
@@ -116,11 +170,21 @@ export function rollbackModalCopy(
       executingConversation: t('rollbackUndoRestoringConversation'),
     }
   }
+  if (coveredByEarlier) {
+    return {
+      title: t('rollbackTitle', { turn }),
+      description: t('rollbackScopeCovered'),
+      confirm: t('rollbackConfirm'),
+      confirmConversation: t('rollbackConfirmConversation'),
+      executing: t('rollbackRestoring'),
+      executingConversation: t('rollbackRestoringConversation'),
+    }
+  }
   return {
     title: t('rollbackTitle', { turn }),
-    description: t('rollbackScope'),
-    confirm: t('rollbackConfirm'),
-    confirmConversation: t('rollbackConfirmConversation'),
+    description: t(alreadyRestored ? 'rollbackScopeAlready' : 'rollbackScope'),
+    confirm: t(alreadyRestored ? 'rollbackConfirmAlready' : 'rollbackConfirm'),
+    confirmConversation: t(alreadyRestored ? 'rollbackConfirmConversationAlready' : 'rollbackConfirmConversation'),
     executing: t('rollbackRestoring'),
     executingConversation: t('rollbackRestoringConversation'),
   }

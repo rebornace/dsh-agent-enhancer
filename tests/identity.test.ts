@@ -22,5 +22,11 @@ describe('package identity', () => {
     expect(isUndoId('dsh-composer-enhancer:undo:restore-1:0')).toBe(true)
     expect(turnFromRollbackId('dsh-composer-enhancer:rollback:7:x')).toBe(7)
     expect(turnFromRollbackId('dsh-agent-enhancer:rollback:3:c:x')).toBe(3)
+    expect(turnFromRollbackId(
+      'dsh-agent-enhancer:undo:j1:2:15:dsh-agent-enhancer:rollback:2:j0',
+    )).toBe(2)
+    expect(turnFromRollbackId(
+      'dsh-composer-enhancer:undo:j1:0:9:dsh-composer-enhancer:rollback:4:c:j0',
+    )).toBe(4)
   })
 })

@@ -5,6 +5,8 @@ import type {
   CheckpointRollbackPreview,
   CheckpointRollbackRequest,
   CheckpointRollbackResult,
+  CheckpointSummariesRequest,
+  CheckpointSummariesResult,
 } from '../../host/checkpoint/service.ts'
 
 function codec(typeSymbol: string): TypertCodec {
@@ -16,6 +18,7 @@ function codec(typeSymbol: string): TypertCodec {
 }
 
 const requestCodec = codec('dsh-agent-enhancer#CheckpointRollbackRequest')
+const summariesRequestCodec = codec('dsh-agent-enhancer#CheckpointSummariesRequest')
 
 export const checkpointClientRemoteInfo = {
   package: 'dsh-agent-enhancer',
@@ -39,6 +42,16 @@ export const checkpointClientRemoteInfo = {
     parameters: [{ name: 'request', wire: 'request', source: 'json', codec: requestCodec }],
     cancellation: { parameter: 'signal' },
     result: codec('dsh-agent-enhancer#CheckpointRollbackResult'),
+  }, {
+    id: 'dsh-agent-enhancer#checkpointRollback/summaries',
+    service: 'checkpointRollback',
+    namespace: 'checkpointRollback',
+    method: 'summaries',
+    implementation: 'summaries',
+    invocation: { kind: 'direct' },
+    parameters: [{ name: 'request', wire: 'request', source: 'json', codec: summariesRequestCodec }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#CheckpointSummariesResult'),
   }],
 } satisfies TypertRemoteContribution
 
@@ -49,9 +62,17 @@ export class CheckpointRollbackClientError extends Error {
   }
 }
 
-type Call = (request: CheckpointRollbackRequest, signal?: AbortSignal) => Promise<RemoteResult<unknown>>
+type Call = (
+  request: CheckpointRollbackRequest | CheckpointSummariesRequest,
+  signal?: AbortSignal,
+) => Promise<RemoteResult<unknown>>
 
-async function invoke(remote: unknown, method: 'preview' | 'execute', request: CheckpointRollbackRequest, signal?: AbortSignal) {
+async function invoke(
+  remote: unknown,
+  method: 'preview' | 'execute' | 'summaries',
+  request: CheckpointRollbackRequest | CheckpointSummariesRequest,
+  signal?: AbortSignal,
+) {
   const namespace = Reflect.get(remote as object, 'checkpointRollback') as object
   const call = Reflect.get(namespace, method) as Call
   let result: RemoteResult<unknown>
@@ -75,5 +96,8 @@ export const checkpointRollbackRemote = {
   },
   execute(remote: unknown, request: CheckpointRollbackRequest, signal?: AbortSignal) {
     return invoke(remote, 'execute', request, signal) as Promise<CheckpointRollbackResult>
+  },
+  summaries(remote: unknown, request: CheckpointSummariesRequest, signal?: AbortSignal) {
+    return invoke(remote, 'summaries', request, signal) as Promise<CheckpointSummariesResult>
   },
 }

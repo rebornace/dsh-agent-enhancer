@@ -169,6 +169,61 @@ export class CheckpointStore {
     return parsed.data.checkpoints
   }
 
+  /**
+   * Replace the full per-session checkpoint list (used to drop undo-shell junk).
+   * Empty list removes the session file.
+   */
+  async replace(sessionId: SessionId, checkpoints: readonly Checkpoint[]): Promise<void> {
+    await serialize(checkpointQueues, this.checkpointKey(sessionId), async () => {
+      await this.ensureDirectories()
+      const path = this.checkpointPath(sessionId)
+      if (checkpoints.length === 0) {
+        await removeIfPresent(path)
+        return
+      }
+      const next: Checkpoint[] = []
+      for (const checkpoint of checkpoints) {
+        assertCheckpointSchema(checkpoint)
+        const parsed = checkpointSchema.safeParse(checkpoint)
+        if (!parsed.success) throw new CheckpointStoreError('INVALID_CHECKPOINT')
+        if (parsed.data.sessionId !== sessionId) throw new CheckpointStoreError('INVALID_CHECKPOINT')
+        next.push(parsed.data)
+      }
+      next.sort((left, right) => left.createdAt - right.createdAt || left.turn - right.turn || left.id.localeCompare(right.id))
+      await writeAtomic(path, {
+        schemaVersion: CHECKPOINT_SCHEMA_VERSION,
+        checkpoints: next.slice(-MAX_CHECKPOINTS),
+      })
+    })
+  }
+
+  /** Drop settled journal files left behind after compensate / complete races. */
+  async purgeSettledJournals(): Promise<number> {
+    return serialize(journalQueues, this.rootKey, async () => {
+      await this.ensureDirectories()
+      let names: string[]
+      try {
+        names = await readdir(this.journalDirectory)
+      } catch (error) {
+        if (isMissing(error)) return 0
+        throw error
+      }
+      let removed = 0
+      for (const name of names) {
+        if (!name.endsWith('.json')) continue
+        const path = join(this.journalDirectory, name)
+        const stored = await this.readJson(path)
+        assertCheckpointSchema(stored)
+        const parsed = journalSchema.safeParse(stored)
+        if (!parsed.success) continue
+        if (parsed.data.status === 'prepared' || parsed.data.status === 'files-restored') continue
+        await removeIfPresent(path)
+        removed += 1
+      }
+      return removed
+    })
+  }
+
   async recoverInterruptedWrites(sessionId: SessionId): Promise<void> {
     await serialize(checkpointQueues, this.checkpointKey(sessionId), async () => {
       await this.ensureDirectories()

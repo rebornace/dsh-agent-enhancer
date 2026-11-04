@@ -1,6 +1,7 @@
 import type { ContextInspectCategory } from '../../host/context-inspect.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { USAGE_TAB_KIND } from '../dsh/usage-kind.ts'
+import { CHECKPOINT_TIMELINE_TAB_KIND } from '../rollback/timeline-kind.ts'
 import { CONTEXT_INSPECT_TAB_KIND } from './tab.ts'
 
 export interface SidebarRightOpenTab {
@@ -61,4 +62,12 @@ export function openContextInspectTab(
 /** Open the model bill; poll briefly until the rightbar session surface is mounted. */
 export function openUsageTab(sidebarRight: SidebarRightOpenTab | undefined): () => void {
   return openRightTab(sidebarRight, USAGE_TAB_KIND, {})
+}
+
+/** Open the checkpoint timeline for a session; poll briefly until the rightbar mounts. */
+export function openCheckpointTimelineTab(
+  sidebarRight: SidebarRightOpenTab | undefined,
+  params: { readonly sessionId: SessionId, readonly turn?: number },
+): () => void {
+  return openRightTab(sidebarRight, CHECKPOINT_TIMELINE_TAB_KIND, params)
 }

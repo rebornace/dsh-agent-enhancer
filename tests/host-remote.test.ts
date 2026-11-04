@@ -385,7 +385,7 @@ describe('host composition', () => {
     expect(hostContribution.invocations.map(entry => entry.namespace)).toEqual([
       'agentEnhancer', 'agentEnhancer', 'agentEnhancer', 'agentEnhancer',
       'agentEnhancer', 'agentEnhancer', 'agentEnhancer', 'agentEnhancer',
-      'checkpointRollback', 'checkpointRollback',
+      'checkpointRollback', 'checkpointRollback', 'checkpointRollback',
     ])
     expect(ctx.agentEnhancer).toBeInstanceOf(AgentEnhancerService)
     await ctx.fiber.dispose()

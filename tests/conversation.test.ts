@@ -107,17 +107,29 @@ describe('sentPrompts', () => {
       kind: 'steering', messageId: 'm2', seq: 2, time: 2,
       content: [{ type: 'text', text: 'not arrow history' }], source: { kind: 'user' },
     })
+    const rollbackNotice = node('notice', 'user', {
+      kind: 'user', seq: 4, time: 4,
+      content: [{ type: 'text', text: 'Rolled back before turn 2' }],
+      source: { kind: 'checkpoint-rollback', form: 'notice', summary: 'Rolled back before turn 2' },
+    })
+    const injected = node('inject', 'user', {
+      kind: 'user', seq: 6, time: 6,
+      content: [{ type: 'text', text: 'model-side inject' }],
+      source: { kind: 'agent.inject' },
+    })
     const chat = snapshot([
       user('u1', 1, [{ type: 'text', text: 'first ' }, { type: 'text', text: 'part' }]),
       steering,
       user('blank', 3, [{ type: 'text', text: '  \n' }]),
-      node('assistant', 'assistant', { seq: 4 }),
-      user('u2', 5, [{ type: 'text', text: 'second' }]),
+      rollbackNotice,
+      node('assistant', 'assistant', { seq: 5 }),
+      injected,
+      user('u2', 7, [{ type: 'text', text: 'second' }]),
     ])
 
     expect(sentPrompts(chat)).toEqual([
       { seq: 1, text: 'first part' },
-      { seq: 5, text: 'second' },
+      { seq: 7, text: 'second' },
     ])
     expect(sentPrompts(undefined)).toEqual([])
   })

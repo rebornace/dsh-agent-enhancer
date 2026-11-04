@@ -5,6 +5,7 @@ import {
   activeRollbackContinueAfterSeq,
   activeRollbackHideTurnsFrom,
   filterTurnOutline,
+  undoShellRangesFromEntries,
 } from './transcript.ts'
 
 interface EventSource {
@@ -54,8 +55,10 @@ export function installRollbackTurnOutlineFilter(ctx: Context): () => void {
     const entries = source.getSnapshot().entries
     const hideTurnsFrom = activeRollbackHideTurnsFrom(entries)
     const continueAfterSeq = activeRollbackContinueAfterSeq(entries)
+    const omitShellRanges = undoShellRangesFromEntries(entries)
     const base = hostOutlines.has(sessionId) ? hostOutlines.get(sessionId) : projections.get('turnOutline')
-    const filtered = filterTurnOutline(base, hideTurnsFrom, continueAfterSeq)
+    // Omit Host undo scaffolding turns so the rail does not gain a fake "new round".
+    const filtered = filterTurnOutline(base, hideTurnsFrom, continueAfterSeq, omitShellRanges)
     if (Object.is(filtered, projections.get('turnOutline'))) return
     const currentSeq = Number(projections.seqOf('turnOutline') ?? 0)
     const nextSeq = Number.isFinite(currentSeq) ? currentSeq + 1 : 1

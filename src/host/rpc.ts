@@ -398,17 +398,19 @@ const checkpointUnavailableSchema = z.enum([
   'session-running',
   'permission-denied',
   'rollback-disabled',
-  'first-turn',
   'incompatible-session',
   'compacted-surface',
   'subagent-session',
   'unknown-surface',
+  'already-restored',
+  'covered-by-earlier-restore',
 ])
 const checkpointPreviewSchema = z.strictObject({
   sessionId: sessionIdSchema,
   turn: z.number().int().positive(),
   operation: z.enum(['rollback', 'undo']).optional(),
   scope: checkpointScopeSchema.optional(),
+  tipTurn: z.number().int().positive().optional(),
   messages: z.array(checkpointMessageSchema),
   files: z.array(checkpointFileSchema),
   conflicts: z.array(checkpointConflictSchema),
@@ -419,9 +421,48 @@ const checkpointResultSchema = z.strictObject({
   turn: z.number().int().positive(),
   draft: z.string(),
 })
+export const checkpointSummariesRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+})
+const checkpointGapSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('prompt'), reason: z.literal('non-text-content') }).strict(),
+  z.object({ type: z.literal('workspace'), reason: z.literal('capture-failed') }).strict(),
+])
+const checkpointTurnSummarySchema = z.strictObject({
+  turn: z.number().int().positive(),
+  coverage: z.enum(['complete', 'partial']),
+  fileCount: z.number().int().nonnegative(),
+  createdAt: z.number().int().nonnegative(),
+  atSeq: z.number().int().nonnegative(),
+  prompt: z.string(),
+  promptPreview: z.string(),
+  files: z.array(checkpointFileSchema),
+  gaps: z.array(checkpointGapSchema),
+  rolledBack: z.boolean(),
+  tip: z.boolean(),
+})
+const liveActivityStatsSchema = z.strictObject({
+  turns: z.number().int().nonnegative(),
+  steps: z.number().int().nonnegative(),
+  checkpoints: z.number().int().nonnegative(),
+  liveCheckpoints: z.number().int().nonnegative(),
+})
+const checkpointSummariesResultSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  activity: liveActivityStatsSchema,
+  turns: z.array(checkpointTurnSummarySchema),
+})
 const checkpointRequestCodec = codec('dsh-agent-enhancer#CheckpointRollbackRequest', checkpointRollbackRequestSchema)
 const checkpointPreviewCodec = codec('dsh-agent-enhancer#CheckpointRollbackPreview', checkpointPreviewSchema)
 const checkpointResultCodec = codec('dsh-agent-enhancer#CheckpointRollbackResult', checkpointResultSchema)
+const checkpointSummariesRequestCodec = codec(
+  'dsh-agent-enhancer#CheckpointSummariesRequest',
+  checkpointSummariesRequestSchema,
+)
+const checkpointSummariesResultCodec = codec(
+  'dsh-agent-enhancer#CheckpointSummariesResult',
+  checkpointSummariesResultSchema,
+)
 
 export const checkpointRemoteInfo = createTypertRemoteInfo({
   package: 'dsh-agent-enhancer',
@@ -441,6 +482,19 @@ export const checkpointRemoteInfo = createTypertRemoteInfo({
       parameters: [{ name: 'request', source: 'json', codec: checkpointRequestCodec, strictCodec: checkpointRequestCodec }],
       cancellation: { parameter: 'signal' },
       result: checkpointResultCodec,
+    },
+    'checkpointRollback/summaries': {
+      service: 'checkpointRollback',
+      implementation: 'summaries',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: checkpointSummariesRequestCodec,
+        strictCodec: checkpointSummariesRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: checkpointSummariesResultCodec,
     },
   },
 }, z)

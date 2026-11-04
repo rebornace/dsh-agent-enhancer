@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { installContextMeterEnhance } from '../src/client/context/enhance-meter.ts'
 import { installUsageMeterLink } from '../src/client/dsh/usage-meter.ts'
+import { installSessionStatsCheckpointLink } from '../src/client/rollback/session-stats-meter.ts'
 
 function mountComposerDock(): HTMLElement {
   const dock = document.createElement('div')
@@ -124,6 +125,71 @@ describe('installUsageMeterLink', () => {
     })
     expect(document.querySelector('[data-agent-enhancer-usage]')).toBeNull()
     expect(open).not.toHaveBeenCalled()
+    dispose()
+  })
+})
+
+function mountSessionStatsPanel(): { panel: HTMLElement, title: HTMLElement } {
+  mountComposerDock()
+  const panel = document.createElement('div')
+  panel.setAttribute('role', 'dialog')
+
+  const title = document.createElement('div')
+  title.textContent = '会话统计'
+
+  const dl = document.createElement('dl')
+  for (const [label, value] of [
+    ['模型用时', '27秒'],
+    ['工具调用用时', '17秒'],
+    ['首 token 平均 (TTFT)', '0.8秒'],
+    ['输出速度 (TPS)', '99 tok/s'],
+  ] as const) {
+    const row = document.createElement('div')
+    const dt = document.createElement('dt')
+    dt.textContent = label
+    const dd = document.createElement('dd')
+    dd.textContent = value
+    row.append(dt, dd)
+    dl.append(row)
+  }
+
+  panel.append(title, dl)
+  document.body.append(panel)
+  return { panel, title }
+}
+
+describe('installSessionStatsCheckpointLink', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('wires the 会话统计 title to open the checkpoint timeline', () => {
+    const { title } = mountSessionStatsPanel()
+    const open = vi.fn()
+    const dispose = installSessionStatsCheckpointLink({
+      enabled: () => true,
+      sessionId: () => 's1',
+      open,
+      label: () => 'Checkpoint timeline',
+    })
+
+    expect(title.getAttribute('data-agent-enhancer-checkpoint')).toBe('1')
+    expect(title.getAttribute('aria-label')).toBe('Checkpoint timeline')
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(open).toHaveBeenCalledOnce()
+    dispose()
+  })
+
+  it('ignores Token 用量 and context composition panels', () => {
+    mountTokenUsagePanel()
+    const open = vi.fn()
+    const dispose = installSessionStatsCheckpointLink({
+      enabled: () => true,
+      sessionId: () => 's1',
+      open,
+      label: () => 'Checkpoint timeline',
+    })
+    expect(document.querySelector('[data-agent-enhancer-checkpoint]')).toBeNull()
     dispose()
   })
 })

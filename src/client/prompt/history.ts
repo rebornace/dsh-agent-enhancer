@@ -4,12 +4,18 @@ export interface HistorySnapshot { readonly text: string; readonly index: number
 
 export class PromptHistory {
   constructor(private entries: readonly PromptEntry[]) {
-    const seen = new Set<number>()
-    this.entries = entries.filter(entry => {
-      if (seen.has(entry.seq)) return false
-      seen.add(entry.seq)
+    // Newest-first; one row per exact text (and per seq if the same string raced in).
+    const bySeq = new Map<number, PromptEntry>()
+    for (const entry of entries) {
+      if (!bySeq.has(entry.seq)) bySeq.set(entry.seq, entry)
+    }
+    const newestFirst = [...bySeq.values()].sort((a, b) => b.seq - a.seq)
+    const seenText = new Set<string>()
+    this.entries = newestFirst.filter(entry => {
+      if (seenText.has(entry.text)) return false
+      seenText.add(entry.text)
       return true
-    }).sort((a, b) => b.seq - a.seq)
+    })
   }
 
   previous(index: number | null): HistorySnapshot | null {

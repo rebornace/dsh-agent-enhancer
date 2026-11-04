@@ -1,4 +1,4 @@
-import { isAbsolute, relative, sep } from 'node:path'
+import { isAbsolute, join, relative, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -6,17 +6,50 @@ import type {} from '@deepseek-ai/dsh-tools'
 import type { SessionStore } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
+import { isRollbackId, isUndoId } from '../../identity.ts'
+import { isRollbackScaffoldEvent } from './activity.ts'
 import { captureCheckpoint } from './capture.ts'
 import { readSnapshot, snapshotHash, unsafePath } from './files.ts'
 import type { CurrentSnapshot } from './files.ts'
 import type { CheckpointStore } from './store.ts'
 import type { FileCheckpoint } from './types.ts'
+import { diffSnapshots, scanWorkspace } from './workspace-snapshot.ts'
 
 type LiveAgent = NonNullable<ReturnType<Context['agents']['get']>>
 
 interface TrackedFile {
   readonly path: string
   readonly before: CurrentSnapshot
+}
+
+function isFileMutationTool(name: string): boolean {
+  return /^(?:write_file|edit_file|write|edit|str_replace(?:_editor)?|apply_patch)$/i.test(name)
+}
+
+function isShellTool(name: string): boolean {
+  return /^(?:shell|bash|terminal|run_code|pwsh)/i.test(name)
+}
+
+function filePathFromToolArgs(args: unknown): string | null {
+  if (args === null || typeof args !== 'object') return null
+  const record = args as Record<string, unknown>
+  for (const key of ['path', 'file_path', 'filePath', 'target'] as const) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim() !== '') return value
+  }
+  return null
+}
+
+function agentFromActor(actor: object | undefined, actors: Map<object, LiveAgent>): LiveAgent | undefined {
+  if (actor === undefined) return undefined
+  const mapped = actors.get(actor)
+  if (mapped !== undefined) return mapped
+  // Desktop fires tools/execute with an agent carrier, so non-global listeners
+  // never populate `actors`. write-intent still receives the same exec object,
+  // which carries `.agent` — use it directly.
+  if (!('agent' in actor)) return undefined
+  const agent = (actor as { agent?: LiveAgent }).agent
+  return agent
 }
 
 interface PendingTurn {
@@ -26,6 +59,15 @@ interface PendingTurn {
   readonly files: Map<string, TrackedFile>
   readonly capturing: Set<string>
   incomplete: boolean
+  /**
+   * Undo shells / rollback notices are Host scaffolding. Capturing them would
+   * append fake timeline checkpoints that look like new conversation rounds.
+   */
+  suppressCheckpoint: boolean
+}
+
+function isScaffoldUserPrompt(event: SessionEvent<'user/message'>): boolean {
+  return isUndoId(event.data.id) || isRollbackId(event.data.id) || isRollbackScaffoldEvent(event)
 }
 
 export interface CheckpointCaptureOptions {
@@ -54,6 +96,7 @@ export class DshCheckpointCapture {
             files: new Map(),
             capturing: new Set(),
             incomplete: false,
+            suppressCheckpoint: false,
           })
         }
         return next()
@@ -71,12 +114,24 @@ export class DshCheckpointCapture {
             files: new Map(),
             capturing: new Set(),
             incomplete: false,
+            suppressCheckpoint: false,
           }
           current.turnStart = event
           this.turns.set(session.id, current)
         } else if (event.type === 'user/message') {
           const current = this.turns.get(session.id)
-          if (current !== undefined) current.prompt = event.data
+          if (current === undefined) return
+          // Undo copies keep source.kind === 'user' from the original — detect by id.
+          if (isScaffoldUserPrompt(event)) {
+            current.suppressCheckpoint = true
+            return
+          }
+          // Keep the first direct human prompt. Later user/message events may be
+          // injects, steering, or runtime context that would wipe the preview.
+          if (event.data.source.kind === 'user'
+            && (current.prompt === null || current.prompt.source.kind !== 'user')) {
+            current.prompt = event.data
+          }
         } else if (event.type === 'turn/end') {
           const current = this.turns.get(session.id)
           if (current?.turnStart?.data.turn === event.data.turn) {
@@ -85,25 +140,36 @@ export class DshCheckpointCapture {
           }
         }
       }),
+      // global: Desktop dispatches tools/execute with an agent carrier; without
+      // this flag the host plugin's listener is filtered out and never runs.
       ctx.on('tools/execute', async (exec, next) => {
         if (exec.agent === undefined) return next()
         const current = this.turns.get(exec.agent.id)
-        if (current !== undefined && /^(?:shell|bash|terminal|run_code)/.test(exec.name)) current.incomplete = true
         this.actors.set(exec, exec.agent)
         try {
+          // Observation-policy owns fs/*-intent and never calls next(); snapshot
+          // write/edit paths from the tool args before the mutation runs.
+          if (current !== undefined && isFileMutationTool(exec.name)) {
+            await this.captureToolPath(exec.agent, exec.arguments)
+          }
+          if (current !== undefined && isShellTool(exec.name)) {
+            return await this.captureShellWorkspace(current, next)
+          }
           return await next()
         } finally {
           this.actors.delete(exec)
         }
-      }),
+      }, { global: true }),
+      // Prepend: policy is a single-slot owner that does not call next(). Capture
+      // must wrap it so create/edit before-images still land in the checkpoint.
       ctx.on('fs/write-intent', async (target, actor, next) => {
         await this.captureIntent(target, actor)
         return next()
-      }),
+      }, { prepend: true, global: true }),
       ctx.on('fs/edit-intent', async (target, actor, next) => {
         await this.captureIntent(target, actor)
         return next()
-      }),
+      }, { prepend: true, global: true }),
     )
   }
 
@@ -122,7 +188,7 @@ export class DshCheckpointCapture {
 
   private finish(turn: PendingTurn, turnEnd: SessionEvent<'turn/end'>): void {
     const turnStart = turn.turnStart
-    if (turnStart === null) return
+    if (turnStart === null || turn.suppressCheckpoint) return
     const operation = captureCheckpoint({
       store: {
         save: async checkpoint => {
@@ -147,12 +213,83 @@ export class DshCheckpointCapture {
     void operation.finally(() => { this.pending.delete(operation) })
   }
 
-  private async captureIntent(target: { displayPath: string }, actor: object | undefined): Promise<void> {
-    const agent = actor === undefined ? undefined : this.actors.get(actor)
-    if (agent === undefined) {
-      for (const turn of this.turns.values()) turn.incomplete = true
+  /**
+   * Cline-style workspace before/after scan around shell tools so creates like
+   * `Set-Content` land in turn.files. Incomplete only when the scan truncates
+   * or fails — not merely because a shell tool ran.
+   */
+  private async captureShellWorkspace<T>(turn: PendingTurn, run: () => Promise<T>): Promise<T> {
+    const workspaceRoot = turn.agent.session.header.cwd
+    if (workspaceRoot === undefined) {
+      turn.incomplete = true
+      return run()
+    }
+    let before
+    try {
+      before = await scanWorkspace(workspaceRoot)
+    } catch {
+      turn.incomplete = true
+      return run()
+    }
+    if (before.truncated) turn.incomplete = true
+    try {
+      return await run()
+    } finally {
+      try {
+        const after = await scanWorkspace(workspaceRoot)
+        if (after.truncated) turn.incomplete = true
+        const diff = diffSnapshots(before.files, after.files)
+        if (diff.truncated) turn.incomplete = true
+        for (const file of diff.files) {
+          if (turn.files.has(file.path) || turn.capturing.has(file.path)) continue
+          turn.files.set(file.path, {
+            path: file.path,
+            before: file.beforeText === null
+              ? { path: file.path, exists: false, text: null }
+              : { path: file.path, exists: true, text: file.beforeText },
+          })
+        }
+      } catch {
+        turn.incomplete = true
+      }
+    }
+  }
+
+  private async captureToolPath(agent: LiveAgent, args: unknown): Promise<void> {
+    const path = filePathFromToolArgs(args)
+    if (path === null) return
+    const workspaceRoot = agent.session.header.cwd
+    if (workspaceRoot === undefined) {
+      const turn = this.turns.get(agent.id)
+      if (turn !== undefined) turn.incomplete = true
       return
     }
+    try {
+      const absolutePath = isAbsolute(path) ? path : join(workspaceRoot, path)
+      await this.captureAbsolutePath(agent, absolutePath)
+    } catch {
+      const turn = this.turns.get(agent.id)
+      if (turn !== undefined) turn.incomplete = true
+    }
+  }
+
+  private async captureIntent(target: { displayPath: string }, actor: object | undefined): Promise<void> {
+    const agent = agentFromActor(actor, this.actors)
+    if (agent === undefined) {
+      // Unattributed writes must not poison unrelated open sessions. Only mark
+      // incomplete once the intent maps to a concrete agent turn below.
+      return
+    }
+    try {
+      const absolutePath = this.ctx.fs.processPath(target as never)
+      await this.captureAbsolutePath(agent, absolutePath)
+    } catch {
+      const turn = this.turns.get(agent.id)
+      if (turn !== undefined) turn.incomplete = true
+    }
+  }
+
+  private async captureAbsolutePath(agent: LiveAgent, absolutePath: string): Promise<void> {
     const turn = this.turns.get(agent.id)
     if (turn === undefined) return
     const workspaceRoot = agent.session.header.cwd
@@ -161,7 +298,6 @@ export class DshCheckpointCapture {
       return
     }
     try {
-      const absolutePath = this.ctx.fs.processPath(target as never)
       const relativePath = relative(workspaceRoot, absolutePath)
       if (relativePath === '' || relativePath.startsWith(`..${sep}`) || relativePath === '..' || isAbsolute(relativePath)) {
         turn.incomplete = true
@@ -191,6 +327,8 @@ export class DshCheckpointCapture {
       const after = await readSnapshot(turn.agent.session.header.cwd!, tracked.path)
       const beforeHash = snapshotHash(tracked.before)
       const afterHash = snapshotHash(after)
+      // Existence flips (create/delete) always count, including empty-file creates
+      // where the after-image is the empty string.
       if (beforeHash === afterHash) continue
       files.push({
         path: tracked.path,
@@ -201,7 +339,11 @@ export class DshCheckpointCapture {
         afterHash,
       })
     }
-    if (turn.incomplete) throw new Error('Workspace capture is incomplete')
+    if (turn.incomplete) {
+      // Keep write/edit snapshots even when shell (or another gap) marked the turn
+      // incomplete — discarding them left created files undeleted on rollback.
+      throw Object.assign(new Error('Workspace capture is incomplete'), { files })
+    }
     return files
   }
 }

@@ -1,0 +1,22 @@
+---
+description: When a hard bug resists multiple local fixes, study mature agent implementations before more patching
+alwaysApply: true
+---
+
+# Learn from mature agents
+
+If the same product problem (especially restore / undo / checkpoint / transcript / timeline UX) is **not solved after multiple local fix attempts**:
+
+1. **Stop stacking speculative patches** on the same path.
+2. **Find how mature coding agents implement the analogous feature** (Claude Code `/rewind`, Cline/Roo checkpoints, Cursor checkpoints, Aider `/undo`, etc.).
+3. Prefer **their architectural model** over further ad-hoc edge-case gates.
+4. Adapt that model into this repo with the smallest faithful change set; keep Desktop/Session constraints explicit.
+
+## Checkpoint/restore model to prefer (Claude Code / Cline / Roo)
+
+- Restore means **go back to a chosen checkpoint** (truncate forward / re-attach snapshot), with explicit modes: conversation, files, or both.
+- Only **live-transcript** tips count; orphan log markers must not block undo.
+- After conversation restore, **prefill the original prompt** for edit/resend.
+- Do not invent fragile “session-changed” dead-ends when the tip snapshot still exists.
+
+Do not treat “one more session-changed guard” as progress when the user still cannot complete the primary action.

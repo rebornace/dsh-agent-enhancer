@@ -152,23 +152,38 @@ describe('captureCheckpoint', () => {
   it.each([
     { name: 'attachment', block: { type: 'file', ref: 'attachment-1' } },
     { name: 'chip', block: { type: 'chip', text: 'chip text' } },
-  ])('marks complex $name content incomplete without inventing restorable prompt text', async ({ block }) => {
+  ])('keeps typed text when $name blocks are mixed in', async ({ block }) => {
     const h = harness({
       prompt: {
         source: { kind: 'user' },
-        content: [{ type: 'text', text: '不要拼接成草稿' }, block as never],
+        content: [{ type: 'text', text: '带附件的提示词' }, block as never],
       },
     })
 
     const result = await captureCheckpoint(h.options)
 
     expect(result).toMatchObject({
-      prompt: '',
-      coverage: 'partial',
-      gaps: [{ type: 'prompt', reason: 'non-text-content' }],
+      prompt: '带附件的提示词',
+      coverage: 'complete',
+      gaps: [],
       stage: 'committed',
     })
     expect(h.saved).toEqual([result])
+  })
+
+  it('marks pure non-text prompts incomplete without inventing draft text', async () => {
+    const h = harness({
+      prompt: {
+        source: { kind: 'user' },
+        content: [{ type: 'file', ref: 'attachment-1' } as never],
+      },
+    })
+
+    await expect(captureCheckpoint(h.options)).resolves.toMatchObject({
+      prompt: '',
+      coverage: 'partial',
+      gaps: [{ type: 'prompt', reason: 'non-text-content' }],
+    })
   })
 
   it('does not treat synthetic user-role content as direct user text', async () => {
@@ -204,7 +219,29 @@ describe('captureCheckpoint', () => {
     expect(h.stages).toEqual(['preparing', 'session-flushed', 'workspace-captured', 'committed'])
   })
 
-  it('resolves rollback cuts from live turn/start even when stored atSeq is stale', () => {
+  it('keeps attached file snapshots when incomplete workspace capture throws', async () => {
+    const tracked = [{
+      path: 'blank.txt',
+      change: 'create' as const,
+      beforeText: null,
+      beforeHash: '',
+      afterText: '',
+      afterHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    }]
+    const h = harness({
+      captureFiles: async () => {
+        throw Object.assign(new Error('Workspace capture is incomplete'), { files: tracked })
+      },
+    })
+
+    await expect(captureCheckpoint(h.options)).resolves.toMatchObject({
+      files: tracked,
+      coverage: 'partial',
+      gaps: [{ type: 'workspace', reason: 'capture-failed' }],
+    })
+  })
+
+  it('resolves before-N cuts from live turn/start (pin by atSeq when reused)', () => {
     expect(checkpointAtSeq(0)).toBe(0)
     expect(checkpointAtSeq(1)).toBe(0)
     expect(checkpointAtSeq(2)).toBe(1)
@@ -220,14 +257,30 @@ describe('captureCheckpoint', () => {
       { type: 'user/message', seq: 2, time: 3, data: {} },
     ] as SessionEvent[]
     expect(resolveRollbackCut(seeded, 1, 0)).toEqual({ cutSeq: 0 })
-    const withSystem = [
+    const withNext = [
       { type: 'session/end-seed', seq: 0, time: 1, data: {} },
       { type: 'system/message', seq: 1, time: 2, data: {} },
       { type: 'turn/start', seq: 2, time: 3, data: { turn: 1 } },
       { type: 'user/message', seq: 3, time: 4, data: {} },
+      { type: 'turn/end', seq: 4, time: 5, data: { turn: 1, reason: { kind: 'completed' } } },
+      { type: 'turn/start', seq: 5, time: 6, data: { turn: 2 } },
+      { type: 'user/message', seq: 6, time: 7, data: {} },
     ] as SessionEvent[]
-    // Stale atSeq=0 would previously miss turn/start@2; turn lookup still cuts before it.
-    expect(resolveRollbackCut(withSystem, 1, 0)).toEqual({ cutSeq: 1 })
+    expect(resolveRollbackCut(withNext, 1, 0)).toEqual({ cutSeq: 1 })
+    expect(resolveRollbackCut(withNext, 2, 0)).toEqual({ cutSeq: 4 })
+    const reused = [
+      { type: 'turn/start', seq: 1, time: 1, data: { turn: 2 } },
+      { type: 'user/message', seq: 2, time: 2, data: {} },
+      { type: 'turn/end', seq: 3, time: 3, data: { turn: 2, reason: { kind: 'completed' } } },
+      { type: 'turn/start', seq: 4, time: 4, data: { turn: 3 } },
+      { type: 'user/message', seq: 5, time: 5, data: {} },
+      { type: 'turn/end', seq: 6, time: 6, data: { turn: 3, reason: { kind: 'completed' } } },
+      { type: 'turn/start', seq: 10, time: 10, data: { turn: 2 } },
+      { type: 'user/message', seq: 11, time: 11, data: {} },
+      { type: 'turn/end', seq: 12, time: 12, data: { turn: 2, reason: { kind: 'completed' } } },
+    ] as SessionEvent[]
+    expect(resolveRollbackCut(reused, 2, 0)).toEqual({ cutSeq: 0 })
+    expect(resolveRollbackCut(reused, 2, 9)).toEqual({ cutSeq: 9 })
   })
 
   it('synthesizes a checkpoint when turn 1 starts at seq 0', async () => {

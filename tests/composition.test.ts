@@ -33,6 +33,14 @@ const staticModules: Record<string, unknown> = {
   '@deepseek-ai/dsh-client-store': clientStore,
   '@deepseek-ai/dsh-client-ui-primitives': clientPrimitives,
 }
+
+const stubUseContextMenu = () => ({
+  getTriggerProps: () => ({}),
+})
+const stubContextMenu = {
+  useContextMenu: stubUseContextMenu,
+  apply: () => {},
+}
 const SESSION_ID = 'session-1' as SessionId
 const WORKSPACES = { items: [], phase: 'ready' }
 
@@ -53,8 +61,9 @@ function installClientModules() {
     load(registration) { registrations.set(registration.id, registration) },
   }
   const moduleId = (specifier: string) => specifier.replace(/\/client$/, '')
-  const requireModule = (specifier: string): unknown => {
+  const requireModule = Object.assign((specifier: string): unknown => {
     const id = moduleId(specifier)
+    if (id === '@deepseek-ai/dsh-client-ui-context-menu') return stubContextMenu
     if (id in staticModules) return staticModules[id]
     if (materialized.has(id)) return materialized.get(id)
     const registered = registrations.get(id)
@@ -66,7 +75,10 @@ function installClientModules() {
     } catch (error) {
       throw new Error(`Client module require failed: ${specifier}`, { cause: error })
     }
-  }
+  }, {
+    // 0.2.2 chat CSS embeds require.asset(...); Desktop resolves plugin assets.
+    asset: (path: string) => path,
+  })
   function materialize(registration: ClientRegistration): unknown {
     const cached = materialized.get(registration.id)
     if (cached !== undefined) return cached
@@ -262,7 +274,17 @@ it('loads through the official Loader without replacing the composer bar and cle
     ctx.provide('remoteAccess', { source: () => allowed } as never)
     ctx.provide('fileUpload', { upload: async () => { throw new Error('Unexpected file upload') } } as never)
     ctx.provide('sidebarRight', { openResource: vi.fn(), openTab: vi.fn() } as never)
-    ctx.provide('sidebarRightTabs', { register: vi.fn(() => () => {}) } as never)
+    ctx.provide('sidebarRightTabs', { register: vi.fn(() => () => {}), get: () => undefined } as never)
+    // 0.2.2 chat injects connection + fileDrag before registering conversation.view/chat.node.
+    ctx.provide('connection', {
+      state: { getSnapshot: () => 'connected', subscribe: () => () => {} },
+    } as never)
+    ctx.provide('fileDrag', {
+      actions: {
+        prepare: async () => ({ start: () => false, release: () => {} }),
+        reportFailure: () => {},
+      },
+    } as never)
     ctx.provide('uiWorkspace', uiWorkspace)
 
     const entries = [
@@ -304,6 +326,10 @@ it('loads through the official Loader without replacing the composer bar and cle
           getSnapshot: () => WORKSPACES,
           subscribe: () => () => {},
         },
+      },
+      // 0.2.2 conversation header requires GlobalStandardProps.useContextMenu.
+      props: {
+        useContextMenu: stubUseContextMenu,
       },
     }))
 

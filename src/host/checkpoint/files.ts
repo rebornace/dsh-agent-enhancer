@@ -6,9 +6,16 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { CHECKPOINT_SCHEMA_VERSION } from './types.ts'
 import type { CheckpointJournal, FileCheckpoint } from './types.ts'
 
-const MAX_FILE_BYTES = 2 * 1024 * 1024
+export const MAX_FILE_BYTES = 2 * 1024 * 1024
 const ABSENT_FILE_HASH = ''
 const excludedSegments = new Set(['.git', 'node_modules', '.dsh', 'dist', 'build', 'out', 'coverage', '.next'])
+
+/** True when a single path segment is excluded from checkpoint walk/restore. */
+export function isExcludedSegment(segment: string): boolean {
+  if (!segment || segment === '.' || segment === '..') return true
+  const canonical = segment.replace(/[. ]+$/g, '').toLowerCase()
+  return !canonical || excludedSegments.has(canonical) || canonical === '.env' || canonical.startsWith('.env.')
+}
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 const transactionQueues = new Map<string, Promise<void>>()
 
@@ -146,11 +153,7 @@ function pathKey(path: string): string {
 
 export function unsafePath(path: string): boolean {
   if (!path || path.includes('\0') || isAbsolute(path) || win32.isAbsolute(path) || /^[a-z]:/i.test(path)) return true
-  return segments(path).some(segment => {
-    if (!segment || segment === '.' || segment === '..') return true
-    const canonical = canonicalSegment(segment)
-    return !canonical || excludedSegments.has(canonical) || canonical === '.env' || canonical.startsWith('.env.')
-  })
+  return segments(path).some(segment => isExcludedSegment(segment))
 }
 
 function absolutePath(workspaceRoot: string, path: string): string {

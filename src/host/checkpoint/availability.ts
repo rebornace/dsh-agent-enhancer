@@ -9,11 +9,17 @@ export type CheckpointUnavailable =
   | 'session-running'
   | 'permission-denied'
   | 'rollback-disabled'
-  | 'first-turn'
   | 'incompatible-session'
   | 'compacted-surface'
   | 'subagent-session'
   | 'unknown-surface'
+  /** Tip already sits at this cut — confirm prefills draft / may re-apply files. */
+  | 'already-restored'
+  /**
+   * A more aggressive tip already hides this cut. Restore here is a no-op until
+   * the live tip is undone.
+   */
+  | 'covered-by-earlier-restore'
 
 /** Soft gaps that must not block conversation-only restore (draft may be empty). */
 const CONVERSATION_SOFT = new Set<CheckpointUnavailable>([
@@ -25,10 +31,12 @@ const CONVERSATION_SOFT = new Set<CheckpointUnavailable>([
   'compacted-surface',
   // Conversation restore does not need a workspace cwd.
   'permission-denied',
-  // Turn 1 is restorable; keep this soft for older previews that still emit it.
-  'first-turn',
   // Non-contiguous logs are unusual but still restorable when a surface was built.
   // Only emit unknown-surface when surface is missing — that case stays hard.
+  // Re-confirming the active tip is a soft no-op (draft prefill / optional files).
+  'already-restored',
+  // Covered cuts need undo-first — UI replaces confirms with Undo, not a fatal gap list.
+  'covered-by-earlier-restore',
 ])
 
 /**
@@ -40,6 +48,21 @@ const EMPTY_FILES_SOFT = new Set<CheckpointUnavailable>([
   'workspace-capture-failed',
   'prompt-non-text-content',
   'compacted-surface',
+  'already-restored',
+  'covered-by-earlier-restore',
+])
+
+/**
+ * Soft gaps that must not block restoring already-tracked file paths. Workspace
+ * capture may be partial (shell side effects) while write/edit/shell snapshots
+ * are still known and restorable. Prompt gaps only affect draft text, not files.
+ */
+const TRACKED_FILES_SOFT = new Set<CheckpointUnavailable>([
+  'incomplete-checkpoint',
+  'workspace-capture-failed',
+  'prompt-non-text-content',
+  'already-restored',
+  'covered-by-earlier-restore',
 ])
 
 export interface BlockingUnavailableOptions {
@@ -51,11 +74,12 @@ export function blockingUnavailable(
   scope: CheckpointRollbackScope,
   options: BlockingUnavailableOptions = {},
 ): readonly CheckpointUnavailable[] {
-  const trackedFiles = options.trackedFiles
-  const soft = scope === 'conversation' || trackedFiles === 0
-    ? (scope === 'conversation' ? CONVERSATION_SOFT : EMPTY_FILES_SOFT)
-    : null
-  if (soft === null) return unavailable
+  const trackedFiles = options.trackedFiles ?? 0
+  const soft = scope === 'conversation'
+    ? CONVERSATION_SOFT
+    : trackedFiles === 0
+      ? EMPTY_FILES_SOFT
+      : TRACKED_FILES_SOFT
   return unavailable.filter(reason => !soft.has(reason))
 }
 

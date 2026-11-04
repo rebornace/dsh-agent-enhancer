@@ -117,9 +117,10 @@ describe('installAutoSessionRoute', () => {
     await expect(adapter?.resolveModel(AUTO_PROVIDER, AUTO_MODEL)).resolves.toEqual(
       expect.objectContaining({
         inputModalities: ['text'],
+        // 0.2.2 compaction-basic requires capacity before selectModel can switch.
+        context: { contextWindow: 524_288 },
       }),
     )
-    await expect(adapter?.resolveModel(AUTO_PROVIDER, AUTO_MODEL)).resolves.not.toHaveProperty('context')
   })
 
   it('still routes Auto when agents is unavailable (inactive context)', async () => {

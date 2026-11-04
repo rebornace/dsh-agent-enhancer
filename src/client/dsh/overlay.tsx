@@ -7,6 +7,7 @@ import type { PromptInput, PromptSearchState, Coordinator } from '../prompt/coor
 import type { PromptSession } from '../prompt/session.ts'
 import type { PromptKey, KeyContext, PromptEntry } from '../prompt/types.ts'
 import styles from '../styles.module.css'
+import { promptLedgerFor, subscribePromptLedgerInvalidation } from '../prompt/ledger-store.ts'
 import { latestCompletedTurn, sentPrompts } from './conversation.ts'
 import { isComposing, lineBoundary, officialMenuOpen, publicWriter, readSelection } from './editor.ts'
 import { CoexistenceHints } from './hints.tsx'
@@ -69,13 +70,21 @@ export function AgentOverlay(props: AgentOverlayProps) {
       setSearch(coordinator.searchSnapshot())
       setPrediction(coordinator.predictionSnapshot())
     })
-    let unregisterHistory = () => {}
-    const refreshHistory = () => {
-      unregisterHistory()
-      unregisterHistory = coordinator.registerHistory({
-        load: requested => requested === props.sessionId ? sentPrompts(latestRef.current.chat) : [],
-      })
+    // Register once: load always reads latestRef + ledger. Re-registering on every
+    // chat tick cleared the cache and resetTransient(), so history vanished on reuse.
+    const unregisterHistory = coordinator.registerHistory({
+      load: requested => {
+        if (requested !== props.sessionId) return []
+        return promptLedgerFor(props.sessionId).observe(sentPrompts(latestRef.current.chat))
+      },
+    })
+    const warmHistory = () => {
+      promptLedgerFor(props.sessionId).observe(sentPrompts(latestRef.current.chat))
+      coordinator.invalidateHistoryCache(props.sessionId)
     }
+    const unsubscribeLedger = subscribePromptLedgerInvalidation(sessionId => {
+      if (sessionId === props.sessionId) coordinator.invalidateHistoryCache(sessionId)
+    })
     let selection = { start: latestRef.current.input.draft.length, end: latestRef.current.input.draft.length }
     const sync = () => {
       selection = readSelection(root) ?? selection
@@ -136,7 +145,7 @@ export function AgentOverlay(props: AgentOverlayProps) {
     root.ownerDocument.addEventListener('click', onOfficialMenuPointer)
     const active: ActivePrompt = {
       sync,
-      refreshHistory,
+      refreshHistory: warmHistory,
       dispose() {
         root.removeEventListener('keydown', onKeyDown)
         root.removeEventListener('input', onInput)
@@ -146,12 +155,14 @@ export function AgentOverlay(props: AgentOverlayProps) {
         root.ownerDocument.removeEventListener('pointerdown', onOfficialMenuPointer)
         root.ownerDocument.removeEventListener('click', onOfficialMenuPointer)
         unregisterHistory()
+        unsubscribeLedger()
         unsubscribe()
         detach()
       },
     }
     activeRef.current = active
     sync()
+    warmHistory()
     return () => {
       active.dispose()
       if (activeRef.current === active) activeRef.current = null

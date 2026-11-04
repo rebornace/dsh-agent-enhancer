@@ -4,9 +4,10 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { useSyncExternalStore } from 'react'
-import { UndoIcon } from '../dsh/icons.tsx'
+import { TimelineIcon, UndoIcon } from '../dsh/icons.tsx'
 import styles from '../styles.module.css'
 import type { RollbackController } from './controller.ts'
+import { checkpointPrimaryAction, coverageAffordance } from './format.ts'
 
 export interface RollbackMessageActionsProps {
   readonly rollback: RollbackController
@@ -14,6 +15,7 @@ export interface RollbackMessageActionsProps {
   readonly turn: TurnLocation
   readonly useSession: (selector: (state: { running: boolean }) => unknown) => unknown
   readonly useAccess: (action: string) => boolean | undefined
+  readonly onOpenTimeline?: (turn: number) => void
 }
 
 /** Icon entry for the common “Restore to here” action beside Copy. */
@@ -33,22 +35,55 @@ export function RollbackMessageActions(props: RollbackMessageActionsProps) {
         : turn.start === undefined ? 'rollbackTurnStartMissing' as const
           : null
 
-  const entryLabel = props.t('rollbackAction')
-  const entryTooltip = disabledReason === null ? entryLabel : props.t(disabledReason)
+  const summary = snapshot.coverageByTurn[turn.turn]
+  const affordance = coverageAffordance(summary)
+  const primary = checkpointPrimaryAction(summary)
+  const entryLabel = primary === 'undo' ? props.t('rollbackUndoAction') : props.t('rollbackAction')
+  const coverageLabel = disabledReason !== null || primary === 'undo' ? null
+    : affordance === 'files' ? props.t('rollbackCoverageFiles', { count: summary!.fileCount })
+      : affordance === 'partial' ? props.t('rollbackCoveragePartial', {
+        count: summary!.fileCount,
+      })
+        : affordance === 'conversation' ? props.t('rollbackCoverageConversation')
+          : null
+  const entryTooltip = disabledReason !== null ? props.t(disabledReason)
+    : coverageLabel ?? entryLabel
+  const timelineLabel = props.t('rollbackTimelineOpen')
+  const actionDisabled = disabledReason !== null
 
-  return <Tooltip label={entryTooltip} side="bottom">
-    <button
-      type="button"
-      className={styles.userMessageAction}
-      aria-label={entryLabel}
-      title={entryTooltip}
-      disabled={disabledReason !== null}
-      data-unavailable={disabledReason !== null || undefined}
-      onClick={() => {
-        if (disabledReason === null) props.rollback.open(turn.turn, 'rollback')
-      }}
-    >
-      <UndoIcon />
-    </button>
-  </Tooltip>
+  return <>
+    <Tooltip label={entryTooltip} side="bottom">
+      <button
+        type="button"
+        className={styles.userMessageAction}
+        aria-label={entryTooltip}
+        title={entryTooltip}
+        disabled={actionDisabled}
+        data-unavailable={actionDisabled || undefined}
+        data-coverage={primary === 'restore' && affordance !== 'unknown' ? affordance : undefined}
+        data-action={primary}
+        onClick={() => {
+          if (actionDisabled) return
+          if (primary === 'undo') {
+            props.rollback.open(turn.turn, 'undo')
+            return
+          }
+          props.rollback.open(turn.turn, 'rollback')
+        }}
+      >
+        <UndoIcon />
+      </button>
+    </Tooltip>
+    {props.onOpenTimeline === undefined ? null : <Tooltip label={timelineLabel} side="bottom">
+      <button
+        type="button"
+        className={styles.userMessageAction}
+        aria-label={timelineLabel}
+        title={timelineLabel}
+        onClick={() => { props.onOpenTimeline?.(turn.turn) }}
+      >
+        <TimelineIcon />
+      </button>
+    </Tooltip>}
+  </>
 }

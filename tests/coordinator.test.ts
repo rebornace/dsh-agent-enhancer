@@ -351,6 +351,27 @@ describe('Coordinator history and search lifecycle', () => {
     expect(loads).toEqual([session('a')])
   })
 
+  it('reloads history after cache invalidation without leaving history mode', () => {
+    let entries = [{ seq: 1, text: 'first' }, { seq: 2, text: 'second' }]
+    const loads: number[] = []
+    const { coordinator, writer, input } = setup({
+      history: () => {
+        loads.push(entries.length)
+        return entries
+      },
+    })
+    expect(coordinator.handleKey('up', key())).toBe(true)
+    expect(writer.replacements.at(-1)?.text).toBe('second')
+    coordinator.sync({ ...input, draft: 'second', draftRev: 2 })
+    expect(coordinator.handleKey('escape', key())).toBe(true)
+
+    entries = [{ seq: 1, text: 'first' }, { seq: 2, text: 'second' }, { seq: 3, text: 'retained' }]
+    coordinator.invalidateHistoryCache(input.sessionId)
+    expect(coordinator.handleKey('up', key())).toBe(true)
+    expect(writer.replacements.at(-1)?.text).toBe('retained')
+    expect(loads).toEqual([2, 3])
+  })
+
   it('uses Escape for transient state before search and adopts a candidate only with Enter', () => {
     const { coordinator, writer } = setup({ history: () => [{ seq: 1, text: 'needle' }] })
     expect(coordinator.handleKey('search', key())).toBe(true)

@@ -82,6 +82,24 @@ describe('CheckpointStore', () => {
     expect(values.map(value => value.turn)).toEqual(Array.from({ length: 20 }, (_, index) => index + 2))
   })
 
+  it('replaces the session list and can clear it', async () => {
+    const store = new CheckpointStore(root)
+    await store.save(checkpoint(1))
+    await store.save(checkpoint(2))
+    await store.replace(sessionId, [checkpoint(2)])
+    await expect(store.list(sessionId)).resolves.toEqual([checkpoint(2)])
+    await store.replace(sessionId, [])
+    await expect(store.list(sessionId)).resolves.toEqual([])
+  })
+
+  it('purges compensated journals left on disk', async () => {
+    const store = new CheckpointStore(root)
+    await store.beginJournal(journal())
+    await store.beginJournal({ ...journal(), id: 'journal-2', status: 'compensated' })
+    await expect(store.purgeSettledJournals()).resolves.toBe(1)
+    await expect(store.listPendingJournals()).resolves.toEqual([journal()])
+  })
+
   it('serializes concurrent saves for one Session across store instances', async () => {
     const stores = [new CheckpointStore(root), new CheckpointStore(root)]
     const values = Array.from({ length: 12 }, (_, index) => checkpoint(index + 1))

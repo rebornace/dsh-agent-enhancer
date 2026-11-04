@@ -193,7 +193,11 @@ function chatFixture(): ChatSnapshot {
   ]
   const nodes = new Map(entries.map(entry => [entry.key, {
     kind: 'user',
-    data: { seq: entry.seq, content: [{ type: 'text', text: entry.text }] },
+    data: {
+      seq: entry.seq,
+      content: [{ type: 'text', text: entry.text }],
+      source: { kind: 'user' },
+    },
   }]))
   return {
     order: entries.map(entry => entry.key),
@@ -206,7 +210,11 @@ function settledChatFixture(turn = 1): ChatSnapshot {
     ['user', {
       kind: 'user',
       location: { kind: 'turn', turn: { turn } },
-      data: { seq: turn, content: [{ type: 'text', text: turn === 1 ? 'first prompt' : `prompt ${turn}` }] },
+      data: {
+        seq: turn,
+        content: [{ type: 'text', text: turn === 1 ? 'first prompt' : `prompt ${turn}` }],
+        source: { kind: 'user' },
+      },
     }],
     ['tail', {
       kind: 'turn-tail',

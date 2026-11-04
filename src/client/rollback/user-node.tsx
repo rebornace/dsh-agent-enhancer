@@ -18,6 +18,7 @@ export type RollbackUserNodeProps = ChatNodeViewProps<'user'> & {
   readonly rollback: RollbackController
   readonly tEnhancer: TranslateNS<'agent-enhancer'>
   readonly tChat: TranslateNS<'chat'>
+  readonly onOpenTimeline?: (turn: number) => void
 }
 
 function turnOf(location: RollbackUserNodeProps['node']['location']): TurnLocation | null {
@@ -95,6 +96,7 @@ export function RollbackUserNode(props: RollbackUserNodeProps) {
           turn={turn}
           useSession={props.useSession}
           useAccess={props.useAccess}
+          onOpenTimeline={props.onOpenTimeline}
         /> : null}
     </div>
   </div>

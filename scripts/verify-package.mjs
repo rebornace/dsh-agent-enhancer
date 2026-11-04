@@ -69,7 +69,7 @@ if (packedManifest.dsh?.bundle?.patch !== './cordis.patch.yml' ||
     packedManifest.dsh?.client?.platform !== 'web') {
   throw new Error('Packed manifest has invalid DSH metadata')
 }
-if (packedManifest.engines?.dsh !== '>=0.2.1-rc.5 <0.3.0-0') {
+if (packedManifest.engines?.dsh !== '>=0.2.2-rc.1 <0.3.0-0') {
   throw new Error('Packed manifest has an invalid DSH compatibility range')
 }
 

@@ -142,7 +142,15 @@ async function runFileTurn(
 }
 
 async function setRollbackEnabled(ctx: Context, enabled: boolean) {
-  await ctx.waterfall(ctx.fiber, 'internal/update', Config({ rollbackEnabled: enabled }), false, () => {})
+  // Cordis 4.1: waterfall(fiber, 'internal/update', config, next) binds `this` to the
+  // Fiber. Pass a no-op next so listeners run without Fiber.update()'s restart
+  // (which would detach SessionStore sessions on this shared fixture fiber).
+  await (ctx.waterfall as (thisArg: unknown, name: string, ...args: unknown[]) => Promise<unknown>)(
+    ctx.fiber,
+    'internal/update',
+    Config({ rollbackEnabled: enabled }),
+    () => {},
+  )
 }
 
 it('recovers a persisted surface append during Host startup without a preview call', async () => {
@@ -227,11 +235,10 @@ it('captures a real turn and file before-image only after the independent switch
   expect(checkpoint!.files[0]!.beforeHash).not.toBe(checkpoint!.files[0]!.afterHash)
   const beforeUnload = (await h.store.list(h.session.id)).length
 
+  // 0.2.2 SessionStore detaches sessions when its owning fiber disposes, so
+  // post-unload appends are illegal on this shared fixture fiber. Unload still
+  // must leave persisted checkpoints intact.
   await h.ctx.fiber.dispose()
-  h.session.append('turn/start', { turn: 3 })
-  appendUser(h.session, 3, 'after unload')
-  h.session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
-  await Promise.resolve()
   expect(await h.store.list(h.session.id)).toHaveLength(beforeUnload)
 })
 
@@ -259,6 +266,283 @@ it('follows runtime enable, disable, and re-enable in one Context without relyin
     expect(await h.store.list(h.session.id)).toHaveLength(2)
   })
   expect((await h.store.list(h.session.id)).map(checkpoint => checkpoint.turn)).toEqual([2, 4])
+})
+
+it('still captures creates when write-intent policy owns the slot without calling next', async () => {
+  const h = await captureFixture(true)
+  // Mimic dsh-fs-observation-policy: first decision listener returns and never next().
+  h.ctx.on('fs/write-intent', async () => ({ kind: 'createIfAbsent' as const }))
+
+  h.session.append('turn/start', { turn: 1 })
+  appendUser(h.session, 1, 'first prompt')
+  h.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+
+  const prompt = {
+    id: MessageId('user-2'), role: 'user' as const,
+    content: [{ type: 'text' as const, text: 'prompt 2' }], source: { kind: 'user' as const },
+  }
+  await h.ctx.waterfall('agent/pre-step', {
+    agent: h.agent, messages: [prompt], turn: 2, step: 0, signal: new AbortController().signal,
+  } as never, async () => ({ kind: 'enter', messages: [prompt] }))
+  h.session.append('turn/start', { turn: 2 })
+  appendUser(h.session, 2, 'prompt 2')
+
+  const blankPath = join(h.workspaceRoot, 'blank.txt')
+  const writeTarget = { absolutePath: blankPath, displayPath: blankPath }
+  const writeExec = {
+    agent: h.agent,
+    name: 'write',
+    arguments: { file_path: 'blank.txt', content: '' },
+    signal: new AbortController().signal,
+  }
+  await h.ctx.waterfall('tools/execute', writeExec as never, async () => {
+    // Policy owns the slot; our prepended capture must still have run via tools/execute args.
+    const intent = await h.ctx.waterfall('fs/write-intent', writeTarget as never, writeExec, () => undefined)
+    expect(intent).toEqual({ kind: 'createIfAbsent' })
+    await writeFile(blankPath, '', { encoding: 'utf8', flag: 'wx' })
+    return { value: null, content: [], isError: false }
+  })
+  h.session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+
+  await vi.waitFor(async () => {
+    expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
+  })
+  const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
+  expect(checkpoint).toMatchObject({
+    turn: 2,
+    files: [{
+      path: 'blank.txt',
+      change: 'create',
+      beforeText: null,
+      afterText: '',
+    }],
+  })
+})
+
+it('captures empty creates from write-intent actor.agent when tools/execute never ran', async () => {
+  // Desktop scopes tools/execute to the agent carrier; a non-global host listener
+  // never populates the actors WeakMap. Capture must still read exec.agent.
+  const h = await captureFixture(true)
+  h.ctx.on('fs/write-intent', async () => ({ kind: 'createIfAbsent' as const }))
+
+  const prompt = {
+    id: MessageId('user-2'), role: 'user' as const,
+    content: [{ type: 'text' as const, text: 'create blank' }], source: { kind: 'user' as const },
+  }
+  await h.ctx.waterfall('agent/pre-step', {
+    agent: h.agent, messages: [prompt], turn: 2, step: 0, signal: new AbortController().signal,
+  } as never, async () => ({ kind: 'enter', messages: [prompt] }))
+  h.session.append('turn/start', { turn: 2 })
+  appendUser(h.session, 2, 'create blank')
+
+  const blankPath = join(h.workspaceRoot, 'blank.txt')
+  const writeTarget = { absolutePath: blankPath, displayPath: blankPath }
+  const writeExec = {
+    agent: h.agent,
+    name: 'write',
+    arguments: { file_path: 'blank.txt', content: '' },
+    signal: new AbortController().signal,
+  }
+  const intent = await h.ctx.waterfall('fs/write-intent', writeTarget as never, writeExec, () => undefined)
+  expect(intent).toEqual({ kind: 'createIfAbsent' })
+  await writeFile(blankPath, '', { encoding: 'utf8', flag: 'wx' })
+  h.session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+
+  await vi.waitFor(async () => {
+    expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
+  })
+  const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
+  expect(checkpoint).toMatchObject({
+    turn: 2,
+    files: [{
+      path: 'blank.txt',
+      change: 'create',
+      beforeText: null,
+      afterText: '',
+    }],
+  })
+})
+
+it('keeps empty write creates when the same turn also uses a no-op shell', async () => {
+  const h = await captureFixture(true)
+  h.session.append('turn/start', { turn: 1 })
+  appendUser(h.session, 1, 'first prompt')
+  h.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+
+  const prompt = {
+    id: MessageId('user-2'), role: 'user' as const,
+    content: [{ type: 'text' as const, text: 'prompt 2' }], source: { kind: 'user' as const },
+  }
+  await h.ctx.waterfall('agent/pre-step', {
+    agent: h.agent, messages: [prompt], turn: 2, step: 0, signal: new AbortController().signal,
+  } as never, async () => ({ kind: 'enter', messages: [prompt] }))
+  h.session.append('turn/start', { turn: 2 })
+  appendUser(h.session, 2, 'prompt 2')
+
+  const blankPath = join(h.workspaceRoot, 'blank.txt')
+  const writeTarget = { absolutePath: blankPath, displayPath: blankPath }
+  const writeExec = {
+    agent: h.agent,
+    name: 'write',
+    arguments: { file_path: 'blank.txt', content: '' },
+    signal: new AbortController().signal,
+  }
+  await h.ctx.waterfall('tools/execute', writeExec as never, async () => {
+    await h.ctx.waterfall('fs/write-intent', writeTarget as never, writeExec, () => undefined)
+    await writeFile(blankPath, '', { encoding: 'utf8', flag: 'wx' })
+    return { value: null, content: [], isError: false }
+  })
+
+  const shellExec = {
+    agent: h.agent,
+    name: 'bash',
+    arguments: { command: 'ls' },
+    signal: new AbortController().signal,
+  }
+  await h.ctx.waterfall('tools/execute', shellExec as never, async () => ({
+    value: null, content: [], isError: false,
+  }))
+
+  h.session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+
+  await vi.waitFor(async () => {
+    expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
+  })
+  const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
+  // No-op shell scan succeeds — no forced workspace gap.
+  expect(checkpoint).toMatchObject({
+    turn: 2,
+    coverage: 'complete',
+    gaps: [],
+    files: [{
+      path: 'blank.txt',
+      change: 'create',
+      beforeText: null,
+      afterText: '',
+    }],
+  })
+  expect(checkpoint!.files[0]!.beforeHash).toBe('')
+  expect(checkpoint!.files[0]!.afterHash).toBe(createHash('sha256').update('').digest('hex'))
+})
+
+it('captures pwsh Set-Content style creates via workspace before/after scan', async () => {
+  const h = await captureFixture(true)
+  const prompt = {
+    id: MessageId('user-2'), role: 'user' as const,
+    content: [{ type: 'text' as const, text: 'create via pwsh' }], source: { kind: 'user' as const },
+  }
+  await h.ctx.waterfall('agent/pre-step', {
+    agent: h.agent, messages: [prompt], turn: 2, step: 0, signal: new AbortController().signal,
+  } as never, async () => ({ kind: 'enter', messages: [prompt] }))
+  h.session.append('turn/start', { turn: 2 })
+  appendUser(h.session, 2, 'create via pwsh')
+
+  const created = join(h.workspaceRoot, '111.txt')
+  const shellExec = {
+    agent: h.agent,
+    name: 'pwsh',
+    arguments: { command: "Set-Content -Path '.\\\\111.txt' -Value $null -NoNewline" },
+    signal: new AbortController().signal,
+  }
+  await h.ctx.waterfall('tools/execute', shellExec as never, async () => {
+    await writeFile(created, '', { encoding: 'utf8', flag: 'wx' })
+    return { value: null, content: [], isError: false }
+  })
+  h.session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+
+  await vi.waitFor(async () => {
+    expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
+  })
+  const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
+  expect(checkpoint).toMatchObject({
+    turn: 2,
+    coverage: 'complete',
+    gaps: [],
+    files: [{
+      path: '111.txt',
+      change: 'create',
+      beforeText: null,
+      afterText: '',
+    }],
+  })
+})
+
+it('does not mark a no-op shell turn incomplete or invent file rows', async () => {
+  const h = await captureFixture(true)
+  await writeFile(join(h.workspaceRoot, 'keep.txt'), 'stable', 'utf8')
+  const prompt = {
+    id: MessageId('user-2'), role: 'user' as const,
+    content: [{ type: 'text' as const, text: 'list only' }], source: { kind: 'user' as const },
+  }
+  await h.ctx.waterfall('agent/pre-step', {
+    agent: h.agent, messages: [prompt], turn: 2, step: 0, signal: new AbortController().signal,
+  } as never, async () => ({ kind: 'enter', messages: [prompt] }))
+  h.session.append('turn/start', { turn: 2 })
+  appendUser(h.session, 2, 'list only')
+
+  await h.ctx.waterfall('tools/execute', {
+    agent: h.agent,
+    name: 'pwsh',
+    arguments: { command: 'Get-ChildItem' },
+    signal: new AbortController().signal,
+  } as never, async () => ({ value: null, content: [], isError: false }))
+
+  h.session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+
+  await vi.waitFor(async () => {
+    expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
+  })
+  const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
+  expect(checkpoint).toMatchObject({
+    turn: 2,
+    coverage: 'complete',
+    gaps: [],
+    files: [],
+  })
+})
+
+it('ignores unattributed fs intents so an open turn stays file-restorable', async () => {
+  const h = await captureFixture(true)
+  await writeFile(join(h.workspaceRoot, 'note.txt'), 'before', 'utf8')
+  const prompt = {
+    id: MessageId('user-2'), role: 'user' as const,
+    content: [{ type: 'text' as const, text: 'prompt 2' }], source: { kind: 'user' as const },
+  }
+  await h.ctx.waterfall('agent/pre-step', {
+    agent: h.agent, messages: [prompt], turn: 2, step: 0, signal: new AbortController().signal,
+  } as never, async () => ({ kind: 'enter', messages: [prompt] }))
+  h.session.append('turn/start', { turn: 2 })
+  appendUser(h.session, 2, 'prompt 2')
+
+  // Stray write with no tools/execute actor must not mark the pending turn incomplete.
+  const stray = { absolutePath: join(h.workspaceRoot, 'note.txt'), displayPath: join(h.workspaceRoot, 'note.txt') }
+  await h.ctx.waterfall('fs/write-intent', stray as never, undefined, () => undefined)
+
+  const absolutePath = join(h.workspaceRoot, 'note.txt')
+  const target = { absolutePath, displayPath: absolutePath }
+  const exec = {
+    agent: h.agent,
+    name: 'write_file',
+    arguments: { path: 'note.txt' },
+    signal: new AbortController().signal,
+  }
+  await h.ctx.waterfall('tools/execute', exec as never, async () => {
+    await h.ctx.waterfall('fs/write-intent', target as never, exec, () => undefined)
+    await writeFile(absolutePath, 'after 2', 'utf8')
+    return { value: null, content: [], isError: false }
+  })
+  h.session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+
+  await vi.waitFor(async () => {
+    expect(await h.store.list(h.session.id)).toHaveLength(1)
+  })
+  const [checkpoint] = await h.store.list(h.session.id)
+  expect(checkpoint).toMatchObject({
+    turn: 2,
+    coverage: 'complete',
+    gaps: [],
+    files: [expect.objectContaining({ path: 'note.txt', change: 'modify' })],
+  })
 })
 
 it('never reads or saves excluded file contents during live capture', async () => {

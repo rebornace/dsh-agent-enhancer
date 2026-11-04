@@ -107,6 +107,17 @@ describe('CheckpointFiles', () => {
     expect(journal.status).toBe('completed')
   })
 
+  it('restores a created empty file by deleting it', async () => {
+    const path = join(workspaceRoot, 'blank.txt')
+    await writeFile(path, '', 'utf8')
+    const file = checkpointFile('blank.txt', 'create', null, '')
+
+    await expect(manager().verifyCurrent([file])).resolves.toEqual([])
+    await manager().runTransaction([file], surfaceSucceeded)
+
+    await expectMissing(path)
+  })
+
   it('restores a modified file from its before-image', async () => {
     const path = join(workspaceRoot, 'modified.txt')
     await writeFile(path, 'after', 'utf8')

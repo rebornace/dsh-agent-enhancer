@@ -15,6 +15,7 @@ import {
   PROVIDER_BALANCE_ACCOUNT_KEY,
   PROVIDER_BALANCE_API_KEY_KEY,
 } from '../host/usage/balance.ts'
+import { disposePromptLedger } from './prompt/ledger-store.ts'
 import { PromptSession } from './prompt/session.ts'
 import type { ModuleSwitches } from './prompt/types.ts'
 import { AgentControls } from './dsh/controls.tsx'
@@ -28,7 +29,7 @@ import type { ModelCatalogLoaders } from './dsh/model-catalog.ts'
 import { AcceptedSettingsForm } from './dsh/settings-form.ts'
 import { PluginSettings } from './dsh/settings.tsx'
 import { ContextInspectDock } from './context/dock.tsx'
-import { openContextInspectTab, openUsageTab } from './context/open-tab.ts'
+import { openCheckpointTimelineTab, openContextInspectTab, openUsageTab } from './context/open-tab.ts'
 import { ContextInspectRightTab, ContextInspectRightTabTitle } from './context/right-tab.tsx'
 import { CONTEXT_INSPECT_TAB_ID, CONTEXT_INSPECT_TAB_KIND } from './context/tab.ts'
 import { UsageMeterDock } from './dsh/usage-dock.tsx'
@@ -55,8 +56,19 @@ import { checkpointRollbackRemote } from './rollback/remote.ts'
 import { installRollbackUndoCommand } from './rollback/command-ui.ts'
 import { installRollbackTranscriptFilter } from './rollback/transcript-filter.ts'
 import { installRollbackTurnOutlineFilter } from './rollback/turn-outline-filter.ts'
+import { installRollbackSessionStatsFilter } from './rollback/session-stats-filter.ts'
 import { RollbackUndoTipStore } from './rollback/undo-tip.ts'
 import { RollbackUserNode } from './rollback/user-node.tsx'
+import {
+  CHECKPOINT_TIMELINE_TAB_ID,
+  CHECKPOINT_TIMELINE_TAB_KIND,
+} from './rollback/timeline-kind.ts'
+import { SessionStatsCheckpointDock } from './rollback/session-stats-dock.tsx'
+import {
+  CheckpointTimelineTab,
+  CheckpointTimelineTabTitle,
+  type CheckpointTimelineTabProps,
+} from './rollback/timeline-tab.tsx'
 import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { installCss } from './styles.module.css'
@@ -224,6 +236,7 @@ export function apply(ctx: Context): void {
       for (const session of sessions.values()) session.refreshSettings()
     }))
     mountedCtx.effect(() => () => {
+      for (const sessionId of sessions.keys()) disposePromptLedger(sessionId)
       for (const session of sessions.values()) session.dispose()
       sessions.clear()
     })
@@ -364,6 +377,7 @@ export function apply(ctx: Context): void {
     const rollbackRemote: RollbackRemote = {
       preview: (request, signal) => checkpointRollbackRemote.preview(mountedCtx.remote, request, signal),
       execute: (request, signal) => checkpointRollbackRemote.execute(mountedCtx.remote, request, signal),
+      summaries: (request, signal) => checkpointRollbackRemote.summaries(mountedCtx.remote, request, signal),
     }
     const rollbackSessions = new Map<SessionId, RollbackController>()
     const rollbackRetentions = new Map<SessionId, () => void>()
@@ -386,19 +400,76 @@ export function apply(ctx: Context): void {
           rollbackRetentions.set(sessionId, retention.subscribe(() => {
             if ((retention.getSnapshot().retainedBy.mainView ?? 0) === 0) {
               rollbackSessions.get(sessionId)?.close()
+              // Keep the prompt ledger for the session lifetime; only agent unmount clears it.
             }
           }))
         }
       }
       return rollback
     }
+    const openTimeline = (sessionId: SessionId, turn?: number) => {
+      openCheckpointTimelineTab(mountedCtx.sidebarRight, turn === undefined
+        ? { sessionId }
+        : { sessionId, turn })
+    }
+    const restoreFromTimeline = (sessionId: SessionId, turn: number) => {
+      // Defer so the timeline click finishes before the body-portaled modal mounts.
+      queueMicrotask(() => {
+        rollbackFor(sessionId).open(turn, 'rollback', { surface: 'timeline' })
+      })
+    }
+    const undoFromTimeline = (sessionId: SessionId, turn: number) => {
+      queueMicrotask(() => {
+        rollbackFor(sessionId).open(turn, 'undo', { surface: 'timeline' })
+      })
+    }
+    const TimelineTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(
+      CheckpointTimelineTab,
+      {
+        ...props,
+        t: tEnhancer,
+        remote: rollbackRemote,
+        sessions: mountedCtx.get('sessions') as CheckpointTimelineTabProps['sessions'],
+        rollbackFor,
+        locale: resolveUiLocale(mountedCtx.locale.getLocale().active) === 'zh' ? 'zh-CN' : 'en',
+        onRestore: restoreFromTimeline,
+        onUndo: undoFromTimeline,
+      },
+    )
+    const TimelineTitle = (props: PropsRuntime<'sidebar.right.pane.tab.title'>) => createElement(
+      CheckpointTimelineTabTitle,
+      { ...props, t: tEnhancer },
+    )
+    const StatsCheckpointDock = (props: PropsRuntime<'conversation.composer.dock'>) => createElement(
+      SessionStatsCheckpointDock,
+      {
+        ...props,
+        enabled: rollbackEnabled,
+        open: sessionId => { openTimeline(sessionId) },
+        t: tEnhancer,
+      },
+    )
     const rollbackUserNode = (props: ChatNodeViewProps<'user'>) => createElement(
       RollbackUserNode,
-      { ...props, rollback: rollbackFor(props.sessionId), tEnhancer, tChat },
+      {
+        ...props,
+        rollback: rollbackFor(props.sessionId),
+        tEnhancer,
+        tChat,
+        onOpenTimeline: turn => { openTimeline(props.sessionId, turn) },
+      },
     )
     const rollbackOverlay = (props: PropsRuntime<'conversation.input.overlay'>) => createElement(
       RollbackModalHost,
-      { rollback: rollbackFor(props.sessionId), t: tEnhancer, inputActions: props.inputActions },
+      {
+        rollback: rollbackFor(props.sessionId),
+        t: tEnhancer,
+        inputActions: props.inputActions,
+        useSession: props.useSession,
+        sessionId: props.sessionId,
+        surface: 'composer',
+        onOpenTimeline: turn => { openTimeline(props.sessionId, turn) },
+      },
     )
     const disposers: Array<() => void> = []
     const disableRollback = () => {
@@ -415,6 +486,22 @@ export function apply(ctx: Context): void {
         if (!enabled) {
           disableRollback()
         } else if (disposers.length === 0) {
+          disposers.push(mountedCtx.sidebarRightTabs.register({
+            id: CHECKPOINT_TIMELINE_TAB_ID,
+            kind: CHECKPOINT_TIMELINE_TAB_KIND,
+            priority: 'extension',
+            title: () => tEnhancer('rollbackTimelineTitle'),
+          }))
+          disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab', () => mountedCtx.slots.register({
+            name: 'sidebar.right.pane.tab',
+            key: CHECKPOINT_TIMELINE_TAB_ID,
+            locale: 'agent-enhancer',
+          }, TimelineTab)))
+          disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab.title', () => mountedCtx.slots.register({
+            name: 'sidebar.right.pane.tab.title',
+            key: CHECKPOINT_TIMELINE_TAB_ID,
+            locale: 'agent-enhancer',
+          }, TimelineTitle)))
           disposers.push(mountedCtx.slots.inject('conversation.chat.node', () => mountedCtx.slots.register({
             name: 'conversation.chat.node', key: 'user', priority: -120,
             registrant: 'agent-enhancer-rollback-user',
@@ -424,11 +511,18 @@ export function apply(ctx: Context): void {
             name: 'conversation.input.overlay', id: 'agent-enhancer-rollback', order: 121,
             locale: 'agent-enhancer',
           }, rollbackOverlay as never)))
+          // Session-stats title stays after a full rollback when per-message buttons are gone.
+          disposers.push(mountedCtx.slots.inject('conversation.composer.dock', () => mountedCtx.slots.register({
+            name: 'conversation.composer.dock', id: 'agent-enhancer-checkpoint-stats', order: 55,
+            locale: 'agent-enhancer',
+          }, StatsCheckpointDock)))
           // Chat only renders append-origin events; reshape the loaded window so
           // surface-replaced history disappears and the rollback tip becomes visible.
           disposers.push(installRollbackTranscriptFilter(mountedCtx, undoTips))
           // Host turnOutline keeps every turn; filter it so TurnNavigator drops rolled-back marks.
           disposers.push(installRollbackTurnOutlineFilter(mountedCtx))
+          // ActivityPill sessionStats is whole-log; after rollback show surface turns/steps only.
+          disposers.push(installRollbackSessionStatsFilter(mountedCtx))
           // + button and `/` share this menu; show undo only while a restore tip remains.
           disposers.push(installRollbackUndoCommand({
             ctx: mountedCtx,

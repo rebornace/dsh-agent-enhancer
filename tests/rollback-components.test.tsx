@@ -15,6 +15,7 @@ import type { RollbackUserNodeProps } from '../src/client/rollback/user-node.tsx
 import { agentLocales } from '../src/client/locales.ts'
 import { RollbackController } from '../src/client/rollback/controller.ts'
 import type { RollbackRemote } from '../src/client/rollback/controller.ts'
+import { CheckpointRollbackClientError } from '../src/client/rollback/remote.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>()
@@ -96,8 +97,10 @@ function setup(options: {
   remote?: RollbackRemote
   turn?: TurnLocation
   operation?: 'rollback' | 'undo'
+  running?: boolean
 } = {}) {
   let enabled = options.enabled ?? true
+  let running = options.running ?? false
   let turn = options.turn ?? turnFixture()
   const operation = options.operation ?? 'rollback'
   const remote = options.remote ?? remoteWith()
@@ -107,7 +110,12 @@ function setup(options: {
     persistDraft: vi.fn(),
     submit: vi.fn(),
   } as unknown as InputActions
-  const tree = () => <RollbackModalHost rollback={rollback} t={translate} inputActions={actions} />
+  const tree = () => <RollbackModalHost
+    rollback={rollback}
+    t={translate}
+    inputActions={actions}
+    useSession={selector => selector({ running })}
+  />
   const view = render(tree())
   return {
     ...view,
@@ -120,6 +128,10 @@ function setup(options: {
     setEnabled(value: boolean) {
       enabled = value
       rollback.refreshSettings()
+      view.rerender(tree())
+    },
+    setRunning(value: boolean) {
+      running = value
       view.rerender(tree())
     },
     rerenderTurn(nextTurn: TurnLocation) {
@@ -146,16 +158,22 @@ describe('RollbackModalHost', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Restore before turn 2' })
     expect(dialog.textContent).toContain('Choose conversation-only restore')
+    expect(dialog.textContent).toContain('2 messages · 1 files')
+    expect(dialog.textContent).toContain('User')
+    expect(dialog.textContent).toContain('Assistant')
     expect(dialog.textContent).toContain('second prompt')
     expect(dialog.textContent).toContain('second response')
+    expect(dialog.textContent).not.toContain('user/message · 3')
     expect(dialog.textContent).toContain('src/app.ts')
-    // Soft capture gaps must not appear under a fatal unavailable heading.
+    // Soft capture gaps must not appear under a fatal unavailable heading, and
+    // must not by themselves mark full restore as limited when files are tracked.
     expect(dialog.textContent).not.toContain('Workspace capture is incomplete')
     expect(dialog.textContent).not.toContain('The original prompt was not plain text')
-    expect(dialog.textContent).toContain('Full restore is limited')
-    expect(dialog.textContent).toContain('Conversation-only restore is still available')
+    expect(dialog.textContent).not.toContain('Full restore is limited')
     expect(dialog.textContent).toContain('File changed after this checkpoint')
+    expect(dialog.textContent).toContain('Revert the file to the checkpoint contents, or restore conversation only')
     expect(dialog.textContent).not.toContain('complete world restore')
+    // Hash conflict still blocks conversation-and-files; conversation-only stays open.
     expect(screen.getByRole('button', { name: 'Restore conversation and tracked files' })).toHaveProperty('disabled', true)
     expect(screen.getByRole('button', { name: 'Restore conversation only' })).toHaveProperty('disabled', false)
     expect(remote.execute).not.toHaveBeenCalled()
@@ -182,6 +200,32 @@ describe('RollbackModalHost', () => {
       turn: 2,
       operation: 'rollback',
       scope: 'conversation-and-files',
+    }, expect.any(AbortSignal))
+  })
+
+  it('explains already-restored tips, offers undo, and prefills draft without pretending to withdraw the notice', async () => {
+    const result: CheckpointRollbackResult = { sessionId, turn: 2, draft: 'second prompt' }
+    const remote = remoteWith(async () => preview({
+      messages: [],
+      files: [],
+      unavailable: ['already-restored'],
+    }), async () => result)
+    const h = setup({ remote })
+    h.open()
+    const dialog = await screen.findByRole('dialog', { name: 'Restore before turn 2' })
+    expect(dialog.textContent).toContain('Already restored to this checkpoint')
+    expect(dialog.textContent).toContain('already at this checkpoint')
+    expect(dialog.textContent).toContain('0 messages · 0 files')
+    expect(dialog.textContent).not.toContain('The user rolled back')
+    expect(screen.getByRole('button', { name: 'Undo restore' })).toHaveProperty('disabled', false)
+    expect(screen.getByRole('button', { name: 'Prefill draft' })).toHaveProperty('disabled', false)
+    fireEvent.click(screen.getByRole('button', { name: 'Prefill draft' }))
+    await waitFor(() => { expect(h.actions.setDraft).toHaveBeenCalledWith('second prompt') })
+    expect(remote.execute).toHaveBeenCalledWith({
+      sessionId,
+      turn: 2,
+      operation: 'rollback',
+      scope: 'conversation',
     }, expect.any(AbortSignal))
   })
 
@@ -270,6 +314,65 @@ describe('RollbackModalHost', () => {
       operation: 'rollback',
       scope: 'conversation',
     }, expect.any(AbortSignal))
+  })
+
+  it('shows typed execute failures with a next step instead of a generic restore error', async () => {
+    const remote = remoteWith(async () => preview(), async () => {
+      throw new CheckpointRollbackClientError('ROLLBACK_CONFLICT')
+    })
+    const h = setup({ remote })
+    h.open()
+    await screen.findByRole('dialog')
+    fireEvent.click(screen.getByRole('button', { name: 'Restore conversation and tracked files' }))
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain('Files changed after preview')
+    })
+    expect(screen.getByRole('alert').textContent).toContain('Use conversation-only restore')
+    expect(h.actions.setDraft).not.toHaveBeenCalled()
+  })
+
+  it('shows recovery guidance when preview fails with ROLLBACK_RECOVERY_FAILED', async () => {
+    const remote = remoteWith(async () => {
+      throw new CheckpointRollbackClientError('ROLLBACK_RECOVERY_FAILED')
+    })
+    setup({ remote }).open()
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain('previous restore is still finishing')
+    })
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy()
+  })
+
+  it('retries preview from the error footer without closing the modal', async () => {
+    const remote = remoteWith(vi.fn()
+      .mockRejectedValueOnce(new CheckpointRollbackClientError('ROLLBACK_RECOVERY_FAILED'))
+      .mockResolvedValueOnce(preview()))
+    const h = setup({ remote })
+    h.open()
+    await screen.findByRole('alert')
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+    await waitFor(() => {
+      expect(screen.getByRole('dialog').textContent).toContain('2 messages · 1 files')
+    })
+    expect(remote.preview).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-previews when the session becomes idle while the modal is open', async () => {
+    const remote = remoteWith(vi.fn()
+      .mockResolvedValueOnce(preview({ unavailable: ['session-running'] }))
+      .mockResolvedValueOnce(preview()))
+    const h = setup({ remote, running: true })
+    h.open()
+    await screen.findByRole('dialog')
+    expect(screen.getByRole('button', { name: 'Restore conversation only' })).toHaveProperty('disabled', true)
+    expect(remote.preview).toHaveBeenCalledTimes(1)
+
+    h.setRunning(false)
+    await waitFor(() => {
+      expect(remote.preview).toHaveBeenCalledTimes(2)
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Restore conversation only' })).toHaveProperty('disabled', false)
+    })
   })
 
   it('executes only after confirmation and restores the returned prompt as an unsent persisted draft', async () => {
@@ -524,5 +627,108 @@ describe('RollbackUserNode', () => {
     expect(screen.queryByRole('button', { name: 'Restore to here' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Undo restore' })).toBeNull()
     markerTip.view.unmount()
+  })
+})
+
+describe('timeline modal surface', () => {
+  it('shows the confirm dialog from the timeline host when composer overlay is absent', async () => {
+    const remote = remoteWith()
+    const rollback = controller(remote)
+    const actions = {
+      setDraft: vi.fn(),
+      persistDraft: vi.fn(),
+      submit: vi.fn(),
+    } as unknown as InputActions
+
+    // Composer overlay host is not mounted — only the timeline surface host.
+    render(<RollbackModalHost
+      rollback={rollback}
+      t={translate}
+      inputActions={actions}
+      surface="timeline"
+    />)
+
+    rollback.open(2, 'rollback', { surface: 'timeline' })
+    expect(await screen.findByRole('dialog', { name: 'Restore before turn 2' })).toBeTruthy()
+    expect(remote.preview).toHaveBeenCalled()
+  })
+
+  it('falls back to the composer host when the timeline surface is not mounted', async () => {
+    const rollback = controller(remoteWith())
+    const actions = {
+      setDraft: vi.fn(),
+      persistDraft: vi.fn(),
+      submit: vi.fn(),
+    } as unknown as InputActions
+
+    // Only composer is registered — a timeline-preferred open must still show a dialog.
+    render(<RollbackModalHost
+      rollback={rollback}
+      t={translate}
+      inputActions={actions}
+      surface="composer"
+    />)
+
+    rollback.open(2, 'rollback', { surface: 'timeline' })
+    expect(await screen.findByRole('dialog', { name: 'Restore before turn 2' })).toBeTruthy()
+    expect(rollback.getSnapshot().active?.surface).toBe('composer')
+  })
+
+  it('keeps timeline-owned restores on the timeline host when both surfaces are mounted', async () => {
+    const rollback = controller(remoteWith())
+    const actions = {
+      setDraft: vi.fn(),
+      persistDraft: vi.fn(),
+      submit: vi.fn(),
+    } as unknown as InputActions
+
+    render(<>
+      <RollbackModalHost
+        rollback={rollback}
+        t={translate}
+        inputActions={actions}
+        surface="composer"
+      />
+      <RollbackModalHost
+        rollback={rollback}
+        t={translate}
+        inputActions={actions}
+        surface="timeline"
+      />
+    </>)
+
+    rollback.open(2, 'rollback', { surface: 'timeline' })
+    expect(await screen.findByRole('dialog', { name: 'Restore before turn 2' })).toBeTruthy()
+    expect(rollback.getSnapshot().active?.surface).toBe('timeline')
+    // A single dialog — composer host must not also present.
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  })
+
+  it('accepts undo previews that remap a browsed card onto the live tip turn', async () => {
+    const remote = remoteWith(async () => preview({
+      turn: 1,
+      tipTurn: 1,
+      operation: 'undo',
+      messages: [{ seq: 2, type: 'user/message', text: 'first prompt' }],
+    }))
+    const rollback = controller(remote)
+    const actions = {
+      setDraft: vi.fn(),
+      persistDraft: vi.fn(),
+      submit: vi.fn(),
+    } as unknown as InputActions
+
+    render(<RollbackModalHost
+      rollback={rollback}
+      t={translate}
+      inputActions={actions}
+      surface="timeline"
+    />)
+
+    // User browsed rolled-back turn 2; host remaps undo onto tip turn 1.
+    rollback.open(2, 'undo', { surface: 'timeline' })
+    const dialog = await screen.findByRole('dialog', { name: /Undo restore before turn 1/ })
+    expect(dialog).toBeTruthy()
+    expect(rollback.getSnapshot().active).toMatchObject({ turn: 1, status: 'ready' })
   })
 })

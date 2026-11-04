@@ -40,6 +40,22 @@ describe('PromptHistory', () => {
     expect(history.search('')).toEqual([{ seq: 2, text: 'newer' }, { seq: 1, text: 'older' }])
   })
 
+  it('keeps one navigation step per exact prompt text', () => {
+    const history = new PromptHistory([
+      { seq: 1, text: 'same' },
+      { seq: 3, text: 'same' },
+      { seq: 2, text: 'other' },
+    ])
+
+    expect(history.previous(null)).toEqual({ text: 'same', index: 0 })
+    expect(history.previous(0)).toEqual({ text: 'other', index: 1 })
+    expect(history.previous(1)).toEqual({ text: 'other', index: 1 })
+    expect(history.search('')).toEqual([
+      { seq: 3, text: 'same' },
+      { seq: 2, text: 'other' },
+    ])
+  })
+
   it('searches case-insensitively and treats whitespace as an empty query', () => {
     const history = new PromptHistory([
       { seq: 1, text: 'Deploy API' },

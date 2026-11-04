@@ -29,10 +29,43 @@ export interface CaptureCheckpointOptions {
   readonly onStage?: (stage: CheckpointStage) => void
 }
 
+/** Join text blocks only — attachments/chips must not wipe a typed prompt preview. */
+export function textBlocksOf(
+  content: readonly { readonly type: string, readonly text?: string }[],
+): string {
+  return content
+    .flatMap(block => block.type === 'text' && typeof block.text === 'string' ? [block.text] : [])
+    .join('')
+}
+
 function directText(prompt: CaptureCheckpointOptions['prompt']): string | null {
   if (prompt.source.kind !== 'user' || prompt.content.length === 0) return null
-  if (prompt.content.some(block => block.type !== 'text')) return null
-  return prompt.content.map(block => block.type === 'text' ? block.text : '').join('')
+  const text = textBlocksOf(prompt.content)
+  return text.trim() === '' ? null : text
+}
+
+/** Recover a human prompt from session events when a stored checkpoint left it empty. */
+export function recoverTurnPrompt(
+  events: readonly SessionEvent[],
+  turn: number,
+): string {
+  const turnStart = events.find(
+    (event): event is SessionEvent<'turn/start'> =>
+      event.type === 'turn/start' && event.data.turn === turn,
+  )
+  const turnEnd = events.find(
+    (event): event is SessionEvent<'turn/end'> =>
+      event.type === 'turn/end' && event.data.turn === turn,
+  )
+  if (turnStart === undefined || turnEnd === undefined) return ''
+  for (const event of events) {
+    if (event.type !== 'user/message') continue
+    if (event.seq <= turnStart.seq || event.seq >= turnEnd.seq) continue
+    if (event.data.source.kind !== 'user') continue
+    const text = textBlocksOf(event.data.content)
+    if (text.trim() !== '') return text
+  }
+  return ''
 }
 
 /** Inclusive keep-prefix end seq for a turn/start (never negative — store schema). */
@@ -42,20 +75,32 @@ export function checkpointAtSeq(turnStartSeq: number): number {
 
 /**
  * Exclusive cut for restore: events with seq > cut are rolled back.
- * Always resolve from the live `turn/start` for `turn` — stored `atSeq` is only a
- * hint. When turn/start is the first log event, cut is -1 (empty keep-prefix).
- * When turn/start is seq 1 after `session/end-seed`, cut is 0.
+ *
+ * “Restore to here” on turn N withdraws turn N and everything after (cut just
+ * before that turn’s `turn/start`). Pin the turn/start by stored `atSeq` when
+ * the append-only log reuses turn numbers after undo.
  */
 export function resolveRollbackCut(
   events: readonly SessionEvent[],
   turn: number,
-  _atSeq?: number,
+  atSeq?: number,
 ): { readonly cutSeq: number } | null {
-  const turnStart = events.find(
+  const starts = events.filter(
     (event): event is SessionEvent<'turn/start'> =>
       event.type === 'turn/start' && event.data.turn === turn,
   )
-  if (turnStart === undefined) return null
+  if (starts.length === 0) return null
+  let turnStart = starts[0]!
+  if (typeof atSeq === 'number') {
+    const want = atSeq + 1
+    const exact = starts.find(event => Number(event.seq) === want)
+    if (exact !== undefined) {
+      turnStart = exact
+    } else {
+      const after = [...starts].reverse().find(event => Number(event.seq) >= want)
+      if (after !== undefined) turnStart = after
+    }
+  }
   return { cutSeq: Number(turnStart.seq) - 1 }
 }
 
@@ -75,8 +120,13 @@ export async function captureCheckpoint(options: CaptureCheckpointOptions): Prom
   let files: readonly FileCheckpoint[]
   try {
     files = await options.captureFiles()
-  } catch {
-    files = []
+  } catch (error) {
+    // Live capture may attach already-tracked write/edit snapshots when the turn
+    // is incomplete (e.g. shell used alongside write_file). Keep them so rollback
+    // can still delete/restore those paths; the workspace gap warns about the rest.
+    files = Array.isArray((error as { files?: unknown }).files)
+      ? (error as { files: readonly FileCheckpoint[] }).files
+      : []
     gaps.push({ type: 'workspace', reason: 'capture-failed' })
   }
   options.onStage?.('workspace-captured')
@@ -129,7 +179,10 @@ export function synthesizeCheckpoint(options: SynthesizeCheckpointOptions): Chec
 
   const user = options.events.find(
     (event): event is SessionEvent<'user/message'> =>
-      event.type === 'user/message' && event.seq > turnStart.seq && event.seq < turnEnd.seq,
+      event.type === 'user/message'
+      && event.data.source.kind === 'user'
+      && event.seq > turnStart.seq
+      && event.seq < turnEnd.seq,
   )
   const prompt = user === undefined ? null : directText(user.data)
   // No tracked files were observed; treat as a complete empty-files checkpoint so

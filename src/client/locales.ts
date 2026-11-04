@@ -38,20 +38,35 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'dismissHint' |
       'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackUndoAction' |
       'rollbackUndoCommandDescription' |
-      'rollbackTitle' | 'rollbackScope' | 'rollbackUndoTitle' | 'rollbackUndoScope' | 'rollbackUndoScopeConversation' |
-      'rollbackClose' | 'rollbackConfirm' | 'rollbackConfirmConversation' | 'rollbackUndoConfirm' |
-      'rollbackUndoConfirmConversation' | 'rollbackCancel' | 'rollbackLoading' |
+      'rollbackTitle' | 'rollbackScope' | 'rollbackScopeAlready' | 'rollbackScopeCovered' | 'rollbackUndoTitle' | 'rollbackUndoScope' | 'rollbackUndoScopeConversation' |
+      'rollbackClose' | 'rollbackConfirm' | 'rollbackConfirmConversation' | 'rollbackConfirmAlready' |
+      'rollbackConfirmConversationAlready' | 'rollbackUndoConfirm' |
+      'rollbackUndoConfirmConversation' | 'rollbackCancel' | 'rollbackLoading' | 'rollbackAlreadyRestored' |
+      'rollbackCoveredByEarlier' |
       'rollbackRestoring' | 'rollbackRestoringConversation' | 'rollbackUndoRestoring' |
       'rollbackUndoRestoringConversation' | 'rollbackFailed' |
-      'rollbackTurnOpen' | 'rollbackTurnStartMissing' |
+      'rollbackFailedUnavailable' | 'rollbackFailedConflict' | 'rollbackFailedRecovery' |
+      'rollbackRetry' | 'rollbackTurnOpen' | 'rollbackTurnStartMissing' |
+      'rollbackSummary' | 'rollbackSummaryLabel' | 'rollbackMessageEmpty' |
+      'rollbackRole_user' | 'rollbackRole_assistant' | 'rollbackRole_tool' | 'rollbackRole_system' | 'rollbackRole_other' |
+      'rollbackCoverageFiles' | 'rollbackCoveragePartial' | 'rollbackCoverageConversation' |
+      'rollbackTimelineTitle' | 'rollbackTimelineOpen' | 'rollbackTimelineLead' | 'rollbackTimelineLoading' |
+      'rollbackTimelineFailed' | 'rollbackTimelineEmpty' | 'rollbackTimelineNoSession' | 'rollbackTimelineTurn' |
+      'rollbackTimelineRolledBack' | 'rollbackTimelineTip' | 'rollbackTimelineOpening' |
+      'rollbackTimelineCoveredHint' | 'rollbackTimelineNoPrompt' | 'rollbackTimelineFileFallback' |
+      'rollbackTimelineFilesFallback' | 'rollbackTimelineCoverageFiles' | 'rollbackTimelineCoveragePartial' |
+      'rollbackTimelineCoverageConversation' | 'rollbackTimelineCoverageUnknown' |
       'rollbackMessages' | 'rollbackFiles' | 'rollbackGaps' | 'rollbackFilesLimited' | 'rollbackFilesLimitedHint' |
       'rollbackConflicts' | 'rollbackNoMessages' | 'rollbackNoFiles' |
       'rollbackFile_create' | 'rollbackFile_modify' | 'rollbackFile_delete' | 'rollbackGapWorkspace' | 'rollbackGapPrompt' |
       'rollbackUnavailableCheckpoint' | 'rollbackUnavailableIncomplete' | 'rollbackUnavailableSessionChanged' |
       'rollbackUnavailableRunning' | 'rollbackUnavailablePermission' | 'rollbackUnavailableDisabled' |
-      'rollbackUnavailableFirstTurn' | 'rollbackUnavailableIncompatible' | 'rollbackUnavailableCompacted' |
-      'rollbackUnavailableSubagent' | 'rollbackUnavailableUnknown' | 'rollbackConflictUnsafe' | 'rollbackConflictSymlink' |
-      'rollbackConflictRegular' | 'rollbackConflictBinary' | 'rollbackConflictLarge' | 'rollbackConflictBefore' | 'rollbackConflictHash' |
+      'rollbackUnavailableIncompatible' | 'rollbackUnavailableCompacted' |
+      'rollbackUnavailableSubagent' | 'rollbackUnavailableUnknown' | 'rollbackUnavailableAlready' |
+      'rollbackUnavailableCovered' |
+      'rollbackConflictUnsafe' | 'rollbackConflictSymlink' |
+      'rollbackConflictRegular' | 'rollbackConflictBinary' | 'rollbackConflictLarge' | 'rollbackConflictBefore' |
+      'rollbackConflictHash' | 'rollbackConflictHashHint' |
       'contextInspect' | 'contextInspectDescription' | 'contextInspectDetailTitle' | 'contextInspectNote' |
       'contextInspectEmpty' | 'contextInspectApproxTotal' | 'contextInspectApproxBadge' |
       'contextInspectOpenCategory' | 'contextInspectCategories' | 'contextInspectItemDetail' |
@@ -256,46 +271,87 @@ export const agentLocales = {
     rollbackTitle: '恢复到第 {turn} 轮之前',
     rollbackUndoTitle: '撤销第 {turn} 轮恢复',
     rollbackScope: '可选择仅恢复对话，或同时恢复已跟踪文件。进程、终端、后台任务、数据库、网络、部署、第三方服务和未跟踪文件不会恢复。无文件变更或仅有捕获缺口时仍可确认；有文件冲突时仍可仅恢复对话。',
+    rollbackScopeAlready: '对话已停在此检查点。确认只会重新填入该轮草稿；若要重新显示被撤回的消息，请用「撤销恢复」。进程、终端、后台任务、数据库、网络、部署、第三方服务和未跟踪文件不会恢复。',
+    rollbackScopeCovered: '当前已恢复到更早的检查点，此处被覆盖。请先「撤销恢复」回到完整对话，再选择恢复到这一轮。',
     rollbackUndoScope: '将撤回本次恢复标记，并还原恢复前的对话与已跟踪文件预览。进程、终端、后台任务、数据库、网络、部署、第三方服务和未跟踪文件不会恢复。',
     rollbackUndoScopeConversation: '将撤回本次仅对话恢复标记，并还原恢复前的对话预览。已跟踪文件保持当前状态。',
     rollbackClose: '关闭恢复预览',
     rollbackConfirm: '恢复对话与已跟踪文件',
     rollbackConfirmConversation: '仅恢复对话',
+    rollbackConfirmAlready: '重新填入草稿（含文件）',
+    rollbackConfirmConversationAlready: '重新填入草稿',
     rollbackUndoConfirm: '撤销恢复并还原预览内容',
     rollbackUndoConfirmConversation: '撤销恢复并还原对话',
     rollbackCancel: '取消',
+    rollbackAlreadyRestored: '当前已恢复到此检查点，没有新的对话可撤回。确认后关闭预览并填入该轮提示词草稿；需要找回被撤回的消息时，请改用「撤销恢复」。',
+    rollbackCoveredByEarlier: '更早的恢复（第 {tipTurn} 轮）已覆盖此检查点。请先撤销当前恢复，再恢复到这一轮。',
     rollbackLoading: '正在重新检查对话和文件状态…',
     rollbackRestoring: '正在恢复对话与已跟踪文件…',
     rollbackRestoringConversation: '正在恢复对话…',
     rollbackUndoRestoring: '正在撤销恢复并还原对话与已跟踪文件…',
     rollbackUndoRestoringConversation: '正在撤销恢复并还原对话…',
     rollbackFailed: '恢复未完成，请关闭预览后重试。',
+    rollbackFailedUnavailable: '当前无法恢复（会话已变化、仍在运行或结构不兼容）。请关闭预览后重试。',
+    rollbackFailedConflict: '文件在预览后发生了变化，完整恢复已取消。可改为仅恢复对话，或关闭后重新预览。',
+    rollbackFailedRecovery: '上次恢复尚未收尾（会话正忙或崩溃恢复未完成）。请等会话空闲后点「重新检查」，或关闭预览再试。',
+    rollbackRetry: '重新检查',
     rollbackTurnOpen: '本轮尚未结束',
     rollbackTurnStartMissing: '本轮开始事件尚未加载',
+    rollbackSummary: '{messages} 条消息 · {files} 个文件',
+    rollbackSummaryLabel: '恢复范围摘要',
+    rollbackMessageEmpty: '（无文本）',
+    rollbackRole_user: '用户',
+    rollbackRole_assistant: '助手',
+    rollbackRole_tool: '工具',
+    rollbackRole_system: '系统',
+    rollbackRole_other: '其他',
+    rollbackCoverageFiles: '恢复到这里 · {count} 个已跟踪文件',
+    rollbackCoveragePartial: '恢复到这里 · 部分文件快照（{count}）',
+    rollbackCoverageConversation: '恢复到这里 · 仅对话快照',
+    rollbackTimelineTitle: '检查点',
+    rollbackTimelineOpen: '检查点时间线',
+    rollbackTimelineLead: '当前对话 {turns} 轮 / {steps} 步 · 检查点 {liveCheckpoints}/{checkpoints}（不含撤销壳）。按对话顺序排列；展开可看提示词、文件与缺口。',
+    rollbackTimelineLoading: '正在加载检查点…',
+    rollbackTimelineFailed: '检查点列表加载失败。请重试。',
+    rollbackTimelineEmpty: '此会话还没有可展示的检查点。完成一轮后会出现在这里。',
+    rollbackTimelineNoSession: '请从会话中的恢复入口打开检查点时间线。',
+    rollbackTimelineTurn: '第 {turn} 轮',
+    rollbackTimelineRolledBack: '已回滚',
+    rollbackTimelineTip: '当前恢复点',
+    rollbackTimelineOpening: '正在打开预览…',
+    rollbackTimelineCoveredHint: '已被更早的恢复点覆盖。要回到这一轮，请先撤销当前恢复。',
+    rollbackTimelineNoPrompt: '无可用提示词摘要',
+    rollbackTimelineFileFallback: '{path}',
+    rollbackTimelineFilesFallback: '{path} 等 {count} 个文件',
+    rollbackTimelineCoverageFiles: '{count} 个已跟踪文件',
+    rollbackTimelineCoveragePartial: '部分快照 · {count} 个文件',
+    rollbackTimelineCoverageConversation: '仅对话',
+    rollbackTimelineCoverageUnknown: '未知覆盖',
     rollbackMessages: '将撤回的对话',
     rollbackFiles: '将恢复的已跟踪文件',
     rollbackGaps: '无法恢复的原因',
     rollbackFilesLimited: '完整恢复受限',
-    rollbackFilesLimitedHint: '仍可只恢复对话；工作区捕获不完整或文件有冲突时，不建议恢复文件。',
+    rollbackFilesLimitedHint: '已跟踪的文件变更仍可恢复；若文件冲突或捕获缺口挡住其余部分，仍可只恢复对话。',
     rollbackConflicts: '文件冲突',
     rollbackNoMessages: '没有可预览的对话消息。',
     rollbackNoFiles: '此检查点没有已跟踪文件。',
     rollbackFile_create: '删除本轮创建的文件',
     rollbackFile_modify: '恢复修改前内容',
     rollbackFile_delete: '恢复已删除文件',
-    rollbackGapWorkspace: '工作区捕获不完整',
+    rollbackGapWorkspace: '工作区捕获不完整（部分命令行副作用可能未收录）',
     rollbackGapPrompt: '原提示词不是纯文本',
     rollbackUnavailableCheckpoint: '找不到此轮检查点',
-    rollbackUnavailableIncomplete: '检查点不完整；仍可只恢复对话',
+    rollbackUnavailableIncomplete: '检查点不完整；已跟踪文件与对话仍可恢复；部分命令行副作用可能未收录',
     rollbackUnavailableSessionChanged: '会话已变化，请重新预览',
     rollbackUnavailableRunning: '会话仍在运行',
     rollbackUnavailablePermission: '当前没有恢复权限',
     rollbackUnavailableDisabled: '回滚功能已关闭',
-    rollbackUnavailableFirstTurn: '首轮边界较特殊；仍可尝试只恢复对话',
     rollbackUnavailableIncompatible: '检查点与当前会话或插件版本不兼容',
     rollbackUnavailableCompacted: '对话曾被压缩；完整文件恢复可能不可用，仍可只恢复对话',
     rollbackUnavailableSubagent: '子 Agent 会话不支持回滚',
     rollbackUnavailableUnknown: '对话结构无法安全识别',
+    rollbackUnavailableAlready: '对话已停在此检查点',
+    rollbackUnavailableCovered: '已被更早的恢复点覆盖',
     rollbackConflictUnsafe: '文件路径不安全',
     rollbackConflictSymlink: '文件路径包含符号链接',
     rollbackConflictRegular: '当前路径不是普通文件',
@@ -303,6 +359,7 @@ export const agentLocales = {
     rollbackConflictLarge: '文件超过恢复大小限制',
     rollbackConflictBefore: '检查点文件内容无效',
     rollbackConflictHash: '文件在检查点后发生了变化',
+    rollbackConflictHashHint: '可改回检查点内容后重试，或先仅恢复对话',
   },
   en: {
     historyTitle: 'Prompt history',
@@ -488,46 +545,87 @@ export const agentLocales = {
     rollbackTitle: 'Restore before turn {turn}',
     rollbackUndoTitle: 'Undo restore before turn {turn}',
     rollbackScope: 'Choose conversation-only restore, or restore conversation and tracked files. Processes, terminals, background jobs, databases, network activity, deployments, third-party state, and untracked files are not restored. Soft capture gaps do not block restore when there are no tracked files; conversation-only remains available when files conflict.',
+    rollbackScopeAlready: 'The conversation is already at this checkpoint. Confirm only prefills that turn’s draft; use Undo restore to bring withdrawn messages back. Processes, terminals, background jobs, databases, network activity, deployments, third-party state, and untracked files are not restored.',
+    rollbackScopeCovered: 'A more recent restore already sits at an earlier checkpoint. Undo that restore first, then restore to this turn.',
     rollbackUndoScope: 'Withdraw the restore marker and bring back the conversation and tracked files shown in preview. Processes, terminals, background jobs, databases, network activity, deployments, third-party state, and untracked files are not restored.',
     rollbackUndoScopeConversation: 'Withdraw the conversation-only restore marker and bring back the conversation shown in preview. Tracked files stay as they are.',
     rollbackClose: 'Close restore preview',
     rollbackConfirm: 'Restore conversation and tracked files',
     rollbackConfirmConversation: 'Restore conversation only',
+    rollbackConfirmAlready: 'Prefill draft (with files)',
+    rollbackConfirmConversationAlready: 'Prefill draft',
     rollbackUndoConfirm: 'Undo restore and bring back preview',
     rollbackUndoConfirmConversation: 'Undo restore and bring back conversation',
     rollbackCancel: 'Cancel',
+    rollbackAlreadyRestored: 'Already restored to this checkpoint — nothing new to withdraw. Confirm closes the preview and prefills that turn’s prompt. Use Undo restore if you want the withdrawn messages back.',
+    rollbackCoveredByEarlier: 'An earlier restore (before turn {tipTurn}) already covers this checkpoint. Undo the current restore first, then restore to this turn.',
     rollbackLoading: 'Rechecking conversation and file state…',
     rollbackRestoring: 'Restoring conversation and tracked files…',
     rollbackRestoringConversation: 'Restoring conversation…',
     rollbackUndoRestoring: 'Undoing restore and bringing back conversation and tracked files…',
     rollbackUndoRestoringConversation: 'Undoing restore and bringing back conversation…',
     rollbackFailed: 'Restore did not complete. Close the preview and try again.',
+    rollbackFailedUnavailable: 'Restore is unavailable (session changed, still running, or structure incompatible). Close the preview and try again.',
+    rollbackFailedConflict: 'Files changed after preview, so full restore was cancelled. Use conversation-only restore, or close and preview again.',
+    rollbackFailedRecovery: 'A previous restore is still finishing (session busy or crash recovery pending). Wait until the session is idle, then tap Check again, or close the preview and retry.',
+    rollbackRetry: 'Check again',
     rollbackTurnOpen: 'The turn is not closed',
     rollbackTurnStartMissing: 'The turn start is not loaded',
+    rollbackSummary: '{messages} messages · {files} files',
+    rollbackSummaryLabel: 'Restore scope summary',
+    rollbackMessageEmpty: '(no text)',
+    rollbackRole_user: 'User',
+    rollbackRole_assistant: 'Assistant',
+    rollbackRole_tool: 'Tool',
+    rollbackRole_system: 'System',
+    rollbackRole_other: 'Other',
+    rollbackCoverageFiles: 'Restore to here · {count} tracked files',
+    rollbackCoveragePartial: 'Restore to here · partial file snapshot ({count})',
+    rollbackCoverageConversation: 'Restore to here · conversation snapshot',
+    rollbackTimelineTitle: 'Checkpoints',
+    rollbackTimelineOpen: 'Checkpoint timeline',
+    rollbackTimelineLead: 'Live chat {turns} turns / {steps} steps · checkpoints {liveCheckpoints}/{checkpoints} (undo shells excluded). Listed in conversation order; expand a row for prompt, files, and gaps.',
+    rollbackTimelineLoading: 'Loading checkpoints…',
+    rollbackTimelineFailed: 'Could not load checkpoints. Try again.',
+    rollbackTimelineEmpty: 'No checkpoints for this session yet. They appear after a completed turn.',
+    rollbackTimelineNoSession: 'Open the checkpoint timeline from a restore entry in a conversation.',
+    rollbackTimelineTurn: 'Turn {turn}',
+    rollbackTimelineRolledBack: 'Rolled back',
+    rollbackTimelineTip: 'Current restore point',
+    rollbackTimelineOpening: 'Opening preview…',
+    rollbackTimelineCoveredHint: 'Covered by an earlier restore. Undo the current restore before restoring to this turn.',
+    rollbackTimelineNoPrompt: 'No prompt summary available',
+    rollbackTimelineFileFallback: '{path}',
+    rollbackTimelineFilesFallback: '{path} · {count} files',
+    rollbackTimelineCoverageFiles: '{count} tracked files',
+    rollbackTimelineCoveragePartial: 'Partial · {count} files',
+    rollbackTimelineCoverageConversation: 'Conversation only',
+    rollbackTimelineCoverageUnknown: 'Unknown coverage',
     rollbackMessages: 'Conversation to withdraw',
     rollbackFiles: 'Tracked files to restore',
     rollbackGaps: 'Why restore is unavailable',
     rollbackFilesLimited: 'Full restore is limited',
-    rollbackFilesLimitedHint: 'Conversation-only restore is still available. Skip file restore when workspace capture is incomplete or files conflict.',
+    rollbackFilesLimitedHint: 'Tracked file changes can still be restored. Conversation-only restore remains available if files conflict or capture gaps block the rest.',
     rollbackConflicts: 'File conflicts',
     rollbackNoMessages: 'No conversation messages are available for preview.',
     rollbackNoFiles: 'This checkpoint has no tracked files.',
     rollbackFile_create: 'Remove file created in this turn',
     rollbackFile_modify: 'Restore previous content',
     rollbackFile_delete: 'Restore deleted file',
-    rollbackGapWorkspace: 'Workspace capture is incomplete',
+    rollbackGapWorkspace: 'Workspace capture is incomplete (some shell side effects may be missing)',
     rollbackGapPrompt: 'The original prompt was not plain text',
     rollbackUnavailableCheckpoint: 'No checkpoint was found for this turn',
-    rollbackUnavailableIncomplete: 'The checkpoint is incomplete; conversation-only restore is still available',
+    rollbackUnavailableIncomplete: 'The checkpoint is incomplete; tracked files and conversation restore are still available; some shell side effects may be missing',
     rollbackUnavailableSessionChanged: 'The session changed. Preview again.',
     rollbackUnavailableRunning: 'The session is still running',
     rollbackUnavailablePermission: 'Restore permission is unavailable',
     rollbackUnavailableDisabled: 'Rollback is disabled',
-    rollbackUnavailableFirstTurn: 'The first-turn boundary is unusual; conversation-only restore may still work',
     rollbackUnavailableIncompatible: 'The checkpoint is incompatible with this session or plugin version',
     rollbackUnavailableCompacted: 'The conversation was compacted; full file restore may be unavailable, conversation-only restore still works',
     rollbackUnavailableSubagent: 'Subagent sessions do not support rollback',
     rollbackUnavailableUnknown: 'The conversation structure cannot be verified safely',
+    rollbackUnavailableAlready: 'Already at this checkpoint',
+    rollbackUnavailableCovered: 'Covered by an earlier restore',
     rollbackConflictUnsafe: 'The file path is unsafe',
     rollbackConflictSymlink: 'The file path contains a symbolic link',
     rollbackConflictRegular: 'The current path is not a regular file',
@@ -535,5 +633,6 @@ export const agentLocales = {
     rollbackConflictLarge: 'The file exceeds the restore size limit',
     rollbackConflictBefore: 'The checkpoint file content is invalid',
     rollbackConflictHash: 'File changed after this checkpoint',
+    rollbackConflictHashHint: 'Revert the file to the checkpoint contents, or restore conversation only',
   },
 } as const

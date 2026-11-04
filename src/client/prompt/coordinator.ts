@@ -120,6 +120,14 @@ export class Coordinator {
     }
   }
 
+  /** Drop cached ↑↓ / search entries without leaving history mode. */
+  invalidateHistoryCache(sessionId?: SessionId): void {
+    if (this.disposed) return
+    if (sessionId === undefined) this.historyCache.clear()
+    else this.historyCache.delete(sessionId)
+    this.historyPending.clear()
+  }
+
   refreshSettings(): void {
     if (this.disposed || this.switches.history()) return
     if (this.mode.kind !== 'history' && this.mode.kind !== 'search') return
@@ -228,11 +236,24 @@ export class Coordinator {
 
   updateSearch(query: string): boolean {
     if (this.disposed || this.mode.kind !== 'search' || this.input === null) return false
-    const entries = this.historyCache.get(this.input.sessionId)?.entries ?? []
-    this.searchEntries = new PromptHistory(entries).search(query)
-    this.searchIndex = this.searchEntries.length > 0 ? 0 : -1
+    const generation = this.generation
+    const guard = guardOf(this.input)
+    const entries = this.loadHistory(this.input.sessionId)
+    if (Array.isArray(entries)) {
+      this.searchEntries = new PromptHistory(entries).search(query)
+      this.searchIndex = this.searchEntries.length > 0 ? 0 : -1
+      this.mode = { ...this.mode, query }
+      this.emit()
+      return true
+    }
     this.mode = { ...this.mode, query }
     this.emit()
+    void Promise.resolve(entries).then(loaded => {
+      if (this.disposed || generation !== this.generation || !this.current(guard) || this.mode.kind !== 'search') return
+      this.searchEntries = new PromptHistory(loaded).search(this.mode.query)
+      this.searchIndex = this.searchEntries.length > 0 ? 0 : -1
+      this.emit()
+    })
     return true
   }
 
@@ -420,14 +441,29 @@ export class Coordinator {
       return true
     }
     if (this.mode.kind !== 'history') return false
-    const entries = this.historyCache.get(this.input.sessionId)?.entries ?? []
-    const selected = new PromptHistory(entries).next(this.mode.index)
-    if (selected === null) return true
-    if (selected.index === null) {
-      this.restoreOriginal(this.mode.original)
-      return true
+    const original = this.mode.original
+    const index = this.mode.index
+    const generation = this.generation
+    const guard = guardOf(this.input)
+    const entries = this.loadHistory(this.input.sessionId)
+    const apply = (loaded: readonly PromptEntry[]) => {
+      const selected = new PromptHistory(loaded).next(index)
+      if (selected === null) return
+      if (selected.index === null) {
+        this.restoreOriginal(original)
+        return
+      }
+      this.selectHistory(selected, original)
     }
-    this.selectHistory(selected, this.mode.original)
+    if (Array.isArray(entries)) {
+      apply(entries)
+    } else {
+      void Promise.resolve(entries).then(loaded => {
+        if (this.disposed || generation !== this.generation || !this.current(guard)) return
+        if (this.mode.kind !== 'history') return
+        apply(loaded)
+      })
+    }
     return true
   }
 

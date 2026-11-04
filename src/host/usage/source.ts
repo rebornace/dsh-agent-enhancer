@@ -35,18 +35,17 @@ export function classifyUsageSource(options: GenerateOptions): UsageSource {
     stamps.set(options, tagged)
     return tagged
   }
-  switch (options.purpose) {
+  // 0.2.2: LlmRequestPurposeMap is package-augmented; treat purpose as a string tag.
+  const purpose = options.purpose as string | undefined
+  switch (purpose) {
     case 'compaction':
       return 'compaction'
     case 'session-title':
       return 'sessionTitle'
     case undefined:
       break
-    default: {
-      const _exhaustive: never = options.purpose
-      void _exhaustive
+    default:
       return 'other'
-    }
   }
   if (isAgentLoopRequest(options)) return 'session'
   if (options.system === undefined && options.sessionId !== undefined) return 'session'
