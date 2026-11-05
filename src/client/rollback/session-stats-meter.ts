@@ -104,17 +104,23 @@ function enhanceTitleRow(row: HTMLElement, options: SessionStatsCheckpointLinkOp
 }
 
 /**
- * Wire the official 会话统计 title to open the checkpoint timeline — a stable
- * entry when per-message restore buttons are gone after a full rollback.
+ * Optional DOM shortcut: when the official 会话统计 popover is open, make the
+ * title row open our checkpoint timeline. Primary entries remain the message
+ * timeline icon and the right-sidebar tab — this must fail silently if the
+ * host markup changes (Desktop 0.2.2+ session stats / experimental stats).
  */
 export function installSessionStatsCheckpointLink(
   options: SessionStatsCheckpointLinkOptions,
 ): () => void {
   const scan = () => {
-    const panel = findOpenSessionStatsPanel()
-    if (panel === null) return
-    const title = findSessionStatsTitleRow(panel)
-    if (title !== null) enhanceTitleRow(title, options)
+    try {
+      const panel = findOpenSessionStatsPanel()
+      if (panel === null) return
+      const title = findSessionStatsTitleRow(panel)
+      if (title !== null) enhanceTitleRow(title, options)
+    } catch {
+      // Host popover shape changed — keep composer usable without the shortcut.
+    }
   }
   const observer = new MutationObserver(scan)
   observer.observe(document.body, {

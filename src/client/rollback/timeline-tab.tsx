@@ -73,8 +73,6 @@ export interface CheckpointTimelineTabProps extends PropsRuntime<'sidebar.right.
   readonly locale?: string
   readonly sessions?: SessionsLookup
   readonly rollbackFor: (sessionId: SessionId) => RollbackController
-  readonly onRestore: (sessionId: SessionId, turn: number) => void
-  readonly onUndo: (sessionId: SessionId, turn: number) => void
 }
 
 function paramsOf(raw: unknown): Partial<CheckpointTimelineTabParams> {
@@ -84,6 +82,17 @@ function paramsOf(raw: unknown): Partial<CheckpointTimelineTabParams> {
     ...(typeof record.sessionId === 'string' ? { sessionId: record.sessionId as SessionId } : {}),
     ...(typeof record.turn === 'number' ? { turn: record.turn } : {}),
   }
+}
+
+/** Prefer the live session-scoped slot id; openTab params are focus-only / legacy. */
+export function resolveTimelineSessionId(
+  scopedSessionId: string | undefined,
+  params: Partial<CheckpointTimelineTabParams>,
+): SessionId | undefined {
+  if (typeof scopedSessionId === 'string' && scopedSessionId !== '') {
+    return scopedSessionId as SessionId
+  }
+  return params.sessionId
 }
 
 function CheckpointTimelineTabBody(props: CheckpointTimelineTabProps & {
@@ -112,11 +121,8 @@ function CheckpointTimelineTabBody(props: CheckpointTimelineTabProps & {
       t={props.t}
       locale={props.locale}
       {...activityBridge}
-      onRestore={turn => { props.onRestore(props.sessionId, turn) }}
-      onUndo={turn => { props.onUndo(props.sessionId, turn) }}
     />
-    {/* Own the confirm modal for timeline opens — composer overlay may not be
-        subscribed/visible while the right pane has focus. */}
+    {/* Keep modal host so bubble-triggered restores still confirm while this pane is focused. */}
     <RollbackModalHost
       rollback={rollback}
       t={props.t}
@@ -130,14 +136,21 @@ function CheckpointTimelineTabBody(props: CheckpointTimelineTabProps & {
 export function CheckpointTimelineTab(props: CheckpointTimelineTabProps) {
   const info = props.useTabInfo()
   const params = paramsOf(info.tab.navigation.params)
-  if (params.sessionId === undefined) {
+  // `sidebar.right.pane.tab` is session-scoped: props.sessionId tracks the chat
+  // currently drawn in this right pane. openTab params.sessionId can go stale
+  // after the user switches conversations and must not win.
+  const sessionId = resolveTimelineSessionId(
+    typeof props.sessionId === 'string' ? props.sessionId : undefined,
+    params,
+  )
+  if (sessionId === undefined) {
     return <div className={styles.timelineRightPane}>
       <p className={styles.timelineStatus}>{props.t('rollbackTimelineNoSession')}</p>
     </div>
   }
   return <CheckpointTimelineTabBody
     {...props}
-    sessionId={params.sessionId}
+    sessionId={sessionId}
     focusTurn={params.turn}
   />
 }

@@ -20,10 +20,15 @@ import { DshCheckpointSessions } from './checkpoint/dsh.ts'
 import { DshCheckpointCaptureSwitch } from './checkpoint/live.ts'
 import { CheckpointRollbackError, CheckpointRollbackService } from './checkpoint/service.ts'
 import type {
+  CheckpointCutRequest,
   CheckpointRollbackRequest,
   CheckpointSummariesRequest,
 } from './checkpoint/service.ts'
+import { SessionCutStore } from './checkpoint/cut-store.ts'
+import { installSessionCutFilter } from './checkpoint/cut-live.ts'
+import type { SessionCut } from './checkpoint/cut-store.ts'
 import { CheckpointStore } from './checkpoint/store.ts'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Session, SessionStore } from '@deepseek-ai/dsh-session'
 import { compactContextNow, resolveCompactRouteOverride } from './context-compact.ts'
 import type { CompactRouteOverride, ContextCompactRequest, ContextCompactResult } from './context-compact.ts'
@@ -395,6 +400,8 @@ export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => ctx.typert.register(hostContribution))
 
   const store = new CheckpointStore(storageRoot)
+  const cutStore = new SessionCutStore(join(storageRoot, 'cuts'))
+  const cutCache = new Map<SessionId, SessionCut | null>()
   const sessions = new DshCheckpointSessions(ctx)
   let rollbackEnabled = config.rollbackEnabled.get()
   const captures = new DshCheckpointCaptureSwitch(ctx, { store, pluginVersion: PACKAGE_VERSION })
@@ -405,11 +412,14 @@ export function apply(ctx: Context, config: Config): void {
     resolveSession: sessions.resolveSession,
     isEnabled: () => rollbackEnabled,
     awaitCaptures: () => captures.awaitPending(),
+    cutStore,
+    cutCache,
   })
   applyCheckpointRollback(ctx, rollback)
   void rollback.recover().catch(() => {
     ctx.logger.warn('Checkpoint rollback recovery is still pending')
   })
+  ctx.effect(() => installSessionCutFilter(ctx, { store: cutStore, cache: cutCache }))
 
   ctx.effect(() => {
     // Cordis 4.1: internal/update is (resolvedConfig, next); noSave moved to Fiber.update.
@@ -463,6 +473,15 @@ export class CheckpointRollbackRemoteService extends TypertRemoteService {
     this.assertOwner()
     try {
       return await this.rollback.summaries(request, signal)
+    } catch (error) {
+      throw this.remoteError(error, signal)
+    }
+  }
+
+  async getCut(request: CheckpointCutRequest, signal: AbortSignal) {
+    this.assertOwner()
+    try {
+      return await this.rollback.getCut(request, signal)
     } catch (error) {
       throw this.remoteError(error, signal)
     }

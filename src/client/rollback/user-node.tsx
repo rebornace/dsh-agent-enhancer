@@ -78,7 +78,8 @@ export function RollbackUserNode(props: RollbackUserNodeProps) {
   const turn = turnOf(props.node.location)
   const isMarker = isRollbackMarkerMessage(data.source, messageId)
   const rollbackTurn = turnFromRollbackMarkerId(messageId) ?? turn?.turn
-  const rollbackEnabled = useSyncExternalStore(props.rollback.subscribe, props.rollback.getSnapshot).enabled
+  const snapshot = useSyncExternalStore(props.rollback.subscribe, props.rollback.getSnapshot)
+  const rollbackEnabled = snapshot.enabled
 
   return <div className={styles.userMessageRow}>
     {props.renderFactorySlot('conversation.chat.user.content', {

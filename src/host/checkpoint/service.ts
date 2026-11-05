@@ -11,11 +11,14 @@ import {
 } from './activity.ts'
 import { blockingUnavailable } from './availability.ts'
 import type { CheckpointRollbackScope, CheckpointUnavailable } from './availability.ts'
-import { recoverTurnPrompt, resolveRollbackCut, synthesizeCheckpoint } from './capture.ts'
+import { checkpointAtSeq, recoverTurnPrompt, resolveRollbackCut, synthesizeCheckpoint } from './capture.ts'
+import { chainTrackedFiles } from './chain-files.ts'
 import { CheckpointFileError, CheckpointFiles } from './files.ts'
 import type { CheckpointFileOperations, FileConflict, RestoreDirection } from './files.ts'
 import type { CheckpointStore } from './store.ts'
-import type { Checkpoint, CheckpointGap } from './types.ts'
+import type { Checkpoint, CheckpointGap, FileCheckpoint } from './types.ts'
+import type { SessionCut, SessionCutStore } from './cut-store.ts'
+import { syncCutCache } from './cut-live.ts'
 export type { CheckpointGap }
 import {
   indexOfRollbackPrefix,
@@ -49,6 +52,8 @@ export type CheckpointRollbackOperation = 'rollback' | 'undo'
 export interface CheckpointRollbackRequest {
   readonly sessionId: SessionId
   readonly turn: number
+  /** Stable log pin when turn numbers reuse after undo/restore. */
+  readonly atSeq?: number
   readonly operation?: CheckpointRollbackOperation
   readonly scope?: CheckpointRollbackScope
 }
@@ -82,6 +87,23 @@ export interface CheckpointTurnSummary {
   readonly rolledBack: boolean
   /** True when this turn is the live restore tip (cut before this turn). */
   readonly tip: boolean
+}
+
+export interface CheckpointCutView {
+  readonly hideTurnsFrom: number
+  readonly cutSeq: number
+  readonly restoredAtSeq: number
+  readonly draftPrompt: string
+  readonly scope: CheckpointRollbackScope
+}
+
+export interface CheckpointCutRequest {
+  readonly sessionId: SessionId
+}
+
+export interface CheckpointCutResult {
+  readonly sessionId: SessionId
+  readonly cut: CheckpointCutView | null
 }
 
 export interface CheckpointSummariesRequest {
@@ -139,6 +161,61 @@ export function toCheckpointTurnSummary(
   }
 }
 
+/** Timeline row for a closed log turn when no checkpoint file exists yet. */
+export function summaryFromClosedTurn(
+  events: readonly SessionEvent[],
+  turn: number,
+  options: {
+    readonly rolledBack?: boolean
+    readonly tip?: boolean
+    readonly now?: number
+  } = {},
+): CheckpointTurnSummary | null {
+  const turnStart = events.find(
+    (event): event is SessionEvent<'turn/start'> =>
+      event.type === 'turn/start' && event.data.turn === turn,
+  )
+  if (turnStart === undefined) return null
+  const prompt = recoverTurnPrompt(events, turn)
+  return {
+    turn,
+    coverage: 'complete',
+    fileCount: 0,
+    createdAt: options.now ?? Date.now(),
+    atSeq: checkpointAtSeq(Number(turnStart.seq)),
+    prompt,
+    promptPreview: checkpointPromptPreview(prompt),
+    files: [],
+    gaps: [],
+    rolledBack: options.rolledBack ?? false,
+    tip: options.tip ?? false,
+  }
+}
+
+export function cutViewOf(cut: SessionCut): CheckpointCutView {
+  return {
+    hideTurnsFrom: cut.hideTurnsFrom,
+    cutSeq: cut.cutSeq,
+    restoredAtSeq: cut.restoredAtSeq,
+    draftPrompt: cut.draftPrompt,
+    scope: cut.scope,
+  }
+}
+
+/** Project a live cut into the tip-window shape summaries / transcript already understand. */
+export function windowFromCut(cut: SessionCut | null | undefined): {
+  readonly tipTurn: number
+  readonly hideTurnsFrom: number
+  readonly continueAfterSeq: number
+} | undefined {
+  if (cut === null || cut === undefined) return undefined
+  return {
+    tipTurn: cut.hideTurnsFrom,
+    hideTurnsFrom: cut.hideTurnsFrom,
+    continueAfterSeq: cut.restoredAtSeq,
+  }
+}
+
 export interface CheckpointRollbackPreview extends CheckpointRollbackRequest {
   readonly messages: readonly CheckpointMessagePreview[]
   readonly files: readonly CheckpointFilePreview[]
@@ -193,61 +270,30 @@ export interface CheckpointRollbackServiceOptions {
   readonly now?: () => number
   /** Wait for in-flight turn captures before reading the checkpoint store. */
   readonly awaitCaptures?: () => Promise<void>
+  /** Per-session projection cut (hide turns after a restore without appending tip notices). */
+  readonly cutStore?: SessionCutStore
+  readonly cutCache?: Map<SessionId, SessionCut | null>
 }
 
-interface RollbackSurface {
+/** Cut-based restore plan — no tip append / undo shell on the DSH log. */
+interface CutRollbackSurface {
   readonly operation: 'rollback'
-  /** Checkpoint turn the user restored to — stable across later undo shells. */
   readonly turn: number
-  readonly nodes: readonly SessionSeq[]
-  /**
-   * Surface tip already matches this cut (only prior restore markers remain after
-   * the cut). Confirm may skip appending when there are no files to rewrite.
-   */
+  readonly cutSeq: number
   readonly alreadyRestored: boolean
-  /**
-   * Live tip is earlier than this cut. Re-attach tip sources through this turn,
-   * then keep a tip for anything still past the cut — so restoring to turn 2
-   * while tip is turn 1 brings turn 2 back without also resurrecting turn 3.
-   */
-  readonly forwardFromTip?: {
-    readonly marker: SessionEvent<'user/message'>
-    readonly reappear: readonly SurfaceMessageEvent[]
-    readonly stillWithdraw: readonly SurfaceMessageEvent[]
-  }
 }
 
-interface UndoSurface {
+interface CutUndoSurface {
   readonly operation: 'undo'
-  readonly marker: SessionEvent<'user/message'>
-  readonly sources: readonly SurfaceMessageEvent[]
-  /**
-   * `replace` — Claude/Cline-style rewind: withdraw tip (+ post-tip) and put sources back.
-   * `append` — tip notice is already gone from the surface; only re-attach sources
-   * (same outcome as Cline “restore task” when the transcript was already truncated).
-   */
-  readonly mode: 'replace' | 'append'
-  /** Inclusive surface start of the tip replace (marker seq, or first post-cut node). */
-  readonly replaceStartSeq: SessionSeq
-  /**
-   * Inclusive surface end of the tip replace. Extends past the marker when the
-   * user continued chatting after restore — undo withdraws that continuation too.
-   */
-  readonly replaceEndSeq: SessionSeq
-  /**
-   * Peel one tip turn at a time: after re-attaching `sources`, leave a tip that
-   * still withdraws later turns (undo turn 2 must not resurrect turn 3).
-   */
-  readonly nextTip?: {
-    readonly turn: number
-    readonly sources: readonly SurfaceMessageEvent[]
-  }
+  readonly tipTurn: number
+  readonly live: SessionCut
+  readonly restoreCut: SessionCut | null
 }
 
 interface Evaluation {
   readonly checkpoint: Checkpoint | null
   readonly adapter: CheckpointServiceSession | null
-  readonly surface: RollbackSurface | UndoSurface | null
+  readonly surface: CutRollbackSurface | CutUndoSurface | null
   readonly preview: CheckpointRollbackPreview
 }
 
@@ -901,6 +947,13 @@ export class CheckpointRollbackService {
     return this.track(this.runSummaries(request, signal))
   }
 
+  getCut(
+    request: CheckpointCutRequest,
+    signal?: AbortSignal,
+  ): Promise<CheckpointCutResult> {
+    return this.track(this.runGetCut(request, signal))
+  }
+
   recover(): Promise<void> {
     if (this.recovery !== undefined) return this.recovery
     const operation = this.track(this.runRecovery())
@@ -953,8 +1006,14 @@ export class CheckpointRollbackService {
     const linked = this.linkedSignal([callerSignal])
     try {
       linked.signal.throwIfAborted()
+      // Pending journals must not dead-end preview into a false "恢复未完成".
+      // Finish crash recovery first; only then block if recovery itself cannot run.
       if ((await this.options.store.listPendingJournals()).length > 0) {
-        throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
+        try {
+          await this.recover()
+        } catch {
+          throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
+        }
       }
       linked.signal.throwIfAborted()
       return (await this.evaluate(request)).preview
@@ -982,39 +1041,121 @@ export class CheckpointRollbackService {
       await this.options.awaitCaptures?.()
       linked.signal.throwIfAborted()
       const checkpoints = await this.options.store.list(request.sessionId)
+      const liveCut = await this.readCut(request.sessionId)
       const adapter = this.options.resolveSession(request.sessionId)
       const events = adapter?.readEvents() ?? []
       const surfaceNodes = adapter?.session.surface.nodes
-      const window = events.length === 0
+      const tipWindow = events.length === 0
         ? undefined
         : activeRollbackWindow(events, surfaceNodes)
+      const window = windowFromCut(liveCut) ?? tipWindow
       const shells = undoShellRanges(events)
+      // Never drop file-bearing captures on a shell mis-detect — restart prune
+      // previously wiped rollback snapshots, then soft backfill left files:[].
       const kept = events.length === 0
         ? checkpoints
-        : checkpoints.filter(checkpoint => !isUndoShellCheckpoint(checkpoint.atSeq, shells))
+        : checkpoints.filter(checkpoint => (
+          checkpoint.files.length > 0 || !isUndoShellCheckpoint(checkpoint.atSeq, shells)
+        ))
       // Persist the prune so undo-shell junk stops occupying the 20-slot cap /
       // shadowing real turns on the next preview.
       if (kept.length !== checkpoints.length) {
         await this.options.store.replace(request.sessionId, kept)
       }
       void this.options.store.purgeSettledJournals().catch(() => undefined)
-      const byTurn = new Map<number, CheckpointTurnSummary>()
+      // Index by atSeq: turn numbers reuse after undo and must not collapse rows.
+      const tipAtSeq = liveCut?.cutSeq
+      const byAtSeq = new Map<number, CheckpointTurnSummary>()
       for (const checkpoint of kept) {
         const recoveredPrompt = checkpoint.prompt.trim() === ''
           ? recoverTurnPrompt(events, checkpoint.turn)
           : ''
         const rolledBack = isRolledBackCheckpoint(checkpoint.turn, checkpoint.atSeq, window)
-        byTurn.set(
-          checkpoint.turn,
-          toCheckpointTurnSummary(checkpoint, {
-            rolledBack,
-            tip: window !== undefined && checkpoint.turn === window.tipTurn,
-            recoveredPrompt,
-          }),
-        )
+        const tip = tipAtSeq !== undefined
+          ? checkpoint.atSeq === tipAtSeq
+          : window !== undefined && checkpoint.turn === window.tipTurn
+        const summary = toCheckpointTurnSummary(checkpoint, {
+          rolledBack,
+          tip,
+          recoveredPrompt,
+        })
+        const previous = byAtSeq.get(checkpoint.atSeq)
+        // Identical atSeq is corrupt / legacy; keep the file-bearing row.
+        if (previous !== undefined && previous.fileCount > 0 && summary.fileCount === 0) continue
+        byAtSeq.set(checkpoint.atSeq, summary)
+      }
+      // Live capture can miss closed turns (reload races, agent.id≠session.id).
+      // Synthesize conversation-only rows so the timeline matches visible chat.
+      const live = adapter
+      if (live != null && events.length > 0) {
+        const closedStarts: SessionEvent<'turn/start'>[] = []
+        for (let index = 0; index < events.length; index += 1) {
+          const event = events[index]!
+          if (event.type !== 'turn/start') continue
+          const turn = event.data.turn
+          const ended = events.slice(index + 1).some(item => (
+            item.type === 'turn/end'
+            && item.data.turn === turn
+            && Number(item.seq) > Number(event.seq)
+          ))
+          if (ended) closedStarts.push(event)
+        }
+        const backfilled: Checkpoint[] = []
+        for (const event of closedStarts) {
+          const atSeq = checkpointAtSeq(Number(event.seq))
+          if (byAtSeq.has(atSeq)) continue
+          const soft = synthesizeCheckpoint({
+            sessionId: request.sessionId,
+            session: {
+              format: live.session.header.version,
+              preset: live.session.header.agentPreset ?? null,
+            },
+            pluginVersion: this.options.pluginVersion,
+            turn: event.data.turn,
+            events,
+            createId: this.options.createId,
+            now: this.options.now,
+          })
+          if (soft !== null) {
+            if (isUndoShellCheckpoint(soft.atSeq, shells) && soft.atSeq === atSeq) continue
+            // Pin soft atSeq to this turn/start — synthesize uses the first
+            // matching turn number and lies after undo reuse.
+            const pinned = soft.atSeq === atSeq ? soft : { ...soft, atSeq }
+            if (isUndoShellCheckpoint(pinned.atSeq, shells)) continue
+            backfilled.push(pinned)
+            byAtSeq.set(
+              atSeq,
+              toCheckpointTurnSummary(pinned, {
+                rolledBack: isRolledBackCheckpoint(pinned.turn, pinned.atSeq, window),
+                tip: tipAtSeq !== undefined
+                  ? pinned.atSeq === tipAtSeq
+                  : window !== undefined && pinned.turn === window.tipTurn,
+              }),
+            )
+            continue
+          }
+          // Contiguous-seq synthesize failed — still list the closed turn for UI.
+          const row = summaryFromClosedTurn(events, event.data.turn, {
+            rolledBack: isRolledBackCheckpoint(event.data.turn, atSeq, window),
+            tip: tipAtSeq !== undefined
+              ? atSeq === tipAtSeq
+              : window !== undefined && event.data.turn === window.tipTurn,
+            now: this.options.now?.(),
+          })
+          if (row !== null && !isUndoShellCheckpoint(atSeq, shells)) {
+            byAtSeq.set(atSeq, { ...row, atSeq })
+          }
+        }
+        for (const soft of backfilled) {
+          try {
+            await this.options.store.save(soft)
+          } catch {
+            // Timeline can still show the in-memory row if persist races.
+          }
+        }
       }
       // Conversation order by log position — turn ids alone lie after undo reuse.
-      const turns = [...byTurn.values()].sort((left, right) => (
+      const turns = [...byAtSeq.values()].sort((left, right) => (
         left.atSeq - right.atSeq || left.turn - right.turn || left.createdAt - right.createdAt
       ))
       const liveCheckpoints = turns.filter(turn => !turn.rolledBack).length
@@ -1034,6 +1175,42 @@ export class CheckpointRollbackService {
     } finally {
       linked.cleanup()
     }
+  }
+
+  private async runGetCut(
+    request: CheckpointCutRequest,
+    callerSignal?: AbortSignal,
+  ): Promise<CheckpointCutResult> {
+    const linked = this.linkedSignal([callerSignal])
+    try {
+      linked.signal.throwIfAborted()
+      const cut = await this.readCut(request.sessionId)
+      return {
+        sessionId: request.sessionId,
+        cut: cut === null ? null : cutViewOf(cut),
+      }
+    } catch (error) {
+      throw this.sanitize(error, linked.signal)
+    } finally {
+      linked.cleanup()
+    }
+  }
+
+  private async readCut(sessionId: SessionId): Promise<SessionCut | null> {
+    const cached = this.options.cutCache?.get(sessionId)
+    if (cached !== undefined) return cached
+    if (this.options.cutStore === undefined) return null
+    const cut = await this.options.cutStore.get(sessionId)
+    if (this.options.cutCache !== undefined) syncCutCache(this.options.cutCache, sessionId, cut)
+    return cut
+  }
+
+  private async writeCut(sessionId: SessionId, cut: SessionCut | null): Promise<void> {
+    if (this.options.cutStore === undefined) {
+      throw new CheckpointRollbackError('ROLLBACK_FAILED')
+    }
+    await this.options.cutStore.set(sessionId, cut)
+    if (this.options.cutCache !== undefined) syncCutCache(this.options.cutCache, sessionId, cut)
   }
 
   private async runExecute(
@@ -1058,54 +1235,88 @@ export class CheckpointRollbackService {
           const current = await this.evaluate(request, { withinMaintenance: true })
           const scope = this.effectiveScope(request, current)
           this.assertExecutable(current, scope)
-          if (current.adapter?.session !== adapter.session || current.surface === null) {
+          // Same Session id is enough — object identity churns under maintenance.
+          if (current.adapter?.session.id !== adapter.session.id || current.surface === null) {
             throw new CheckpointRollbackError('ROLLBACK_UNAVAILABLE', ['session-changed'])
           }
           const checkpoint = current.checkpoint!
           const operation = operationOf(request)
           const session = adapter.session
-          const expectedSeq = session.seq
-          const expectedNodes = [...session.surface.nodes]
+          const expectedSeq = Number(session.seq)
           const journalId = (this.options.createId ?? randomUUID)()
           const files = this.files(adapter, checkpoint, journalId)
-          const filesToRestore = scope === 'conversation' ? [] : checkpoint.files
           const surface = current.surface!
-          // Tip already matches this cut and there is nothing to rewrite on disk —
-          // skip append (marker→marker is invisible) and still return the draft.
+          const filesToRestore = scope === 'conversation'
+            ? []
+            : this.trackedFilesForRestore(
+              await this.options.store.list(request.sessionId),
+              adapter,
+              surface,
+              await this.readCut(request.sessionId),
+            )
+          const draftPrompt = checkpoint.prompt.trim() !== ''
+            ? checkpoint.prompt
+            : recoverTurnPrompt(adapter.readEvents(), request.turn)
+          // Cut already matches and nothing to rewrite — return draft only.
           if (operation === 'rollback' && surface.operation === 'rollback'
             && surface.alreadyRestored && filesToRestore.length === 0) {
-            const draftPrompt = checkpoint.prompt.trim() !== ''
-              ? checkpoint.prompt
-              : recoverTurnPrompt(adapter.readEvents(), request.turn)
             return {
               sessionId: request.sessionId,
               turn: request.turn,
               draft: draftPrompt,
             }
           }
-          await files.runTransaction(filesToRestore, async () => {
-            if (maintenance.signal.aborted) return { appended: false, synchronized: false }
-            const latest = this.options.resolveSession(request.sessionId)
-            // Same Session id can still mean a replaced Session object — compare by reference.
-            if (latest?.session !== session || !this.canCommit(adapter, scope) || session.seq !== expectedSeq
-              || session.surface.nodes.length !== expectedNodes.length
-              || session.surface.nodes.some((node, index) => node !== expectedNodes[index])) {
-              return { appended: false, synchronized: false }
+          // Cut-first (Claude Code / Cline): commit the conversation tip, then
+          // restore files. Never restore files before the cut — a later cut miss
+          // used to compensate and delete the just-restored file ("恢复未完成").
+          if (maintenance.signal.aborted) {
+            throw this.sanitize(abortError(), maintenance.signal)
+          }
+          if (adapter.session.id !== session.id
+            || Number(adapter.session.seq) !== expectedSeq
+            || !this.canCommit(adapter, scope)) {
+            throw new CheckpointRollbackError('ROLLBACK_FAILED')
+          }
+          try {
+            if (surface.operation === 'rollback') {
+              const previous = await this.readCut(request.sessionId)
+              const next: SessionCut = {
+                hideTurnsFrom: surface.turn,
+                cutSeq: surface.cutSeq,
+                restoredAtSeq: expectedSeq,
+                draftPrompt,
+                scope,
+                ...(filesToRestore.length > 0 ? { journalId } : {}),
+                previous,
+              }
+              await this.writeCut(request.sessionId, next)
+            } else {
+              await this.writeCut(request.sessionId, surface.restoreCut)
             }
-            const restored = await this.appendAndSynchronize(
-              adapter, surface, journalId, scope, maintenance.signal,
-            )
-            // Preserve the real append flag: a sync failure must leave the journal
-            // pending (files-restored) instead of compensating away a committed surface.
-            const appended = restored.appended && this.appendOccurred(adapter, journalId)
-            return { appended, synchronized: appended && restored.synchronized }
-          }, directionOf(operation))
-          const draftPrompt = checkpoint.prompt.trim() !== ''
-            ? checkpoint.prompt
-            : recoverTurnPrompt(adapter.readEvents(), request.turn)
+          } catch (error) {
+            if (error instanceof CheckpointRollbackError) throw error
+            throw new CheckpointRollbackError('ROLLBACK_FAILED')
+          }
+          const latest = this.options.resolveSession(request.sessionId)
+          const syncTarget = latest !== undefined && latest.session.id === session.id
+            ? latest
+            : adapter
+          try {
+            await syncTarget.synchronize(maintenance.signal)
+          } catch {
+            // Projection sync is best-effort; the cut is already durable.
+          }
+          if (filesToRestore.length > 0) {
+            // Surface already committed. Abort after files moved still compensates
+            // disk only — the conversation cut stays (tip already restored).
+            await files.runTransaction(filesToRestore, async () => {
+              if (maintenance.signal.aborted) return { appended: false, synchronized: false }
+              return { appended: true, synchronized: true }
+            }, directionOf(operation))
+          }
           return {
             sessionId: request.sessionId,
-            turn: request.turn,
+            turn: surface.operation === 'undo' ? surface.tipTurn : request.turn,
             draft: operation === 'rollback' ? draftPrompt : '',
           }
         } catch (error) {
@@ -1128,181 +1339,6 @@ export class CheckpointRollbackService {
     } finally {
       linked.cleanup()
     }
-  }
-
-  private async appendAndSynchronize(
-    adapter: CheckpointServiceSession,
-    surface: RollbackSurface | UndoSurface,
-    journalId: string,
-    scope: CheckpointRollbackScope,
-    signal: AbortSignal,
-  ): Promise<{ appended: boolean, synchronized: boolean }> {
-    try {
-      if (surface.operation === 'rollback') this.appendRollback(adapter, surface, journalId, scope)
-      else {
-        this.appendUndo(
-          adapter.session,
-          surface.marker,
-          surface.sources,
-          journalId,
-          surface.mode,
-          surface.replaceStartSeq,
-          surface.replaceEndSeq,
-        )
-        // Peel one tip turn: keep a tip for anything still withdrawn past this undo.
-        if (surface.nextTip !== undefined && surface.nextTip.sources.length > 0) {
-          this.appendRollbackNotice(adapter, surface.nextTip.turn, journalId, scopeOfMarker(surface.marker), {
-            surfaceOp: 'append',
-            sourceEventSeqs: surface.nextTip.sources.map(event => SessionSeq(event.seq)),
-          })
-        }
-      }
-    } catch {
-      return { appended: this.appendOccurred(adapter, journalId), synchronized: false }
-    }
-    try {
-      await adapter.synchronize(signal)
-      return { appended: true, synchronized: true }
-    } catch {
-      return { appended: true, synchronized: false }
-    }
-  }
-
-  private appendRollback(
-    adapter: CheckpointServiceSession,
-    surface: RollbackSurface,
-    journalId: string,
-    scope: CheckpointRollbackScope,
-  ): void {
-    const forward = surface.forwardFromTip
-    if (forward !== undefined) {
-      if (forward.stillWithdraw.length === 0) {
-        // Landed on/after the last withdrawn turn — same as undoing the tip.
-        this.appendUndo(
-          adapter.session,
-          forward.marker,
-          forward.reappear,
-          journalId,
-          'replace',
-          SessionSeq(forward.marker.seq),
-          SessionSeq(forward.marker.seq),
-        )
-        return
-      }
-      if (forward.reappear.length === 0) {
-        // Retarget the tip without bringing anything back (should be rare).
-        this.appendRollbackNotice(adapter, surface.turn, journalId, scope, {
-          surfaceOp: {
-            op: 'replace',
-            startSeq: SessionSeq(forward.marker.seq),
-            endSeq: SessionSeq(forward.marker.seq),
-          },
-          sourceEventSeqs: forward.stillWithdraw.map(event => SessionSeq(event.seq)),
-        })
-        return
-      }
-      // Partial tip undo through this turn, then tip whatever is still past the cut.
-      this.appendUndo(
-        adapter.session,
-        forward.marker,
-        forward.reappear,
-        journalId,
-        'replace',
-        SessionSeq(forward.marker.seq),
-        SessionSeq(forward.marker.seq),
-      )
-      this.appendRollbackNotice(adapter, surface.turn, journalId, scope, {
-        surfaceOp: 'append',
-        sourceEventSeqs: forward.stillWithdraw.map(event => SessionSeq(event.seq)),
-      })
-      return
-    }
-    // Keep sourceEventSeqs aligned with the replace range (Session validates that).
-    // Nested tip notices are expanded when reading sources for undo/peel.
-    this.appendRollbackNotice(adapter, surface.turn, journalId, scope, {
-      surfaceOp: {
-        op: 'replace',
-        startSeq: surface.nodes[0]!,
-        endSeq: surface.nodes[surface.nodes.length - 1]!,
-      },
-      sourceEventSeqs: [...surface.nodes],
-    })
-  }
-
-  private appendRollbackNotice(
-    adapter: CheckpointServiceSession,
-    checkpointTurn: number,
-    journalId: string,
-    scope: CheckpointRollbackScope,
-    append: {
-      readonly surfaceOp: 'append' | { readonly op: 'replace', readonly startSeq: SessionSeq, readonly endSeq: SessionSeq }
-      readonly sourceEventSeqs: readonly SessionSeq[]
-    },
-  ): void {
-    const conversationOnly = scope === 'conversation'
-    const summary = conversationOnly
-      ? `Conversation rolled back before turn ${checkpointTurn}`
-      : `Conversation and tracked files rolled back before turn ${checkpointTurn}`
-    const detail = conversationOnly
-      ? `The user rolled back the conversation to before turn ${checkpointTurn}. `
-        + 'Later events remain in the append-only log but are no longer active model context. '
-        + 'Tracked files were not restored.'
-      : `The user rolled back the conversation and tracked files to before turn ${checkpointTurn}. `
-        + 'Later events remain in the append-only log but are no longer active model context. '
-        + 'Re-read tracked files before relying on their contents.'
-    adapter.session.append('user/message', {
-      id: rollbackMarkerId(checkpointTurn, journalId, scope),
-      role: 'user',
-      content: [{ type: 'text', text: detail }],
-      source: { kind: 'checkpoint-rollback', form: 'notice', summary },
-    }, {
-      surfaceOp: append.surfaceOp,
-      sourceEventSeqs: [...append.sourceEventSeqs],
-    })
-  }
-
-  private appendUndo(
-    session: Session,
-    marker: SessionEvent<'user/message'>,
-    sources: readonly SurfaceMessageEvent[],
-    journalId: string,
-    mode: 'replace' | 'append',
-    replaceStartSeq: SessionSeq,
-    replaceEndSeq: SessionSeq,
-    start = 0,
-    openCalls = new Map<string, UndoToolCall>(),
-  ): void {
-    // Chat binds assistants to turn/step coordinates. Format validation also requires
-    // an open step for assistant/message. Re-using the rolled-back turn id fails on
-    // reload — always open the next monotonic turn with step 1.
-    // Agent.runMaintenance freezes lastTurn across this append; DshCheckpointSessions
-    // re-syncs idle lastTurn from turnBoundary afterward so the next prompt does not
-    // reopen this shell's turn id (which would collapse the restored reply in Chat).
-    const events = session.snapshotEvents()
-    const turn = start === 0 ? nextTurnNumber(events) : undoTurnAfterMarker(events, marker.seq)
-    const step = 1
-    if (start === 0) {
-      session.append('turn/start', { turn })
-      session.append('step/start', { turn, step })
-    }
-    for (let index = start; index < sources.length; index += 1) {
-      appendUndoCopy(
-        session,
-        sources[index]!,
-        journalId,
-        index,
-        marker.seq,
-        mode,
-        replaceStartSeq,
-        replaceEndSeq,
-        turn,
-        step,
-        openCalls,
-      )
-    }
-    settleOpenUndoToolCalls(session, journalId, turn, step, openCalls)
-    session.append('step/end', { turn, step })
-    session.append('turn/end', { turn, reason: { kind: 'completed' } })
   }
 
   private async runRecovery(): Promise<void> {
@@ -1330,10 +1366,9 @@ export class CheckpointRollbackService {
               now: this.options.now,
             })
             await files.recoverFiles(async journal => {
-              if (!this.appendOccurred(adapter, journal.id)) return false
-              await this.resumeUndo(adapter, journal.id)
-              await adapter.synchronize(linked.signal)
-              return true
+              // Cut projection is the commit marker now — tip append is no longer required.
+              const cut = await this.readCut(sessionId)
+              return cut?.journalId === journal.id
             })
           } finally {
             linked.cleanup()
@@ -1343,64 +1378,6 @@ export class CheckpointRollbackService {
     } catch (error) {
       if (error instanceof CheckpointRollbackError) throw error
       throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
-    }
-  }
-
-  private async resumeUndo(adapter: CheckpointServiceSession, journalId: string): Promise<void> {
-    const events = adapter.readEvents()
-    const first = events.find(event => isUndoCopyAt(event, undoCopyId(journalId, 0)))
-    if (first === undefined) return
-    if (first.type !== 'user/message') {
-      throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
-    }
-    const appendOnly = first.surfaceOp === 'append'
-    const hinted = first.sourceEventSeqs
-      ?.map(seq => events[seq])
-      .find(event => isRollbackMarker(event))
-    const marker = !appendOnly && first.surfaceOp !== undefined && first.surfaceOp !== 'append'
-      && isRollbackMarker(events[first.surfaceOp.startSeq])
-      ? events[first.surfaceOp.startSeq]
-      : hinted
-    if (!isRollbackMarker(marker)) throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
-    const sources = sourceEvents(events, marker)
-    if (sources === null) throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
-    const tipTurn = turnFromRollbackId(marker.data.id)
-    if (tipTurn === undefined) throw new CheckpointRollbackError('ROLLBACK_RECOVERY_FAILED')
-    const peeled = peelUndoSources(events, sources, tipTurn)
-    const tip = Number(adapter.session.seq) - 1
-    const completed = countPartialUndoCopies(events, first, journalId, tip)
-    const openCalls = new Map<string, UndoToolCall>()
-    const turn = undoTurnAfterMarker(events, marker.seq)
-    const step = 1
-    ensureCopiedAssistantToolCalls(
-      adapter.session, events, journalId, completed, turn, step, openCalls,
-    )
-    // Resume only appends remaining copies — replace range already committed on copy 0.
-    const replaceStart = appendOnly || first.surfaceOp === 'append' || first.surfaceOp === undefined
-      ? marker.seq
-      : SessionSeq(first.surfaceOp.startSeq)
-    const replaceEnd = appendOnly || first.surfaceOp === 'append' || first.surfaceOp === undefined
-      ? marker.seq
-      : SessionSeq(first.surfaceOp.endSeq)
-    this.appendUndo(
-      adapter.session,
-      marker,
-      peeled.undoSources,
-      journalId,
-      appendOnly ? 'append' : 'replace',
-      replaceStart,
-      replaceEnd,
-      completed,
-      openCalls,
-    )
-    if (peeled.nextTip !== undefined && peeled.nextTip.sources.length > 0) {
-      const live = activeRollbackWindow(adapter.readEvents(), adapter.session.surface.nodes)
-      if (live?.tipTurn !== peeled.nextTip.turn) {
-        this.appendRollbackNotice(adapter, peeled.nextTip.turn, journalId, scopeOfMarker(marker), {
-          surfaceOp: 'append',
-          sourceEventSeqs: peeled.nextTip.sources.map(event => SessionSeq(event.seq)),
-        })
-      }
     }
   }
 
@@ -1415,10 +1392,19 @@ export class CheckpointRollbackService {
     const shells = undoShellRanges(events)
     const checkpoints = await this.options.store.list(request.sessionId)
     // Prefer a real turn capture. Undo-shell rows share / steal turn ids and must
-    // not satisfy restore/undo preview.
-    let stored = checkpoints.find(checkpoint => (
-      checkpoint.turn === request.turn && !isUndoShellCheckpoint(checkpoint.atSeq, shells)
-    )) ?? null
+    // not satisfy restore/undo preview. When turn numbers reuse, pin by atSeq and
+    // prefer file-bearing snapshots over empty soft backfills.
+    const candidates = checkpoints.filter(checkpoint => (
+      checkpoint.turn === request.turn
+      && (checkpoint.files.length > 0 || !isUndoShellCheckpoint(checkpoint.atSeq, shells))
+    ))
+    let stored = (
+      request.atSeq === undefined
+        ? undefined
+        : candidates.find(checkpoint => checkpoint.atSeq === request.atSeq)
+    ) ?? candidates.find(checkpoint => checkpoint.files.length > 0)
+      ?? candidates[0]
+      ?? null
     // Cancelled / raced turns often have no store entry yet — synthesize a soft
     // conversation checkpoint from the closed turn so restore stays available.
     if (stored === null && adapter !== null && operation === 'rollback') {
@@ -1461,7 +1447,8 @@ export class CheckpointRollbackService {
       }
     }
     let messages: CheckpointMessagePreview[] = []
-    let surface: RollbackSurface | UndoSurface | null = null
+    let surface: CutRollbackSurface | CutUndoSurface | null = null
+    const liveCut = await this.readCut(request.sessionId)
     if (stored !== null && adapter !== null && stored.atSeq >= 0) {
       const events = adapter.readEvents()
       const cut = resolveRollbackCut(events, stored.turn, stored.atSeq)
@@ -1472,195 +1459,126 @@ export class CheckpointRollbackService {
           && !isOwnReplacement(event))) {
           unavailable.push('compacted-surface')
         }
-        const surfaceNodes = adapter.session.surface.nodes
-        const tipWindow = activeRollbackWindow(events, surfaceNodes)
-        // Restore-forward: live tip is earlier — reappear through this turn only.
-        if (tipWindow !== undefined && stored.turn > tipWindow.tipTurn) {
-          const marker = resolveUndoTipMarker(events, surfaceNodes)
-          const sources = marker === undefined ? null : sourceEvents(events, marker)
-          if (marker === undefined || sources === null) {
-            unavailable.push('unknown-surface')
-          } else {
-            const reappear = sources.filter(event => Number(event.seq) <= cut.cutSeq)
-            const stillWithdraw = sources.filter(event => Number(event.seq) > cut.cutSeq)
-            messages = reappear.map(event => ({
-              seq: event.seq,
+        const withdrawn = events.filter(event => (
+          Number(event.seq) > cut.cutSeq
+          && surfaceEventTypes.has(event.type)
+          && !isProtectedSystemMessage(event)
+        ))
+        const alreadyRestored = liveCut !== null
+          && liveCut.hideTurnsFrom === stored.turn
+          && liveCut.cutSeq === cut.cutSeq
+          && liveCut.restoredAtSeq === Number(adapter.session.seq)
+        if (withdrawn.length === 0 || alreadyRestored) {
+          unavailable.push('already-restored')
+          surface = {
+            operation,
+            turn: stored.turn,
+            cutSeq: cut.cutSeq,
+            alreadyRestored: true,
+          }
+          messages = []
+        } else {
+          surface = {
+            operation,
+            turn: stored.turn,
+            cutSeq: cut.cutSeq,
+            alreadyRestored: false,
+          }
+          messages = withdrawn.map(event => ({
+            seq: Number(event.seq),
+            type: event.type,
+            text: textOf(event),
+          }))
+        }
+      } else if (liveCut === null) {
+        // No live projection cut — nothing to undo (legacy tip-only sessions stay blocked).
+        unavailable.push('session-changed')
+      } else {
+        const tipTurn = liveCut.hideTurnsFrom
+        let undoStored = tipTurn === stored.turn
+          ? stored
+          : checkpoints.find(item => (
+            item.turn === tipTurn && !isUndoShellCheckpoint(item.atSeq, shells)
+          )) ?? null
+        if (undoStored === null) {
+          undoStored = synthesizeCheckpoint({
+            sessionId: request.sessionId,
+            session: {
+              format: adapter.session.header.version,
+              preset: adapter.session.header.agentPreset ?? null,
+            },
+            pluginVersion: this.options.pluginVersion,
+            turn: tipTurn,
+            events,
+            createId: this.options.createId,
+            now: this.options.now,
+          })
+        }
+        if (undoStored === null) {
+          unavailable.push('checkpoint-not-found')
+        } else {
+          if (tipTurn !== stored.turn) {
+            const drop = new Set<CheckpointUnavailable>([
+              'checkpoint-not-found',
+              'incomplete-checkpoint',
+              'prompt-non-text-content',
+              'workspace-capture-failed',
+              'incompatible-session',
+            ])
+            for (let index = unavailable.length - 1; index >= 0; index -= 1) {
+              if (drop.has(unavailable[index]!)) unavailable.splice(index, 1)
+            }
+            if (undoStored.coverage !== 'complete' || undoStored.gaps.length > 0) {
+              unavailable.push('incomplete-checkpoint')
+              for (const gap of undoStored.gaps) {
+                unavailable.push(gap.type === 'prompt' ? 'prompt-non-text-content' : 'workspace-capture-failed')
+              }
+            }
+            if (undoStored.session.format !== adapter.session.header.version) {
+              unavailable.push('incompatible-session')
+            }
+          }
+          stored = undoStored
+          surface = {
+            operation,
+            tipTurn,
+            live: liveCut,
+            restoreCut: liveCut.previous,
+          }
+          // Undo preview shows what the cut currently withdraws.
+          messages = events
+            .filter(event => (
+              Number(event.seq) > liveCut.cutSeq
+              && Number(event.seq) <= liveCut.restoredAtSeq
+              && surfaceEventTypes.has(event.type)
+              && !isProtectedSystemMessage(event)
+            ))
+            .map(event => ({
+              seq: Number(event.seq),
               type: event.type,
               text: textOf(event),
             }))
-            surface = {
-              operation,
-              turn: stored.turn,
-              nodes: [SessionSeq(marker.seq)],
-              alreadyRestored: false,
-              forwardFromTip: { marker, reappear, stillWithdraw },
-            }
-          }
-        } else {
-          const fromSurface = adapter.session.surface.nodes
-            .filter(node => events[node] !== undefined
-              && Number(logicalSeq(events[node]!)) > cut.cutSeq)
-          const fromLog = events
-            .filter(event => Number(event.seq) > cut.cutSeq && surfaceEventTypes.has(event.type))
-            .map(event => SessionSeq(event.seq))
-          const candidates = (fromSurface.length > 0
-            && fromSurface.every(node => surfaceEventTypes.has(events[node]!.type))
-            ? fromSurface.map(node => SessionSeq(node))
-            : fromLog)
-          // Never include the protected system prompt — Desktop injects it after turn/start.
-          const nodes = rollbackSurfaceNodes(events, candidates)
-          if (nodes.length === 0) {
-            // Before-N restore: nothing after the cut means we are already there.
-            unavailable.push('already-restored')
-            surface = { operation, turn: stored.turn, nodes, alreadyRestored: true }
-            messages = []
-          } else {
-            const alreadyRestored = isAlreadyRestoredRollback(events, nodes, stored.turn, surfaceNodes)
-            if (alreadyRestored) unavailable.push('already-restored')
-            surface = { operation, turn: stored.turn, nodes, alreadyRestored }
-            // Do not list the existing restore notice as "conversation to withdraw" —
-            // that reads as a real rollback when the tip is already here.
-            messages = alreadyRestored ? [] : nodes.map(node => ({
-              seq: node,
-              type: events[node]!.type,
-              text: textOf(events[node]!),
-            }))
-          }
-        }
-      } else {
-        // Undo always follows the live tip. The client may open undo from a later
-        // rolled-back checkpoint card while the tip still points at an earlier turn.
-        const currentNodes = adapter.session.surface.nodes
-        // Prefer the live tip turn from the log window when the browsed card differs.
-        const tipWindow = activeRollbackWindow(events, currentNodes)
-        let marker = resolveUndoTipMarker(events, currentNodes)
-        // When the surface lost the notice but the log tip is still active, use the
-        // log marker for sources and replace post-cut surface nodes instead.
-        if (marker === undefined && tipWindow !== undefined) {
-          for (let index = events.length - 1; index >= 0; index -= 1) {
-            const event = events[index]
-            if (!isRollbackMarker(event) || !markerStillActive(event, events)) continue
-            const turn = turnFromRollbackId(event.data.id)
-            if (turn === tipWindow.tipTurn) {
-              marker = event
-              break
-            }
-          }
-        }
-        const tipTurn = marker === undefined ? undefined : turnFromRollbackId(marker.data.id)
-        if (marker === undefined || tipTurn === undefined) {
-          unavailable.push('session-changed')
-        } else {
-          let undoStored = tipTurn === stored.turn
-            ? stored
-            : checkpoints.find(item => (
-              item.turn === tipTurn && !isUndoShellCheckpoint(item.atSeq, shells)
-            )) ?? null
-          if (undoStored === null) {
-            undoStored = synthesizeCheckpoint({
-              sessionId: request.sessionId,
-              session: {
-                format: adapter.session.header.version,
-                preset: adapter.session.header.agentPreset ?? null,
-              },
-              pluginVersion: this.options.pluginVersion,
-              turn: tipTurn,
-              events,
-              createId: this.options.createId,
-              now: this.options.now,
-            })
-          }
-          if (undoStored === null) {
-            unavailable.push('checkpoint-not-found')
-          } else {
-            if (tipTurn !== stored.turn) {
-              // Replace browsed-card meta gaps with the live tip checkpoint's.
-              const drop = new Set<CheckpointUnavailable>([
-                'checkpoint-not-found',
-                'incomplete-checkpoint',
-                'prompt-non-text-content',
-                'workspace-capture-failed',
-                'incompatible-session',
-              ])
-              for (let index = unavailable.length - 1; index >= 0; index -= 1) {
-                if (drop.has(unavailable[index]!)) unavailable.splice(index, 1)
-              }
-              if (undoStored.coverage !== 'complete' || undoStored.gaps.length > 0) {
-                unavailable.push('incomplete-checkpoint')
-                for (const gap of undoStored.gaps) {
-                  unavailable.push(gap.type === 'prompt' ? 'prompt-non-text-content' : 'workspace-capture-failed')
-                }
-              }
-              if (undoStored.session.format !== adapter.session.header.version) {
-                unavailable.push('incompatible-session')
-              }
-            }
-            // Preview/execute files for the tip checkpoint, not the browsed card.
-            stored = undoStored
-            // Trust the tip marker's recorded sources. Keep-prefix / tipCut gates were
-            // falsely marking Desktop sessions as session-changed after restore+continue
-            // or when atSeq / projection drifted — blocking the only way out of a tip.
-            const sources = sourceEvents(events, marker)
-            if (sources === null || sources.length === 0) {
-              unavailable.push('unknown-surface')
-            } else {
-              const markerOnSurface = currentNodes.some(node => Number(node) === Number(marker.seq))
-              let mode: 'replace' | 'append' = 'replace'
-              let replaceStartSeq = marker.seq
-              let replaceEndSeq = undoReplaceEndSeq(events, currentNodes, marker.seq)
-              if (!markerOnSurface) {
-                const tipCut = resolveRollbackCut(events, tipTurn, undoStored.atSeq)
-                const afterCut = tipCut === null ? [] : currentNodes.filter(node => {
-                  const event = events[node]
-                  if (ignoreOnUndoKeepPrefix(event)) return false
-                  return Number(logicalSeq(event!)) > tipCut.cutSeq
-                })
-                if (afterCut.length === 0) {
-                  // Cline-style: transcript already looks truncated — re-attach sources only.
-                  mode = 'append'
-                  const last = currentNodes[currentNodes.length - 1]
-                  replaceStartSeq = last === undefined ? marker.seq : SessionSeq(last)
-                  replaceEndSeq = replaceStartSeq
-                } else {
-                  replaceStartSeq = SessionSeq(afterCut[0]!)
-                  replaceEndSeq = SessionSeq(afterCut[afterCut.length - 1]!)
-                }
-              }
-              // Peel one tip turn: only re-attach the tip turn; keep a tip for later.
-              const peeled = peelUndoSources(events, sources, tipTurn)
-              surface = {
-                operation,
-                marker,
-                sources: peeled.undoSources,
-                mode,
-                replaceStartSeq,
-                replaceEndSeq,
-                ...(peeled.nextTip !== undefined ? { nextTip: peeled.nextTip } : {}),
-              }
-              messages = peeled.undoSources.map(event => ({
-                seq: event.seq, type: event.type, text: textOf(event),
-              }))
-            }
-          }
         }
       }
     }
+    const trackedFiles = stored === null || adapter === null || surface === null
+      ? []
+      : this.trackedFilesForRestore(checkpoints, adapter, surface, liveCut)
     let conflicts: readonly FileConflict[] = []
     if (stored !== null && adapter !== null) {
       try {
-        conflicts = await this.files(adapter, stored, 'preview').verifyCurrent(stored.files, directionOf(operation))
+        conflicts = await this.files(adapter, stored, 'preview').verifyCurrent(trackedFiles, directionOf(operation))
       } catch (error) {
         if (error instanceof CheckpointFileError) conflicts = error.conflicts
         else throw error
       }
     }
-    const markerScope = surface?.operation === 'undo' ? scopeOfMarker(surface.marker) : undefined
+    const cutWindow = windowFromCut(liveCut)
     const tipWindow = adapter !== null
-      ? activeRollbackWindow(adapter.readEvents(), adapter.session.surface.nodes)
+      ? (cutWindow ?? activeRollbackWindow(adapter.readEvents(), adapter.session.surface.nodes))
       : undefined
-    const previewTurn = surface?.operation === 'undo'
-      ? (turnFromRollbackId(surface.marker.data.id) ?? request.turn)
-      : request.turn
+    const previewTurn = surface?.operation === 'undo' ? surface.tipTurn : request.turn
+    const undoScope = surface?.operation === 'undo' ? surface.live.scope : undefined
     return {
       checkpoint: stored,
       adapter,
@@ -1668,15 +1586,57 @@ export class CheckpointRollbackService {
       preview: {
         sessionId: request.sessionId,
         turn: previewTurn,
+        ...(stored === null ? {} : { atSeq: stored.atSeq }),
         ...(operation === 'undo' ? { operation } : {}),
-        ...(markerScope === undefined ? {} : { scope: markerScope }),
+        ...(undoScope === undefined ? {} : { scope: undoScope }),
         ...(tipWindow === undefined ? {} : { tipTurn: tipWindow.tipTurn }),
         messages,
-        files: stored?.files.map(file => ({ path: file.path, change: file.change })) ?? [],
+        files: trackedFiles.map(file => ({ path: file.path, change: file.change })),
         conflicts,
         unavailable: [...new Set(unavailable)],
       },
     }
+  }
+
+  /**
+   * Tracked text files for this restore/undo.
+   * Rollback with no live cut: target turn → tip.
+   * Rollback while a later cut is live: only the gap down to that tip (already restored).
+   * Undo: reverse only the segment this tip added (down to previous tip, or open-ended).
+   */
+  private trackedFilesForRestore(
+    checkpoints: readonly Checkpoint[],
+    adapter: CheckpointServiceSession,
+    surface: CutRollbackSurface | CutUndoSurface,
+    liveCut: SessionCut | null,
+  ): readonly FileCheckpoint[] {
+    const shells = undoShellRanges(adapter.readEvents())
+    const real = checkpoints.filter(checkpoint => (
+      checkpoint.files.length > 0 || !isUndoShellCheckpoint(checkpoint.atSeq, shells)
+    ))
+    if (surface.operation === 'undo') {
+      const previous = liveCut?.previous ?? null
+      return chainTrackedFiles(real, {
+        fromTurn: surface.tipTurn,
+        fromAtSeq: surface.live.cutSeq,
+        ...(previous !== null && previous.hideTurnsFrom > surface.tipTurn
+          ? {
+            untilTurnExclusive: previous.hideTurnsFrom,
+            untilAtSeqExclusive: previous.cutSeq,
+          }
+          : {}),
+      })
+    }
+    return chainTrackedFiles(real, {
+      fromTurn: surface.turn,
+      fromAtSeq: surface.cutSeq,
+      ...(liveCut !== null && liveCut.hideTurnsFrom > surface.turn
+        ? {
+          untilTurnExclusive: liveCut.hideTurnsFrom,
+          untilAtSeqExclusive: liveCut.cutSeq,
+        }
+        : {}),
+    })
   }
 
   private effectiveScope(

@@ -10,3 +10,7 @@ test-results/
 .worktrees/
 .superpowers/
 scripts/inspect-sessions.mjs
+docs/superpowers
+docs/roadmap.md
+.cursor/
+tests/

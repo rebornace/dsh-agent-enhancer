@@ -117,7 +117,12 @@ export function RollbackModalHost(props: RollbackModalHostProps) {
 
   const runRetry = () => {
     if (active.status !== 'error') return
-    props.rollback.open(active.turn, active.operation, { surface: active.surface })
+    props.rollback.open(active.turn, active.operation, {
+      surface: active.surface,
+      ...(active.atSeq === undefined && active.preview?.atSeq === undefined
+        ? {}
+        : { atSeq: active.atSeq ?? active.preview?.atSeq }),
+    })
   }
 
   return <Modal
@@ -156,5 +161,9 @@ export function RollbackModalHost(props: RollbackModalHostProps) {
         </Button>
       </>}
     </>}
-  ><RollbackPreview active={active} t={props.t} onOpenTimeline={props.onOpenTimeline} /></Modal>
+  ><RollbackPreview
+    active={active}
+    t={props.t}
+    onOpenTimeline={props.onOpenTimeline}
+  /></Modal>
 }

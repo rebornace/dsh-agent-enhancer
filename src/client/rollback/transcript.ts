@@ -101,13 +101,22 @@ function liveTipMarker(events: readonly SessionEvent[]): SessionEvent | undefine
   ))
 }
 
+/** Plugin projection cut used by chat filtering (preferred over legacy tip markers). */
+export interface TranscriptCut {
+  readonly hideTurnsFrom: number
+  readonly cutSeq: number
+  readonly restoredAtSeq: number
+}
+
 /**
- * First turn hidden by any still-active tip (stacked uncleared markers keep the
- * most aggressive tip). Marker `rollback:N` means cut before turn N → hide from N.
+ * First turn hidden by the live cut, or by any still-active legacy tip marker.
+ * Marker `rollback:N` means cut before turn N → hide from N.
  */
 export function activeRollbackHideTurnsFrom(
   entries: readonly SessionEventLikeEntry[],
+  cut?: TranscriptCut | null,
 ): number | undefined {
+  if (cut !== null && cut !== undefined) return cut.hideTurnsFrom
   let hideTurnsFrom: number | undefined
   for (const tip of activeTipMarkers(entries.flatMap(entry => entry.type === 'event' ? [entry.event] : []))) {
     if (tip.type !== 'user/message') continue
@@ -118,10 +127,12 @@ export function activeRollbackHideTurnsFrom(
   return hideTurnsFrom
 }
 
-/** Latest live tip seq; events after it are a fresh continuation, not rolled-back history. */
+/** Latest live tip / cut seq; events after it are a fresh continuation, not rolled-back history. */
 export function activeRollbackContinueAfterSeq(
   entries: readonly SessionEventLikeEntry[],
+  cut?: TranscriptCut | null,
 ): number | undefined {
+  if (cut !== null && cut !== undefined) return cut.restoredAtSeq
   const tip = liveTipMarker(entries.flatMap(entry => entry.type === 'event' ? [entry.event] : []))
   return tip === undefined ? undefined : Number(tip.seq)
 }
@@ -132,7 +143,9 @@ export function activeRollbackContinueAfterSeq(
  */
 export function keepPrefixLoadThroughSeq(
   entries: readonly SessionEventLikeEntry[],
+  cut?: TranscriptCut | null,
 ): number | undefined {
+  if (cut !== null && cut !== undefined) return Math.max(0, cut.cutSeq)
   const markers = activeTipMarkers(entries.flatMap(entry => entry.type === 'event' ? [entry.event] : []))
   if (markers.length === 0) return undefined
   let minShadowed: number | undefined
@@ -165,9 +178,10 @@ function hasKeepPrefixConversation(entries: readonly SessionEventLikeEntry[]): b
 export function needsKeepPrefixHistory(
   entries: readonly SessionEventLikeEntry[],
   hasMore: boolean,
+  cut?: TranscriptCut | null,
 ): boolean {
   if (!hasMore) return false
-  if (keepPrefixLoadThroughSeq(entries) === undefined) return false
+  if (keepPrefixLoadThroughSeq(entries, cut) === undefined) return false
   return !hasKeepPrefixConversation(entries)
 }
 
@@ -178,7 +192,14 @@ export function needsKeepPrefixHistory(
  */
 export function activeRollbackUndoTip(
   entries: readonly SessionEventLikeEntry[],
+  cut?: TranscriptCut | null,
 ): { readonly turn: number } | undefined {
+  if (cut !== null && cut !== undefined) {
+    const events = entries.flatMap(entry => entry.type === 'event' ? [entry.event] : [])
+    const later = events.some(event => Number(event.seq) > cut.restoredAtSeq
+      && !isRollbackMarkerEvent(event) && !isUndoCopyEvent(event))
+    return later ? undefined : { turn: cut.hideTurnsFrom }
+  }
   const events = entries.flatMap(entry => entry.type === 'event' ? [entry.event] : [])
   const tip = liveTipMarker(events)
   if (tip === undefined || tip.type !== 'user/message') return undefined
@@ -481,20 +502,22 @@ function renumberCollidingTurns(
  */
 export function presentRollbackTranscript(
   entries: readonly SessionEventLikeEntry[],
+  cut?: TranscriptCut | null,
 ): readonly SessionEventLikeEntry[] {
   const events = entries.flatMap(entry => entry.type === 'event' ? [entry.event] : [])
   const bySeq = new Map(events.map(event => [Number(event.seq), event]))
   const everShadowed = new Set<number>()
-  const liveTip = liveTipMarker(events)
+  const liveTip = cut !== null && cut !== undefined ? undefined : liveTipMarker(events)
   const liveTipSeq = liveTip === undefined ? undefined : Number(liveTip.seq)
-  const hideTurnsFrom = activeRollbackHideTurnsFrom(entries)
-  const continueAfterSeq = activeRollbackContinueAfterSeq(entries)
+  const hideTurnsFrom = activeRollbackHideTurnsFrom(entries, cut)
+  const continueAfterSeq = activeRollbackContinueAfterSeq(entries, cut)
   const undoRanges = undoShellRanges(events)
   for (const event of events) {
     if (!isRollbackMarkerEvent(event)) continue
     for (const seq of event.sourceEventSeqs ?? []) everShadowed.add(Number(seq))
   }
-  if (everShadowed.size === 0 && liveTipSeq === undefined && undoRanges.length === 0
+  const hasCut = cut !== null && cut !== undefined
+  if (!hasCut && everShadowed.size === 0 && liveTipSeq === undefined && undoRanges.length === 0
     && !events.some(isUndoCopyEvent)) return renumberCollidingTurns(entries)
 
   let changed = false
@@ -507,12 +530,17 @@ export function presentRollbackTranscript(
       continue
     }
     const event = entry.event
-    if (everShadowed.has(Number(event.seq))) {
+    const seq = Number(event.seq)
+    // Plugin cut: withdraw the closed interval (cutSeq, restoredAtSeq].
+    if (hasCut && seq > cut.cutSeq && seq <= cut.restoredAtSeq) {
+      changed = true
+      continue
+    }
+    if (everShadowed.has(seq)) {
       changed = true
       continue
     }
     const ownedTurn = turnOfEvent(event)
-    const seq = Number(event.seq)
     const shell = undoRanges.find(range => seq >= range.startSeq && seq <= range.endSeq)
     if (shell !== undefined) {
       // Drop Host turn scaffolding + synthetic tool/call — not a real new round.
@@ -535,7 +563,7 @@ export function presentRollbackTranscript(
     // Continuation turns after the tip often reuse turn numbers >= hideTurnsFrom;
     // hiding those would blank the new model reply.
     const beforeTip = continueAfterSeq === undefined || seq <= continueAfterSeq
-    if (hideTurnsFrom !== undefined && ownedTurn !== undefined && ownedTurn >= hideTurnsFrom
+    if (!hasCut && hideTurnsFrom !== undefined && ownedTurn !== undefined && ownedTurn >= hideTurnsFrom
       && beforeTip && !isRollbackMarkerEvent(event) && !isUndoCopyEvent(event)) {
       changed = true
       continue
@@ -546,6 +574,11 @@ export function presentRollbackTranscript(
       presentSteps.ends.add(stepKey(event.data.turn, event.data.step))
     }
     if (isRollbackMarkerEvent(event)) {
+      // Cut projection path: drop tip notices entirely (legacy bookkeeping only).
+      if (hasCut) {
+        changed = true
+        continue
+      }
       // Older tips: drop. Live tip: keep only for bookkeeping — Chat hides context.
       if (liveTipSeq === undefined || Number(event.seq) !== liveTipSeq) {
         changed = true

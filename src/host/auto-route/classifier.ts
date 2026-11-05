@@ -58,9 +58,10 @@ export function createClassifier(
   }
   return async (text, signal) => withUsageSource('autoClassifier', async () => {
     const timeout = new AbortController()
-    const timer = setTimeout(() => { timeout.abort() }, CLASSIFIER_TIMEOUT_MS)
     const unlink = signal === undefined ? undefined : linkAbortSignal(signal, timeout)
-    try {
+    // Abort alone is not enough: providers that ignore AbortSignal leave
+    // `for await` parked forever. Race the whole classify so Auto remap returns.
+    const run = (async (): Promise<AutoTier> => {
       timeout.signal.throwIfAborted()
       const call = await llm.prepareCall(
         { provider: route.provider, model: route.model, maxTokens: CLASSIFIER_MAX_TOKENS },
@@ -89,8 +90,20 @@ export function createClassifier(
         throw new Error('Classifier finished without stop')
       }
       throw new Error(`Invalid classifier output: ${raw}`)
+    })()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([
+        run,
+        new Promise<AutoTier>((_resolve, reject) => {
+          timer = setTimeout(() => {
+            timeout.abort()
+            reject(new Error('Classifier timed out'))
+          }, CLASSIFIER_TIMEOUT_MS)
+        }),
+      ])
     } finally {
-      clearTimeout(timer)
+      if (timer !== undefined) clearTimeout(timer)
       unlink?.()
     }
   })

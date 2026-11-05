@@ -83,22 +83,38 @@ export class RollbackController {
     if (!this.options.enabled() || previous === undefined || previous === running) return
     const active = this.operation
     if (active === null || active.status === 'executing' || active.status === 'loading') return
-    this.open(active.turn, active.operation, { surface: active.surface })
+    this.open(active.turn, active.operation, {
+      surface: active.surface,
+      ...(active.atSeq === undefined ? {} : { atSeq: active.atSeq }),
+    })
   }
 
   open(
     turn: number,
     operation: CheckpointRollbackOperation = 'rollback',
-    options: { readonly surface?: RollbackModalSurface } = {},
+    options: { readonly surface?: RollbackModalSurface, readonly atSeq?: number } = {},
   ): void {
     if (this.disposed || !this.options.enabled() || this.operation?.status === 'executing') return
     this.cancelOperation()
     const version = ++this.version
     const controller = new AbortController()
     const surface = this.resolveSurface(options.surface ?? 'composer')
-    this.operation = { turn, operation, status: 'loading', version, controller, surface }
+    this.operation = {
+      turn,
+      operation,
+      status: 'loading',
+      version,
+      controller,
+      surface,
+      ...(options.atSeq === undefined ? {} : { atSeq: options.atSeq }),
+    }
     this.publish()
-    const request: CheckpointRollbackRequest = { sessionId: this.options.sessionId, turn, operation }
+    const request: CheckpointRollbackRequest = {
+      sessionId: this.options.sessionId,
+      turn,
+      operation,
+      ...(options.atSeq === undefined ? {} : { atSeq: options.atSeq }),
+    }
     void this.options.remote.preview(request, controller.signal).then(result => {
       if (!this.current(version, request, result)) return
       this.rememberPreviewCoverage(result)
@@ -108,10 +124,16 @@ export class RollbackController {
         turn: result.turn,
         status: 'ready',
         preview: result,
+        ...(typeof result.atSeq === 'number' ? { atSeq: result.atSeq } : {}),
       }
       this.publish()
     }).catch((error: unknown) => {
       if (!this.current(version, request)) return
+      // Superseded / aborted previews must not paint "恢复未完成" (figure-1 false alarm).
+      if (controller.signal.aborted
+        || (error instanceof Error && (error.name === 'AbortError' || error.message === 'AbortError'))) {
+        return
+      }
       this.operation = {
         ...this.operation!,
         status: 'error',
@@ -152,6 +174,7 @@ export class RollbackController {
       turn,
       operation,
       scope: effectiveScope,
+      ...(typeof preview.atSeq === 'number' ? { atSeq: preview.atSeq } : {}),
     }
     const controller = new AbortController()
     this.operation = {
@@ -175,7 +198,8 @@ export class RollbackController {
     }
     if (this.disposed || !this.options.enabled()) return
     if (result === null || typeof result !== 'object'
-      || result.sessionId !== request.sessionId || result.turn !== request.turn
+      || result.sessionId !== request.sessionId
+      || Number(result.turn) !== Number(request.turn)
       || typeof result.draft !== 'string') {
       this.failExecute(turn, operation, preview, effectiveScope)
       return
@@ -271,7 +295,9 @@ export class RollbackController {
     if (response.sessionId !== request.sessionId) return false
     // Undo remaps later rolled-back cards onto the live tip — accept tip turn.
     if (operation === 'undo') return true
-    return response.turn === request.turn
+    // Wire codecs may revive turn as string; strict === dropped ready previews
+    // and left the modal on a false failure path after the next click.
+    return Number(response.turn) === Number(request.turn)
   }
 
   private failExecute(
@@ -316,6 +342,7 @@ export class RollbackController {
         ...(this.operation.scope === undefined ? {} : { scope: this.operation.scope }),
         ...(this.operation.error === undefined ? {} : { error: this.operation.error }),
         ...(this.operation.errorCode === undefined ? {} : { errorCode: this.operation.errorCode }),
+        ...(this.operation.atSeq === undefined ? {} : { atSeq: this.operation.atSeq }),
       },
     }
     for (const listener of this.listeners) listener()

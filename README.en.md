@@ -17,7 +17,7 @@ English | [简体中文](./README.md)
 | Category | You want to… | Do this |
 | --- | --- | --- |
 | **Write** | Revisit / clarify / continue | `↑↓` or `Alt+R`; **Optimize** on the right; after a reply, `Tab` for the gray suggestion |
-| **Restore** | Go back before a turn | **Checkpoint timeline** / **Restore to here** → confirm in preview; **Undo restore** via **+** / `/` when available |
+| **Restore** | Truncate & retry | Bubble / timeline **Restore to here** (optional tracked files); **Undo restore** via **+** / `/` |
 | **Usage & cost** | See tokens spent and remaining credit | **Token usage** → **Model bill**; **Settings → Models** for per-account balance; helpers can use a cheaper model or Auto |
 | **Context** | See how full the window is | Context meter → right-pane details; optional **Compress context** |
 | **Routing** | Let the session pick a strength tier | Choose **Auto** in the model list; map Instant / Thinking / Pro in settings |
@@ -34,7 +34,7 @@ Grouped by capability; screenshots share a row so new features extend the matchi
 | Category | Includes | How to use | Notes |
 | --- | --- | --- | --- |
 | **Write** | History · Optimize · Predict | First/last-line `↑↓`; `Alt+R` (`Ctrl+R` where available); Optimize on the right (undo; selection-only when selected); gray suggestion after a reply, `Tab` to accept | Current loaded session only; `Enter` fills without sending; chip drafts ignore history keys; vague drafts gain detail, specific drafts stay lean; at most one prediction per turn |
-| **Restore** | Checkpoint timeline · Restore to here · Undo restore | Open session stats from the composer “N turns / M steps” pill, then click the **Session statistics** title row; or the **Checkpoint timeline** icon on a user message; restore from the timeline or **Restore to here** → preview conversation-only or + tracked files; after restore open **+** / `/` → **Undo restore** (while a tip remains) | No processes / terminals / untracked files; existing checkpoints stay if you turn the switch off |
+| **Restore** | Bubble restore · Checkpoint timeline · Undo restore | **Projection truncate (cut-first):** **Restore to here** on a message or the right-pane checkpoint timeline → preview first (conversation-only or + tracked **text** files, including deleted paths) → on confirm, write the projection cut then restore files; chat and the model hide everything past the cut **without** appending a tip to the DSH log. Use **+** / `/` → **Undo restore**. Optional: composer “N turns / M steps” → **Session statistics** title row also opens the timeline | File tracking = write/edit intents + Cline-style before/after workspace scan around shells, UTF-8 text only (PNG/WebP binaries are skipped). Multi-turn restore merges tracked files from the target turn through the tip. Official session stats keep full-log counts. No processes / terminals / untracked / binaries / external services. Existing checkpoints and projection cuts stay if you turn the switch off |
 | **Usage & cost** | Token usage · Model bill · Per-provider balance | Open the bill from the usage title (today / 7d / 30d / all); **Settings → Models** for DeepSeek account / API-key balances | Local input / output / cache-read totals, heatmap, feature share; “≈ ¥” from official rates (not an invoice); account uses Platform wallets, API key uses `/user/balance`; two decimal places |
 | **Context** | Meter · Details · Compact | Open the meter into the right pane; drill into categories; one-click official `/compact` | System / tools / messages breakdown; numbers are heuristic estimates, not bill-precise |
 | **Routing** | Auto · Tier maps · Optional classifier | Pick **Auto** in the model list; map Instant / Thinking / Pro; optional small-model classifier | Bilingual heuristic by default; classifier failures fall back; optimize / predict may also use Auto or a fixed model |
@@ -46,7 +46,7 @@ Grouped by capability; screenshots share a row so new features extend the matchi
 | Category | Toggles / config | Default | Effect |
 | --- | --- | --- | --- |
 | **Write** | `historyEnabled` · `optimizeEnabled` · `predictEnabled` | All on | `↑↓` / `Alt+R`; optimize & undo (model pill); gray predict (model pill) |
-| **Restore** | `rollbackEnabled` | On | Checkpoint timeline; **Restore to here**; **+** / `/` **Undo restore** |
+| **Restore** | `rollbackEnabled` | On | Bubble / timeline **Restore to here**; **+** / `/` **Undo restore** |
 | **Context** | `contextInspectEnabled` | On | Context meter → right-pane details |
 | **Routing** | `autoClassifierEnabled`, etc. | Classifier off | Session / helpers may use Auto; tier maps; optional classifier |
 | **Maintenance** | Plugin updates | — | Check/apply for npm installs; link installs show guidance only |
@@ -58,7 +58,7 @@ Model pills default to **Follow session**, or pick provider / model / reasoning 
 | Category | What you see | Preview |
 | --- | --- | --- |
 | **Write** | History search; optimize control and gray prediction | ![History search](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/prompt-history.png) ![Optimize & predict](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/optimize-and-predict.png) |
-| **Restore** | Session-stats / message timeline entry → restore → preview → undo | ![Session stats entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/checkpoint-session-stats-entry.png) ![Checkpoint timeline entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/checkpoint-timeline-entry.png) ![Rollback entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-entry.png) ![Rollback preview](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-preview.png) ![Undo restore](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/undo-restore.png) |
+| **Restore** | Bubble / timeline restore → preview → undo; session-stats row optional | ![Checkpoint timeline entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/checkpoint-timeline-entry.png) ![Rollback entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-entry.png) ![Rollback preview](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-preview.png) ![Undo restore](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/undo-restore.png) ![Session stats shortcut](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/checkpoint-session-stats-entry.png) |
 | **Usage & cost** | Token usage entry, model bill, per-provider balance | ![Token usage](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/token-usage-meter.png) ![Model bill](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/model-bill.png) ![Provider balance](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/provider-balance.png) |
 | **Context** | Meter summary and right-pane details / compact | ![Context meter](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/context-meter.png) ![Context details](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/context-details.png) |
 | **Routing** | Auto in the model list; tier maps and optional classifier | ![Auto picker](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/auto-model-picker.png) ![Auto routing](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/auto-routing-settings.png) |
@@ -95,7 +95,7 @@ Then open the **Plugin Market** tab, search, and install this plugin. Some third
 When the `dsh` CLI is available and you intend to write the **desktop** profile:
 
 ```sh
-dsh plugin --profile desktop add dsh-agent-enhancer@0.3.1
+dsh plugin --profile desktop add dsh-agent-enhancer@0.3.2
 ```
 
 Or unpinned: `dsh plugin --profile desktop add dsh-agent-enhancer`.  

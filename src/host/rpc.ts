@@ -364,6 +364,8 @@ export const checkpointRollbackRequestSchema = z.strictObject({
   turn: z.number().int().positive(),
   operation: z.enum(['rollback', 'undo']).optional(),
   scope: checkpointScopeSchema.optional(),
+  // Timeline cards pin the tip by atSeq (turn numbers reuse after undo).
+  atSeq: z.number().int().nonnegative().optional(),
 })
 const checkpointMessageSchema = z.strictObject({
   seq: z.number().int().nonnegative(),
@@ -411,6 +413,7 @@ const checkpointPreviewSchema = z.strictObject({
   operation: z.enum(['rollback', 'undo']).optional(),
   scope: checkpointScopeSchema.optional(),
   tipTurn: z.number().int().positive().optional(),
+  atSeq: z.number().int().nonnegative().optional(),
   messages: z.array(checkpointMessageSchema),
   files: z.array(checkpointFileSchema),
   conflicts: z.array(checkpointConflictSchema),
@@ -452,6 +455,20 @@ const checkpointSummariesResultSchema = z.strictObject({
   activity: liveActivityStatsSchema,
   turns: z.array(checkpointTurnSummarySchema),
 })
+export const checkpointCutRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+})
+const checkpointCutViewSchema = z.strictObject({
+  hideTurnsFrom: z.number().int().positive(),
+  cutSeq: z.number().int().nonnegative(),
+  restoredAtSeq: z.number().int().nonnegative(),
+  draftPrompt: z.string(),
+  scope: checkpointScopeSchema,
+})
+const checkpointCutResultSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  cut: checkpointCutViewSchema.nullable(),
+})
 const checkpointRequestCodec = codec('dsh-agent-enhancer#CheckpointRollbackRequest', checkpointRollbackRequestSchema)
 const checkpointPreviewCodec = codec('dsh-agent-enhancer#CheckpointRollbackPreview', checkpointPreviewSchema)
 const checkpointResultCodec = codec('dsh-agent-enhancer#CheckpointRollbackResult', checkpointResultSchema)
@@ -462,6 +479,14 @@ const checkpointSummariesRequestCodec = codec(
 const checkpointSummariesResultCodec = codec(
   'dsh-agent-enhancer#CheckpointSummariesResult',
   checkpointSummariesResultSchema,
+)
+const checkpointCutRequestCodec = codec(
+  'dsh-agent-enhancer#CheckpointCutRequest',
+  checkpointCutRequestSchema,
+)
+const checkpointCutResultCodec = codec(
+  'dsh-agent-enhancer#CheckpointCutResult',
+  checkpointCutResultSchema,
 )
 
 export const checkpointRemoteInfo = createTypertRemoteInfo({
@@ -495,6 +520,19 @@ export const checkpointRemoteInfo = createTypertRemoteInfo({
       }],
       cancellation: { parameter: 'signal' },
       result: checkpointSummariesResultCodec,
+    },
+    'checkpointRollback/getCut': {
+      service: 'checkpointRollback',
+      implementation: 'getCut',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: checkpointCutRequestCodec,
+        strictCodec: checkpointCutRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: checkpointCutResultCodec,
     },
   },
 }, z)

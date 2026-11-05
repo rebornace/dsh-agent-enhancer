@@ -1,6 +1,8 @@
 import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
+  CheckpointCutRequest,
+  CheckpointCutResult,
   CheckpointRollbackErrorCode,
   CheckpointRollbackOperation,
   CheckpointRollbackPreview,
@@ -17,6 +19,7 @@ export interface RollbackRemote {
   preview(request: CheckpointRollbackRequest, signal: AbortSignal): Promise<CheckpointRollbackPreview>
   execute(request: CheckpointRollbackRequest, signal: AbortSignal): Promise<CheckpointRollbackResult>
   summaries?(request: CheckpointSummariesRequest, signal: AbortSignal): Promise<CheckpointSummariesResult>
+  getCut?(request: CheckpointCutRequest, signal: AbortSignal): Promise<CheckpointCutResult>
 }
 
 /** Which UI surface owns the confirm modal for the active restore. */
@@ -37,6 +40,8 @@ export interface RollbackActive {
    * the composer overlay host is often not the visible subscriber there.
    */
   readonly surface: RollbackModalSurface
+  /** Pin from the timeline card; retry must keep it or preview can miss the tip. */
+  readonly atSeq?: number
 }
 
 export interface RollbackSnapshot {

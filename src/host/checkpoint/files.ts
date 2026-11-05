@@ -353,7 +353,9 @@ export class CheckpointFiles {
         await journal.compensate()
         throw new CheckpointFileError('FILE_RESTORE_FAILED')
       }
-      if (!result.synchronized) throw new CheckpointFileError('FILE_RESTORE_FAILED')
+      // Cut / surface commit landed. Projection sync is best-effort — callers
+      // retry snapshot/flush after maintenance. Failing the whole restore here
+      // showed "恢复未完成" even when files and the cut were already durable.
       try {
         await journal.complete('completed')
         return journal

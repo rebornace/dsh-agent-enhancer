@@ -2,13 +2,22 @@
 
 ## Unreleased
 
+## 0.3.2 - 2026-11-05
+
 ### Fixed
 
-- **Auto 切模**：为 `agent-enhancer/auto` 哨兵补上 `context.contextWindow`，避免 Desktop `0.2.2` compaction-basic 报 `no context capacity for agent-enhancer/auto` 而无法选中 Auto。
+- **检查点预览：** RPC `request` / `preview` 允许可选 `atSeq`，时间线按检查点打开时不再因 `strictObject` 拒参而直接「恢复未完成」。
+- **投影恢复：** 改为 cut-first（先写投影 cut、再恢复已跟踪文件）；维护态下按 Session **id** 判定，避免对象身份抖动误报 `session-changed`；跨轮合并已跟踪文本文件（含已删除路径）并正确还原。
+- **Auto 切模：** 为 `agent-enhancer/auto` 哨兵补上 `context.contextWindow`，避免 Desktop `0.2.2` compaction-basic 报 `no context capacity for agent-enhancer/auto` 而无法选中 Auto。
+
+### Changed
+
+- **轮/步分账：** 不再覆写 Host `sessionStats` 的 turns/steps（官方 ActivityPill / 统计页保留完整日志口径）；检查点时间线 lead 改为「当前可见对话」，并注明与底部官方统计可能不一致。
+- **检查点入口：** 主路径为消息旁时间线图标与右侧栏；会话统计标题行仅作可选 DOM 捷径（探测失败静默）。
 
 ### Docs
 
-- README 中英文补齐 **检查点** 入口：会话统计弹层「会话统计」行、用户消息旁「检查点时间线」图标；截图见 `docs/images/checkpoint-session-stats-entry.png`、`checkpoint-timeline-entry.png`。
+- README 中英文钉到 `0.3.2`，并按投影截断 / cut-first 口径更新回退说明。
 
 ## 0.3.1 - 2026-11-04
 

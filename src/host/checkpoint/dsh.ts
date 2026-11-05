@@ -48,18 +48,22 @@ export class DshCheckpointSessions {
 
   resolveSession = (sessionId: SessionId): CheckpointServiceSession | undefined => {
     const agent = this.ctx.agents.get(sessionId)
-    if (agent === undefined || (this.ctx.get('sessions') as unknown as SessionStore).get(sessionId) !== agent.session) {
+    const stored = (this.ctx.get('sessions') as unknown as SessionStore).get(sessionId)
+    // Require the live Agent and a registered Session id. Do not compare Session
+    // object identity — projection/flush can briefly rebind the store entry for
+    // the same id during maintenance, which previously aborted cut writes and
+    // compensated already-restored files ("恢复未完成").
+    if (agent === undefined || stored === undefined || stored.id !== agent.session.id) {
       this.adapters.delete(sessionId)
       return undefined
     }
     const cached = this.adapters.get(sessionId)
     if (cached?.agent === agent) return cached.adapter
-    const workspaceRoot = agent.session.header.cwd ?? ''
     const adapter: CheckpointServiceSession = {
-      session: agent.session,
-      workspaceRoot,
+      get session() { return agent.session },
+      get workspaceRoot() { return agent.session.header.cwd ?? '' },
       get status() { return agent.status },
-      get canRestore() { return workspaceRoot !== '' },
+      get canRestore() { return (agent.session.header.cwd ?? '') !== '' },
       readEvents: () => agent.session.snapshotEvents(),
       runMaintenance: async task => {
         const result = await agent.runMaintenance(task)
@@ -72,10 +76,11 @@ export class DshCheckpointSessions {
         // client views observe the committed surface before execute returns.
         // flush() === false means the Session was already durable (common during
         // startup journal recovery); only a thrown error is a real sync failure.
-        this.ctx.sessionProjections.snapshot(agent.session)
-        await (this.ctx.get('sessions') as unknown as SessionStore).flush(agent.session)
+        const session = agent.session
+        this.ctx.sessionProjections.snapshot(session)
+        await (this.ctx.get('sessions') as unknown as SessionStore).flush(session)
         signal.throwIfAborted()
-        this.ctx.sessionProjections.snapshot(agent.session)
+        this.ctx.sessionProjections.snapshot(session)
       },
     }
     this.adapters.set(sessionId, { agent, adapter })

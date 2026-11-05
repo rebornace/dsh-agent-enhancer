@@ -35,7 +35,7 @@ import {
   resolveUiLocale,
 } from './prompts.ts'
 import { maskReferences, unmaskReferences } from './structured.ts'
-import type { AuxiliaryRequest, AuxiliaryResult, ModelRoute } from './types.ts'
+import type { AuxiliaryRequest, AuxiliaryResult, ModelRoute, UiLocale } from './types.ts'
 
 export type AuxiliarySettingsReader = () => Pick<EnhancerSettings,
   | 'optimizeProvider' | 'optimizeModel' | 'optimizeReasoningEffort'
@@ -79,7 +79,7 @@ export class AuxiliaryModels {
   private readonly lifetime = new AbortController()
   private readonly requests = new Map<SessionId, Set<AbortController>>()
   private readonly predictedTurns = new Set<string>()
-  private readonly pending = new Set<Promise<AuxiliaryResult | null>>()
+  private readonly pending = new Set<Promise<unknown>>()
   private readonly settings: AuxiliarySettingsReader
 
   constructor(private readonly ctx: Context, settings?: AuxiliarySettingsReader) {

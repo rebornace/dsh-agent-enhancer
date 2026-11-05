@@ -9,7 +9,7 @@ export interface SessionStatsCheckpointDockProps extends PropsRuntime<'conversat
   readonly t: TranslateNS<'agent-enhancer'>
 }
 
-/** Invisible dock resident: adds a checkpoint jump on the official 会话统计 title. */
+/** Invisible dock resident: weak optional jump on the official 会话统计 title. */
 export function SessionStatsCheckpointDock(props: SessionStatsCheckpointDockProps) {
   const sessionId = props.sessionId as SessionId | undefined
   useEffect(() => installSessionStatsCheckpointLink({

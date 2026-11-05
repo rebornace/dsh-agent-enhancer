@@ -51,6 +51,7 @@ import { ProviderBalanceChip } from './dsh/provider-balance-chip.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { RollbackController } from './rollback/controller.ts'
 import type { RollbackRemote } from './rollback/controller.ts'
+import { SessionCutCache } from './rollback/cut-cache.ts'
 import { RollbackModalHost } from './rollback/modal-host.tsx'
 import { checkpointRollbackRemote } from './rollback/remote.ts'
 import { installRollbackUndoCommand } from './rollback/command-ui.ts'
@@ -378,28 +379,62 @@ export function apply(ctx: Context): void {
       preview: (request, signal) => checkpointRollbackRemote.preview(mountedCtx.remote, request, signal),
       execute: (request, signal) => checkpointRollbackRemote.execute(mountedCtx.remote, request, signal),
       summaries: (request, signal) => checkpointRollbackRemote.summaries(mountedCtx.remote, request, signal),
+      getCut: (request, signal) => checkpointRollbackRemote.getCut(mountedCtx.remote, request, signal),
     }
     const rollbackSessions = new Map<SessionId, RollbackController>()
     const rollbackRetentions = new Map<SessionId, () => void>()
     const undoTips = new RollbackUndoTipStore()
+    const cutCache = new SessionCutCache()
+    const refreshCut = async (sessionId: SessionId): Promise<void> => {
+      const getCut = rollbackRemote.getCut
+      if (getCut === undefined) return
+      try {
+        const result = await getCut({ sessionId }, new AbortController().signal)
+        cutCache.set(sessionId, result.cut === null ? null : {
+          hideTurnsFrom: result.cut.hideTurnsFrom,
+          cutSeq: result.cut.cutSeq,
+          restoredAtSeq: result.cut.restoredAtSeq,
+        })
+      } catch {
+        // Keep the previous projection; the next summaries/execute will retry.
+      }
+    }
     const tEnhancer = mountedCtx.locale.bind('agent-enhancer')
     const tChat = mountedCtx.locale.bind('chat')
     const rollbackEnabled = () => resolveSettings(form.getSnapshot().value).rollbackEnabled
     const rollbackFor = (sessionId: SessionId) => {
       let rollback = rollbackSessions.get(sessionId)
       if (rollback === undefined) {
+        const remote: RollbackRemote = {
+          ...rollbackRemote,
+          async execute(request, signal) {
+            const result = await rollbackRemote.execute(request, signal)
+            // Await so undo clears the cut before the modal closes / chat re-projects.
+            await refreshCut(sessionId)
+            return result
+          },
+          async summaries(request, signal) {
+            const summaries = rollbackRemote.summaries
+            if (summaries === undefined) throw new Error('summaries unavailable')
+            const result = await summaries(request, signal)
+            void refreshCut(sessionId)
+            return result
+          },
+        }
         rollback = new RollbackController({
           sessionId,
           enabled: rollbackEnabled,
-          remote: rollbackRemote,
+          remote,
         })
         rollbackSessions.set(sessionId, rollback)
+        void refreshCut(sessionId)
         const sessions = mountedCtx.get('sessions')
         if (sessions !== undefined) {
           const retention = sessions.retainInfo(sessionId)
           rollbackRetentions.set(sessionId, retention.subscribe(() => {
             if ((retention.getSnapshot().retainedBy.mainView ?? 0) === 0) {
               rollbackSessions.get(sessionId)?.close()
+              cutCache.clear(sessionId)
               // Keep the prompt ledger for the session lifetime; only agent unmount clears it.
             }
           }))
@@ -412,17 +447,6 @@ export function apply(ctx: Context): void {
         ? { sessionId }
         : { sessionId, turn })
     }
-    const restoreFromTimeline = (sessionId: SessionId, turn: number) => {
-      // Defer so the timeline click finishes before the body-portaled modal mounts.
-      queueMicrotask(() => {
-        rollbackFor(sessionId).open(turn, 'rollback', { surface: 'timeline' })
-      })
-    }
-    const undoFromTimeline = (sessionId: SessionId, turn: number) => {
-      queueMicrotask(() => {
-        rollbackFor(sessionId).open(turn, 'undo', { surface: 'timeline' })
-      })
-    }
     const TimelineTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(
       CheckpointTimelineTab,
       {
@@ -432,8 +456,6 @@ export function apply(ctx: Context): void {
         sessions: mountedCtx.get('sessions') as CheckpointTimelineTabProps['sessions'],
         rollbackFor,
         locale: resolveUiLocale(mountedCtx.locale.getLocale().active) === 'zh' ? 'zh-CN' : 'en',
-        onRestore: restoreFromTimeline,
-        onUndo: undoFromTimeline,
       },
     )
     const TimelineTitle = (props: PropsRuntime<'sidebar.right.pane.tab.title'>) => createElement(
@@ -518,10 +540,10 @@ export function apply(ctx: Context): void {
           }, StatsCheckpointDock)))
           // Chat only renders append-origin events; reshape the loaded window so
           // surface-replaced history disappears and the rollback tip becomes visible.
-          disposers.push(installRollbackTranscriptFilter(mountedCtx, undoTips))
+          disposers.push(installRollbackTranscriptFilter(mountedCtx, undoTips, cutCache))
           // Host turnOutline keeps every turn; filter it so TurnNavigator drops rolled-back marks.
           disposers.push(installRollbackTurnOutlineFilter(mountedCtx))
-          // ActivityPill sessionStats is whole-log; after rollback show surface turns/steps only.
+          // No-op: do not rewrite Host sessionStats (official pill / stats page own whole-log counts).
           disposers.push(installRollbackSessionStatsFilter(mountedCtx))
           // + button and `/` share this menu; show undo only while a restore tip remains.
           disposers.push(installRollbackUndoCommand({

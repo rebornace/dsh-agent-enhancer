@@ -12,7 +12,12 @@ import {
   isFollowSessionModel,
   resolveSettings,
 } from '../../config.ts'
-import type { AuxiliaryFeature, AuxiliaryModelSettings, EnhancerSettings, ModuleName } from '../../config.ts'
+import type {
+  AuxiliaryModelSettings,
+  ConfigurableAuxiliaryFeature,
+  EnhancerSettings,
+  ModuleName,
+} from '../../config.ts'
 import type { ApplyUpdateResult, UpdateCheckResult } from '../../host/update/types.ts'
 import { AUTO_MODEL, AUTO_PROVIDER } from '../../host/auto-route/sentinel.ts'
 import styles from '../styles.module.css'
@@ -90,7 +95,7 @@ type SettingsForm = Pick<ConfigForm<EnhancerSettings>, 'getSnapshot' | 'subscrib
 /** Home = feature toggles only; detail panels hold model / Auto mapping. */
 type SettingsView =
   | { readonly kind: 'home' }
-  | { readonly kind: 'feature'; readonly feature: AuxiliaryFeature }
+  | { readonly kind: 'feature'; readonly feature: ConfigurableAuxiliaryFeature }
   | { readonly kind: 'auto' }
 
 export interface PluginSettingsProps {
@@ -327,7 +332,7 @@ const DESCRIPTIONS = {
   contextInspect: 'contextInspectDescription',
 } as const
 
-function modelFeatureOf(module: ModuleName): AuxiliaryFeature | null {
+function modelFeatureOf(module: ModuleName): ConfigurableAuxiliaryFeature | null {
   switch (module) {
     case 'optimize':
       return 'optimize'
@@ -512,7 +517,7 @@ class SettingsErrorBoundary extends Component<
 }
 
 function featureDetailTitle(
-  feature: AuxiliaryFeature,
+  feature: ConfigurableAuxiliaryFeature,
   t: TranslateNS<'agent-enhancer'>,
 ): string {
   switch (feature) {
@@ -616,7 +621,7 @@ function PluginSettingsBody({ form, t, loadCatalog, checkUpdate, applyUpdate }: 
     }
   }
 
-  const onModelMenuSelect = async (feature: AuxiliaryFeature, id: string) => {
+  const onModelMenuSelect = async (feature: ConfigurableAuxiliaryFeature, id: string) => {
     const decoded = decodeModelSelection(id)
     if (decoded === null) return
     switch (decoded.kind) {

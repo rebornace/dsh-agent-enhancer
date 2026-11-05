@@ -1,6 +1,8 @@
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TypertCodec, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type {
+  CheckpointCutRequest,
+  CheckpointCutResult,
   CheckpointRollbackErrorCode,
   CheckpointRollbackPreview,
   CheckpointRollbackRequest,
@@ -19,6 +21,7 @@ function codec(typeSymbol: string): TypertCodec {
 
 const requestCodec = codec('dsh-agent-enhancer#CheckpointRollbackRequest')
 const summariesRequestCodec = codec('dsh-agent-enhancer#CheckpointSummariesRequest')
+const cutRequestCodec = codec('dsh-agent-enhancer#CheckpointCutRequest')
 
 export const checkpointClientRemoteInfo = {
   package: 'dsh-agent-enhancer',
@@ -52,6 +55,16 @@ export const checkpointClientRemoteInfo = {
     parameters: [{ name: 'request', wire: 'request', source: 'json', codec: summariesRequestCodec }],
     cancellation: { parameter: 'signal' },
     result: codec('dsh-agent-enhancer#CheckpointSummariesResult'),
+  }, {
+    id: 'dsh-agent-enhancer#checkpointRollback/getCut',
+    service: 'checkpointRollback',
+    namespace: 'checkpointRollback',
+    method: 'getCut',
+    implementation: 'getCut',
+    invocation: { kind: 'direct' },
+    parameters: [{ name: 'request', wire: 'request', source: 'json', codec: cutRequestCodec }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#CheckpointCutResult'),
   }],
 } satisfies TypertRemoteContribution
 
@@ -63,14 +76,14 @@ export class CheckpointRollbackClientError extends Error {
 }
 
 type Call = (
-  request: CheckpointRollbackRequest | CheckpointSummariesRequest,
+  request: CheckpointRollbackRequest | CheckpointSummariesRequest | CheckpointCutRequest,
   signal?: AbortSignal,
 ) => Promise<RemoteResult<unknown>>
 
 async function invoke(
   remote: unknown,
-  method: 'preview' | 'execute' | 'summaries',
-  request: CheckpointRollbackRequest | CheckpointSummariesRequest,
+  method: 'preview' | 'execute' | 'summaries' | 'getCut',
+  request: CheckpointRollbackRequest | CheckpointSummariesRequest | CheckpointCutRequest,
   signal?: AbortSignal,
 ) {
   const namespace = Reflect.get(remote as object, 'checkpointRollback') as object
@@ -99,5 +112,8 @@ export const checkpointRollbackRemote = {
   },
   summaries(remote: unknown, request: CheckpointSummariesRequest, signal?: AbortSignal) {
     return invoke(remote, 'summaries', request, signal) as Promise<CheckpointSummariesResult>
+  },
+  getCut(remote: unknown, request: CheckpointCutRequest, signal?: AbortSignal) {
+    return invoke(remote, 'getCut', request, signal) as Promise<CheckpointCutResult>
   },
 }

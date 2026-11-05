@@ -10,6 +10,36 @@ const MAX_CHECKPOINTS = 20
 const checkpointQueues = new Map<string, Promise<void>>()
 const journalQueues = new Map<string, Promise<void>>()
 
+function byStoreOrder(left: Checkpoint, right: Checkpoint): number {
+  return left.createdAt - right.createdAt
+    || left.atSeq - right.atSeq
+    || left.turn - right.turn
+    || left.id.localeCompare(right.id)
+}
+
+/**
+ * Cap the per-session list without discarding file-bearing captures in favor of
+ * newer conversation-only / synthesized rows. Restart backfill used to save empty
+ * soft checkpoints until `slice(-20)` evicted the snapshots rollback needs.
+ */
+export function retainCheckpoints(
+  checkpoints: readonly Checkpoint[],
+  max = MAX_CHECKPOINTS,
+): Checkpoint[] {
+  if (checkpoints.length <= max) return [...checkpoints].sort(byStoreOrder)
+  const rich = checkpoints.filter(checkpoint => checkpoint.files.length > 0)
+  const empty = checkpoints.filter(checkpoint => checkpoint.files.length === 0)
+  const emptyOldestFirst = [...empty].sort(byStoreOrder)
+  const dropEmpty = Math.max(0, checkpoints.length - max)
+  const keptEmpty = emptyOldestFirst.slice(dropEmpty)
+  let kept = [...rich, ...keptEmpty]
+  if (kept.length > max) {
+    // Still over capacity: drop oldest file-bearing last.
+    kept = [...kept].sort(byStoreOrder).slice(kept.length - max)
+  }
+  return kept.sort(byStoreOrder)
+}
+
 async function serialize<T>(queues: Map<string, Promise<void>>, key: string, operation: () => Promise<T>): Promise<T> {
   const previous = queues.get(key) ?? Promise.resolve()
   const result = previous.then(operation)
@@ -54,6 +84,9 @@ const checkpointSchema = z.object({
   coverage: z.enum(['complete', 'partial']),
   gaps: z.array(gapSchema),
   files: z.array(fileSchema),
+  /** Legacy shadow-git fields (ignored; stripped on save). */
+  shadowBeforeCommit: z.string().min(7).optional(),
+  shadowAfterCommit: z.string().min(7).optional(),
 }).strict().superRefine((checkpoint, context) => {
   const valid = checkpoint.coverage === 'complete' ? checkpoint.gaps.length === 0 : checkpoint.gaps.length > 0
   if (!valid) context.addIssue({ code: 'custom', path: ['gaps'], message: 'Coverage does not match gaps' })
@@ -145,11 +178,10 @@ export class CheckpointStore {
       const existing = checkpoints.findIndex(value => value.id === checkpoint.id)
       if (existing >= 0) checkpoints.splice(existing, 1, parsed.data)
       else checkpoints.push(parsed.data)
-      checkpoints.sort((left, right) => left.createdAt - right.createdAt || left.turn - right.turn || left.id.localeCompare(right.id))
       await this.ensureDirectories()
       await writeAtomic(this.checkpointPath(checkpoint.sessionId), {
         schemaVersion: CHECKPOINT_SCHEMA_VERSION,
-        checkpoints: checkpoints.slice(-MAX_CHECKPOINTS),
+        checkpoints: retainCheckpoints(checkpoints, MAX_CHECKPOINTS),
       })
     })
   }
@@ -189,10 +221,9 @@ export class CheckpointStore {
         if (parsed.data.sessionId !== sessionId) throw new CheckpointStoreError('INVALID_CHECKPOINT')
         next.push(parsed.data)
       }
-      next.sort((left, right) => left.createdAt - right.createdAt || left.turn - right.turn || left.id.localeCompare(right.id))
       await writeAtomic(path, {
         schemaVersion: CHECKPOINT_SCHEMA_VERSION,
-        checkpoints: next.slice(-MAX_CHECKPOINTS),
+        checkpoints: retainCheckpoints(next, MAX_CHECKPOINTS),
       })
     })
   }

@@ -4,7 +4,9 @@ import type { AutoRouteMap } from './host/auto-route/types.ts'
 export const MODULES = ['history', 'optimize', 'predict', 'rollback', 'contextInspect'] as const
 export type ModuleName = typeof MODULES[number]
 
-export type AuxiliaryFeature = 'optimize' | 'predict' | 'compact'
+/** Features with dedicated provider/model settings fields. */
+export type ConfigurableAuxiliaryFeature = 'optimize' | 'predict' | 'compact'
+export type AuxiliaryFeature = ConfigurableAuxiliaryFeature
 
 /** Empty provider/model means “follow the current session model”. */
 export interface AuxiliaryModelSettings {

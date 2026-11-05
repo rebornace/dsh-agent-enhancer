@@ -13,8 +13,10 @@ export function confirmBlocked(
   conflicts: readonly unknown[],
   scope: CheckpointRollbackScope,
   trackedFiles = 0,
+  options: { readonly shadowRestore?: boolean } = {},
 ): boolean {
   if (blockingUnavailable(unavailable, scope, { trackedFiles }).length > 0) return true
+  if (options.shadowRestore === true) return false
   return scope === 'conversation-and-files' && conflicts.length > 0
 }
 

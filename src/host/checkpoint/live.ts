@@ -85,11 +85,14 @@ export class DshCheckpointCapture {
   constructor(private readonly ctx: Context, private readonly options: CheckpointCaptureOptions) {
     this.disposers.push(
       ctx.on('agent/pre-step', async (payload, next) => {
-        const current = this.turns.get(payload.agent.id)
+        // Always key by Session id. agent.id may diverge from session.id on newer
+        // Desktop builds; session/event listeners only see session.id.
+        const sessionId = payload.agent.session.id
+        const current = this.turns.get(sessionId)
         const startsTurn = current === undefined
           || (current.turnStart !== null && current.turnStart.data.turn !== payload.turn)
         if (!this.closed && startsTurn && payload.agent.session.header.origin !== 'subagent') {
-          this.turns.set(payload.agent.id, {
+          this.turns.set(sessionId, {
             agent: payload.agent,
             prompt: payload.messages.find(message => message.source.kind === 'user') ?? null,
             turnStart: null,
@@ -144,7 +147,7 @@ export class DshCheckpointCapture {
       // this flag the host plugin's listener is filtered out and never runs.
       ctx.on('tools/execute', async (exec, next) => {
         if (exec.agent === undefined) return next()
-        const current = this.turns.get(exec.agent.id)
+        const current = this.turns.get(exec.agent.session.id)
         this.actors.set(exec, exec.agent)
         try {
           // Observation-policy owns fs/*-intent and never calls next(); snapshot
@@ -195,7 +198,7 @@ export class DshCheckpointCapture {
           if (!this.closed) await this.options.store.save(checkpoint)
         },
       },
-      sessionId: turn.agent.id,
+      sessionId: turn.agent.session.id,
       session: {
         format: turn.agent.session.header.version,
         preset: turn.agent.session.header.agentPreset ?? null,
@@ -255,12 +258,16 @@ export class DshCheckpointCapture {
     }
   }
 
+  private turnOf(agent: LiveAgent): PendingTurn | undefined {
+    return this.turns.get(agent.session.id)
+  }
+
   private async captureToolPath(agent: LiveAgent, args: unknown): Promise<void> {
     const path = filePathFromToolArgs(args)
     if (path === null) return
     const workspaceRoot = agent.session.header.cwd
     if (workspaceRoot === undefined) {
-      const turn = this.turns.get(agent.id)
+      const turn = this.turnOf(agent)
       if (turn !== undefined) turn.incomplete = true
       return
     }
@@ -268,7 +275,7 @@ export class DshCheckpointCapture {
       const absolutePath = isAbsolute(path) ? path : join(workspaceRoot, path)
       await this.captureAbsolutePath(agent, absolutePath)
     } catch {
-      const turn = this.turns.get(agent.id)
+      const turn = this.turnOf(agent)
       if (turn !== undefined) turn.incomplete = true
     }
   }
@@ -284,13 +291,13 @@ export class DshCheckpointCapture {
       const absolutePath = this.ctx.fs.processPath(target as never)
       await this.captureAbsolutePath(agent, absolutePath)
     } catch {
-      const turn = this.turns.get(agent.id)
+      const turn = this.turnOf(agent)
       if (turn !== undefined) turn.incomplete = true
     }
   }
 
   private async captureAbsolutePath(agent: LiveAgent, absolutePath: string): Promise<void> {
-    const turn = this.turns.get(agent.id)
+    const turn = this.turnOf(agent)
     if (turn === undefined) return
     const workspaceRoot = agent.session.header.cwd
     if (workspaceRoot === undefined) {
