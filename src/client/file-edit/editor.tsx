@@ -1,5 +1,10 @@
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import styles from '../styles.module.css'
+import { quoteSelectedText } from '../quote/insert.ts'
+import { placeQuoteChip } from '../quote/position.ts'
+import type { QuoteAnchor } from '../quote/position.ts'
+import { QuotePortalLayer } from '../quote/portal-layer.tsx'
 import { ensureMonaco, ensureMonacoLanguage, isDarkTheme } from './monaco-loader.ts'
 import type { MonacoApi, MonacoEditor } from './monaco-loader.ts'
 
@@ -9,28 +14,86 @@ export interface FileMonacoEditorProps {
   readonly onChange: (value: string) => void
   readonly onSave: () => void
   readonly readOnly?: boolean
+  readonly sessionId?: SessionId
+  readonly quoteLabel?: string
 }
 
 export interface FileMonacoEditorHandle {
   openFind(): void
 }
 
+interface LocalQuote {
+  readonly text: string
+  readonly anchor: QuoteAnchor
+}
+
 function LinedTextarea(props: {
   readonly value: string
   readonly onChange: (value: string) => void
+  readonly sessionId?: SessionId
+  readonly quoteLabel?: string
 }) {
+  const areaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [quote, setQuote] = useState<LocalQuote | null>(null)
   const lines = String(props.value || '').split('\n').length
   const nums: string[] = []
   for (let i = 1; i <= lines; i += 1) nums.push(`${i}`)
+
+  const refreshQuote = () => {
+    const area = areaRef.current
+    const label = props.quoteLabel
+    if (area === null || label === undefined || props.sessionId === undefined) {
+      setQuote(null)
+      return
+    }
+    const start = area.selectionStart
+    const end = area.selectionEnd
+    if (start === end) {
+      setQuote(null)
+      return
+    }
+    const text = area.value.slice(start, end).replace(/\r\n?/gu, '\n').trim()
+    if (text === '') {
+      setQuote(null)
+      return
+    }
+    const rect = area.getBoundingClientRect()
+    setQuote({
+      text,
+      anchor: placeQuoteChip({
+        left: rect.left + 12,
+        right: rect.left + 12,
+        top: rect.top + 8,
+        bottom: rect.top + 8,
+      }),
+    })
+  }
+
   return (
     <div className={styles.fileEditFallback}>
       <div className={styles.fileEditGutter} aria-hidden>{nums.join('\n')}</div>
       <textarea
+        ref={areaRef}
         className={styles.fileEditTextarea}
         value={props.value}
         spellCheck={false}
         onChange={event => props.onChange(event.target.value)}
+        onSelect={refreshQuote}
+        onKeyUp={refreshQuote}
+        onMouseUp={refreshQuote}
       />
+      {quote !== null && props.quoteLabel !== undefined
+        ? (
+          <QuotePortalLayer
+            label={props.quoteLabel}
+            anchor={quote.anchor}
+            onQuote={() => {
+              if (!quoteSelectedText(quote.text, props.sessionId)) return
+              setQuote(null)
+            }}
+          />
+        )
+        : null}
     </div>
   )
 }
@@ -54,6 +117,41 @@ function openEditorFind(editor: MonacoEditor | null | undefined): void {
   } catch { /* ignore */ }
 }
 
+function readMonacoQuote(editor: MonacoEditor, host: HTMLElement): LocalQuote | null {
+  const selection = editor.getSelection()
+  const model = editor.getModel()
+  if (selection === null || model === null || selection.isEmpty()) return null
+  const text = model.getValueInRange(selection).replace(/\r\n?/gu, '\n').trim()
+  if (text === '') return null
+  const visible = editor.getScrolledVisiblePosition({
+    lineNumber: selection.startLineNumber,
+    column: selection.startColumn,
+  })
+  const hostRect = host.getBoundingClientRect()
+  if (visible === null) {
+    return {
+      text,
+      anchor: placeQuoteChip({
+        left: hostRect.left + 16,
+        right: hostRect.left + 16,
+        top: hostRect.top + 16,
+        bottom: hostRect.top + 16,
+      }),
+    }
+  }
+  const left = hostRect.left + visible.left
+  const top = hostRect.top + visible.top
+  return {
+    text,
+    anchor: placeQuoteChip({
+      left,
+      right: left + 1,
+      top,
+      bottom: top + Math.max(visible.height, 16),
+    }),
+  }
+}
+
 export const FileMonacoEditor = forwardRef<FileMonacoEditorHandle, FileMonacoEditorProps>(
   function FileMonacoEditor(props, ref) {
     const hostRef = useRef<HTMLDivElement | null>(null)
@@ -65,6 +163,7 @@ export const FileMonacoEditor = forwardRef<FileMonacoEditorHandle, FileMonacoEdi
     saveRef.current = props.onSave
     const [failed, setFailed] = useState(false)
     const [ready, setReady] = useState(false)
+    const [quote, setQuote] = useState<LocalQuote | null>(null)
     const applyingExternal = useRef(false)
 
     useImperativeHandle(ref, () => ({
@@ -79,6 +178,7 @@ export const FileMonacoEditor = forwardRef<FileMonacoEditorHandle, FileMonacoEdi
     useEffect(() => {
       let disposed = false
       let editor: MonacoEditor | undefined
+      let selectionSub: { dispose(): void } | undefined
       ensureMonaco()
         .then(async monaco => {
           monacoRef.current = monaco
@@ -111,6 +211,14 @@ export const FileMonacoEditor = forwardRef<FileMonacoEditorHandle, FileMonacoEdi
             if (applyingExternal.current) return
             changeRef.current(editor!.getValue())
           })
+          selectionSub = editor.onDidChangeCursorSelection(() => {
+            const host = hostRef.current
+            if (host === null || editor === undefined) {
+              setQuote(null)
+              return
+            }
+            setQuote(readMonacoQuote(editor, host))
+          })
           editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
             saveRef.current()
           })
@@ -125,6 +233,9 @@ export const FileMonacoEditor = forwardRef<FileMonacoEditorHandle, FileMonacoEdi
         })
       return () => {
         disposed = true
+        try {
+          selectionSub?.dispose()
+        } catch { /* ignore */ }
         try {
           editor?.dispose()
         } catch { /* ignore */ }
@@ -176,8 +287,35 @@ export const FileMonacoEditor = forwardRef<FileMonacoEditorHandle, FileMonacoEdi
     }, [props.readOnly, ready])
 
     if (failed) {
-      return <LinedTextarea value={props.value} onChange={props.onChange} />
+      return (
+        <LinedTextarea
+          value={props.value}
+          onChange={props.onChange}
+          sessionId={props.sessionId}
+          quoteLabel={props.quoteLabel}
+        />
+      )
     }
-    return <div ref={hostRef} className={styles.fileEditMonacoHost} />
+    return (
+      <>
+        <div
+          ref={hostRef}
+          className={styles.fileEditMonacoHost}
+          data-agent-enhancer-monaco=""
+        />
+        {quote !== null && props.quoteLabel !== undefined
+          ? (
+            <QuotePortalLayer
+              label={props.quoteLabel}
+              anchor={quote.anchor}
+              onQuote={() => {
+                if (!quoteSelectedText(quote.text, props.sessionId)) return
+                setQuote(null)
+              }}
+            />
+          )
+          : null}
+      </>
+    )
   },
 )

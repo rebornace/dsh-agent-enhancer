@@ -290,6 +290,8 @@ export function FileEditTab(props: FileEditTabProps) {
               onChange={setText}
               onSave={() => { void save() }}
               readOnly={phase === 'loading'}
+              sessionId={sessionId}
+              quoteLabel={props.t('quoteSelection')}
             />
           )
           : null}

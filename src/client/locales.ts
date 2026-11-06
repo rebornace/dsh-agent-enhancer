@@ -110,7 +110,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'contextInspectCompact' | 'contextInspectCompactHint' | 'contextInspectCompacting' |
       'contextInspectCompactDone' | 'contextInspectCompactNoop' |
       'contextInspectCompactUnavailable' | 'contextInspectCompactBusy' | 'contextInspectCompactFailed' |
-      'contextInspectCompactModel' | 'contextInspectCompactSummary' | 'contextInspectCompactChanged'
+      'contextInspectCompactModel' | 'contextInspectCompactSummary' | 'contextInspectCompactChanged' |
+      'quoteSelection'
   }
 }
 
@@ -131,6 +132,7 @@ export const agentLocales = {
     optimizeSessionChanged: '会话已变化，请重新优化',
     optimizeChips: '保留引用，仅优化其他文字',
     optimizeChipSelection: '选区包含引用，请优化整稿或调整选区',
+    quoteSelection: '引用',
     settingsTitle: '智能体增强',
     settingsSubtitle: '一个插件补齐常用 Agent 体验，按需开关',
     settingsTabFeatures: '功能',
@@ -479,6 +481,7 @@ export const agentLocales = {
     optimizeSessionChanged: 'Session changed. Optimize again.',
     optimizeChips: 'References stay unchanged; only surrounding text is optimized',
     optimizeChipSelection: 'Selection includes references. Optimize the full draft or adjust the selection.',
+    quoteSelection: 'Quote',
     settingsTitle: 'Agent Enhance',
     settingsSubtitle: 'One plugin for common agent UX — toggle features as needed',
     settingsTabFeatures: 'Features',

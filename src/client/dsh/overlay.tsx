@@ -12,6 +12,8 @@ import { latestCompletedTurn, sentPrompts } from './conversation.ts'
 import { isComposing, lineBoundary, officialMenuOpen, publicWriter, readSelection } from './editor.ts'
 import { CoexistenceHints } from './hints.tsx'
 import type { OverlapHintStore } from './plugin-hints.ts'
+import { rememberRollbackInputActions } from '../rollback/input-actions-cache.ts'
+import { rememberQuoteSession } from '../quote/session.ts'
 
 export type AgentOverlayProps = PropsRuntime<'conversation.input.overlay'> & {
   readonly session: PromptSession
@@ -58,6 +60,11 @@ export function AgentOverlay(props: AgentOverlayProps) {
   const chat = props.useConversation(snapshot => snapshot.views.get('chat')) as ChatSnapshot | undefined
   const latestRef = useRef({ input, session, chat })
   latestRef.current = { input, session, chat }
+
+  useEffect(() => {
+    rememberRollbackInputActions(props.sessionId, props.inputActions)
+    rememberQuoteSession(props.sessionId)
+  }, [props.sessionId, props.inputActions])
 
   useEffect(() => {
     const container = containerRef.current

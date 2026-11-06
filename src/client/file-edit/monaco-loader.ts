@@ -20,13 +20,32 @@ export interface MonacoEditorAction {
 
 export interface MonacoTextModel {
   getLanguageId(): string
+  getValueInRange(range: MonacoRange): string
 }
+
+export interface MonacoPosition {
+  readonly lineNumber: number
+  readonly column: number
+}
+
+export interface MonacoRange {
+  readonly startLineNumber: number
+  readonly startColumn: number
+  readonly endLineNumber: number
+  readonly endColumn: number
+  isEmpty(): boolean
+}
+
+export interface MonacoSelection extends MonacoRange {}
 
 export interface MonacoEditor {
   getValue(): string
   setValue(value: string): void
   getModel(): MonacoTextModel | null
+  getSelection(): MonacoSelection | null
+  getScrolledVisiblePosition(position: MonacoPosition): { top: number; left: number; height: number } | null
   onDidChangeModelContent(listener: () => void): { dispose(): void }
+  onDidChangeCursorSelection(listener: () => void): { dispose(): void }
   addCommand(keybinding: number, handler: () => void): string | null
   getAction(id: string): MonacoEditorAction | null
   focus(): void

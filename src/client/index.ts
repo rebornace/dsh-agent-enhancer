@@ -78,7 +78,15 @@ import {
   type CheckpointTimelineTabProps,
 } from './rollback/timeline-tab.tsx'
 import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import {
+  quoteInteraction,
+  QUOTE_INTERACTION_ID,
+} from './quote/interaction.ts'
+import { QuoteExternalHosts } from './quote/external-hosts.tsx'
+import { QuoteSurface } from './quote/surface.tsx'
 import { SessionDeleteMenuItem } from './session-delete/menu.tsx'
 import { SessionDeleteOverlay } from './session-delete/overlay.tsx'
 import { basenameOfPath, parseWorkspaceFileAddress } from './file-edit/address.ts'
@@ -332,8 +340,28 @@ export function apply(ctx: Context): void {
       inject: sessionId => ({ session: sessionFor(sessionId), hints }),
     }, AgentOverlay))
 
-    const contextInspectEnabled = () => resolveSettings(form.getSnapshot().value).contextInspectEnabled
+    // Transcript select → composer quote. Nested inject waits for uiConversation
+    // without blocking this fiber — a hard ctx.uiConversation read here would
+    // throw (not in plugin inject) and skip file-edit / extra-folders setup.
+    mountedCtx.inject(['uiConversation'], (scope: Context) => {
+      scope.effect(() => scope.uiConversation.interactions.register(quoteInteraction))
+      scope.slots.inject('conversation.chat.text-interaction', () => scope.slots.register({
+        name: 'conversation.chat.text-interaction',
+        key: QUOTE_INTERACTION_ID,
+        locale: 'agent-enhancer',
+      }, QuoteSurface))
+    })
+
     const tContext = mountedCtx.locale.bind('agent-enhancer')
+    // Preview / terminal quote hosts — outside chat text-interaction.
+    mountedCtx.slots.inject('shell.overlay', () => mountedCtx.slots.register({
+      name: 'shell.overlay',
+      id: 'agent-enhancer-quote-hosts',
+      order: 150,
+      locale: 'agent-enhancer',
+    }, () => createElement(QuoteExternalHosts, { t: tContext })))
+
+    const contextInspectEnabled = () => resolveSettings(form.getSnapshot().value).contextInspectEnabled
     const inspectContext = (
       sessionId: SessionId,
       category: ContextInspectCategory,

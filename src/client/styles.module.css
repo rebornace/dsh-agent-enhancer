@@ -2764,3 +2764,43 @@
 .extraFoldersTitleIcon {
   flex: none;
 }
+
+/* Mirror ChatView floating chrome (toBottom): fill + elevation, no card border.
+   Keep an opaque layer fill so preview / Monaco text cannot show through on hover. */
+.quoteSelectionButton {
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1, var(--dsw-alias-button-floating-fill));
+  box-shadow: var(--dsw-elevation-panel);
+  font: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+  isolation: isolate;
+}
+
+@media (hover: hover) {
+  .quoteSelectionButton:hover {
+    background: var(--dsw-alias-button-floating-hover, var(--dsw-alias-bg-layer-2));
+  }
+}
+
+.quoteSelectionButton:hover,
+.quoteSelectionButton:focus-visible {
+  z-index: 1;
+}
+
+.quotePortal {
+  position: fixed;
+  /* Above sidebar chrome / Monaco / preview; below session-delete modal (9999). */
+  z-index: 5000;
+  width: max-content;
+  margin: 0;
+  pointer-events: auto;
+  isolation: isolate;
+}
