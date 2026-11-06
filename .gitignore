@@ -11,6 +11,7 @@ test-results/
 .superpowers/
 scripts/inspect-sessions.mjs
 docs/superpowers
+docs/architecture
 docs/roadmap.md
 .cursor/
 tests/
