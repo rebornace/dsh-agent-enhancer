@@ -95,7 +95,7 @@ Then open the **Plugin Market** tab, search, and install this plugin. Some third
 When the `dsh` CLI is available and you intend to write the **desktop** profile:
 
 ```sh
-dsh plugin --profile desktop add dsh-agent-enhancer@0.3.3
+dsh plugin --profile desktop add dsh-agent-enhancer@0.3.4
 ```
 
 Or unpinned: `dsh plugin --profile desktop add dsh-agent-enhancer`.  
@@ -112,7 +112,7 @@ corepack pnpm install --frozen-lockfile
 # Local dev: build → pack → extract into profile/.dsh-enhancer-pack/pkg, then install
 corepack pnpm desktop:link
 
-# Back to npm (defaults to this package.json version; or: pnpm desktop:npm -- 0.3.3)
+# Back to npm (defaults to this package.json version; or: pnpm desktop:npm -- 0.3.4)
 corepack pnpm desktop:npm
 ```
 

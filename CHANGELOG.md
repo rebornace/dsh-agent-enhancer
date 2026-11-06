@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.3.4 - 2026-11-06
+
+### Fixed
+
+- **压缩上下文：** 侧栏按钮改为直连官方 `ctx.compaction.compactNow`（与聊天 `/compact` 同路径）；Auto 会话下恢复对 `purpose=compaction` 的 `llm.stream` 哨兵改写，避免「压缩未完成，会话可能未变化」。
+
+### Docs
+
+- README 中英文钉到 `0.3.4`。
+
 ## 0.3.3 - 2026-11-06
 
 ### Fixed
