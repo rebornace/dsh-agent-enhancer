@@ -340,28 +340,47 @@ export function apply(ctx: Context): void {
       inject: sessionId => ({ session: sessionFor(sessionId), hints }),
     }, AgentOverlay))
 
-    // Transcript select → composer quote. Nested inject waits for uiConversation
-    // without blocking this fiber — a hard ctx.uiConversation read here would
-    // throw (not in plugin inject) and skip file-edit / extra-folders setup.
-    mountedCtx.inject(['uiConversation'], (scope: Context) => {
-      scope.effect(() => scope.uiConversation.interactions.register(quoteInteraction))
-      scope.slots.inject('conversation.chat.text-interaction', () => scope.slots.register({
-        name: 'conversation.chat.text-interaction',
-        key: QUOTE_INTERACTION_ID,
-        locale: 'agent-enhancer',
-      }, QuoteSurface))
+    const tContext = mountedCtx.locale.bind('agent-enhancer')
+    const quoteEnabled = () => resolveSettings(form.getSnapshot().value).quoteEnabled
+    // Transcript + preview/terminal quote. Nested uiConversation inject waits
+    // without blocking this fiber; toggle tears the registrations down.
+    mountedCtx.effect(() => {
+      const disposers: Array<() => void> = []
+      const clear = () => {
+        while (disposers.length > 0) disposers.pop()?.()
+      }
+      const synchronize = () => {
+        if (!quoteEnabled()) {
+          clear()
+          return
+        }
+        if (disposers.length > 0) return
+        const fiber = mountedCtx.inject(['uiConversation'], (scope: Context) => {
+          scope.effect(() => scope.uiConversation.interactions.register(quoteInteraction))
+          scope.slots.inject('conversation.chat.text-interaction', () => scope.slots.register({
+            name: 'conversation.chat.text-interaction',
+            key: QUOTE_INTERACTION_ID,
+            locale: 'agent-enhancer',
+          }, QuoteSurface))
+        })
+        disposers.push(() => { void fiber.dispose() })
+        disposers.push(mountedCtx.slots.inject('shell.overlay', () => mountedCtx.slots.register({
+          name: 'shell.overlay',
+          id: 'agent-enhancer-quote-hosts',
+          order: 150,
+          locale: 'agent-enhancer',
+        }, () => createElement(QuoteExternalHosts, { t: tContext }))))
+      }
+      const unsubscribe = form.subscribe(synchronize)
+      synchronize()
+      return () => {
+        unsubscribe()
+        clear()
+      }
     })
 
-    const tContext = mountedCtx.locale.bind('agent-enhancer')
-    // Preview / terminal quote hosts — outside chat text-interaction.
-    mountedCtx.slots.inject('shell.overlay', () => mountedCtx.slots.register({
-      name: 'shell.overlay',
-      id: 'agent-enhancer-quote-hosts',
-      order: 150,
-      locale: 'agent-enhancer',
-    }, () => createElement(QuoteExternalHosts, { t: tContext })))
-
     const contextInspectEnabled = () => resolveSettings(form.getSnapshot().value).contextInspectEnabled
+    const usageEnabled = () => resolveSettings(form.getSnapshot().value).usageEnabled
     const inspectContext = (
       sessionId: SessionId,
       category: ContextInspectCategory,
@@ -414,6 +433,7 @@ export function apply(ctx: Context): void {
       remote: () => agentEnhancerRemote,
       sidebarRight: mountedCtx.sidebarRight,
       t: tContext,
+      quoteEnabled,
     })
     const FileEditRightTitle = (props: PropsRuntime<'sidebar.right.pane.tab.title'>) => createElement(
       FileEditTabTitle,
@@ -442,29 +462,38 @@ export function apply(ctx: Context): void {
       { ...props, t: tContext },
     )
     mountedCtx.effect(() => {
-      const disposers = [
-        mountedCtx.sidebarRightTabs.register({
+      const disposers: Array<() => void> = []
+      const synchronize = () => {
+        if (!usageEnabled()) {
+          while (disposers.length > 0) disposers.pop()?.()
+          return
+        }
+        if (disposers.length > 0) return
+        disposers.push(mountedCtx.sidebarRightTabs.register({
           id: USAGE_TAB_ID,
           kind: USAGE_TAB_KIND,
           priority: 'extension',
           title: () => tContext('usageTitle'),
-        }),
-        mountedCtx.slots.inject('sidebar.right.pane.tab', () => mountedCtx.slots.register({
+        }))
+        disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab', () => mountedCtx.slots.register({
           name: 'sidebar.right.pane.tab',
           key: USAGE_TAB_ID,
           locale: 'agent-enhancer',
-        }, BillRightTab)),
-        mountedCtx.slots.inject('sidebar.right.pane.tab.title', () => mountedCtx.slots.register({
+        }, BillRightTab)))
+        disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab.title', () => mountedCtx.slots.register({
           name: 'sidebar.right.pane.tab.title',
           key: USAGE_TAB_ID,
           locale: 'agent-enhancer',
-        }, BillRightTitle)),
-        mountedCtx.slots.inject('conversation.composer.dock', () => mountedCtx.slots.register({
+        }, BillRightTitle)))
+        disposers.push(mountedCtx.slots.inject('conversation.composer.dock', () => mountedCtx.slots.register({
           name: 'conversation.composer.dock', id: 'agent-enhancer-usage', order: 40,
           locale: 'agent-enhancer',
-        }, BillDock)),
-      ]
+        }, BillDock)))
+      }
+      const unsubscribe = form.subscribe(synchronize)
+      synchronize()
       return () => {
+        unsubscribe()
         while (disposers.length > 0) disposers.pop()?.()
       }
     })

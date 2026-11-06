@@ -10,8 +10,10 @@ export type FeatureLabelKey =
   | 'history'
   | 'optimize'
   | 'predict'
+  | 'quote'
   | 'rollback'
   | 'contextInspect'
+  | 'usage'
   | 'sessionDelete'
   | 'fileEdit'
 
@@ -19,8 +21,10 @@ export type FeatureDescriptionKey =
   | 'historyDescription'
   | 'optimizeDescription'
   | 'predictDescription'
+  | 'quoteDescription'
   | 'rollbackDescription'
   | 'contextInspectDescription'
+  | 'usageDescription'
   | 'sessionDeleteDescription'
   | 'fileEditDescription'
 
@@ -62,6 +66,12 @@ export const SETTINGS_FEATURE_GROUPS: readonly SettingsFeatureGroup[] = [
         modelFeature: 'predict',
       },
       {
+        module: 'quote',
+        labelKey: 'quote',
+        descriptionKey: 'quoteDescription',
+        modelFeature: null,
+      },
+      {
         module: 'rollback',
         labelKey: 'rollback',
         descriptionKey: 'rollbackDescription',
@@ -72,6 +82,12 @@ export const SETTINGS_FEATURE_GROUPS: readonly SettingsFeatureGroup[] = [
         labelKey: 'contextInspect',
         descriptionKey: 'contextInspectDescription',
         modelFeature: 'compact',
+      },
+      {
+        module: 'usage',
+        labelKey: 'usage',
+        descriptionKey: 'usageDescription',
+        modelFeature: null,
       },
     ],
   },

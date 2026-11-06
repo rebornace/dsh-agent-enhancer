@@ -2,7 +2,7 @@ import { AUTO_MODEL, AUTO_PROVIDER } from './host/auto-route/sentinel.ts'
 import type { AutoRouteMap } from './host/auto-route/types.ts'
 
 export const MODULES = [
-  'history', 'optimize', 'predict', 'rollback', 'contextInspect', 'sessionDelete', 'fileEdit',
+  'history', 'optimize', 'predict', 'quote', 'rollback', 'contextInspect', 'usage', 'sessionDelete', 'fileEdit',
 ] as const
 export type ModuleName = typeof MODULES[number]
 
@@ -53,8 +53,10 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   historyEnabled: true,
   optimizeEnabled: true,
   predictEnabled: true,
+  quoteEnabled: true,
   rollbackEnabled: true,
   contextInspectEnabled: true,
+  usageEnabled: true,
   sessionDeleteEnabled: true,
   fileEditEnabled: true,
   optimizeProvider: '',
@@ -90,8 +92,10 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     historyEnabled: value?.historyEnabled ?? true,
     optimizeEnabled: value?.optimizeEnabled ?? true,
     predictEnabled: value?.predictEnabled ?? true,
+    quoteEnabled: value?.quoteEnabled ?? true,
     rollbackEnabled: value?.rollbackEnabled ?? true,
     contextInspectEnabled: value?.contextInspectEnabled ?? true,
+    usageEnabled: value?.usageEnabled ?? true,
     sessionDeleteEnabled: value?.sessionDeleteEnabled ?? true,
     fileEditEnabled: value?.fileEditEnabled ?? true,
     optimizeProvider: text(value?.optimizeProvider),

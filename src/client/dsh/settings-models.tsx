@@ -43,7 +43,9 @@ export function SettingsModelsPanel(props: SettingsModelsPanelProps) {
 
   useEffect(() => {
     if (highlightFeature === null) return
-    highlightRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    const node = highlightRef.current
+    if (node === null || typeof node.scrollIntoView !== 'function') return
+    node.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [highlightFeature])
 
   return (

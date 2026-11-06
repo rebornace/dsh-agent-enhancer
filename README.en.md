@@ -3,7 +3,7 @@
 English | [简体中文](./README.md)
 
 > One plugin to make DeepSeek Harness Desktop **easier to write, refine, roll back, and see usage & context**, and to keep moving toward mainstream agent UX.  
-> Prompt history · one-click optimize · next-prompt predict · conversation & file restore · model bill · context details · Auto routing · per-provider balance — inside the official conversation and settings, no extra window.
+> Prompt history · select-to-quote · one-click optimize · next-prompt predict · conversation & file restore · workspace edit / extra folders · session delete · model bill · context details · Auto routing · per-provider balance — inside the official conversation and settings, no extra window.
 
 [![npm](https://img.shields.io/npm/v/dsh-agent-enhancer.svg)](https://www.npmjs.com/package/dsh-agent-enhancer)
 [![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.2--rc.1%20%3C0.3.0-blue)](https://www.npmjs.com/package/dsh-agent-enhancer)
@@ -16,12 +16,13 @@ English | [简体中文](./README.md)
 
 | Category | You want to… | Do this |
 | --- | --- | --- |
-| **Write** | Revisit / clarify / continue | `↑↓` or `Alt+R`; **Optimize** on the right; after a reply, `Tab` for the gray suggestion |
+| **Write** | Revisit / clarify / continue / quote selection | `↑↓` or `Alt+R`; **Optimize** on the right; after a reply, `Tab` for the gray suggestion; select text in chat / preview / editor / terminal → **Quote text** |
 | **Restore** | Truncate & retry | Bubble / timeline **Restore to here** (optional tracked files); **Undo restore** via **+** / `/` |
+| **Workspace** | Edit files, attach folders, delete sessions | Preview toolbar **Edit**; right-sidebar guide capsule **Extra folders**; session ⋯ **Delete session** |
 | **Usage & cost** | See tokens spent and remaining credit | **Token usage** → **Model bill**; **Settings → Models** for per-account balance; helpers can use a cheaper model or Auto |
 | **Context** | See how full the window is | Context meter → right-pane details; optional **Compress context** |
 | **Routing** | Let the session pick a strength tier | Choose **Auto** in the model list; map Instant / Thinking / Pro in settings |
-| **Master switches** | Turn a feature off | **Settings → Built-in plugins → Agent Enhance** |
+| **Master switches** | Turn a feature off | **Settings → Built-in plugins → Agent Enhance** (Features / Models & routing / About) |
 
 Core features default on. UI language follows Desktop (`zh` / `en`).
 
@@ -33,23 +34,23 @@ Grouped by capability; screenshots share a row so new features extend the matchi
 
 | Category | Includes | How to use | Notes |
 | --- | --- | --- | --- |
-| **Write** | History · Optimize · Predict | First/last-line `↑↓`; `Alt+R` (`Ctrl+R` where available); Optimize on the right (undo; selection-only when selected); gray suggestion after a reply, `Tab` to accept | Current loaded session only; `Enter` fills without sending; chip drafts ignore history keys; vague drafts gain detail, specific drafts stay lean; at most one prediction per turn |
+| **Write** | History · Select-to-quote · Optimize · Predict | First/last-line `↑↓`; `Alt+R` (`Ctrl+R` where available); select text in the transcript, file preview, Monaco editor, or sidebar terminal, then the floating **Quote text** chip (atomic quote in the composer); Optimize on the right (undo; selection-only when selected); gray suggestion after a reply, `Tab` to accept | Current loaded session only; `Enter` fills without sending; chip drafts ignore history keys; vague drafts gain detail, specific drafts stay lean; at most one prediction per turn. Quote never calls a model. Streaming assistant replies and HTML iframe / PDF / Excel previews are not quote sources yet |
 | **Restore** | Bubble restore · Checkpoint timeline · Undo restore | **Projection truncate (cut-first):** **Restore to here** on a message or the right-pane checkpoint timeline → preview first (conversation-only or + tracked **text** files, including deleted paths) → on confirm, write the projection cut then restore files; chat and the model hide everything past the cut **without** appending a tip to the DSH log. Use **+** / `/` → **Undo restore**. Optional: composer “N turns / M steps” → **Session statistics** title row also opens the timeline | File tracking = write/edit intents + Cline-style before/after workspace scan around shells, UTF-8 text only (PNG/WebP binaries are skipped). Multi-turn restore merges tracked files from the target turn through the tip. Official session stats keep full-log counts. No processes / terminals / untracked / binaries / external services. Existing checkpoints and projection cuts stay if you turn the switch off |
+| **Workspace** | File edit · Extra folders · Session delete | Official preview toolbar **Edit** → Monaco (`Ctrl+S` / pause-to-save), with a path back to preview; open **Extra folders** from the right-sidebar guide capsule (same list as Workspace Files), attach local folders via the system picker (tree chrome matches Workspace Files), open with official preview, then optional Edit; session ⋯ **Delete session** (confirm, then purge conversation + plugin-local data) | Edit is UTF-8 text only. Extra folders are for human browse/edit and do **not** expand the Agent sandbox. Delete is permanent; running sessions cannot be deleted. Delete must clear every plugin-owned store for that session (see `docs/architecture/session-delete.md`) |
 | **Usage & cost** | Token usage · Model bill · Per-provider balance | Open the bill from the usage title (today / 7d / 30d / all); **Settings → Models** for DeepSeek account / API-key balances | Local input / output / cache-read totals, heatmap, feature share; “≈ ¥” from official rates (not an invoice); account uses Platform wallets, API key uses `/user/balance`; two decimal places |
 | **Context** | Meter · Details · Compact | Open the meter into the right pane; drill into categories; one-click official `/compact` | System / tools / messages breakdown; numbers are heuristic estimates, not bill-precise |
 | **Routing** | Auto · Tier maps · Optional classifier | Pick **Auto** in the model list; map Instant / Thinking / Pro; optional small-model classifier | Bilingual heuristic by default; classifier failures fall back; optimize / predict may also use Auto or a fixed model |
 
 ### Settings
 
-**Settings → Built-in plugins → Agent Enhance**
+**Settings → Built-in plugins → Agent Enhance** (in-plugin **Features** / **Models & routing** / **About**)
 
 | Category | Toggles / config | Default | Effect |
 | --- | --- | --- | --- |
-| **Write** | `historyEnabled` · `optimizeEnabled` · `predictEnabled` | All on | `↑↓` / `Alt+R`; optimize & undo (model pill); gray predict (model pill) |
-| **Restore** | `rollbackEnabled` | On | Bubble / timeline **Restore to here**; **+** / `/` **Undo restore** |
-| **Context** | `contextInspectEnabled` | On | Context meter → right-pane details |
-| **Routing** | `autoClassifierEnabled`, etc. | Classifier off | Session / helpers may use Auto; tier maps; optional classifier |
-| **Maintenance** | Plugin updates | — | Check/apply for npm installs; link installs show guidance only |
+| **Chat** | `historyEnabled` · `optimizeEnabled` · `predictEnabled` · `quoteEnabled` · `rollbackEnabled` · `contextInspectEnabled` · `usageEnabled` | All on | `↑↓` / `Alt+R`; optimize & undo (model pill); gray predict; select-to-quote; restore; context meter; token usage / model bill |
+| **Workspace & sessions** | `sessionDeleteEnabled` · `fileEditEnabled` | All on | Session ⋯ delete; preview **Edit** + guide-capsule **Extra folders** (both follow `fileEditEnabled`) |
+| **Models & routing** | Helper model pills · `autoClassifierEnabled`, etc. | Classifier off | Optimize / predict / compact may follow session or Auto; tier maps; optional classifier |
+| **About** | Plugin updates | — | Check/apply for npm installs; link installs show guidance only |
 
 Model pills default to **Follow session**, or pick provider / model / reasoning effort, or **Auto**. Live balance stays on **Settings → Models** cards, not as a single global line on the bill.
 
@@ -57,12 +58,13 @@ Model pills default to **Follow session**, or pick provider / model / reasoning 
 
 | Category | What you see | Preview |
 | --- | --- | --- |
-| **Write** | History search; optimize control and gray prediction | ![History search](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/prompt-history.png) ![Optimize & predict](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/optimize-and-predict.png) |
+| **Write** | History search; optimize control and gray prediction; select text → floating **Quote text** | ![History search](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/prompt-history.png) ![Optimize & predict](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/optimize-and-predict.png) ![Select to quote](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/select-to-quote.png) |
 | **Restore** | Bubble / timeline restore → preview → undo; session-stats row optional | ![Checkpoint timeline entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/checkpoint-timeline-entry.png) ![Rollback entry](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-entry.png) ![Rollback preview](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/rollback-preview.png) ![Undo restore](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/undo-restore.png) ![Session stats shortcut](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/checkpoint-session-stats-entry.png) |
+| **Workspace** | Preview toolbar **Edit**; guide-capsule **Extra folders**; session delete | ![File edit](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/file-edit-toolbar.png) ![Extra folders](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/extra-folders.png) |
 | **Usage & cost** | Token usage entry, model bill, per-provider balance | ![Token usage](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/token-usage-meter.png) ![Model bill](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/model-bill.png) ![Provider balance](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/provider-balance.png) |
 | **Context** | Meter summary and right-pane details / compact | ![Context meter](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/context-meter.png) ![Context details](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/context-details.png) |
 | **Routing** | Auto in the model list; tier maps and optional classifier | ![Auto picker](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/auto-model-picker.png) ![Auto routing](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/auto-routing-settings.png) |
-| **Settings** | Agent Enhance toggles and model pills | ![Settings](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/settings.png) |
+| **Settings** | Features / Models & routing / About (nine toggles) | ![Settings](https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/settings.png) |
 
 ---
 
@@ -127,8 +129,11 @@ Keep host-shared DSH packages in both `peerDependencies` and `devDependencies`, 
 | Topic | Detail |
 | --- | --- |
 | History | Never calls a model |
+| Select-to-quote | Local composer quote insert only — no model call |
 | Optimize | Sends draft/selection + latest completed turn |
 | Predict | Sends the latest completed turn |
+| File edit / Extra folders | Reads/writes local text and chosen folders; extra folders do not expand the Agent sandbox |
+| Session delete | Purges that session’s conversation and plugin-local data (permanent) |
 | Auto classifier | Only when the toggle is on; failures fall back to local heuristics without blocking the main request |
 | Bill / context | Local aggregation and heuristic estimates; balance queries use Desktop-stored credentials — this plugin ships no keys |
 | Cache | In-session memory (bill data persists under the local usage directory) |
@@ -178,8 +183,8 @@ corepack pnpm check   # typecheck + test + build + pack verify
 
 | Path | Contents |
 | --- | --- |
-| `src/host/` | Model calls, RPC, checkpoint rollback, bill, Auto routing, balances |
-| `src/client/` | Conversation input, bill / context side panes, settings and Models-page balances |
+| `src/host/` | Model calls, RPC, checkpoint rollback, bill, Auto routing, balances, file I/O, extra folders, session delete |
+| `src/client/` | Conversation input, select-to-quote, file edit / extra folders, bill / context side panes, settings |
 | `tests/` | Vitest |
 | `lib/` | Build output |
 | `docs/images/` | README screenshots |

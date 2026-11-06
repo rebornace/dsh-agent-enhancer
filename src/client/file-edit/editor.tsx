@@ -16,6 +16,7 @@ export interface FileMonacoEditorProps {
   readonly readOnly?: boolean
   readonly sessionId?: SessionId
   readonly quoteLabel?: string
+  readonly quoteEnabled?: () => boolean
 }
 
 export interface FileMonacoEditorHandle {
@@ -32,6 +33,7 @@ function LinedTextarea(props: {
   readonly onChange: (value: string) => void
   readonly sessionId?: SessionId
   readonly quoteLabel?: string
+  readonly quoteEnabled?: () => boolean
 }) {
   const areaRef = useRef<HTMLTextAreaElement | null>(null)
   const [quote, setQuote] = useState<LocalQuote | null>(null)
@@ -42,7 +44,12 @@ function LinedTextarea(props: {
   const refreshQuote = () => {
     const area = areaRef.current
     const label = props.quoteLabel
-    if (area === null || label === undefined || props.sessionId === undefined) {
+    if (
+      area === null
+      || label === undefined
+      || props.sessionId === undefined
+      || props.quoteEnabled?.() === false
+    ) {
       setQuote(null)
       return
     }
@@ -213,7 +220,7 @@ export const FileMonacoEditor = forwardRef<FileMonacoEditorHandle, FileMonacoEdi
           })
           selectionSub = editor.onDidChangeCursorSelection(() => {
             const host = hostRef.current
-            if (host === null || editor === undefined) {
+            if (host === null || editor === undefined || props.quoteEnabled?.() === false) {
               setQuote(null)
               return
             }
@@ -293,9 +300,13 @@ export const FileMonacoEditor = forwardRef<FileMonacoEditorHandle, FileMonacoEdi
           onChange={props.onChange}
           sessionId={props.sessionId}
           quoteLabel={props.quoteLabel}
+          quoteEnabled={props.quoteEnabled}
         />
       )
     }
+    const showQuote = quote !== null
+      && props.quoteLabel !== undefined
+      && props.quoteEnabled?.() !== false
     return (
       <>
         <div
@@ -303,13 +314,13 @@ export const FileMonacoEditor = forwardRef<FileMonacoEditorHandle, FileMonacoEdi
           className={styles.fileEditMonacoHost}
           data-agent-enhancer-monaco=""
         />
-        {quote !== null && props.quoteLabel !== undefined
+        {showQuote
           ? (
             <QuotePortalLayer
-              label={props.quoteLabel}
-              anchor={quote.anchor}
+              label={props.quoteLabel!}
+              anchor={quote!.anchor}
               onQuote={() => {
-                if (!quoteSelectedText(quote.text, props.sessionId)) return
+                if (!quoteSelectedText(quote!.text, props.sessionId)) return
                 setQuote(null)
               }}
             />

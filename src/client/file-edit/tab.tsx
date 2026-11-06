@@ -19,6 +19,8 @@ export interface FileEditTabProps extends PropsRuntime<'sidebar.right.pane.tab'>
   readonly remote: () => { readonly agentEnhancer: object } | undefined
   readonly sidebarRight: FileEditNavigator | undefined
   readonly t: TranslateNS<'agent-enhancer'>
+  /** Live settings bit for select-to-quote inside the editor. */
+  readonly quoteEnabled?: () => boolean
 }
 
 type Phase = 'loading' | 'ready' | 'saving' | 'saved' | 'error'
@@ -292,6 +294,7 @@ export function FileEditTab(props: FileEditTabProps) {
               readOnly={phase === 'loading'}
               sessionId={sessionId}
               quoteLabel={props.t('quoteSelection')}
+              quoteEnabled={props.quoteEnabled}
             />
           )
           : null}

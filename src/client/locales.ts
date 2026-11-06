@@ -6,7 +6,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'optimize' | 'optimizePending' | 'optimizeUndo' | 'optimizeError' | 'optimizeChips' | 'optimizeChipSelection' |
       'optimizeModelUnavailable' | 'optimizeRequestFailed' | 'optimizeInvalidOutput' | 'optimizeRollbackFailed' | 'optimizeSessionChanged' |
       'settingsTitle' | 'settingsSubtitle' | 'history' | 'historyDescription' | 'optimizeDescription' |
-      'predict' | 'predictDescription' | 'privacyTitle' | 'privacy' | 'coexistence' | 'settingsError' | 'settingsUnavailable' |
+      'predict' | 'predictDescription' | 'quote' | 'quoteDescription' |
+      'usage' | 'usageDescription' |
+      'privacyTitle' | 'privacy' | 'coexistence' | 'settingsError' | 'settingsUnavailable' |
       'modelCatalogLoading' | 'modelCatalogError' |
       'modelLabel' | 'modelFollowSession' | 'modelAuto' | 'modelUnconfigured' | 'reasoningDefault' |
       'settingsBack' | 'settingsConfigure' |
@@ -132,7 +134,9 @@ export const agentLocales = {
     optimizeSessionChanged: '会话已变化，请重新优化',
     optimizeChips: '保留引用，仅优化其他文字',
     optimizeChipSelection: '选区包含引用，请优化整稿或调整选区',
-    quoteSelection: '引用',
+    quoteSelection: '引用文本',
+    quote: '划词引用',
+    quoteDescription: '在对话、文件预览、编辑器或终端划词后写入输入框引用块（不调用模型）',
     settingsTitle: '智能体增强',
     settingsSubtitle: '一个插件补齐常用 Agent 体验，按需开关',
     settingsTabFeatures: '功能',
@@ -274,7 +278,7 @@ export const agentLocales = {
     sessionDeleteFailed: '删除失败，请稍后重试',
     sessionDeleteFailedDetail: '删除失败：{message}',
     fileEdit: '编辑',
-    fileEditDescription: '在官方文件预览中直接编辑工作区 UTF-8 文本（Monaco，Ctrl+S / 停顿自动保存）；也可在右侧栏「附加目录」用系统选夹附加本地目录供人机浏览编辑（不影响 Agent 沙箱）',
+    fileEditDescription: '在官方文件预览工具栏点「编辑」用 Monaco 改工作区 UTF-8 文本（Ctrl+S / 停顿自动保存）；也可从右侧指南胶囊打开「附加目录」，用系统选夹挂本地文件夹供人机浏览编辑（不影响 Agent 沙箱）',
     extraFolders: '附加目录',
     extraFoldersTitle: '附加目录',
     extraFoldersGuideDescription: '附加本地文件夹，像工作区文件一样浏览并编辑',
@@ -320,6 +324,8 @@ export const agentLocales = {
     fileEditSessionChanged: '会话已变化，请重新打开文件',
     contextInspect: '上下文明细',
     contextInspectDescription: '点击官方占用环打开右侧明细；可一键官方压缩，并单独选择压缩摘要模型',
+    usage: '模型账单',
+    usageDescription: '输入区 Token 用量入口与右侧栏模型账单（本地汇总；设置 → 模型中的分账号余额仍可用）',
     contextInspectDetailTitle: '上下文明细',
     contextInspectNote: '数字为启发式估算（约），按占用排序；用于理解当前窗口构成，非账单精确值。',
     contextInspectEmpty: '这一类当前没有可列出的条目。',
@@ -481,7 +487,9 @@ export const agentLocales = {
     optimizeSessionChanged: 'Session changed. Optimize again.',
     optimizeChips: 'References stay unchanged; only surrounding text is optimized',
     optimizeChipSelection: 'Selection includes references. Optimize the full draft or adjust the selection.',
-    quoteSelection: 'Quote',
+    quoteSelection: 'Quote text',
+    quote: 'Select to quote',
+    quoteDescription: 'Select text in chat, file preview, editor, or terminal to insert a quote chip (no model call)',
     settingsTitle: 'Agent Enhance',
     settingsSubtitle: 'One plugin for common agent UX — toggle features as needed',
     settingsTabFeatures: 'Features',
@@ -623,7 +631,7 @@ export const agentLocales = {
     sessionDeleteFailed: 'Delete failed. Please try again.',
     sessionDeleteFailedDetail: 'Delete failed: {message}',
     fileEdit: 'Edit',
-    fileEditDescription: 'Edit workspace UTF-8 text from the official file preview (Monaco; Ctrl/Cmd+S or pause autosave). Attach more local folders from the right-sidebar Extra folders card (human browse/edit only; does not widen the Agent sandbox).',
+    fileEditDescription: 'Use Edit on the official file-preview toolbar to change workspace UTF-8 text in Monaco (Ctrl/Cmd+S or pause autosave). Open Extra folders from the right-sidebar guide capsule to attach local folders for human browse/edit (does not widen the Agent sandbox).',
     extraFolders: 'Extra folders',
     extraFoldersTitle: 'Extra folders',
     extraFoldersGuideDescription: 'Attach local folders and browse/edit them like workspace files',
@@ -669,6 +677,8 @@ export const agentLocales = {
     fileEditSessionChanged: 'Session changed — reopen the file',
     contextInspect: 'Context details',
     contextInspectDescription: 'Open right-sidebar details from the official meter; one-click official compact with an optional summary model',
+    usage: 'Model bill',
+    usageDescription: 'Composer token meter and right-sidebar model bill (local totals; provider balances on Settings → Models stay available)',
     contextInspectDetailTitle: 'Context details',
     contextInspectNote: 'Counts are approximate heuristics sorted by size for understanding the current window, not billing-grade totals.',
     contextInspectEmpty: 'Nothing to list in this category right now.',
