@@ -76,6 +76,15 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'sessionDeleteConfirmAction' | 'sessionDeleteCancel' | 'sessionDeleteDeleting' |
       'sessionDeleteDone' | 'sessionDeleteDoneUnloaded' | 'sessionDeleteDoneHidden' |
       'sessionDeleteFailed' | 'sessionDeleteFailedDetail' |
+      'fileEdit' | 'fileEditDescription' | 'fileEditTitle' | 'fileEditActionHint' |
+      'fileEditLoading' | 'fileEditReady' | 'fileEditSaving' | 'fileEditSaved' |
+      'fileEditSave' | 'fileEditSaveDirty' | 'fileEditSaveHint' |
+      'fileEditSearch' | 'fileEditSearchHint' |
+      'fileEditReload' | 'fileEditReloadHint' |
+      'fileEditPreview' | 'fileEditPreviewHint' |
+      'fileEditNoPath' | 'fileEditUnavailable' | 'fileEditFailed' | 'fileEditSaveFailed' |
+      'fileEditTooLarge' | 'fileEditNotText' | 'fileEditDenied' | 'fileEditNotFound' |
+      'fileEditSessionChanged' |
       'contextInspect' | 'contextInspectDescription' | 'contextInspectDetailTitle' | 'contextInspectNote' |
       'contextInspectEmpty' | 'contextInspectApproxTotal' | 'contextInspectApproxBadge' |
       'contextInspectOpenCategory' | 'contextInspectCategories' | 'contextInspectItemDetail' |
@@ -244,6 +253,32 @@ export const agentLocales = {
     sessionDeleteDoneHidden: '数据已清除；会话仍暂留内存，重启后消失',
     sessionDeleteFailed: '删除失败，请稍后重试',
     sessionDeleteFailedDetail: '删除失败：{message}',
+    fileEdit: '编辑',
+    fileEditDescription: '在官方文件预览中直接编辑工作区 UTF-8 文本（Monaco，Ctrl+S / 停顿自动保存）',
+    fileEditTitle: '编辑文件',
+    fileEditActionHint: '在当前页签用 Monaco 编辑此文件',
+    fileEditLoading: '正在读取…',
+    fileEditReady: '{lines} 行',
+    fileEditSaving: '正在保存…',
+    fileEditSaved: '已保存',
+    fileEditSave: '保存',
+    fileEditSaveDirty: '保存 *',
+    fileEditSaveHint: '立即保存（Ctrl+S）；停顿 1.5 秒也会自动保存',
+    fileEditSearch: '搜索',
+    fileEditSearchHint: '在文件中搜索（Ctrl+F）',
+    fileEditReload: '重新读取',
+    fileEditReloadHint: '放弃本地未保存修改并重新读取磁盘内容',
+    fileEditPreview: '预览',
+    fileEditPreviewHint: '返回官方文档预览',
+    fileEditNoPath: '未识别文件路径',
+    fileEditUnavailable: '编辑服务暂不可用',
+    fileEditFailed: '读取失败，请稍后重试',
+    fileEditSaveFailed: '保存失败，请稍后重试',
+    fileEditTooLarge: '文件过大，请用外部编辑器打开',
+    fileEditNotText: '不是可编辑的 UTF-8 文本',
+    fileEditDenied: '当前会话权限不允许编辑此路径',
+    fileEditNotFound: '文件不存在',
+    fileEditSessionChanged: '会话已变化，请重新打开文件',
     contextInspect: '上下文明细',
     contextInspectDescription: '点击官方占用环打开右侧明细；可一键官方压缩，并单独选择压缩摘要模型',
     contextInspectDetailTitle: '上下文明细',
@@ -539,6 +574,32 @@ export const agentLocales = {
     sessionDeleteDoneHidden: 'Data cleared; the session remains in memory until restart',
     sessionDeleteFailed: 'Delete failed. Please try again.',
     sessionDeleteFailedDetail: 'Delete failed: {message}',
+    fileEdit: 'Edit',
+    fileEditDescription: 'Edit workspace UTF-8 text from the official file preview (Monaco; Ctrl/Cmd+S or pause autosave)',
+    fileEditTitle: 'Edit file',
+    fileEditActionHint: 'Edit this file with Monaco in the current tab',
+    fileEditLoading: 'Loading…',
+    fileEditReady: '{lines} lines',
+    fileEditSaving: 'Saving…',
+    fileEditSaved: 'Saved',
+    fileEditSave: 'Save',
+    fileEditSaveDirty: 'Save *',
+    fileEditSaveHint: 'Save now (Ctrl/Cmd+S); also autosaves after a 1.5s pause',
+    fileEditSearch: 'Find',
+    fileEditSearchHint: 'Find in file (Ctrl/Cmd+F)',
+    fileEditReload: 'Reload',
+    fileEditReloadHint: 'Discard local unsaved changes and reload from disk',
+    fileEditPreview: 'Preview',
+    fileEditPreviewHint: 'Return to the official document preview',
+    fileEditNoPath: 'File path is missing',
+    fileEditUnavailable: 'File edit is temporarily unavailable',
+    fileEditFailed: 'Could not read the file. Please try again.',
+    fileEditSaveFailed: 'Could not save the file. Please try again.',
+    fileEditTooLarge: 'File is too large — open it in an external editor',
+    fileEditNotText: 'Not editable UTF-8 text',
+    fileEditDenied: 'This session cannot edit that path',
+    fileEditNotFound: 'File not found',
+    fileEditSessionChanged: 'Session changed — reopen the file',
     contextInspect: 'Context details',
     contextInspectDescription: 'Open right-sidebar details from the official meter; one-click official compact with an optional summary model',
     contextInspectDetailTitle: 'Context details',

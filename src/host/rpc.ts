@@ -182,6 +182,44 @@ export const deleteSessionResultSchema = z.strictObject({
 const deleteSessionRequestCodec = codec('dsh-agent-enhancer#DeleteSessionRequest', deleteSessionRequestSchema)
 const deleteSessionResultCodec = codec('dsh-agent-enhancer#DeleteSessionResult', deleteSessionResultSchema)
 
+export const readWorkspaceFileRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  path: z.string().min(1),
+})
+export const readWorkspaceFileResultSchema = z.strictObject({
+  path: z.string(),
+  absolutePath: z.string(),
+  text: z.string(),
+  bytes: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+})
+export const writeWorkspaceFileRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  path: z.string().min(1),
+  content: z.string(),
+})
+export const writeWorkspaceFileResultSchema = z.strictObject({
+  path: z.string(),
+  absolutePath: z.string(),
+  bytes: z.number().int().nonnegative(),
+})
+const readWorkspaceFileRequestCodec = codec(
+  'dsh-agent-enhancer#ReadWorkspaceFileRequest',
+  readWorkspaceFileRequestSchema,
+)
+const readWorkspaceFileResultCodec = codec(
+  'dsh-agent-enhancer#ReadWorkspaceFileResult',
+  readWorkspaceFileResultSchema,
+)
+const writeWorkspaceFileRequestCodec = codec(
+  'dsh-agent-enhancer#WriteWorkspaceFileRequest',
+  writeWorkspaceFileRequestSchema,
+)
+const writeWorkspaceFileResultCodec = codec(
+  'dsh-agent-enhancer#WriteWorkspaceFileResult',
+  writeWorkspaceFileResultSchema,
+)
+
 export const updateCheckResultSchema = z.strictObject({
   current: z.string(),
   latest: z.string().nullable(),
@@ -349,6 +387,32 @@ export const remoteInfo = createTypertRemoteInfo({
       }],
       cancellation: { parameter: 'signal' },
       result: deleteSessionResultCodec,
+    },
+    'agentEnhancer/readWorkspaceFile': {
+      service: 'agentEnhancer',
+      implementation: 'readWorkspaceFile',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: readWorkspaceFileRequestCodec,
+        strictCodec: readWorkspaceFileRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: readWorkspaceFileResultCodec,
+    },
+    'agentEnhancer/writeWorkspaceFile': {
+      service: 'agentEnhancer',
+      implementation: 'writeWorkspaceFile',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: writeWorkspaceFileRequestCodec,
+        strictCodec: writeWorkspaceFileRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: writeWorkspaceFileResultCodec,
     },
     'agentEnhancer/checkUpdate': {
       service: 'agentEnhancer',

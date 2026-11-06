@@ -81,6 +81,11 @@ import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { SessionDeleteMenuItem } from './session-delete/menu.tsx'
 import { SessionDeleteOverlay } from './session-delete/overlay.tsx'
+import { basenameOfPath, parseWorkspaceFileAddress } from './file-edit/address.ts'
+import { FileEditDocumentAction } from './file-edit/action.tsx'
+import { FILE_EDIT_TAB_ID, FILE_EDIT_TAB_KIND } from './file-edit/kind.ts'
+import { FileEditTab, FileEditTabTitle } from './file-edit/tab.tsx'
+import './file-edit/slot-types.ts'
 import { installCss } from './styles.module.css'
 
 type InventoryRemote = ClientRemote & {
@@ -369,6 +374,26 @@ export function apply(ctx: Context): void {
       UsageRightTabTitle,
       { ...props, t: tContext },
     )
+    const fileEditEnabled = () => resolveSettings(form.getSnapshot().value).fileEditEnabled
+    const FileEditRightTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(FileEditTab, {
+      ...props,
+      remote: () => agentEnhancerRemote,
+      sidebarRight: mountedCtx.sidebarRight,
+      t: tContext,
+    })
+    const FileEditRightTitle = (props: PropsRuntime<'sidebar.right.pane.tab.title'>) => createElement(
+      FileEditTabTitle,
+      { ...props, t: tContext },
+    )
+    const FileEditAction = (props: PropsRuntime<'sidebar.right.tab.document.actions'>) => createElement(
+      FileEditDocumentAction,
+      {
+        absolutePath: props.absolutePath,
+        sessionId: props.sessionId,
+        t: tContext,
+        sidebarRight: mountedCtx.sidebarRight,
+      },
+    )
     mountedCtx.effect(() => {
       const disposers = [
         mountedCtx.sidebarRightTabs.register({
@@ -425,6 +450,52 @@ export function apply(ctx: Context): void {
           name: 'conversation.composer.dock', id: 'agent-enhancer-context', order: 50,
           locale: 'agent-enhancer',
         }, ContextDock)))
+      }
+      const unsubscribe = form.subscribe(synchronize)
+      synchronize()
+      return () => {
+        unsubscribe()
+        while (disposers.length > 0) disposers.pop()?.()
+      }
+    })
+    mountedCtx.effect(() => {
+      const disposers: Array<() => void> = []
+      const synchronize = () => {
+        const enabled = fileEditEnabled()
+        if (!enabled) {
+          while (disposers.length > 0) disposers.pop()?.()
+          return
+        }
+        if (disposers.length > 0) return
+        disposers.push(mountedCtx.sidebarRightTabs.register({
+          id: FILE_EDIT_TAB_ID,
+          kind: FILE_EDIT_TAB_KIND,
+          // No patterns: default file opens stay on official preview. Forced
+          // openResource(..., { kind }) still claims the file address.
+          priority: 'extension',
+          title: (address: string) => {
+            const parsed = parseWorkspaceFileAddress(address)
+            return parsed !== undefined ? basenameOfPath(parsed.path) : tContext('fileEditTitle')
+          },
+          canOpen: (address: string) => parseWorkspaceFileAddress(address) !== undefined,
+        }))
+        disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab', () => mountedCtx.slots.register({
+          name: 'sidebar.right.pane.tab',
+          key: FILE_EDIT_TAB_ID,
+          locale: 'agent-enhancer',
+        }, FileEditRightTab)))
+        disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab.title', () => mountedCtx.slots.register({
+          name: 'sidebar.right.pane.tab.title',
+          key: FILE_EDIT_TAB_ID,
+          locale: 'agent-enhancer',
+        }, FileEditRightTitle)))
+        disposers.push(mountedCtx.slots.inject('sidebar.right.tab.document.actions', () => mountedCtx.slots.register({
+          name: 'sidebar.right.tab.document.actions',
+          id: 'agent-enhancer-file-edit',
+          order: 80,
+          label: () => tContext('fileEdit'),
+          locale: 'agent-enhancer',
+        }, FileEditAction)))
       }
       const unsubscribe = form.subscribe(synchronize)
       synchronize()

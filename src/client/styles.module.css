@@ -2269,3 +2269,155 @@
   font-size: 15.5px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
 }
+
+.fileEditAction {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 9px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12, 12px/16px sans-serif);
+  cursor: pointer;
+}
+
+.fileEditAction:hover {
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.12));
+}
+
+.fileEditRoot {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13, 13px/18px sans-serif);
+}
+
+.fileEditBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 6px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.fileEditPath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+  font: 11px/16px var(--ds-font-family-code, ui-monospace, monospace);
+}
+
+.fileEditBtn,
+.fileEditBtnPrimary {
+  flex: none;
+  border-radius: var(--dsw-radius-sm, 6px);
+  padding: 3px 9px;
+  font: var(--dsw-font-xxs-12, 12px/16px sans-serif);
+  cursor: pointer;
+}
+
+.fileEditBtn {
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+}
+
+.fileEditBtnPrimary {
+  border: 0.5px solid transparent;
+  background: var(--dsw-alias-state-business-primary, #3b82f6);
+  color: #fff;
+}
+
+.fileEditBtn:disabled,
+.fileEditBtnPrimary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.fileEditHost {
+  flex: 1;
+  min-height: 240px;
+  position: relative;
+  overflow: hidden;
+}
+
+.fileEditMonacoHost {
+  position: absolute;
+  inset: 0;
+}
+
+.fileEditLoading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.fileEditStatus,
+.fileEditStatusError {
+  flex: none;
+  min-height: 20px;
+  padding: 3px 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  font: var(--dsw-font-xxs-12, 12px/16px sans-serif);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileEditStatus {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.fileEditStatusError {
+  color: var(--dsw-alias-state-error-primary, #ef4444);
+}
+
+.fileEditFallback {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.fileEditGutter {
+  flex: none;
+  padding: 10px 6px 10px 10px;
+  text-align: right;
+  color: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-bg-base);
+  font: 12px/19px var(--ds-font-family-code, ui-monospace, monospace);
+  user-select: none;
+  overflow: hidden;
+  white-space: pre;
+}
+
+.fileEditTextarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: 10px 12px 10px 0;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: 12px/19px var(--ds-font-family-code, ui-monospace, monospace);
+  tab-size: 2;
+}
+
+.fileEditTabTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

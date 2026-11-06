@@ -223,6 +223,11 @@ export function ContextInspectRightTab(props: ContextInspectRightTabProps) {
           case 'ROLLBACK_FAILED':
           case 'SESSION_BUSY':
           case 'SESSION_DELETE_FAILED':
+          case 'FILE_NOT_FOUND':
+          case 'FILE_NOT_TEXT':
+          case 'FILE_TOO_LARGE':
+          case 'FILE_DENIED':
+          case 'FILE_EDIT_FAILED':
             setCompactNote(props.t('contextInspectCompactFailed'))
             break
           default: {

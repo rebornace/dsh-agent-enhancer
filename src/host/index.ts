@@ -44,6 +44,15 @@ import {
 } from './session-delete/plugin-purge.ts'
 import { deleteSessionNow, SessionDeleteError } from './session-delete/delete.ts'
 import type { DeleteSessionRequest, DeleteSessionResult } from './session-delete/delete.ts'
+import { readWorkspaceFileNow, writeWorkspaceFileNow } from './file-edit/io.ts'
+import { installMonacoRoute } from './file-edit/monaco.ts'
+import { FileEditError } from './file-edit/types.ts'
+import type {
+  ReadWorkspaceFileRequest,
+  ReadWorkspaceFileResult,
+  WriteWorkspaceFileRequest,
+  WriteWorkspaceFileResult,
+} from './file-edit/types.ts'
 import { inspectContextCategory, pressureFromProjection } from './context-inspect.ts'
 import type { ContextInspectRequest, ContextInspectResult } from './context-inspect.ts'
 import { installAutoSessionRoute } from './auto-route/session-hook.ts'
@@ -97,6 +106,7 @@ export const Config = z.object({
   rollbackEnabled: z.boolean().default(true).volatile(),
   contextInspectEnabled: z.boolean().default(true).volatile(),
   sessionDeleteEnabled: z.boolean().default(true).volatile(),
+  fileEditEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.
   optimizeProvider: z.string().default('').volatile(),
   optimizeModel: z.string().default('').volatile(),
@@ -239,6 +249,36 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
   }
 
+  /** Read a workspace UTF-8 text file for the in-app Monaco editor. */
+  async readWorkspaceFile(
+    request: ReadWorkspaceFileRequest,
+    signal: AbortSignal,
+  ): Promise<ReadWorkspaceFileResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await readWorkspaceFileNow({ ctx: this.ctx, request, signal })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw fileEditRemoteError(error)
+    }
+  }
+
+  /** Write a workspace UTF-8 text file from the in-app Monaco editor. */
+  async writeWorkspaceFile(
+    request: WriteWorkspaceFileRequest,
+    signal: AbortSignal,
+  ): Promise<WriteWorkspaceFileResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await writeWorkspaceFileNow({ ctx: this.ctx, request, signal })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw fileEditRemoteError(error)
+    }
+  }
+
   /** Trigger official idle compaction (same seam as chat `/compact`). */
   async compactContext(request: ContextCompactRequest, signal: AbortSignal): Promise<ContextCompactResult> {
     this.assertOwner()
@@ -322,6 +362,16 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+function fileEditRemoteError(error: unknown): RemoteError {
+  if (error instanceof FileEditError) {
+    return new RemoteError('agent-enhancer/failed', error.message, { code: error.code })
+  }
+  const detail = error instanceof Error ? error.message : String(error)
+  return new RemoteError('agent-enhancer/failed', detail || 'File edit failed', {
+    code: 'FILE_EDIT_FAILED',
+  })
+}
+
 function softService<T extends object>(
   ctx: Context,
   name: string,
@@ -363,6 +413,7 @@ function readSettings(config: Config): EnhancerSettings {
     rollbackEnabled: config.rollbackEnabled.get(),
     contextInspectEnabled: config.contextInspectEnabled.get(),
     sessionDeleteEnabled: config.sessionDeleteEnabled.get(),
+    fileEditEnabled: config.fileEditEnabled.get(),
     optimizeProvider: config.optimizeProvider.get(),
     optimizeModel: config.optimizeModel.get(),
     optimizeReasoningEffort: config.optimizeReasoningEffort.get(),
@@ -446,6 +497,14 @@ export function apply(ctx: Context, config: Config): void {
     sessionCleanup,
   )
   ctx.effect(() => ctx.typert.register(hostContribution))
+  // Monaco is optional — never let route install throw and tear down this fiber
+  // (that makes settings mutate report "Plugin entry is no longer configurable").
+  try {
+    installMonacoRoute(ctx)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    ctx.logger.warn(`agent-enhancer: Monaco route install failed: ${detail}`)
+  }
 
   const sessions = new DshCheckpointSessions(ctx)
   let rollbackEnabled = config.rollbackEnabled.get()

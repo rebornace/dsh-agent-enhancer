@@ -209,7 +209,14 @@ console.log(`profile dependency -> ${nextDep}`)
 ensurePatchEnabled()
 
 console.log('forcing profile pnpm install for dsh-agent-enhancer…')
-run('corepack', ['pnpm', 'install', '--force', '--config.confirmModulesPurge=false'], profileDir)
+// Dependency string changes on every link (file: extract path); frozen lock would reject it.
+run('corepack', [
+  'pnpm',
+  'install',
+  '--force',
+  '--no-frozen-lockfile',
+  '--config.confirmModulesPurge=false',
+], profileDir)
 
 if (!existsSync(modulePath)) {
   console.error(`Install did not create ${modulePath}`)
