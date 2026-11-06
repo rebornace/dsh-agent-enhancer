@@ -22,7 +22,7 @@
 
 ### Docs
 
-- README 中英文同步划词引用、工作区编辑 / 附加目录、会话删除与设置页结构；补截图：`settings.png`（功能九开关）、`select-to-quote.png`、`extra-folders.png`、`file-edit-toolbar.png`、`session-delete.png`。
+- README 中英文同步划词引用、工作区编辑 / 附加目录、会话删除与设置页结构；补截图：`settings.png`（功能九开关）、`select-to-quote.png`、`extra-folders.png`、`file-edit-toolbar.png`、`session-delete.png`；界面一览用「类别 / 说明 / 预览」表，`docs/images/thumbs/` 下 56×56 方裁缩略图横排换行，点击打开原图（`scripts/make-readme-thumbs.py`）。
 
 ## 0.3.4 - 2026-11-06
 
