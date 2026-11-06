@@ -99,7 +99,7 @@
 本机已配置 `dsh` CLI、且要写入 **desktop** profile 时：
 
 ```sh
-dsh plugin --profile desktop add dsh-agent-enhancer@0.3.4
+dsh plugin --profile desktop add dsh-agent-enhancer@0.3.5
 ```
 
 也可不钉版本：`dsh plugin --profile desktop add dsh-agent-enhancer`。  
@@ -116,7 +116,7 @@ corepack pnpm install --frozen-lockfile
 # 本机开发：build → pack → 解压到 profile/.dsh-enhancer-pack/pkg 再安装
 corepack pnpm desktop:link
 
-# 切回线上 npm（默认用本仓库 package.json 的 version；也可 pnpm desktop:npm -- 0.3.4）
+# 切回线上 npm（默认用本仓库 package.json 的 version；也可 pnpm desktop:npm -- 0.3.5）
 corepack pnpm desktop:npm
 ```
 

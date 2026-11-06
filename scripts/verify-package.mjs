@@ -74,7 +74,12 @@ if (packedManifest.engines?.dsh !== '>=0.2.2-rc.1 <0.3.0-0') {
 }
 
 const absolutePath = /(?:file:\/\/\/|(?:^|[^a-zA-Z])[A-Z]:[\\/]|\/Users\/|\/home\/)/
-for (const path of files.filter(path => path !== 'package/package.json' && /\.(?:js|map|ts|json|yml)$/.test(path))) {
+// Vendored Monaco ships Windows `file:///` conversion helpers — not leaked build paths.
+for (const path of files.filter(path =>
+  path !== 'package/package.json'
+  && !path.startsWith('package/vendor/')
+  && /\.(?:js|map|ts|json|yml)$/.test(path)
+)) {
   const contents = await readEntry(path)
   if (path.endsWith('.map')) {
     const map = JSON.parse(contents)
