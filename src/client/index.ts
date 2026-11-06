@@ -86,6 +86,12 @@ import { FileEditDocumentAction } from './file-edit/action.tsx'
 import { FILE_EDIT_TAB_ID, FILE_EDIT_TAB_KIND } from './file-edit/kind.ts'
 import { FileEditTab, FileEditTabTitle } from './file-edit/tab.tsx'
 import './file-edit/slot-types.ts'
+import { ExtraFoldersGuideIcon } from './extra-folders/guide-icon.tsx'
+import {
+  EXTRA_FOLDERS_TAB_ID,
+  EXTRA_FOLDERS_TAB_KIND,
+} from './extra-folders/kind.ts'
+import { ExtraFoldersTab, ExtraFoldersTabTitle } from './extra-folders/tab.tsx'
 import { installCss } from './styles.module.css'
 
 type InventoryRemote = ClientRemote & {
@@ -394,6 +400,19 @@ export function apply(ctx: Context): void {
         sidebarRight: mountedCtx.sidebarRight,
       },
     )
+    const ExtraFoldersRightTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(
+      ExtraFoldersTab,
+      {
+        ...props,
+        remote: () => agentEnhancerRemote,
+        sidebarRight: mountedCtx.sidebarRight,
+        t: tContext,
+      },
+    )
+    const ExtraFoldersRightTitle = (props: PropsRuntime<'sidebar.right.pane.tab.title'>) => createElement(
+      ExtraFoldersTabTitle,
+      { ...props, t: tContext },
+    )
     mountedCtx.effect(() => {
       const disposers = [
         mountedCtx.sidebarRightTabs.register({
@@ -496,6 +515,31 @@ export function apply(ctx: Context): void {
           label: () => tContext('fileEdit'),
           locale: 'agent-enhancer',
         }, FileEditAction)))
+        disposers.push(mountedCtx.sidebarRightTabs.register({
+          id: EXTRA_FOLDERS_TAB_ID,
+          kind: EXTRA_FOLDERS_TAB_KIND,
+          priority: 'extension',
+          title: () => tContext('extraFoldersTitle'),
+          // Peer of 工作区文件 / 终端 / 浏览器 — use shipped EntryBox (do not
+          // override sidebar.right.tab.guide.entry, or the capsule style drifts).
+          guide: [{
+            id: 'extra-folders',
+            order: 35,
+            title: () => tContext('extraFolders'),
+            description: () => tContext('extraFoldersGuideDescription'),
+            icon: ExtraFoldersGuideIcon,
+          }],
+        }))
+        disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab', () => mountedCtx.slots.register({
+          name: 'sidebar.right.pane.tab',
+          key: EXTRA_FOLDERS_TAB_ID,
+          locale: 'agent-enhancer',
+        }, ExtraFoldersRightTab)))
+        disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab.title', () => mountedCtx.slots.register({
+          name: 'sidebar.right.pane.tab.title',
+          key: EXTRA_FOLDERS_TAB_ID,
+          locale: 'agent-enhancer',
+        }, ExtraFoldersRightTitle)))
       }
       const unsubscribe = form.subscribe(synchronize)
       synchronize()

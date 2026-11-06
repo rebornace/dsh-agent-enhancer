@@ -57,6 +57,19 @@ function replaceTabId(
   }
 }
 
+/**
+ * Open a file the way official 工作区文件 does: no forced `kind`, so the
+ * document-preview registry (text / image / pdf / …) claims the address.
+ */
+export function openWorkspaceFile(
+  sidebarRight: FileEditNavigator | undefined,
+  sessionId: SessionId,
+  path: string,
+): void {
+  if (sidebarRight === undefined || typeof sidebarRight.openResource !== 'function') return
+  sidebarRight.openResource(fileAddressOf(sessionId, path))
+}
+
 /** Open the Monaco editor in place of the current file preview tab. */
 export function openFileEditor(
   sidebarRight: FileEditNavigator | undefined,

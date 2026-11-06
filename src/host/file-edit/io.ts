@@ -1,6 +1,10 @@
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import {
+  assertInsideAllowedRoots,
+  isInsideRoot,
+} from '../extra-folders/paths.ts'
 import {
   FILE_EDIT_MAX_BYTES,
   FileEditError,
@@ -80,14 +84,6 @@ function sessionCwd(session: SessionLike | undefined): string {
   throw new FileEditError('SESSION_CHANGED', 'Session workspace is unavailable')
 }
 
-function assertInsideWorkspace(workspaceRoot: string, absolutePath: string): void {
-  const root = resolve(workspaceRoot)
-  const target = resolve(absolutePath)
-  const rel = relative(root, target)
-  if (rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel))) return
-  throw new FileEditError('FILE_DENIED', 'Path is outside the session workspace')
-}
-
 function processPathOf(target: FsTarget, fallback: string): string {
   const key = typeof target.key === 'string' && target.key.trim() !== '' ? target.key : fallback
   return key
@@ -142,13 +138,21 @@ function pickPolicy(agent: AgentLike | undefined, ctx: Context): unknown {
 async function resolveTarget(
   fs: FileSystemLike,
   workspaceRoot: string,
+  extraRoots: readonly string[],
   path: string,
 ): Promise<{ readonly target: FsTarget, readonly absolutePath: string }> {
   const trimmed = path.trim()
   if (trimmed === '') throw new FileEditError('FILE_NOT_FOUND', 'Path is empty')
   const target = await fs.resolve(trimmed, { cwd: workspaceRoot })
   const absolutePath = processPathOf(target, isAbsolute(trimmed) ? trimmed : resolve(workspaceRoot, trimmed))
-  assertInsideWorkspace(workspaceRoot, absolutePath)
+  try {
+    assertInsideAllowedRoots(workspaceRoot, extraRoots, absolutePath)
+  } catch (error) {
+    throw new FileEditError(
+      'FILE_DENIED',
+      error instanceof Error ? error.message : 'Path is outside the session workspace',
+    )
+  }
   return { target, absolutePath }
 }
 
@@ -156,6 +160,8 @@ export async function readWorkspaceFileNow(options: {
   readonly ctx: Context
   readonly request: ReadWorkspaceFileRequest
   readonly signal: AbortSignal
+  /** Attached folder roots for this session workspace (human multi-folder edit). */
+  readonly extraRoots?: readonly string[]
 }): Promise<ReadWorkspaceFileResult> {
   options.signal.throwIfAborted()
   const agent = options.ctx.agents.get(options.request.sessionId) as AgentLike | undefined
@@ -163,9 +169,15 @@ export async function readWorkspaceFileNow(options: {
     throw new FileEditError('SESSION_CHANGED', 'Session is not available')
   }
   const workspaceRoot = sessionCwd(agent.session)
+  const extraRoots = options.extraRoots ?? []
   const fs = pickFs(agent, options.ctx)
   try {
-    const { target, absolutePath } = await resolveTarget(fs, workspaceRoot, options.request.path)
+    const { target, absolutePath } = await resolveTarget(
+      fs,
+      workspaceRoot,
+      extraRoots,
+      options.request.path,
+    )
     if (typeof fs.stat === 'function') {
       const info = await fs.stat(target, options.signal)
       if (typeof info.bytes === 'number' && info.bytes > FILE_EDIT_MAX_BYTES) {
@@ -201,6 +213,8 @@ export async function writeWorkspaceFileNow(options: {
   readonly ctx: Context
   readonly request: WriteWorkspaceFileRequest
   readonly signal: AbortSignal
+  /** Attached folder roots for this session workspace (human multi-folder edit). */
+  readonly extraRoots?: readonly string[]
 }): Promise<WriteWorkspaceFileResult> {
   options.signal.throwIfAborted()
   const agent = options.ctx.agents.get(options.request.sessionId) as AgentLike | undefined
@@ -216,10 +230,20 @@ export async function writeWorkspaceFileNow(options: {
     )
   }
   const workspaceRoot = sessionCwd(agent.session)
+  const extraRoots = options.extraRoots ?? []
   const fs = pickFs(agent, options.ctx)
-  const policy = pickPolicy(agent, options.ctx)
   try {
-    const { target, absolutePath } = await resolveTarget(fs, workspaceRoot, options.request.path)
+    const { target, absolutePath } = await resolveTarget(
+      fs,
+      workspaceRoot,
+      extraRoots,
+      options.request.path,
+    )
+    // Extra roots are human-only (owner RPC fence); skip workspace-write sandbox
+    // so saves outside the primary cwd are not denied by the single-root policy.
+    const policy = isInsideRoot(workspaceRoot, absolutePath)
+      ? pickPolicy(agent, options.ctx)
+      : undefined
     // Skip replaceIfVersion: Desktop remotes have historically mangled mtimeNs in versions.
     await fs.writeText(target, content, undefined, options.signal, policy)
     return {

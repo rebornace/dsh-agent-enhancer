@@ -19,12 +19,15 @@
   font: var(--dsw-font-sm-12, var(--dsw-font-sm-14));
 }
 
+/* Mirror dsh-client-ui-settings-plugins PluginsSettingsSection + general DeveloperToolsRow */
 .settings {
-  display: grid;
-  gap: 16px;
-  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-sm-14);
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .settings h2,
@@ -34,11 +37,107 @@
 }
 
 .settingsHeader {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
 }
 
-.settingsHeader p,
+.settingsHeading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+}
+
+.settingsIntro {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.settingsTabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 22px;
+  margin-top: 2px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.settingsTab {
+  position: relative;
+  margin: 0;
+  padding: 7px 1px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.settingsTab:hover,
+.settingsTab[data-active='true'] {
+  color: var(--dsw-alias-label-primary);
+}
+
+.settingsTab[data-active='true']::after,
+.settingsTab:focus-visible::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--dsw-alias-label-primary);
+}
+
+.settingsTab:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+  border-radius: 2px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.settingsTabPanel {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.settingsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settingsGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settingsGroupTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.settingsGroupIntro {
+  margin: 0 0 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.settingsGroupBody {
+  display: flex;
+  flex-direction: column;
+}
+
 .settingDescription,
 .privacy p {
   color: var(--dsw-alias-label-secondary);
@@ -48,43 +147,75 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 24px;
+  padding: 16px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.settingsGroupBody > .settingRow:last-child,
+.autoMappingSection > .settingRow:last-child {
+  border-bottom: none;
+}
+
+.settingRowHighlight {
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-interactive-bg-hover);
+  box-shadow: 0 0 0 8px var(--dsw-alias-interactive-bg-hover);
 }
 
 .settingText {
   display: grid;
-  gap: 4px;
   min-width: 0;
 }
 
-.settingText h3,
-.privacy h3 {
-  font: inherit;
-  font-weight: 600;
+.settingTitle {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.settingDescription {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .settingControls {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
 }
 
-.settingsBack {
+.settingsLink {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   margin: 0;
-  padding: 0;
+  padding: 4px 6px;
   border: 0;
+  border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   font: inherit;
+  font-size: 13px;
+  line-height: 18px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
-.settingsBack:hover {
+.settingsLink svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settingsLink:hover:not(:disabled) {
   color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.settingsLink:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .settingsConfigure,
@@ -104,7 +235,6 @@
   white-space: nowrap;
 }
 
-/* Secondary action — Configure / Copy (readable as a control, not plain text). */
 .settingsConfigure {
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-layer-2);
@@ -120,25 +250,31 @@
   cursor: not-allowed;
 }
 
-/* Primary action — Check for updates / Update to… (match compact CTA weight). */
 .settingsActionPrimary {
-  color: #fff;
-  background: #3b7ded;
-  box-shadow: 0 0 0 1px color-mix(in srgb, #3b7ded 55%, transparent);
+  color: var(--dsw-alias-label-on-color, #fff);
+  background: var(--dsw-alias-state-business-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, transparent);
 }
 
 .settingsActionPrimary:hover:not(:disabled) {
-  background: #2f6fe0;
+  filter: brightness(0.95);
 }
 
 .settingsActionPrimary:focus-visible {
-  outline: 2px solid color-mix(in srgb, #3b7ded 70%, white);
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
 .settingsActionPrimary:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.settingsStatus {
+  margin: 8px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .modelPill {
@@ -156,8 +292,13 @@
   display: grid;
   gap: 8px;
   padding: 12px;
-  background: var(--dsw-alias-bg-layer-2);
   border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.privacy p {
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .settingsUpdate {
@@ -165,9 +306,15 @@
   gap: 8px;
 }
 
+.settingsUpdate .settingRow {
+  padding-top: 8px;
+}
+
 .settingsUpdateStatus {
   margin: 0;
   color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .updateCommand {
@@ -184,15 +331,15 @@
 
 .autoMappingSection {
   display: grid;
-  gap: 12px;
-  padding: 12px;
-  background: var(--dsw-alias-bg-layer-2);
+  gap: 0;
+  margin-top: 8px;
+  padding: 4px 12px 0;
   border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
 }
 
-.autoMappingSection h3 {
-  font: inherit;
-  font-weight: 600;
+.autoMappingSection .settingsGroupTitle {
+  padding-top: 12px;
 }
 
 .prediction {
@@ -2420,4 +2567,200 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Mirror @deepseek-ai/dsh-client-ui-sidebar-files FilesBody.module.css */
+.extraFoldersPane {
+  display: flex;
+  flex-direction: column;
+  flex: auto;
+  height: 100%;
+  min-height: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.5;
+}
+
+.extraFoldersHeader {
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 38px;
+  padding: 0 6px 0 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.extraFoldersPath {
+  margin-right: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.extraFoldersTool {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.extraFoldersTool svg {
+  width: 15px;
+  height: 15px;
+}
+
+.extraFoldersTool:hover:not(:disabled),
+.extraFoldersTool[aria-pressed='true'] {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.extraFoldersTool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.extraFoldersError {
+  padding: 6px 12px;
+  color: var(--dsw-alias-state-error-primary, #ef4444);
+  font-size: 12px;
+}
+
+.extraFoldersBody {
+  flex: auto;
+  min-height: 0;
+  margin-right: 2px;
+  padding: 8px 0 8px 8px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.extraFoldersBody::-webkit-scrollbar-track {
+  margin: 2px;
+}
+
+.extraFoldersStatus {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px;
+}
+
+.extraFoldersStatusLine {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.6;
+}
+
+.extraFoldersLevel {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.extraFoldersLevel .extraFoldersLevel {
+  padding-left: 18px;
+}
+
+.extraFoldersItem {
+  margin: 0;
+  padding: 0;
+}
+
+.extraFoldersRowWrap {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 2px;
+}
+
+.extraFoldersRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.extraFoldersRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.extraFoldersFolderIcon {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.extraFoldersFileIcon {
+  flex: none;
+}
+
+.extraFoldersName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extraFoldersNote {
+  margin: 0;
+  padding: 3px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.extraFoldersRemove {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  padding: 4px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.extraFoldersRemove svg {
+  width: 14px;
+  height: 14px;
+}
+
+.extraFoldersRowWrap:hover .extraFoldersRemove {
+  opacity: 0.9;
+}
+
+.extraFoldersRemove:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.extraFoldersTitleIcon {
+  flex: none;
 }

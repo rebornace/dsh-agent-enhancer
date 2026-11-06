@@ -44,6 +44,27 @@ import {
 } from './session-delete/plugin-purge.ts'
 import { deleteSessionNow, SessionDeleteError } from './session-delete/delete.ts'
 import type { DeleteSessionRequest, DeleteSessionResult } from './session-delete/delete.ts'
+import {
+  addExtraFolderNow,
+  listExtraFolderEntriesNow,
+  listExtraFoldersNow,
+  loadExtraRootPaths,
+  pickExtraFolderNow,
+  removeExtraFolderNow,
+} from './extra-folders/io.ts'
+import { createExtraFoldersStore } from './extra-folders/store.ts'
+import type { ExtraFoldersStore } from './extra-folders/store.ts'
+import { ExtraFoldersError } from './extra-folders/types.ts'
+import type {
+  AddExtraFolderRequest,
+  ListExtraFolderEntriesRequest,
+  ListExtraFolderEntriesResult,
+  ListExtraFoldersRequest,
+  ListExtraFoldersResult,
+  PickExtraFolderRequest,
+  PickExtraFolderResult,
+  RemoveExtraFolderRequest,
+} from './extra-folders/types.ts'
 import { readWorkspaceFileNow, writeWorkspaceFileNow } from './file-edit/io.ts'
 import { installMonacoRoute } from './file-edit/monaco.ts'
 import { FileEditError } from './file-edit/types.ts'
@@ -163,8 +184,24 @@ export class AgentEnhancerService extends TypertRemoteService {
       },
     },
     private readonly sessionCleanup: SessionCleanupRegistry = new SessionCleanupRegistry(),
+    private readonly extraFolders: ExtraFoldersStore = createExtraFoldersStore(
+      join(homedir(), '.dsh', 'profiles', 'desktop', 'plugin-data', PACKAGE_NAME, 'extra-folders'),
+    ),
   ) {
     super(ctx, 'agentEnhancer')
+  }
+
+  private extraRootsForSession(sessionId: SessionId): readonly string[] {
+    const agent = this.ctx.agents.get(sessionId) as
+      | { readonly session?: { readonly header?: { readonly cwd?: string } } }
+      | undefined
+    const cwd = agent?.session?.header?.cwd
+    if (typeof cwd !== 'string' || cwd.trim() === '') return []
+    try {
+      return loadExtraRootPaths(this.extraFolders, cwd)
+    } catch {
+      return []
+    }
   }
 
   private assertOwner(): void {
@@ -257,7 +294,12 @@ export class AgentEnhancerService extends TypertRemoteService {
     this.assertOwner()
     signal.throwIfAborted()
     try {
-      return await readWorkspaceFileNow({ ctx: this.ctx, request, signal })
+      return await readWorkspaceFileNow({
+        ctx: this.ctx,
+        request,
+        signal,
+        extraRoots: this.extraRootsForSession(request.sessionId),
+      })
     } catch (error) {
       if (signal.aborted) throw error
       throw fileEditRemoteError(error)
@@ -272,10 +314,110 @@ export class AgentEnhancerService extends TypertRemoteService {
     this.assertOwner()
     signal.throwIfAborted()
     try {
-      return await writeWorkspaceFileNow({ ctx: this.ctx, request, signal })
+      return await writeWorkspaceFileNow({
+        ctx: this.ctx,
+        request,
+        signal,
+        extraRoots: this.extraRootsForSession(request.sessionId),
+      })
     } catch (error) {
       if (signal.aborted) throw error
       throw fileEditRemoteError(error)
+    }
+  }
+
+  async listExtraFolders(
+    request: ListExtraFoldersRequest,
+    signal: AbortSignal,
+  ): Promise<ListExtraFoldersResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await listExtraFoldersNow({
+        ctx: this.ctx,
+        store: this.extraFolders,
+        request,
+        signal,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw extraFoldersRemoteError(error)
+    }
+  }
+
+  async addExtraFolder(
+    request: AddExtraFolderRequest,
+    signal: AbortSignal,
+  ): Promise<ListExtraFoldersResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await addExtraFolderNow({
+        ctx: this.ctx,
+        store: this.extraFolders,
+        request,
+        signal,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw extraFoldersRemoteError(error)
+    }
+  }
+
+  async pickExtraFolder(
+    request: PickExtraFolderRequest,
+    signal: AbortSignal,
+  ): Promise<PickExtraFolderResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await pickExtraFolderNow({
+        ctx: this.ctx,
+        store: this.extraFolders,
+        request,
+        signal,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw extraFoldersRemoteError(error)
+    }
+  }
+
+  async removeExtraFolder(
+    request: RemoveExtraFolderRequest,
+    signal: AbortSignal,
+  ): Promise<ListExtraFoldersResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await removeExtraFolderNow({
+        ctx: this.ctx,
+        store: this.extraFolders,
+        request,
+        signal,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw extraFoldersRemoteError(error)
+    }
+  }
+
+  async listExtraFolderEntries(
+    request: ListExtraFolderEntriesRequest,
+    signal: AbortSignal,
+  ): Promise<ListExtraFolderEntriesResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await listExtraFolderEntriesNow({
+        ctx: this.ctx,
+        store: this.extraFolders,
+        request,
+        signal,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw extraFoldersRemoteError(error)
     }
   }
 
@@ -368,6 +510,16 @@ function fileEditRemoteError(error: unknown): RemoteError {
   }
   const detail = error instanceof Error ? error.message : String(error)
   return new RemoteError('agent-enhancer/failed', detail || 'File edit failed', {
+    code: 'FILE_EDIT_FAILED',
+  })
+}
+
+function extraFoldersRemoteError(error: unknown): RemoteError {
+  if (error instanceof ExtraFoldersError) {
+    return new RemoteError('agent-enhancer/failed', error.message, { code: error.code })
+  }
+  const detail = error instanceof Error ? error.message : String(error)
+  return new RemoteError('agent-enhancer/failed', detail || 'Extra folders failed', {
     code: 'FILE_EDIT_FAILED',
   })
 }
@@ -479,6 +631,7 @@ export function apply(ctx: Context, config: Config): void {
   const sessionCleanup = new SessionCleanupRegistry()
   sessionCleanup.register(createCheckpointCleaner({ store, cutStore, storageRoot }))
   sessionCleanup.register(createContextExcludeCleaner(join(storageRoot, '..')))
+  const extraFoldersStore = createExtraFoldersStore(join(storageRoot, '..', 'extra-folders'))
   new AgentEnhancerService(ctx, models, {
       async summarize(range) {
         const stored = await usage.listCalls()
@@ -495,6 +648,7 @@ export function apply(ctx: Context, config: Config): void {
     },
     balancesFacade,
     sessionCleanup,
+    extraFoldersStore,
   )
   ctx.effect(() => ctx.typert.register(hostContribution))
   // Monaco is optional — never let route install throw and tear down this fiber

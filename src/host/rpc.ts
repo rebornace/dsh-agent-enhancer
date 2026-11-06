@@ -220,6 +220,85 @@ const writeWorkspaceFileResultCodec = codec(
   writeWorkspaceFileResultSchema,
 )
 
+const extraFolderRootSchema = z.strictObject({
+  path: z.string().min(1),
+  title: z.string().min(1),
+})
+export const listExtraFoldersRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+})
+export const listExtraFoldersResultSchema = z.strictObject({
+  primaryCwd: z.string().min(1),
+  primaryTitle: z.string().min(1),
+  roots: z.array(extraFolderRootSchema),
+})
+export const addExtraFolderRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  path: z.string().min(1),
+  title: z.string().min(1).optional(),
+})
+export const pickExtraFolderRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+})
+export const pickExtraFolderResultSchema = z.strictObject({
+  path: z.string().min(1).nullable(),
+  primaryCwd: z.string().min(1),
+  primaryTitle: z.string().min(1),
+  roots: z.array(extraFolderRootSchema),
+  added: z.boolean(),
+})
+export const removeExtraFolderRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  path: z.string().min(1),
+})
+export const listExtraFolderEntriesRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  rootPath: z.string().min(1),
+  relativePath: z.string().optional(),
+})
+export const listExtraFolderEntriesResultSchema = z.strictObject({
+  rootPath: z.string().min(1),
+  relativePath: z.string(),
+  entries: z.array(z.strictObject({
+    name: z.string().min(1),
+    path: z.string(),
+    absolutePath: z.string().min(1),
+    kind: z.enum(['directory', 'file']),
+  })),
+})
+const listExtraFoldersRequestCodec = codec(
+  'dsh-agent-enhancer#ListExtraFoldersRequest',
+  listExtraFoldersRequestSchema,
+)
+const listExtraFoldersResultCodec = codec(
+  'dsh-agent-enhancer#ListExtraFoldersResult',
+  listExtraFoldersResultSchema,
+)
+const addExtraFolderRequestCodec = codec(
+  'dsh-agent-enhancer#AddExtraFolderRequest',
+  addExtraFolderRequestSchema,
+)
+const pickExtraFolderRequestCodec = codec(
+  'dsh-agent-enhancer#PickExtraFolderRequest',
+  pickExtraFolderRequestSchema,
+)
+const pickExtraFolderResultCodec = codec(
+  'dsh-agent-enhancer#PickExtraFolderResult',
+  pickExtraFolderResultSchema,
+)
+const removeExtraFolderRequestCodec = codec(
+  'dsh-agent-enhancer#RemoveExtraFolderRequest',
+  removeExtraFolderRequestSchema,
+)
+const listExtraFolderEntriesRequestCodec = codec(
+  'dsh-agent-enhancer#ListExtraFolderEntriesRequest',
+  listExtraFolderEntriesRequestSchema,
+)
+const listExtraFolderEntriesResultCodec = codec(
+  'dsh-agent-enhancer#ListExtraFolderEntriesResult',
+  listExtraFolderEntriesResultSchema,
+)
+
 export const updateCheckResultSchema = z.strictObject({
   current: z.string(),
   latest: z.string().nullable(),
@@ -413,6 +492,71 @@ export const remoteInfo = createTypertRemoteInfo({
       }],
       cancellation: { parameter: 'signal' },
       result: writeWorkspaceFileResultCodec,
+    },
+    'agentEnhancer/listExtraFolders': {
+      service: 'agentEnhancer',
+      implementation: 'listExtraFolders',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: listExtraFoldersRequestCodec,
+        strictCodec: listExtraFoldersRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: listExtraFoldersResultCodec,
+    },
+    'agentEnhancer/addExtraFolder': {
+      service: 'agentEnhancer',
+      implementation: 'addExtraFolder',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: addExtraFolderRequestCodec,
+        strictCodec: addExtraFolderRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: listExtraFoldersResultCodec,
+    },
+    'agentEnhancer/pickExtraFolder': {
+      service: 'agentEnhancer',
+      implementation: 'pickExtraFolder',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: pickExtraFolderRequestCodec,
+        strictCodec: pickExtraFolderRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: pickExtraFolderResultCodec,
+    },
+    'agentEnhancer/removeExtraFolder': {
+      service: 'agentEnhancer',
+      implementation: 'removeExtraFolder',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: removeExtraFolderRequestCodec,
+        strictCodec: removeExtraFolderRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: listExtraFoldersResultCodec,
+    },
+    'agentEnhancer/listExtraFolderEntries': {
+      service: 'agentEnhancer',
+      implementation: 'listExtraFolderEntries',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: listExtraFolderEntriesRequestCodec,
+        strictCodec: listExtraFolderEntriesRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: listExtraFolderEntriesResultCodec,
     },
     'agentEnhancer/checkUpdate': {
       service: 'agentEnhancer',

@@ -10,6 +10,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'modelCatalogLoading' | 'modelCatalogError' |
       'modelLabel' | 'modelFollowSession' | 'modelAuto' | 'modelUnconfigured' | 'reasoningDefault' |
       'settingsBack' | 'settingsConfigure' |
+      'settingsTabFeatures' | 'settingsTabModels' | 'settingsTabAbout' |
+      'settingsGroupChat' | 'settingsGroupWorkspace' | 'settingsOpenModel' |
+      'settingsAuxModelsTitle' | 'settingsAuxModelsIntro' |
       'usageTitle' | 'usageNote' | 'usageMeterOpen' | 'usageBuckets' |
       'usageBucketInput' | 'usageBucketOutput' | 'usageBucketCacheRead' | 'usageBucketCacheWrite' |
       'usageReasoningNote' | 'usageChartSources' | 'usageChartModels' | 'usageChartTotal' | 'usageChartEmpty' |
@@ -85,6 +88,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'fileEditNoPath' | 'fileEditUnavailable' | 'fileEditFailed' | 'fileEditSaveFailed' |
       'fileEditTooLarge' | 'fileEditNotText' | 'fileEditDenied' | 'fileEditNotFound' |
       'fileEditSessionChanged' |
+      'extraFolders' | 'extraFoldersTitle' | 'extraFoldersGuideDescription' |
+      'extraFoldersAdd' | 'extraFoldersAddHint' | 'extraFoldersPicking' |
+      'extraFoldersRemove' | 'extraFoldersRemoveHint' |
+      'extraFoldersNone' | 'extraFoldersEmptyDir' |
+      'extraFoldersLoading' | 'extraFoldersExpand' | 'extraFoldersCollapse' |
+      'extraFoldersNoSession' | 'extraFoldersUnavailable' | 'extraFoldersFailed' |
+      'extraFoldersDenied' | 'extraFoldersNotFound' | 'extraFoldersSessionChanged' |
       'contextInspect' | 'contextInspectDescription' | 'contextInspectDetailTitle' | 'contextInspectNote' |
       'contextInspectEmpty' | 'contextInspectApproxTotal' | 'contextInspectApproxBadge' |
       'contextInspectOpenCategory' | 'contextInspectCategories' | 'contextInspectItemDetail' |
@@ -123,6 +133,14 @@ export const agentLocales = {
     optimizeChipSelection: '选区包含引用，请优化整稿或调整选区',
     settingsTitle: '智能体增强',
     settingsSubtitle: '一个插件补齐常用 Agent 体验，按需开关',
+    settingsTabFeatures: '功能',
+    settingsTabModels: '模型与路由',
+    settingsTabAbout: '关于',
+    settingsGroupChat: '对话增强',
+    settingsGroupWorkspace: '工作区与会话',
+    settingsOpenModel: '模型',
+    settingsAuxModelsTitle: '辅助功能模型',
+    settingsAuxModelsIntro: '优化、预测与上下文压缩所用模型；默认可跟随当前会话或选用 Auto',
     history: '历史提示词',
     historyDescription: '↑↓ 回顾已发送提示词；Alt+R 搜索（可用环境兼容 Ctrl+R）',
     optimizeDescription: '优化草稿或所选内容，支持一键撤销',
@@ -254,7 +272,26 @@ export const agentLocales = {
     sessionDeleteFailed: '删除失败，请稍后重试',
     sessionDeleteFailedDetail: '删除失败：{message}',
     fileEdit: '编辑',
-    fileEditDescription: '在官方文件预览中直接编辑工作区 UTF-8 文本（Monaco，Ctrl+S / 停顿自动保存）',
+    fileEditDescription: '在官方文件预览中直接编辑工作区 UTF-8 文本（Monaco，Ctrl+S / 停顿自动保存）；也可在右侧栏「附加目录」用系统选夹附加本地目录供人机浏览编辑（不影响 Agent 沙箱）',
+    extraFolders: '附加目录',
+    extraFoldersTitle: '附加目录',
+    extraFoldersGuideDescription: '附加本地文件夹，像工作区文件一样浏览并编辑',
+    extraFoldersAdd: '添加目录',
+    extraFoldersAddHint: '用系统对话框选择要附加的本地文件夹',
+    extraFoldersPicking: '选择中…',
+    extraFoldersRemove: '移除',
+    extraFoldersRemoveHint: '从本工作区移除该附加目录（不删磁盘）',
+    extraFoldersNone: '尚未附加目录。点「添加目录」用系统对话框选择文件夹。',
+    extraFoldersEmptyDir: '（空）',
+    extraFoldersLoading: '正在加载…',
+    extraFoldersExpand: '展开',
+    extraFoldersCollapse: '折叠',
+    extraFoldersNoSession: '当前没有可用会话',
+    extraFoldersUnavailable: '目录服务暂不可用',
+    extraFoldersFailed: '操作失败，请稍后重试',
+    extraFoldersDenied: '无法添加或访问该目录',
+    extraFoldersNotFound: '目录不存在',
+    extraFoldersSessionChanged: '会话已变化，请重新打开',
     fileEditTitle: '编辑文件',
     fileEditActionHint: '在当前页签用 Monaco 编辑此文件',
     fileEditLoading: '正在读取…',
@@ -444,6 +481,14 @@ export const agentLocales = {
     optimizeChipSelection: 'Selection includes references. Optimize the full draft or adjust the selection.',
     settingsTitle: 'Agent Enhance',
     settingsSubtitle: 'One plugin for common agent UX — toggle features as needed',
+    settingsTabFeatures: 'Features',
+    settingsTabModels: 'Models & routing',
+    settingsTabAbout: 'About',
+    settingsGroupChat: 'Conversation',
+    settingsGroupWorkspace: 'Workspace & sessions',
+    settingsOpenModel: 'Model',
+    settingsAuxModelsTitle: 'Helper models',
+    settingsAuxModelsIntro: 'Models for optimize, predict, and context compact — follow the session or pick Auto by default',
     history: 'Prompt history',
     historyDescription: '↑↓ revisit sent prompts; Alt+R to search (Ctrl+R in compatible environments)',
     optimizeDescription: 'Optimize the draft or selection, with one-click undo',
@@ -575,7 +620,26 @@ export const agentLocales = {
     sessionDeleteFailed: 'Delete failed. Please try again.',
     sessionDeleteFailedDetail: 'Delete failed: {message}',
     fileEdit: 'Edit',
-    fileEditDescription: 'Edit workspace UTF-8 text from the official file preview (Monaco; Ctrl/Cmd+S or pause autosave)',
+    fileEditDescription: 'Edit workspace UTF-8 text from the official file preview (Monaco; Ctrl/Cmd+S or pause autosave). Attach more local folders from the right-sidebar Extra folders card (human browse/edit only; does not widen the Agent sandbox).',
+    extraFolders: 'Extra folders',
+    extraFoldersTitle: 'Extra folders',
+    extraFoldersGuideDescription: 'Attach local folders and browse/edit them like workspace files',
+    extraFoldersAdd: 'Add folder',
+    extraFoldersAddHint: 'Choose a local folder with the system dialog',
+    extraFoldersPicking: 'Choosing…',
+    extraFoldersRemove: 'Remove',
+    extraFoldersRemoveHint: 'Detach this folder from the workspace (does not delete disk files)',
+    extraFoldersNone: 'No folders attached yet. Use Add folder to choose one.',
+    extraFoldersEmptyDir: '(empty)',
+    extraFoldersLoading: 'Loading…',
+    extraFoldersExpand: 'Expand',
+    extraFoldersCollapse: 'Collapse',
+    extraFoldersNoSession: 'No session is available',
+    extraFoldersUnavailable: 'Folder browser is temporarily unavailable',
+    extraFoldersFailed: 'Something went wrong. Please try again.',
+    extraFoldersDenied: 'Cannot add or access that folder',
+    extraFoldersNotFound: 'Folder not found',
+    extraFoldersSessionChanged: 'Session changed — reopen Extra folders',
     fileEditTitle: 'Edit file',
     fileEditActionHint: 'Edit this file with Monaco in the current tab',
     fileEditLoading: 'Loading…',
