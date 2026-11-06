@@ -54,6 +54,8 @@ import {
 } from './remote.ts'
 import { ProviderBalanceChip } from './dsh/provider-balance-chip.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import { RollbackController } from './rollback/controller.ts'
 import type { RollbackRemote } from './rollback/controller.ts'
 import { SessionCutCache } from './rollback/cut-cache.ts'
@@ -77,6 +79,8 @@ import {
 } from './rollback/timeline-tab.tsx'
 import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { SessionDeleteMenuItem } from './session-delete/menu.tsx'
+import { SessionDeleteOverlay } from './session-delete/overlay.tsx'
 import { installCss } from './styles.module.css'
 
 type InventoryRemote = ClientRemote & {
@@ -213,6 +217,44 @@ export function apply(ctx: Context): void {
     name: 'settings.models.provider-card',
     key: PROVIDER_BALANCE_API_KEY_KEY,
   }, ApiKeyBalanceChip)))
+
+  // Session delete: menu row + frame-wide confirm overlay (must outlive the menu).
+  ctx.effect(() => {
+    const disposers: Array<() => void> = []
+    const clear = () => {
+      while (disposers.length > 0) disposers.pop()?.()
+    }
+    const synchronize = () => {
+      clear()
+      const enabled = resolveSettings(form.getSnapshot().value).sessionDeleteEnabled
+      if (!enabled) return
+      disposers.push(ctx.slots.inject('sidebar.workspaces.session.menu.item', () => ctx.slots.register({
+        name: 'sidebar.workspaces.session.menu.item',
+        id: 'agent-enhancer-session-delete',
+        order: 700,
+      }, (props: PropsRuntime<'sidebar.workspaces.session.menu.item'>) => createElement(SessionDeleteMenuItem, {
+        ...props,
+        t,
+        ctx,
+      }))))
+      disposers.push(ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: 'agent-enhancer-session-delete',
+        order: 160,
+      }, () => createElement(SessionDeleteOverlay, {
+        remote: agentEnhancerRemote,
+        t,
+        ctx,
+      }))))
+    }
+    const unsubscribe = form.subscribe(synchronize)
+    synchronize()
+    return () => {
+      unsubscribe()
+      clear()
+    }
+  })
+
   const hints = new OverlapHintStore()
   ctx.effect(() => {
     let active = true

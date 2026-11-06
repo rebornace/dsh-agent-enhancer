@@ -221,6 +221,8 @@ export function ContextInspectRightTab(props: ContextInspectRightTabProps) {
           case 'MODEL_FAILED':
           case 'INVALID_OUTPUT':
           case 'ROLLBACK_FAILED':
+          case 'SESSION_BUSY':
+          case 'SESSION_DELETE_FAILED':
             setCompactNote(props.t('contextInspectCompactFailed'))
             break
           default: {

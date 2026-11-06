@@ -325,6 +325,7 @@ const LABELS = {
   predict: 'predict',
   rollback: 'rollback',
   contextInspect: 'contextInspect',
+  sessionDelete: 'sessionDelete',
 } as const
 
 const DESCRIPTIONS = {
@@ -333,6 +334,7 @@ const DESCRIPTIONS = {
   predict: 'predictDescription',
   rollback: 'rollbackDescription',
   contextInspect: 'contextInspectDescription',
+  sessionDelete: 'sessionDeleteDescription',
 } as const
 
 function modelFeatureOf(module: ModuleName): ConfigurableAuxiliaryFeature | null {
@@ -345,6 +347,7 @@ function modelFeatureOf(module: ModuleName): ConfigurableAuxiliaryFeature | null
       return 'compact'
     case 'history':
     case 'rollback':
+    case 'sessionDelete':
       return null
     default: {
       const _exhaustive: never = module

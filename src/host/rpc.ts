@@ -155,6 +155,33 @@ const contextCompactResultSchema = z.strictObject({
 const contextCompactRequestCodec = codec('dsh-agent-enhancer#ContextCompactRequest', contextCompactRequestSchema)
 const contextCompactResultCodec = codec('dsh-agent-enhancer#ContextCompactResult', contextCompactResultSchema)
 
+export const deleteSessionRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+})
+const deleteSessionCleanerReportSchema = z.strictObject({
+  id: z.string(),
+  label: z.string(),
+  ok: z.boolean(),
+  detail: z.string().optional(),
+})
+export const deleteSessionResultSchema = z.strictObject({
+  ok: z.literal(true),
+  sessionId: sessionIdSchema,
+  unloaded: z.boolean(),
+  hidden: z.boolean(),
+  live: z.boolean(),
+  removedPaths: z.array(z.string()),
+  registry: z.strictObject({
+    workspaces: z.array(z.string()),
+    archived: z.boolean(),
+    pinned: z.boolean(),
+  }),
+  pluginCleaners: z.array(deleteSessionCleanerReportSchema),
+  detail: z.string(),
+})
+const deleteSessionRequestCodec = codec('dsh-agent-enhancer#DeleteSessionRequest', deleteSessionRequestSchema)
+const deleteSessionResultCodec = codec('dsh-agent-enhancer#DeleteSessionResult', deleteSessionResultSchema)
+
 export const updateCheckResultSchema = z.strictObject({
   current: z.string(),
   latest: z.string().nullable(),
@@ -309,6 +336,19 @@ export const remoteInfo = createTypertRemoteInfo({
       }],
       cancellation: { parameter: 'signal' },
       result: contextCompactResultCodec,
+    },
+    'agentEnhancer/deleteSession': {
+      service: 'agentEnhancer',
+      implementation: 'deleteSession',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: deleteSessionRequestCodec,
+        strictCodec: deleteSessionRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: deleteSessionResultCodec,
     },
     'agentEnhancer/checkUpdate': {
       service: 'agentEnhancer',

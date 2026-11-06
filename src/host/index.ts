@@ -37,6 +37,13 @@ import type {
   ContextCompactRequest,
   ContextCompactResult,
 } from './context-compact.ts'
+import { SessionCleanupRegistry } from './session-delete/cleanup.ts'
+import {
+  createCheckpointCleaner,
+  createContextExcludeCleaner,
+} from './session-delete/plugin-purge.ts'
+import { deleteSessionNow, SessionDeleteError } from './session-delete/delete.ts'
+import type { DeleteSessionRequest, DeleteSessionResult } from './session-delete/delete.ts'
 import { inspectContextCategory, pressureFromProjection } from './context-inspect.ts'
 import type { ContextInspectRequest, ContextInspectResult } from './context-inspect.ts'
 import { installAutoSessionRoute } from './auto-route/session-hook.ts'
@@ -79,6 +86,8 @@ export const inject = [
   'fs', 'tools', 'tokenMeter', 'typert', 'typertGateway',
   // Chat `/compact` → compaction.compactNow; commands kept as fallback.
   'commands',
+  // Session delete: registry detach + durable workspace/global domain writes.
+  'workspaceRegistry', 'storageDomain',
 ]
 
 export const Config = z.object({
@@ -87,6 +96,7 @@ export const Config = z.object({
   predictEnabled: z.boolean().default(true).volatile(),
   rollbackEnabled: z.boolean().default(true).volatile(),
   contextInspectEnabled: z.boolean().default(true).volatile(),
+  sessionDeleteEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.
   optimizeProvider: z.string().default('').volatile(),
   optimizeModel: z.string().default('').volatile(),
@@ -142,6 +152,7 @@ export class AgentEnhancerService extends TypertRemoteService {
         }
       },
     },
+    private readonly sessionCleanup: SessionCleanupRegistry = new SessionCleanupRegistry(),
   ) {
     super(ctx, 'agentEnhancer')
   }
@@ -198,6 +209,33 @@ export class AgentEnhancerService extends TypertRemoteService {
     } catch (error) {
       if (signal.aborted) throw error
       throw new RemoteError('agent-enhancer/failed', 'Context inspect failed', { code: 'MODEL_FAILED' })
+    }
+  }
+
+  /** Permanently delete one sidebar session (official logs + plugin persistence). */
+  async deleteSession(request: DeleteSessionRequest, signal: AbortSignal): Promise<DeleteSessionResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await deleteSessionNow({
+        ctx: this.ctx,
+        request,
+        cleanup: this.sessionCleanup,
+        signal,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      if (error instanceof SessionDeleteError) {
+        this.ctx.logger.warn(`agent-enhancer deleteSession failed: ${error.code} ${error.message}`)
+        throw new RemoteError('agent-enhancer/failed', error.message, {
+          code: error.code === 'BUSY' ? 'SESSION_BUSY' : 'SESSION_DELETE_FAILED',
+        })
+      }
+      const detail = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(`agent-enhancer deleteSession failed: ${detail}`)
+      throw new RemoteError('agent-enhancer/failed', detail || 'Session delete failed', {
+        code: 'SESSION_DELETE_FAILED',
+      })
     }
   }
 
@@ -324,6 +362,7 @@ function readSettings(config: Config): EnhancerSettings {
     predictEnabled: config.predictEnabled.get(),
     rollbackEnabled: config.rollbackEnabled.get(),
     contextInspectEnabled: config.contextInspectEnabled.get(),
+    sessionDeleteEnabled: config.sessionDeleteEnabled.get(),
     optimizeProvider: config.optimizeProvider.get(),
     optimizeModel: config.optimizeModel.get(),
     optimizeReasoningEffort: config.optimizeReasoningEffort.get(),
@@ -383,6 +422,12 @@ export function apply(ctx: Context, config: Config): void {
     }
   })()
   installUsageObserver(ctx, usage)
+  const store = new CheckpointStore(storageRoot)
+  const cutStore = new SessionCutStore(join(storageRoot, 'cuts'))
+  const cutCache = new Map<SessionId, SessionCut | null>()
+  const sessionCleanup = new SessionCleanupRegistry()
+  sessionCleanup.register(createCheckpointCleaner({ store, cutStore, storageRoot }))
+  sessionCleanup.register(createContextExcludeCleaner(join(storageRoot, '..')))
   new AgentEnhancerService(ctx, models, {
       async summarize(range) {
         const stored = await usage.listCalls()
@@ -398,12 +443,10 @@ export function apply(ctx: Context, config: Config): void {
       },
     },
     balancesFacade,
+    sessionCleanup,
   )
   ctx.effect(() => ctx.typert.register(hostContribution))
 
-  const store = new CheckpointStore(storageRoot)
-  const cutStore = new SessionCutStore(join(storageRoot, 'cuts'))
-  const cutCache = new Map<SessionId, SessionCut | null>()
   const sessions = new DshCheckpointSessions(ctx)
   let rollbackEnabled = config.rollbackEnabled.get()
   const captures = new DshCheckpointCaptureSwitch(ctx, { store, pluginVersion: PACKAGE_VERSION })

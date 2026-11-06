@@ -2170,3 +2170,102 @@
   line-height: 16px;
   font-variant-numeric: tabular-nums;
 }
+
+.sessionDeleteRoot {
+  pointer-events: none;
+}
+
+.sessionDeleteOverlay {
+  pointer-events: auto;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.sessionDeleteDialog {
+  width: min(440px, calc(100vw - 48px));
+  border-radius: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2, #333);
+  background: var(--dsw-alias-bg-layer-2, #1f1f1f);
+  color: var(--dsw-alias-label-primary, #eee);
+  padding: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.sessionDeleteTitle {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.sessionDeleteDesc {
+  margin: 0 0 14px;
+  font-size: 15.5px;
+  line-height: 23px;
+  color: var(--dsw-alias-label-secondary, #aaa);
+  word-break: break-all;
+}
+
+.sessionDeleteWarn {
+  margin: 0 0 14px;
+  font-size: 15.5px;
+  color: var(--dsw-alias-state-error-primary, #f85149);
+}
+
+.sessionDeleteFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sessionDeleteBtn {
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2, #444);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15.5px;
+  cursor: pointer;
+}
+
+.sessionDeleteBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.sessionDeleteBtnDanger {
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 0.5px solid transparent;
+  background: var(--dsw-alias-state-error-primary, #d1242f);
+  color: #fff;
+  font: inherit;
+  font-size: 15.5px;
+  cursor: pointer;
+}
+
+.sessionDeleteBtnDanger:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.sessionDeleteToast {
+  pointer-events: none;
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 10000;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2, #1f1f1f);
+  border: 0.5px solid var(--dsw-alias-border-l2, #333);
+  color: var(--dsw-alias-label-primary, #eee);
+  font-size: 15.5px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}

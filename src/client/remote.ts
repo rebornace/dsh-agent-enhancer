@@ -90,6 +90,21 @@ export const clientRemoteInfo = {
     cancellation: { parameter: 'signal' },
     result: codec('dsh-agent-enhancer#ContextCompactResult'),
   }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/deleteSession',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'deleteSession',
+    implementation: 'deleteSession',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#DeleteSessionRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#DeleteSessionResult'),
+  }, {
     id: 'dsh-agent-enhancer#agentEnhancer/checkUpdate',
     service: 'agentEnhancer',
     namespace: 'agentEnhancer',

@@ -1,6 +1,7 @@
 export const AUXILIARY_ERROR_CODES = [
   'MODEL_UNAVAILABLE', 'MODEL_FAILED', 'INVALID_OUTPUT', 'SESSION_CHANGED', 'ROLLBACK_FAILED',
   'COMPACT_UNAVAILABLE', 'COMPACT_BUSY', 'COMPACT_FAILED', 'COMPACT_SUMMARY', 'COMPACT_CHANGED',
+  'SESSION_BUSY', 'SESSION_DELETE_FAILED',
 ] as const
 export type AuxiliaryErrorCode = typeof AUXILIARY_ERROR_CODES[number]
 const MESSAGES: Record<AuxiliaryErrorCode, string> = {
@@ -14,10 +15,12 @@ const MESSAGES: Record<AuxiliaryErrorCode, string> = {
   COMPACT_FAILED: 'Compaction did not finish; the conversation is unchanged or only partially updated',
   COMPACT_SUMMARY: 'Compaction could not produce a useful summary; the conversation is unchanged',
   COMPACT_CHANGED: 'History changed during compaction; the conversation is unchanged',
+  SESSION_BUSY: 'The session is running and cannot be deleted yet',
+  SESSION_DELETE_FAILED: 'Session delete did not finish cleanly',
 }
 export class AuxiliaryError extends Error {
-  constructor(readonly code: AuxiliaryErrorCode) {
-    super(MESSAGES[code])
+  constructor(readonly code: AuxiliaryErrorCode, message?: string) {
+    super(message ?? MESSAGES[code])
     this.name = 'AuxiliaryError'
   }
 }

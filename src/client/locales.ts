@@ -71,6 +71,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'rollbackConflictUnsafe' | 'rollbackConflictSymlink' |
       'rollbackConflictRegular' | 'rollbackConflictBinary' | 'rollbackConflictLarge' | 'rollbackConflictBefore' |
       'rollbackConflictHash' | 'rollbackConflictHashHint' |
+      'sessionDelete' | 'sessionDeleteDescription' | 'sessionDeleteBusy' | 'sessionDeleteBusyConfirm' |
+      'sessionDeleteConfirmTitle' | 'sessionDeleteConfirmDesc' |
+      'sessionDeleteConfirmAction' | 'sessionDeleteCancel' | 'sessionDeleteDeleting' |
+      'sessionDeleteDone' | 'sessionDeleteDoneUnloaded' | 'sessionDeleteDoneHidden' |
+      'sessionDeleteFailed' | 'sessionDeleteFailedDetail' |
       'contextInspect' | 'contextInspectDescription' | 'contextInspectDetailTitle' | 'contextInspectNote' |
       'contextInspectEmpty' | 'contextInspectApproxTotal' | 'contextInspectApproxBadge' |
       'contextInspectOpenCategory' | 'contextInspectCategories' | 'contextInspectItemDetail' |
@@ -225,6 +230,20 @@ export const agentLocales = {
     overlapOptimize: '检测到另一个提示词优化功能。智能体增强的优化仍保持开启。',
     overlapPredict: '检测到另一个回复建议功能。智能体增强的预测仍保持开启。',
     dismissHint: '关闭共存提示',
+    sessionDelete: '删除会话',
+    sessionDeleteDescription: '在侧栏会话 ⋯ 菜单中永久删除会话及其本地数据（不可恢复）',
+    sessionDeleteBusy: '会话运行中，无法删除',
+    sessionDeleteBusyConfirm: '会话仍有进行中的工作，无法删除。',
+    sessionDeleteConfirmTitle: '删除此会话？',
+    sessionDeleteConfirmDesc: '将永久删除「{title}」的对话记录、检查点等本地数据，且无法恢复。',
+    sessionDeleteConfirmAction: '永久删除',
+    sessionDeleteCancel: '取消',
+    sessionDeleteDeleting: '正在删除…',
+    sessionDeleteDone: '会话已删除',
+    sessionDeleteDoneUnloaded: '会话已删除',
+    sessionDeleteDoneHidden: '数据已清除；会话仍暂留内存，重启后消失',
+    sessionDeleteFailed: '删除失败，请稍后重试',
+    sessionDeleteFailedDetail: '删除失败：{message}',
     contextInspect: '上下文明细',
     contextInspectDescription: '点击官方占用环打开右侧明细；可一键官方压缩，并单独选择压缩摘要模型',
     contextInspectDetailTitle: '上下文明细',
@@ -506,6 +525,20 @@ export const agentLocales = {
     overlapOptimize: 'Another prompt-optimization feature is enabled. Agent Enhance optimization remains enabled.',
     overlapPredict: 'Another reply-suggestion feature is enabled. Agent Enhance prediction remains enabled.',
     dismissHint: 'Dismiss coexistence notice',
+    sessionDelete: 'Delete session',
+    sessionDeleteDescription: 'Permanently delete a session and its local data from the sidebar ⋯ menu (cannot be undone)',
+    sessionDeleteBusy: 'Session is running; deletion unavailable',
+    sessionDeleteBusyConfirm: 'The session still has work in progress and cannot be deleted.',
+    sessionDeleteConfirmTitle: 'Delete this session?',
+    sessionDeleteConfirmDesc: 'This permanently deletes “{title}” — chat history, checkpoints, and other local data. It cannot be undone.',
+    sessionDeleteConfirmAction: 'Delete permanently',
+    sessionDeleteCancel: 'Cancel',
+    sessionDeleteDeleting: 'Deleting…',
+    sessionDeleteDone: 'Session deleted',
+    sessionDeleteDoneUnloaded: 'Session deleted',
+    sessionDeleteDoneHidden: 'Data cleared; the session remains in memory until restart',
+    sessionDeleteFailed: 'Delete failed. Please try again.',
+    sessionDeleteFailedDetail: 'Delete failed: {message}',
     contextInspect: 'Context details',
     contextInspectDescription: 'Open right-sidebar details from the official meter; one-click official compact with an optional summary model',
     contextInspectDetailTitle: 'Context details',
