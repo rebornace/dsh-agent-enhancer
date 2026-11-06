@@ -22,7 +22,7 @@
 
 ### Docs
 
-- README 中英文同步划词引用、工作区编辑 / 附加目录、会话删除与设置页结构；补截图：`settings.png`（功能九开关）、`select-to-quote.png`、`extra-folders.png`、`file-edit-toolbar.png`。
+- README 中英文同步划词引用、工作区编辑 / 附加目录、会话删除与设置页结构；补截图：`settings.png`（功能九开关）、`select-to-quote.png`、`extra-folders.png`、`file-edit-toolbar.png`、`session-delete.png`。
 
 ## 0.3.4 - 2026-11-06
 
