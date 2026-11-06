@@ -26,6 +26,11 @@ import {
   loadDesktopModelCatalog,
 } from './dsh/model-catalog.ts'
 import type { ModelCatalogLoaders } from './dsh/model-catalog.ts'
+import {
+  persistEnhancerSettings,
+  withSettingsRemote,
+} from './dsh/persist-settings.ts'
+import type { SettingsPersistOp } from './dsh/persist-settings.ts'
 import { AcceptedSettingsForm } from './dsh/settings-form.ts'
 import { PluginSettings } from './dsh/settings.tsx'
 import { ContextInspectDock } from './context/dock.tsx'
@@ -83,6 +88,9 @@ type InventoryRemote = ClientRemote & {
 // session.modelCatalog needs remote.session on this fiber. Host listCatalog is
 // wired after $mount from the nested agentEnhancer fiber (root cannot inject it early).
 export const inject = [
+  // Do not hard-inject remote.settings: that delays this client fiber until the
+  // settings controller is up and has been observed to slow Desktop account
+  // paint. Persist probes settings softly at save time instead.
   'remote', 'remote.session', 'remote.pluginInventory', 'configForms', 'locale', 'slots',
   'sidebarRightTabs', 'sidebarRight',
 ]
@@ -162,10 +170,21 @@ export function apply(ctx: Context): void {
     }))
     return source === 'account' ? all.account : all.apiKey
   }
+  const persist = async (ops: readonly SettingsPersistOp[]) => {
+    // Lazy-inject remote.settings only while saving — hard inject at boot slowed
+    // Desktop account paint; soft probe without inject throws unavailable.
+    await withSettingsRemote(ctx, remote => persistEnhancerSettings(
+      remote,
+      ops,
+      () => form.getSnapshot().revision,
+    ))
+    form.acceptLocal(ops)
+  }
   const SettingsTab = (props: { readonly form: typeof form; readonly t: typeof t }) => (
     createElement(PluginSettings, {
       form: props.form,
       t: props.t,
+      persist,
       loadCatalog,
       checkUpdate,
       applyUpdate,

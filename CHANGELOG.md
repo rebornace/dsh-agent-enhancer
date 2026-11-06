@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.3.3 - 2026-11-06
+
+### Fixed
+
+- **设置写入：** 优化 / 预测 / Auto 档位改为原子 `mutate`；按 Typert 三参签名传数字 `revision`；修订冲突时 `describe` 后重试一次，避免 Desktop 0.2.2「设置未保存，请重试。」
+- **设置可用性：** 启动不再硬注入 `remote.settings`（避免拖慢账号页）；设置页按需懒注入；插件未启用时给出明确提示。
+- **优化按钮悬停：** Tooltip 改为 `portal` + `side=top`，避免部分会话窗口悬停时整窗抖动。
+
+### Changed
+
+- **0.2.2 兼容：** 模型座次与 turn 边界改走 `agent.model.current()` / `agents.turnBoundaryOf`；Auto 仍以哨兵占座，仅在每步 `prepareCall` 映射到 Instant/Thinking/Pro（不 `select` 掉 Auto）。
+- **本地开发安装：** `desktop:link` 改为 pack→解压到 profile 内再 `file:`，避免 Windows Junction 暴露仓库 `node_modules` 导致插件一直「已关闭」；profile 不再二次 `insert` enhancer（由包内 `cordis.patch.yml` 负责）。
+
+### Docs
+
+- README 中英文钉到 `0.3.3`。
+
 ## 0.3.2 - 2026-11-05
 
 ### Fixed

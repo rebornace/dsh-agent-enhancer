@@ -3,8 +3,20 @@
 }
 
 .toolbarIcon {
+  box-sizing: border-box;
+  flex-shrink: 0;
   width: 28px;
+  height: 28px;
   padding: 0;
+}
+
+.toolbarStatus {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-sm-12, var(--dsw-font-sm-14));
 }
 
 .settings {

@@ -22,15 +22,11 @@ type IdlePhaseAgent = LiveAgent & {
  */
 function syncIdleLastTurnFromProjection(ctx: Context, agent: LiveAgent): void {
   if (agent.status !== 'idle') return
-  // Prefer the agents domain reader when present; fall back to legacy key stateOf.
+  // 0.2.2: use the agents domain reader — never legacy stateOf(session, key).
   const agents = ctx.agents as typeof ctx.agents & {
     turnBoundaryOf?: (session: LiveAgent['session']) => { lastTurn?: number } | undefined
   }
-  const fromAgents = agents.turnBoundaryOf?.(agent.session)
-  const fromProjection = ctx.sessionProjections.stateOf(agent.session, 'turnBoundary') as
-    | { lastTurn?: number }
-    | undefined
-  const lastTurn = fromAgents?.lastTurn ?? fromProjection?.lastTurn
+  const lastTurn = agents.turnBoundaryOf?.(agent.session)?.lastTurn
   if (typeof lastTurn !== 'number') return
   const live = agent as IdlePhaseAgent
   if (live.phase?.kind !== 'idle' || live.phase.lastTurn === lastTurn) return

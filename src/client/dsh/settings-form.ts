@@ -1,10 +1,16 @@
 import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { EnhancerSettings } from '../../config.ts'
 
-export type SettingsForm = Pick<ConfigForm<EnhancerSettings>, 'getSnapshot' | 'subscribe' | 'set'>
+export type SettingsForm = Pick<ConfigForm<EnhancerSettings>, 'getSnapshot' | 'subscribe' | 'set' | 'mutate'>
 type Field = keyof EnhancerSettings
 type FieldValue = EnhancerSettings[Field]
 type Accepted = { readonly value: FieldValue; readonly revision: number | undefined }
+
+type SettingsPathOp = {
+  readonly op: 'set' | 'unset'
+  readonly path: readonly string[]
+  readonly value?: unknown
+}
 
 export class AcceptedSettingsForm implements SettingsForm {
   private readonly listeners = new Set<() => void>()
@@ -32,15 +38,50 @@ export class AcceptedSettingsForm implements SettingsForm {
   }
 
   async set(field: string, value: unknown): Promise<boolean> {
-    const key = field as Field
-    const revision = this.form.getSnapshot().revision
-    const accepted = await this.form.set(key, value)
-    if (accepted) {
-      this.accepted.set(key, { value: value as FieldValue, revision })
-      this.refresh()
-      for (const listener of this.listeners) listener()
+    return this.mutate([{ op: 'set', path: [field], value }])
+  }
+
+  /**
+   * Optimistic overlay after a successful fence-free Host write (see
+   * `persistEnhancerSettings`). Keeps pills in sync until ConfigForm mirrors
+   * the document-updated event.
+   */
+  acceptLocal(ops: readonly SettingsPathOp[]): void {
+    this.remember(ops)
+  }
+
+  /**
+   * Fallback Host write through ConfigForm. Prefer `persistEnhancerSettings`
+   * for UI saves — ConfigForm always attaches a revision fence.
+   */
+  async mutate(
+    ops: readonly SettingsPathOp[],
+    expectedRevision?: number,
+  ): Promise<boolean> {
+    const accepted = expectedRevision === undefined
+      ? await this.form.mutate(ops as never)
+      : await this.form.mutate(ops as never, expectedRevision)
+    if (!accepted && expectedRevision === undefined) {
+      const retried = await this.form.mutate(ops as never)
+      if (retried) {
+        this.remember(ops)
+        return true
+      }
+      return false
     }
+    if (accepted) this.remember(ops)
     return accepted
+  }
+
+  private remember(ops: readonly SettingsPathOp[]): void {
+    const revision = this.form.getSnapshot().revision
+    for (const op of ops) {
+      if (op.op !== 'set' || op.path.length !== 1) continue
+      const key = op.path[0] as Field
+      this.accepted.set(key, { value: op.value as FieldValue, revision })
+    }
+    this.refresh()
+    for (const listener of this.listeners) listener()
   }
 
   private refresh(): void {

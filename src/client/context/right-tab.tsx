@@ -213,10 +213,12 @@ export function ContextInspectRightTab(props: ContextInspectRightTabProps) {
           case 'COMPACT_CHANGED':
             setCompactNote(props.t('contextInspectCompactChanged'))
             break
+          case 'MODEL_UNAVAILABLE':
+            setCompactNote(props.t('contextInspectCompactModel'))
+            break
           case 'COMPACT_FAILED':
           case 'SESSION_CHANGED':
           case 'MODEL_FAILED':
-          case 'MODEL_UNAVAILABLE':
           case 'INVALID_OUTPUT':
           case 'ROLLBACK_FAILED':
             setCompactNote(props.t('contextInspectCompactFailed'))

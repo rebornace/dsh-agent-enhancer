@@ -1,5 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
+import { ManualCompactionError } from '@deepseek-ai/dsh-compaction'
+import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
 import type {} from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -29,7 +31,7 @@ export interface ContextCompactRequest {
 
 export interface ContextCompactResult {
   readonly sessionId: SessionId
-  /** Official `/compact` returned a replacement summary. */
+  /** Official manual compaction returned a replacement summary. */
   readonly status: 'compacted' | 'noop'
   readonly shadowedCount: number
   readonly shadowedTokens: number
@@ -40,7 +42,7 @@ export interface CompactRouteOverride {
   readonly model: string
 }
 
-/** Minimal face of `@deepseek-ai/dsh-commands` used for `/compact`. */
+/** Minimal face of `@deepseek-ai/dsh-commands` used as `/compact` fallback. */
 export interface CompactCommandRuntime {
   execute(
     agent: unknown,
@@ -55,10 +57,24 @@ export interface CompactCommandRuntime {
   } | undefined>
 }
 
-type AgentWithOptions = {
-  readonly options?: { provider?: string, model?: string }
-  status?: unknown
+/** Official `ctx.compaction.compactNow` — same seam chat `/compact` calls. */
+export interface CompactEngineRuntime {
+  compactNow(
+    agent: CompactManualAgent,
+    signal: AbortSignal,
+    sourceCommandId?: string,
+  ): Promise<CompactionResult | null>
 }
+
+/** Agent shape required by manual compaction (`runMaintenance` + idle gate). */
+export interface CompactManualAgent {
+  readonly status?: unknown
+  readonly options?: { provider?: string, model?: string }
+  readonly session?: unknown
+  runMaintenance?<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>
+}
+
+type ManualCompactionCode = ManualCompactionError['code']
 
 function modelExists(provider: string, model: string): boolean {
   return provider !== '' && model !== ''
@@ -110,7 +126,6 @@ async function resolveAutoRouteForCompact(
   const classify = settings.autoClassifierEnabled
     ? createClassifier(ctx.llm, map.classifier)
     : undefined
-  // Prefer real turn text on cache-miss rematch (empty text + feature session → Instant).
   const hint = sessionTurnHint(session)
   const mapped = await resolveAutoRoute({
     text: hint?.text ?? '',
@@ -133,7 +148,10 @@ async function resolveAutoRouteForCompact(
   return { provider: mapped.provider, model: mapped.model }
 }
 
-/** Resolve the temporary agent route used while official `/compact` runs. */
+/**
+ * Kept for settings / Auto mapping tests. Live compact follows the official
+ * summarizer route (requestHeader / agent.options) — do not force a plugin seat.
+ */
 export async function resolveCompactRouteOverride(
   ctx: Context,
   settings: EnhancerSettings,
@@ -159,22 +177,37 @@ export async function resolveCompactRouteOverride(
   return undefined
 }
 
-function applyCompactRoute(agent: AgentWithOptions, route: CompactRouteOverride | undefined): (() => void) | undefined {
-  if (route === undefined || route.provider === '' || route.model === '') return undefined
-  const options = agent.options
-  if (options === undefined || typeof options !== 'object') return undefined
-  const previous = { provider: options.provider, model: options.model }
-  ;(options as { provider?: string, model?: string }).provider = route.provider
-  ;(options as { provider?: string, model?: string }).model = route.model
-  return () => {
-    ;(options as { provider?: string, model?: string }).provider = previous.provider
-    ;(options as { provider?: string, model?: string }).model = previous.model
+function mapManualCompactionCode(code: ManualCompactionCode): AuxiliaryErrorCode {
+  switch (code) {
+    case 'busy':
+      return 'COMPACT_BUSY'
+    case 'cancelled':
+      return 'COMPACT_FAILED'
+    case 'changed':
+      return 'COMPACT_CHANGED'
+    case 'summary':
+      return 'COMPACT_SUMMARY'
+    case 'commit':
+      return 'COMPACT_FAILED'
+    case 'persistence':
+      return 'COMPACT_FAILED'
+    default: {
+      const _exhaustive: never = code
+      return _exhaustive
+    }
   }
+}
+
+function isManualCompactionError(error: unknown): error is ManualCompactionError {
+  if (error instanceof ManualCompactionError) return true
+  if (typeof error !== 'object' || error === null) return false
+  const candidate = error as { name?: unknown, code?: unknown }
+  return candidate.name === 'ManualCompactionError' && typeof candidate.code === 'string'
 }
 
 function mapCompactErrorText(text: string): AuxiliaryErrorCode {
   const lower = text.toLowerCase()
-  if (lower.includes('busy') || lower.includes('active') || text.includes('忙碌')) {
+  if (lower.includes('busy') || lower.includes('active') || text.includes('忙碌') || text.includes('不可用因为')) {
     return 'COMPACT_BUSY'
   }
   if (lower.includes('summary') || text.includes('摘要')) {
@@ -185,6 +218,9 @@ function mapCompactErrorText(text: string): AuxiliaryErrorCode {
   }
   if (lower.includes('not available') || text.includes('未提供') || text.includes('不可用')) {
     return 'COMPACT_UNAVAILABLE'
+  }
+  if (lower.includes('cancelled') || text.includes('已取消')) {
+    return 'COMPACT_FAILED'
   }
   return 'COMPACT_FAILED'
 }
@@ -209,32 +245,69 @@ function parseCompactSuccess(sessionId: SessionId, text: string | undefined): Co
   }
 }
 
+function resultFromEngine(
+  sessionId: SessionId,
+  result: CompactionResult | null,
+): ContextCompactResult {
+  if (result === null) {
+    return {
+      sessionId,
+      status: 'noop',
+      shadowedCount: 0,
+      shadowedTokens: 0,
+    }
+  }
+  return {
+    sessionId,
+    status: 'compacted',
+    shadowedCount: result.shadowedSeqs.length,
+    shadowedTokens: result.shadowedTokenCount,
+  }
+}
+
 /**
- * Trigger official idle `/compact` through the command registry — same path as
- * typing `/compact` in chat. Avoids requiring `ctx.compaction` inject (which is
- * not visible in this plugin's Cordis scope on Desktop).
+ * Same backend as chat `/compact`: prefer `ctx.compaction.compactNow`, fall back
+ * to `commands.execute('/compact')`. Do not mutate agent.options or wrap
+ * purpose=compaction streams with a plugin-forced route — Auto remapping in
+ * session-hook is enough for the sentinel seat.
  */
 export async function compactContextNow(options: {
+  readonly compaction: CompactEngineRuntime | undefined
   readonly commands: CompactCommandRuntime | undefined
-  readonly agent: unknown
+  readonly agent: CompactManualAgent
   readonly sessionId: SessionId
   readonly signal: AbortSignal
-  readonly route?: CompactRouteOverride
 }): Promise<ContextCompactResult> {
   options.signal.throwIfAborted()
-  if (options.commands === undefined || typeof options.commands.execute !== 'function') {
-    throw new AuxiliaryError('COMPACT_UNAVAILABLE')
-  }
-  if (options.agent === null || typeof options.agent !== 'object') {
+  const agent = options.agent
+  if (agent === null || typeof agent !== 'object') {
     throw new AuxiliaryError('SESSION_CHANGED')
   }
-  const agent = options.agent as AgentWithOptions
   if (agent.status !== undefined && agent.status !== 'idle') {
     throw new AuxiliaryError('COMPACT_BUSY')
   }
 
-  const restore = applyCompactRoute(agent, options.route)
+  const canCompactNow = options.compaction !== undefined
+    && typeof options.compaction.compactNow === 'function'
+    && typeof agent.runMaintenance === 'function'
+
   try {
+    if (canCompactNow && options.compaction !== undefined) {
+      try {
+        const result = await options.compaction.compactNow(agent, options.signal)
+        return resultFromEngine(options.sessionId, result)
+      } catch (error) {
+        if (options.signal.aborted) throw error
+        if (isManualCompactionError(error)) {
+          throw new AuxiliaryError(mapManualCompactionCode(error.code))
+        }
+        throw error
+      }
+    }
+
+    if (options.commands === undefined || typeof options.commands.execute !== 'function') {
+      throw new AuxiliaryError('COMPACT_UNAVAILABLE')
+    }
     const execution = await options.commands.execute(agent, '/compact', [], options.signal)
     if (execution === undefined) throw new AuxiliaryError('COMPACT_UNAVAILABLE')
     if (execution.result.kind === 'error') {
@@ -244,8 +317,9 @@ export async function compactContextNow(options: {
   } catch (error) {
     if (options.signal.aborted) throw error
     if (error instanceof AuxiliaryError) throw error
+    if (isManualCompactionError(error)) {
+      throw new AuxiliaryError(mapManualCompactionCode(error.code))
+    }
     throw new AuxiliaryError('COMPACT_FAILED')
-  } finally {
-    restore?.()
   }
 }

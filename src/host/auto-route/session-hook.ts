@@ -18,26 +18,16 @@ import type { AutoTierRoute } from './types.ts'
 /**
  * Path 1 — official `/model` and the composer model seat.
  *
- * Both entries load `session.modelCatalog`, which is `buildModelCatalog` over
- * the live `ctx.llm` registry. That is a different function from
- * `buildAuxiliaryModelCatalog`; this plugin does not own the official builder.
- * `session.selectModel` persists a choice only after `modelAvailable` and
- * `resolveCallConfig` accept the provider/model pair. The
- * `conversation.input.model.label` slot is non-interactive, so a label cannot
- * become a saved selection. Prepending a row only in our settings catalog
- * would show Auto and then fail when the official selector calls `select`.
+ * Catalog sentinel `{ provider: AUTO_PROVIDER, model: AUTO_MODEL }` is what
+ * `agent.model.select` / official `selectModel` persist. DSH 0.2.2 freezes that
+ * seat for the step before prompt assembly (do not mutate `agent/request` for
+ * routing; do not `agent.model.select` the mapped Instant/Thinking/Pro tier or
+ * the picker leaves Auto).
  *
- * Registering a catalog-only adapter for the Auto sentinel puts
- * `{ provider: AUTO_PROVIDER, model: AUTO_MODEL }` in the official directory.
- * `selectModel` appends `model/selection` with that sentinel and
- * `agent/request` copies it onto the next call config. The `prepareCall`
- * wrapper below reroutes only that sentinel, once per call, and does not
- * write the resolved tier back onto the session.
- *
- * DSH 0.2.2 freezes the step model before prompt assembly / pre-step and asks
- * plugins to prefer `agent.model` over mutating `agent/request`. Remapping the
- * Auto sentinel inside `prepareCall` still runs before the provider stream and
- * keeps the session seat on the sentinel (so the picker stays on Auto).
+ * Each step still calls `llm.prepareCall` with the frozen Auto seat. The
+ * wrapper below remaps only that sentinel onto the configured tier for the
+ * provider stream — once per call, including tool retries — then returns the
+ * real adapter binding. Session seat and `agent.model.current()` stay Auto.
  */
 const AUTO_CATALOG_NAME = 'Auto'
 /**
@@ -54,10 +44,19 @@ interface TurnNote {
   readonly toolHeavy: boolean
 }
 
+interface ModelPick {
+  readonly provider: string
+  readonly model: string
+  readonly reasoningEffort?: string
+}
+
 interface AgentFace {
   readonly options?: { readonly provider?: string, readonly model?: string }
   readonly status?: string
   readonly session?: object
+  readonly model?: {
+    readonly current?: () => ModelPick | undefined
+  }
 }
 
 interface ContentBlockLike {
@@ -73,12 +72,6 @@ interface MessageLike {
 interface AgentsFace {
   currentInitiator?: () => object | undefined
   list?: () => readonly object[]
-}
-
-interface ModelPick {
-  readonly provider: string
-  readonly model: string
-  readonly reasoningEffort?: string
 }
 
 class AutoCatalogAdapter extends LlmAdapter {
@@ -180,8 +173,20 @@ function concreteRoute(selection: ModelPick | undefined): AutoTierRoute | undefi
   }
 }
 
-/** Saved session choice: pending user selection, otherwise the last request that consumed one. */
+/** Live seat via `agent.model.current()`, then Session projection helpers. */
 function projectedSelection(ctx: Context, agent: AgentFace | undefined): ModelPick | undefined {
+  try {
+    const fromModel = agent?.model?.current?.()
+    if (fromModel !== undefined
+      && typeof fromModel.provider === 'string'
+      && fromModel.provider !== ''
+      && typeof fromModel.model === 'string'
+      && fromModel.model !== '') {
+      return fromModel
+    }
+  } catch {
+    // ignore
+  }
   const session = agent?.session as { readonly id?: unknown } | undefined
   if (session === undefined) return undefined
   try {
@@ -193,17 +198,29 @@ function projectedSelection(ctx: Context, agent: AgentFace | undefined): ModelPi
 
 function fallbackRoute(ctx: Context, agent: AgentFace | undefined): AutoTierRoute | undefined {
   try {
+    // Prefer a concrete seat from agent.model / options; skip Auto itself.
+    const projected = concreteRoute(projectedSelection(ctx, agent))
+    if (projected !== undefined) return projected
     const options = agent?.options
     const fromOptions = typeof options?.provider === 'string' && typeof options.model === 'string'
       ? concreteRoute({ provider: options.provider, model: options.model })
       : undefined
     if (fromOptions !== undefined) return fromOptions
-    const projected = concreteRoute(projectedSelection(ctx, agent))
-    if (projected !== undefined) return projected
     const defaults = softService<{ currentSelection?: () => ModelPick | undefined }>(ctx, 'agentDefaultModel')
     return concreteRoute(defaults?.currentSelection?.())
   } catch {
     return undefined
+  }
+}
+
+/** True when the frozen call config or the live agent seat is the Auto sentinel. */
+function shouldRemapAuto(config: LlmCallConfig, agent: AgentFace | undefined): boolean {
+  if (isAutoModel(config)) return true
+  try {
+    const seat = agent?.model?.current?.()
+    return seat !== undefined && isAutoModel(seat)
+  } catch {
+    return false
   }
 }
 
@@ -245,13 +262,11 @@ export function installAutoSessionRoute(
   installAutoCatalogModel(ctx)
   if (typeof ctx.llm.prepareCall !== 'function') return
 
-  // `agent/request` copies the saved selection onto the call, then the loop
-  // calls `prepareCall`. The admitted user batch is not in the session log
-  // yet, so the latest `agent/pre-step` decision is the turn text. The map
-  // stores text only; the resolved route for this turn is cached separately.
+  // Loop freezes `agent.model` for the step, then calls `prepareCall` with that
+  // seat. The admitted user batch is not in the session log yet, so the latest
+  // `agent/pre-step` decision is the turn text. Nested `prepareCall`s (the
+  // classifier) pass through via `resolving` depth.
   const notes = new WeakMap<object, TurnNote>()
-  // Same agent (or, with no agent, the config object) currently inside
-  // resolve. Nested `prepareCall`s — the classifier — pass through.
   const resolving = new WeakMap<object, number>()
 
   ctx.on('agent/pre-step', async (payload, next) => {
@@ -272,43 +287,95 @@ export function installAutoSessionRoute(
 
   ctx.effect(() => {
     const llm = ctx.llm
-    const inner = llm.prepareCall.bind(llm)
-    const wrapped: typeof llm.prepareCall = async (config, signal, configure) => {
-      const keyProbe = activeAgent(ctx) ?? config
-      const depth = resolving.get(keyProbe) ?? 0
-      if (depth > 0 || !isAutoModel(config)) return inner(config, signal, configure)
+    if (typeof llm.prepareCall !== 'function') return () => {}
+    const innerPrepare = llm.prepareCall.bind(llm)
+    const innerStream = typeof llm.stream === 'function' ? llm.stream.bind(llm) : undefined
+
+    const remapAuto = async (
+      config: LlmCallConfig,
+      signal: AbortSignal | undefined,
+      agent: object | undefined,
+      feature: 'session' | 'compact' = 'session',
+    ): Promise<AutoTierRoute> => {
+      const settings = options.settings()
+      const map = autoRouteMapOf(settings)
+      const note = (agent === undefined ? undefined : notes.get(agent)) ?? loggedTurn(asAgent(agent))
+      const classify = settings.autoClassifierEnabled
+        ? createClassifier({ prepareCall: innerPrepare }, map.classifier)
+        : undefined
+      const mapped = await resolveAutoRoute({
+        text: note?.text ?? '',
+        feature,
+        toolHeavy: note?.toolHeavy ?? false,
+        map,
+        classifierEnabled: settings.autoClassifierEnabled,
+        classify,
+        isAvailable: (provider, model) => provider !== '' && model !== '' && !isAutoModel({ provider, model }),
+        signal,
+        fallback: fallbackRoute(ctx, asAgent(agent)),
+      })
+      if (agent !== undefined && feature === 'session') setSessionResolvedRoute(agent, mapped)
+      return mapped
+    }
+
+    const wrappedPrepare: typeof llm.prepareCall = async (config, signal, configure) => {
       const agent = activeAgent(ctx)
+      const keyProbe = agent ?? config
+      const depth = resolving.get(keyProbe) ?? 0
+      if (depth > 0 || !shouldRemapAuto(config, asAgent(agent))) {
+        return innerPrepare(config, signal, configure)
+      }
       const key = agent ?? config
       resolving.set(key, (resolving.get(key) ?? 0) + 1)
       try {
-        const settings = options.settings()
-        const map = autoRouteMapOf(settings)
-        const note = (agent === undefined ? undefined : notes.get(agent)) ?? loggedTurn(asAgent(agent))
-        const classify = settings.autoClassifierEnabled
-          ? createClassifier({ prepareCall: inner }, map.classifier)
-          : undefined
-        const mapped = await resolveAutoRoute({
-          text: note?.text ?? '',
-          feature: 'session',
-          toolHeavy: note?.toolHeavy ?? false,
-          map,
-          classifierEnabled: settings.autoClassifierEnabled,
-          classify,
-          isAvailable: (provider, model) => provider !== '' && model !== '' && !isAutoModel({ provider, model }),
-          signal,
-          fallback: fallbackRoute(ctx, asAgent(agent)),
-        })
-        if (agent !== undefined) setSessionResolvedRoute(agent, mapped)
-        return await inner(routeConfig(config, mapped), signal, configure)
+        const mapped = await remapAuto(config, signal, agent)
+        // Remap call config only — never agent.model.select(mapped).
+        return await innerPrepare(routeConfig(config, mapped), signal, configure)
       } finally {
-        const next = (resolving.get(key) ?? 1) - 1
-        if (next <= 0) resolving.delete(key)
-        else resolving.set(key, next)
+        const nextDepth = (resolving.get(key) ?? 1) - 1
+        if (nextDepth <= 0) resolving.delete(key)
+        else resolving.set(key, nextDepth)
       }
     }
-    llm.prepareCall = wrapped
+
+    llm.prepareCall = wrappedPrepare
+
+    // Compaction-basic (and other helpers) call llm.stream() with the frozen
+    // Auto seat from requestHeader — that path never hits prepareCall, so the
+    // sentinel would throw AUTO_SENTINEL. Remap the same way before dispatch.
+    let wrappedStream: typeof llm.stream | undefined
+    if (innerStream !== undefined) {
+      wrappedStream = (options) => {
+        // compaction-basic streams with requestHeader / agent.options. Auto seats
+        // never hit prepareCall — remap the sentinel here too (including
+        // purpose=compaction). Do not force a plugin compact model on top.
+        const agent = activeAgent(ctx)
+        if (!shouldRemapAuto(options, asAgent(agent))) return innerStream(options)
+        const keyProbe = agent ?? options
+        const depth = resolving.get(keyProbe) ?? 0
+        if (depth > 0) return innerStream(options)
+        return (async function* remappedAutoStream() {
+          const key = agent ?? options
+          resolving.set(key, (resolving.get(key) ?? 0) + 1)
+          try {
+            const mapped = await remapAuto(options, options.signal, agent, 'session')
+            const routed = routeConfig(options, mapped)
+            yield* innerStream({ ...options, ...routed })
+          } finally {
+            const nextDepth = (resolving.get(key) ?? 1) - 1
+            if (nextDepth <= 0) resolving.delete(key)
+            else resolving.set(key, nextDepth)
+          }
+        })()
+      }
+      llm.stream = wrappedStream
+    }
+
     return () => {
-      if (llm.prepareCall === wrapped) llm.prepareCall = inner
+      if (llm.prepareCall === wrappedPrepare) llm.prepareCall = innerPrepare
+      if (wrappedStream !== undefined && llm.stream === wrappedStream && innerStream !== undefined) {
+        llm.stream = innerStream
+      }
     }
   })
 }

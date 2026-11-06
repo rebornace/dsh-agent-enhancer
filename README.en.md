@@ -95,7 +95,7 @@ Then open the **Plugin Market** tab, search, and install this plugin. Some third
 When the `dsh` CLI is available and you intend to write the **desktop** profile:
 
 ```sh
-dsh plugin --profile desktop add dsh-agent-enhancer@0.3.2
+dsh plugin --profile desktop add dsh-agent-enhancer@0.3.3
 ```
 
 Or unpinned: `dsh plugin --profile desktop add dsh-agent-enhancer`.  
@@ -104,27 +104,20 @@ You should then see the optimize control and **Agent Enhance** in settings.
 
 ### Local directory (development)
 
-**Do not** run `dsh plugin --profile desktop add <absolute-path>` against this repo: some Desktop / CLI builds rewrite the plugin's `package.json` into `@deepseek-ai/dsh-desktop-runtime` dependencies and break the tree. Link manually instead:
+**Do not** run `dsh plugin --profile desktop add <absolute-path>` against this repo: some Desktop / CLI builds rewrite the plugin `package.json` or corrupt the profile. Use the one-shot switchers (they only edit `~/.dsh/profiles/desktop/package.json`, **never** the plugin Git tree):
 
 ```powershell
 corepack pnpm install --frozen-lockfile
-corepack pnpm build
 
-$Repo = (Resolve-Path .).Path -replace '\\','/'
-$ProfileDir = if ($env:DSH_HOME) { Join-Path $env:DSH_HOME 'profiles\desktop' } else { Join-Path $env:USERPROFILE '.dsh\profiles\desktop' }
-$ProfilePkg = Join-Path $ProfileDir 'package.json'
-$json = Get-Content -LiteralPath $ProfilePkg -Raw | ConvertFrom-Json
-if (-not $json.dependencies) { $json | Add-Member -NotePropertyName dependencies -NotePropertyValue ([pscustomobject]@{}) }
-$json.dependencies | Add-Member -NotePropertyName 'dsh-agent-enhancer' -NotePropertyValue "link:$Repo" -Force
-$bundles = @($json.dsh.profile.bundles)
-if ($bundles -notcontains 'dsh-agent-enhancer') {
-  $json.dsh.profile.bundles = @($bundles + 'dsh-agent-enhancer')
-}
-($json | ConvertTo-Json -Depth 20) | Set-Content -LiteralPath $ProfilePkg -Encoding utf8
-dsh plugin --profile desktop install
+# Local dev: build → pack → extract into profile/.dsh-enhancer-pack/pkg, then install
+corepack pnpm desktop:link
+
+# Back to npm (defaults to this package.json version; or: pnpm desktop:npm -- 0.3.3)
+corepack pnpm desktop:npm
 ```
 
-Fully quit and restart Desktop afterward. Later code changes only need `corepack pnpm build` (Desktop loads `lib/`).  
+Fully quit and restart Desktop afterward. After local code changes, run `corepack pnpm desktop:link` again (pack-snapshot install; no live repo hot reload).  
+Do not point `link:` / `file:` at the repo directory: on Windows that becomes a Junction and exposes this repo's `node_modules`, which leaves the plugin permanently off.  
 Keep host-shared DSH packages in both `peerDependencies` and `devDependencies`, not in `dependencies`.
 
 ---
@@ -156,7 +149,7 @@ Keep host-shared DSH packages in both `peerDependencies` and `devDependencies`, 
 | --- | --- |
 | Official Desktop / dsh-market | Uninstall or disable the plugin on the in-app **Plugins** page; or `dsh plugin --profile desktop remove dsh-agent-enhancer` |
 | CLI npm | `dsh plugin --profile desktop remove dsh-agent-enhancer` |
-| Local `link:` | **Do not** `remove` / run `pnpm remove` in the profile (can delete the source repo). Follow below |
+| Local `file:` / dev install | **Do not** `remove` / run `pnpm remove` in the profile (a directory link can delete the source repo). Follow below |
 
 1. Quit Desktop (including tray)  
 2. Edit the **profile** `package.json`: drop this plugin from `dependencies` and `dsh.profile.bundles`  

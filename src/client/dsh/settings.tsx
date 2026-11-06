@@ -30,6 +30,7 @@ import {
   encodeUnconfiguredSelection,
 } from './model-catalog.ts'
 import { pillLabel, isUnconfiguredAutoTierMapping, selectedPillMenuId } from './model-pill-label.ts'
+import type { SettingsPersistOp } from './persist-settings.ts'
 
 type AutoRouteTier = 'instant' | 'thinking' | 'pro' | 'classifier'
 
@@ -90,7 +91,7 @@ function autoTierFieldPrefix(tier: AutoRouteTier): 'autoInstant' | 'autoThinking
   }
 }
 
-type SettingsForm = Pick<ConfigForm<EnhancerSettings>, 'getSnapshot' | 'subscribe' | 'set'>
+type SettingsForm = Pick<ConfigForm<EnhancerSettings>, 'getSnapshot' | 'subscribe' | 'set' | 'mutate'>
 
 /** Home = feature toggles only; detail panels hold model / Auto mapping. */
 type SettingsView =
@@ -101,6 +102,8 @@ type SettingsView =
 export interface PluginSettingsProps {
   readonly form: SettingsForm
   readonly t: TranslateNS<'agent-enhancer'>
+  /** Fence-free Host write; preferred over form.mutate/set for Desktop 0.2.2. */
+  readonly persist?: (ops: readonly SettingsPersistOp[]) => Promise<void>
   readonly loadCatalog?: () => Promise<ModelCatalog>
   readonly checkUpdate?: () => Promise<UpdateCheckResult>
   readonly applyUpdate?: () => Promise<ApplyUpdateResult>
@@ -534,7 +537,7 @@ function featureDetailTitle(
   }
 }
 
-function PluginSettingsBody({ form, t, loadCatalog, checkUpdate, applyUpdate }: PluginSettingsProps) {
+function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyUpdate }: PluginSettingsProps) {
   const formState = useSyncExternalStore(
     listener => form.subscribe(listener),
     () => form.getSnapshot(),
@@ -545,6 +548,22 @@ function PluginSettingsBody({ form, t, loadCatalog, checkUpdate, applyUpdate }: 
   const [view, setView] = useState<SettingsView>({ kind: 'home' })
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState(false)
+  const [saveDetail, setSaveDetail] = useState<string | null>(null)
+
+  const writeOps = async (ops: readonly SettingsPersistOp[]) => {
+    if (persist !== undefined) {
+      await persist(ops)
+      return
+    }
+    const accepted = await form.mutate(ops as never)
+    if (!accepted) {
+      const status = form.getSnapshot().status
+      if (status === 'unavailable' || status === 'loading') {
+        throw new Error(t('settingsUnavailable'))
+      }
+      throw new Error(t('settingsError'))
+    }
+  }
   const [catalog, setCatalog] = useState<ModelCatalog | null>(null)
   const [catalogStatus, setCatalogStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
     loadCatalog === undefined ? 'idle' : 'loading',
@@ -593,11 +612,12 @@ function PluginSettingsBody({ form, t, loadCatalog, checkUpdate, applyUpdate }: 
   const onToggle = async (module: ModuleName, checked: boolean) => {
     setSaving(`${module}Enabled`)
     setError(false)
+    setSaveDetail(null)
     try {
-      const accepted = await form.set(`${module}Enabled`, checked)
-      if (!accepted) setError(true)
-    } catch {
+      await writeOps([{ op: 'set', path: [`${module}Enabled`], value: checked }])
+    } catch (cause) {
       setError(true)
+      setSaveDetail(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setSaving(null)
     }
@@ -606,16 +626,18 @@ function PluginSettingsBody({ form, t, loadCatalog, checkUpdate, applyUpdate }: 
   const saveFields = async (fields: ReadonlyArray<readonly [keyof EnhancerSettings, string]>) => {
     setSaving(fields.map(([field]) => field).join(','))
     setError(false)
+    setSaveDetail(null)
     try {
-      for (const [field, value] of fields) {
-        const accepted = await form.set(field, value)
-        if (!accepted) {
-          setError(true)
-          return
-        }
-      }
-    } catch {
+      // One Host mutate for the whole selection — sequential set() races the
+      // namespace revision fence and Host refuses with settingsError.
+      await writeOps(fields.map(([field, value]) => ({
+        op: 'set' as const,
+        path: [field],
+        value,
+      })))
+    } catch (cause) {
       setError(true)
+      setSaveDetail(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setSaving(null)
     }
@@ -687,11 +709,12 @@ function PluginSettingsBody({ form, t, loadCatalog, checkUpdate, applyUpdate }: 
   const onClassifierToggle = async (checked: boolean) => {
     setSaving('autoClassifierEnabled')
     setError(false)
+    setSaveDetail(null)
     try {
-      const accepted = await form.set('autoClassifierEnabled', checked)
-      if (!accepted) setError(true)
-    } catch {
+      await writeOps([{ op: 'set', path: ['autoClassifierEnabled'], value: checked }])
+    } catch (cause) {
       setError(true)
+      setSaveDetail(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setSaving(null)
     }
@@ -705,6 +728,10 @@ function PluginSettingsBody({ form, t, loadCatalog, checkUpdate, applyUpdate }: 
 
   const statusBlock = <>
     {error && <p role="status">{t('settingsError')}</p>}
+    {saveDetail !== null && <p role="status" className={styles.settingDescription}>{saveDetail}</p>}
+    {formState?.status === 'unavailable' && !error && (
+      <p role="status" className={styles.settingDescription}>{t('settingsUnavailable')}</p>
+    )}
     {catalogStatus === 'error' && catalogError !== null && (
       <p role="status" className={styles.settingDescription} title={catalogError}>
         {t('modelCatalogError')}: {catalogError}

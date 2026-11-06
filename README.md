@@ -95,7 +95,7 @@
 本机已配置 `dsh` CLI、且要写入 **desktop** profile 时：
 
 ```sh
-dsh plugin --profile desktop add dsh-agent-enhancer@0.3.2
+dsh plugin --profile desktop add dsh-agent-enhancer@0.3.3
 ```
 
 也可不钉版本：`dsh plugin --profile desktop add dsh-agent-enhancer`。  
@@ -104,27 +104,20 @@ dsh plugin --profile desktop add dsh-agent-enhancer@0.3.2
 
 ### 本地目录（开发）
 
-**不要**对本地仓库执行 `dsh plugin --profile desktop add <绝对路径>`：部分 Desktop / CLI 会把仓库里的 `package.json` 改写成 `@deepseek-ai/dsh-desktop-runtime` 依赖，破坏开发树。请手动 `link:`：
+**不要**对本地仓库执行 `dsh plugin --profile desktop add <绝对路径>`：部分 Desktop / CLI 会改写仓库 `package.json` 或弄坏 profile。本仓库提供一键切换（只改 `~/.dsh/profiles/desktop/package.json`，**不会**进插件 Git）：
 
 ```powershell
 corepack pnpm install --frozen-lockfile
-corepack pnpm build
 
-$Repo = (Resolve-Path .).Path -replace '\\','/'
-$ProfileDir = if ($env:DSH_HOME) { Join-Path $env:DSH_HOME 'profiles\desktop' } else { Join-Path $env:USERPROFILE '.dsh\profiles\desktop' }
-$ProfilePkg = Join-Path $ProfileDir 'package.json'
-$json = Get-Content -LiteralPath $ProfilePkg -Raw | ConvertFrom-Json
-if (-not $json.dependencies) { $json | Add-Member -NotePropertyName dependencies -NotePropertyValue ([pscustomobject]@{}) }
-$json.dependencies | Add-Member -NotePropertyName 'dsh-agent-enhancer' -NotePropertyValue "link:$Repo" -Force
-$bundles = @($json.dsh.profile.bundles)
-if ($bundles -notcontains 'dsh-agent-enhancer') {
-  $json.dsh.profile.bundles = @($bundles + 'dsh-agent-enhancer')
-}
-($json | ConvertTo-Json -Depth 20) | Set-Content -LiteralPath $ProfilePkg -Encoding utf8
-dsh plugin --profile desktop install
+# 本机开发：build → pack → 解压到 profile/.dsh-enhancer-pack/pkg 再安装
+corepack pnpm desktop:link
+
+# 切回线上 npm（默认用本仓库 package.json 的 version；也可 pnpm desktop:npm -- 0.3.3）
+corepack pnpm desktop:npm
 ```
 
-然后完全退出并重启 Desktop。之后改代码只需再执行 `corepack pnpm build`（加载的是 `lib/`）。  
+然后完全退出并重启 Desktop。本地改代码后需再执行 `corepack pnpm desktop:link`（当前为 pack 快照安装，不支持对着仓库热更新）。  
+不要对仓库目录用 `link:` / `file:`：Windows 上会变成 Junction，把仓库 `node_modules` 暴露给宿主，插件会一直「已关闭」。  
 与宿主共享的 DSH 包请同时放在 `peerDependencies` 与 `devDependencies`，不要放进 `dependencies`。
 
 ---
@@ -156,7 +149,7 @@ dsh plugin --profile desktop install
 | --- | --- |
 | 官方桌面端 / dsh-market | 在应用内 **插件** 页对本插件选择卸载或禁用；或 `dsh plugin --profile desktop remove dsh-agent-enhancer` |
 | 命令行 npm | `dsh plugin --profile desktop remove dsh-agent-enhancer` |
-| 本地 `link:` | **不要** `remove` / 在 profile 里 `pnpm remove`（可能删掉源仓库）。按下面做 |
+| 本地 `file:` / 开发安装 | **不要** `remove` / 在 profile 里 `pnpm remove`（若仍是目录链接可能删源仓库）。按下面做 |
 
 1. 退出 Desktop（含托盘）  
 2. 编辑 **profile** 的 `package.json`：从 `dependencies` 与 `dsh.profile.bundles` 去掉本插件  

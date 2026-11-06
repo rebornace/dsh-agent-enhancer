@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 export interface SessionModelPick {
   readonly provider: string
@@ -7,21 +8,52 @@ export interface SessionModelPick {
   readonly reasoningEffort?: string
 }
 
-type ModelSelectionState = {
-  pending?: SessionModelPick | null
-  lastUsed?: SessionModelPick | null
+type AgentModelFace = {
+  readonly current?: () => SessionModelPick | undefined
+  readonly select?: (selection: SessionModelPick) => void
 }
 
-/** Same priority as the main Auto session hook: pending selection, then last used, then host default. */
+type LiveAgentFace = {
+  readonly model?: AgentModelFace
+  readonly options?: { readonly provider?: string, readonly model?: string, readonly reasoningEffort?: string }
+}
+
+/**
+ * Prefer `agent.model.current()` (0.2.2 domain API) over deprecated
+ * `sessionProjections.stateOf(session, 'modelSelection')`.
+ * Same priority as AgentModel: pending → lastUsed → live options → host default.
+ */
 export function projectedSessionModel(ctx: Context, session: Session): SessionModelPick {
   try {
-    const projections = ctx.get('sessionProjections') as
-      | { stateOf?: (session: Session, key: string) => unknown }
+    const agents = ctx.get('agents') as
+      | { get?: (id: SessionId) => LiveAgentFace | undefined }
       | undefined
-    // 0.2.2: legacy key stateOf remains runtime-compatible but returns unknown.
-    const state = projections?.stateOf?.(session, 'modelSelection') as ModelSelectionState | undefined
-    if (state?.pending !== undefined && state.pending !== null) return state.pending
-    if (state?.lastUsed !== undefined && state.lastUsed !== null) return state.lastUsed
+    const agent = agents?.get?.(session.id)
+    const fromModel = agent?.model?.current?.()
+    if (fromModel !== undefined
+      && typeof fromModel.provider === 'string'
+      && fromModel.provider !== ''
+      && typeof fromModel.model === 'string'
+      && fromModel.model !== '') {
+      return {
+        provider: fromModel.provider,
+        model: fromModel.model,
+        ...(typeof fromModel.reasoningEffort === 'string'
+          ? { reasoningEffort: fromModel.reasoningEffort }
+          : {}),
+      }
+    }
+    const options = agent?.options
+    if (typeof options?.provider === 'string' && options.provider !== ''
+      && typeof options.model === 'string' && options.model !== '') {
+      return {
+        provider: options.provider,
+        model: options.model,
+        ...(typeof options.reasoningEffort === 'string'
+          ? { reasoningEffort: options.reasoningEffort }
+          : {}),
+      }
+    }
   } catch {
     // Inactive context / missing inject — fall through to default model.
   }

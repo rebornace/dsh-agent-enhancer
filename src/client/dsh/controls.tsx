@@ -32,7 +32,10 @@ export function AgentControls({ session, t }: AgentControlsProps) {
   const tooltip = state.chipSelection ? t('optimizeChipSelection') : state.error !== null ? t(errorLocale)
     : state.hasChips ? t('optimizeChips') : label
   return <>
-    <Tooltip label={tooltip}>
+    {/* portal + top: input.right sits on the composer edge; an in-tree
+        side=right bubble can expand a transformed overflow ancestor and
+        flicker the window scrollbar ("抖动") on hover in some layouts. */}
+    <Tooltip label={tooltip} side="top" portal>
       <Button
         type="button"
         variant="ghost"
@@ -50,6 +53,6 @@ export function AgentControls({ session, t }: AgentControlsProps) {
         {state.status === 'pending' ? <StateDot state="ongoing" /> : state.status === 'undo' ? <UndoIcon /> : <OptimizeIcon />}
       </Button>
     </Tooltip>
-    {state.error !== null && <span role="status">{t(errorLocale)}</span>}
+    {state.error !== null && <span role="status" className={styles.toolbarStatus}>{t(errorLocale)}</span>}
   </>
 }

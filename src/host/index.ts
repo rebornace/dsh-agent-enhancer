@@ -30,8 +30,13 @@ import type { SessionCut } from './checkpoint/cut-store.ts'
 import { CheckpointStore } from './checkpoint/store.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Session, SessionStore } from '@deepseek-ai/dsh-session'
-import { compactContextNow, resolveCompactRouteOverride } from './context-compact.ts'
-import type { CompactRouteOverride, ContextCompactRequest, ContextCompactResult } from './context-compact.ts'
+import { compactContextNow } from './context-compact.ts'
+import type {
+  CompactCommandRuntime,
+  CompactEngineRuntime,
+  ContextCompactRequest,
+  ContextCompactResult,
+} from './context-compact.ts'
 import { inspectContextCategory, pressureFromProjection } from './context-inspect.ts'
 import type { ContextInspectRequest, ContextInspectResult } from './context-inspect.ts'
 import { installAutoSessionRoute } from './auto-route/session-hook.ts'
@@ -67,13 +72,12 @@ import {
   checkPluginUpdateForHost,
 } from './update/check.ts'
 import type { ApplyUpdateResult, UpdateCheckResult } from './update/types.ts'
-import type { CompactCommandRuntime } from './context-compact.ts'
 
 export const name = PLUGIN_ID
 export const inject = [
   'llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel',
   'fs', 'tools', 'tokenMeter', 'typert', 'typertGateway',
-  // Official `/compact` runs through the command registry (not ctx.compaction).
+  // Chat `/compact` → compaction.compactNow; commands kept as fallback.
   'commands',
 ]
 
@@ -123,10 +127,6 @@ export class AgentEnhancerService extends TypertRemoteService {
   constructor(
     ctx: Context,
     private readonly models: AuxiliaryModels,
-    private readonly compactRoute: (
-      session: Session,
-      signal: AbortSignal,
-    ) => Promise<CompactRouteOverride | undefined>,
     private readonly usage: UsageSummaryReader = {
       async summarize(range: UsageRange): Promise<UsageSummary> {
         return summarizeUsage([], range, Date.now())
@@ -201,7 +201,7 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
   }
 
-  /** Trigger the official idle `/compact` command (same path as chat `/compact`). */
+  /** Trigger official idle compaction (same seam as chat `/compact`). */
   async compactContext(request: ContextCompactRequest, signal: AbortSignal): Promise<ContextCompactResult> {
     this.assertOwner()
     signal.throwIfAborted()
@@ -212,17 +212,21 @@ export class AgentEnhancerService extends TypertRemoteService {
       })
     }
     try {
+      // Prefer ctx.compaction.compactNow — identical to the official /compact handler.
       return await withUsageSource('compact', async () => compactContextNow({
-        commands: this.ctx.commands,
+        compaction: softService<CompactEngineRuntime>(this.ctx, 'compaction', 'compactNow'),
+        commands: softService<CompactCommandRuntime>(this.ctx, 'commands', 'execute')
+          ?? this.ctx.commands,
         agent,
         sessionId: request.sessionId,
         signal,
-        route: await this.compactRoute(agent.session, signal),
       }))
     } catch (error) {
       if (signal.aborted) throw error
       const code = error instanceof AuxiliaryError ? error.code : 'COMPACT_FAILED'
-      throw new RemoteError('agent-enhancer/failed', 'Context compaction failed', { code })
+      const detail = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(`agent-enhancer compact failed (${code}): ${detail}`)
+      throw new RemoteError('agent-enhancer/failed', detail || 'Context compaction failed', { code })
     }
   }
 
@@ -379,9 +383,7 @@ export function apply(ctx: Context, config: Config): void {
     }
   })()
   installUsageObserver(ctx, usage)
-  new AgentEnhancerService(ctx, models, (session, signal) =>
-    resolveCompactRouteOverride(ctx, settings(), session, signal),
-    {
+  new AgentEnhancerService(ctx, models, {
       async summarize(range) {
         const stored = await usage.listCalls()
         let history: UsageCall[] = []

@@ -6,7 +6,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'optimize' | 'optimizePending' | 'optimizeUndo' | 'optimizeError' | 'optimizeChips' | 'optimizeChipSelection' |
       'optimizeModelUnavailable' | 'optimizeRequestFailed' | 'optimizeInvalidOutput' | 'optimizeRollbackFailed' | 'optimizeSessionChanged' |
       'settingsTitle' | 'settingsSubtitle' | 'history' | 'historyDescription' | 'optimizeDescription' |
-      'predict' | 'predictDescription' | 'privacyTitle' | 'privacy' | 'coexistence' | 'settingsError' |
+      'predict' | 'predictDescription' | 'privacyTitle' | 'privacy' | 'coexistence' | 'settingsError' | 'settingsUnavailable' |
       'modelCatalogLoading' | 'modelCatalogError' |
       'modelLabel' | 'modelFollowSession' | 'modelAuto' | 'modelUnconfigured' | 'reasoningDefault' |
       'settingsBack' | 'settingsConfigure' |
@@ -86,7 +86,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'contextInspectCompact' | 'contextInspectCompactHint' | 'contextInspectCompacting' |
       'contextInspectCompactDone' | 'contextInspectCompactNoop' |
       'contextInspectCompactUnavailable' | 'contextInspectCompactBusy' | 'contextInspectCompactFailed' |
-      'contextInspectCompactSummary' | 'contextInspectCompactChanged'
+      'contextInspectCompactModel' | 'contextInspectCompactSummary' | 'contextInspectCompactChanged'
   }
 }
 
@@ -220,6 +220,7 @@ export const agentLocales = {
     privacy: '优化、预测与上下文压缩会把相关内容发送给所选模型提供商（默认跟随当前会话模型）；历史不请求模型；不采集提示词内容或采纳率遥测。模型账单只记录功能、模型和 token，留在本机，不上传。',
     coexistence: '检测到官方或第三方同类能力时仅提示，不会自动停用。',
     settingsError: '设置未保存，请重试。',
+    settingsUnavailable: '插件未在宿主侧启用，无法写入设置。请在插件页打开「智能体增强」后重试。',
     overlapHistory: '检测到另一个历史提示词功能。智能体增强的历史仍保持开启。',
     overlapOptimize: '检测到另一个提示词优化功能。智能体增强的优化仍保持开启。',
     overlapPredict: '检测到另一个回复建议功能。智能体增强的预测仍保持开启。',
@@ -264,6 +265,7 @@ export const agentLocales = {
     contextInspectCompactUnavailable: '当前环境未提供官方压缩能力。',
     contextInspectCompactBusy: '智能体忙碌中，请结束后再压缩。',
     contextInspectCompactFailed: '压缩未完成，会话可能未变化，请稍后重试。',
+    contextInspectCompactModel: '压缩模型不可用。请在设置里为压缩指定具体模型，或先用非 Auto 模型发一轮对话。',
     contextInspectCompactSummary: '未能生成可用摘要，会话未变化；可换模型后重试。',
     contextInspectCompactChanged: '压缩过程中历史已变化，会话未写入；请稍后重试。',
     rollback: '对话与文件恢复',
@@ -499,6 +501,7 @@ export const agentLocales = {
     privacy: 'Optimize, predict, and context compact send related content to the selected model provider (defaults to the current session model). History never requests a model. No prompt content or acceptance-rate telemetry is collected. The model bill records only the feature, model, and token counts on this computer, and is not uploaded.',
     coexistence: 'Similar official or third-party features are only reported; they are never disabled automatically.',
     settingsError: 'Setting was not saved. Try again.',
+    settingsUnavailable: 'The plugin is not enabled on the host, so settings cannot be written. Turn on Agent Enhance in Plugins, then try again.',
     overlapHistory: 'Another prompt-history feature is enabled. Agent Enhance history remains enabled.',
     overlapOptimize: 'Another prompt-optimization feature is enabled. Agent Enhance optimization remains enabled.',
     overlapPredict: 'Another reply-suggestion feature is enabled. Agent Enhance prediction remains enabled.',
@@ -543,6 +546,7 @@ export const agentLocales = {
     contextInspectCompactUnavailable: 'Official compaction is not available here.',
     contextInspectCompactBusy: 'The agent is busy. Try again when it is idle.',
     contextInspectCompactFailed: 'Compaction did not finish. The conversation may be unchanged; try again.',
+    contextInspectCompactModel: 'No usable compact model. Pick a concrete model for compact in settings, or send one turn with a non-Auto model first.',
     contextInspectCompactSummary: 'Could not produce a useful summary; the conversation is unchanged. Try another model.',
     contextInspectCompactChanged: 'History changed during compaction; nothing was written. Try again.',
     rollback: 'Conversation and file restore',
