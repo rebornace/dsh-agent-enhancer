@@ -10,7 +10,7 @@ export function isHostStaleTransport(error: unknown): boolean {
   // Typert may surface missing methods as HTTP 404 *with* the method name.
   if (
     /HTTP\s*404/i.test(text)
-    && /(installSkillFromGit|installSkillFromZip|uninstallSkill|listInstructionsSkills)/i
+    && /(installSkillFromGit|installSkillFromZip|uninstallSkill|listInstructionsSkills|readSkillDocument)/i
       .test(text)
   ) {
     return true
@@ -61,9 +61,25 @@ export function instructionsSkillsErrorMessage(
         }
         return t('instructionsSkillsDenied')
       }
+      case 'FILE_EDIT_FAILED': {
+        const detail = error.message.toLowerCase()
+        if (
+          detail.includes('eperm')
+          || detail.includes('file in use')
+          || detail.includes('still present')
+          || detail.includes('operation not permitted')
+        ) {
+          return t('instructionsSkillsRemoveBusy')
+        }
+        return error.message || t('instructionsSkillsFailed')
+      }
       default:
         return error.message || t('instructionsSkillsFailed')
     }
+  }
+  const raw = error instanceof Error ? error.message : String(error ?? '')
+  if (/eperm|file in use|still present|operation not permitted/i.test(raw)) {
+    return t('instructionsSkillsRemoveBusy')
   }
   return error instanceof Error ? error.message : t('instructionsSkillsFailed')
 }

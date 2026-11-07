@@ -615,7 +615,7 @@ export function apply(ctx: Context): void {
         enabled: instructionsSkillsEnabled,
         t: tContext,
         remote: () => agentEnhancerRemote,
-        sidebarRight: mountedCtx.sidebarRight,
+        sidebarRight: () => mountedCtx.sidebarRight,
       })
       const unsubscribe = form.subscribe(() => nav.synchronize())
       return () => {

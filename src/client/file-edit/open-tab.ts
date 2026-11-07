@@ -1,5 +1,9 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { fileAddressOf } from './address.ts'
+import {
+  fileAddressFor,
+  fileAddressOf,
+  skillDocumentPath,
+} from './address.ts'
 import { FILE_EDIT_TAB_KIND } from './kind.ts'
 
 /** Official document-preview tab kind — used to return from the editor. */
@@ -14,6 +18,7 @@ export interface FileEditNavigator {
       readonly revealIfOpened?: boolean
     },
   ): void
+  openTab?(kind: string, options?: { readonly params?: object }): void
   active?(): { readonly id: string, readonly contentId: string } | undefined
   readonly openTabs?: {
     getSnapshot(): readonly {
@@ -30,9 +35,6 @@ function replaceTabId(
   sessionId: SessionId,
   address: string,
 ): string | undefined {
-  // Prefer the active tab: Edit lives on the preview header, so the file tab is
-  // focused. Do not require contentId equality — preview may use a relative
-  // address while we open with an absolute Host path (or the reverse).
   try {
     const active = sidebarRight?.active?.()
     if (
@@ -67,7 +69,67 @@ export function openWorkspaceFile(
   path: string,
 ): void {
   if (sidebarRight === undefined || typeof sidebarRight.openResource !== 'function') return
-  sidebarRight.openResource(fileAddressOf(sessionId, path))
+  sidebarRight.openResource(fileAddressOf(sessionId, path), { revealIfOpened: true })
+}
+
+/**
+ * Open a skill SKILL.md for document preview.
+ * Uses the same session-scoped address grammar as FilesBody / Extra folders
+ * (`fileAddressFor`) — absolute-scope URIs are not how Desktop opens files.
+ *
+ * When called from a main panel, the session right-bar may not be mounted yet;
+ * we poll briefly (same pattern as `openContextInspectTab`).
+ */
+export function scheduleOpenSkillDocument(options: {
+  readonly getSidebarRight: () => FileEditNavigator | undefined
+  readonly sessionId: SessionId
+  readonly path: string
+  readonly cwd?: string
+  readonly beforeOpen?: () => void
+}): () => void {
+  const documentPath = skillDocumentPath(options.path)
+  const address = fileAddressFor(options.sessionId, options.cwd, documentPath)
+
+  let cancelled = false
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let attempts = 0
+  const maxAttempts = 40
+
+  const clear = () => {
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+
+  const finish = () => {
+    cancelled = true
+    clear()
+  }
+
+  options.beforeOpen?.()
+
+  const run = () => {
+    if (cancelled) return
+    attempts += 1
+    const sidebarRight = options.getSidebarRight()
+    if (sidebarRight === undefined || typeof sidebarRight.openResource !== 'function') {
+      if (attempts >= maxAttempts) return finish()
+      timer = setTimeout(run, 150)
+      return
+    }
+    try {
+      sidebarRight.openResource(address, { revealIfOpened: true })
+      finish()
+    } catch {
+      if (attempts >= maxAttempts) return finish()
+      timer = setTimeout(run, 200)
+    }
+  }
+
+  // First tick after leaving the main panel so conversation + right bar can mount.
+  timer = setTimeout(run, 0)
+  return finish
 }
 
 /** Open the Monaco editor in place of the current file preview tab. */

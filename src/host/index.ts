@@ -80,6 +80,7 @@ import {
   installSkillFromGitNow,
   installSkillFromZipNow,
   listInstructionsSkillsNow,
+  readSkillDocumentNow,
   uninstallSkillNow,
   updateSkillFromGitNow,
 } from './instructions-skills/io.ts'
@@ -94,6 +95,8 @@ import type {
   InstallSkillFromZipResult,
   InstructionsSkillsSnapshot,
   ListInstructionsSkillsRequest,
+  ReadSkillDocumentRequest,
+  ReadSkillDocumentResult,
   UninstallSkillRequest,
   UninstallSkillResult,
   UpdateSkillFromGitRequest,
@@ -638,6 +641,29 @@ export class AgentEnhancerService extends TypertRemoteService {
         request,
         signal,
         installLedgerRoot: this.installLedgerRoot,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  /**
+   * Read SKILL.md for in-panel preview.
+   * Desktop hides the rightbar while a left `main` panel is selected, so Skills
+   * cannot use `sidebarRight.openResource` without leaving the page.
+   */
+  async readSkillDocument(
+    request: ReadSkillDocumentRequest,
+    signal: AbortSignal,
+  ): Promise<ReadSkillDocumentResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await readSkillDocumentNow({
+        ctx: this.ctx,
+        request,
+        signal,
       })
     } catch (error) {
       if (signal.aborted) throw error

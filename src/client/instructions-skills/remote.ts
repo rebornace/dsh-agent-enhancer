@@ -12,6 +12,8 @@ import type {
   ListInstructionsSkillsRequest,
   InstallSkillFromZipRequest,
   InstallSkillFromZipResult,
+  ReadSkillDocumentRequest,
+  ReadSkillDocumentResult,
   UninstallSkillRequest,
   UninstallSkillResult,
   UpdateSkillFromGitRequest,
@@ -151,6 +153,11 @@ type UpdateSkillFromGitCall = (
   signal?: AbortSignal,
 ) => Promise<RemoteResult<UpdateSkillFromGitResult>>
 
+type ReadSkillDocumentCall = (
+  request: ReadSkillDocumentRequest,
+  signal?: AbortSignal,
+) => Promise<RemoteResult<ReadSkillDocumentResult>>
+
 export const agentEnhancerInstallSkillFromGit = {
   async invoke(
     remote: unknown,
@@ -232,6 +239,29 @@ export const agentEnhancerInstallSkillFromZip = {
       throw new AuxiliaryError('FILE_EDIT_FAILED', 'installSkillFromZip remote is unavailable')
     }
     let result: RemoteResult<InstallSkillFromZipResult>
+    try {
+      result = await call.apply(namespace, [request, signal])
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      throw new AuxiliaryError('FILE_EDIT_FAILED')
+    }
+    if (!result.ok) throwRemoteFailure(result)
+    return result.value
+  },
+}
+
+export const agentEnhancerReadSkillDocument = {
+  async invoke(
+    remote: unknown,
+    request: ReadSkillDocumentRequest,
+    signal?: AbortSignal,
+  ): Promise<ReadSkillDocumentResult> {
+    const namespace = agentFace(remote)
+    const call = Reflect.get(namespace, 'readSkillDocument') as ReadSkillDocumentCall | undefined
+    if (typeof call !== 'function') {
+      throw new AuxiliaryError('FILE_EDIT_FAILED', 'readSkillDocument remote is unavailable')
+    }
+    let result: RemoteResult<ReadSkillDocumentResult>
     try {
       result = await call.apply(namespace, [request, signal])
     } catch (error) {

@@ -74,6 +74,25 @@ export function skillRootsFor(cwd: string, projectRoot: string, env: NodeJS.Proc
   ].filter((path, index, all) => all.findIndex(other => samePath(other, path)) === index)
 }
 
+/**
+ * Extra read-only roots used only to resolve preview paths for registry / "其他"
+ * skills (Cursor etc.). Not install/uninstall managed roots.
+ */
+export function previewSkillSearchRoots(
+  cwd: string,
+  projectRoot: string,
+  env: NodeJS.ProcessEnv = process.env,
+): readonly string[] {
+  const home = resolve(homedir())
+  return [
+    ...skillRootsFor(cwd, projectRoot, env),
+    join(home, '.cursor', 'skills'),
+    join(home, '.cursor', 'skills-cursor'),
+    join(home, '.codex', 'skills'),
+    join(home, '.claude', 'skills'),
+  ].filter((path, index, all) => all.findIndex(other => samePath(other, path)) === index)
+}
+
 export function fileBytes(path: string): number | null {
   try {
     const stat = statSync(path)

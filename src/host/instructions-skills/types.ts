@@ -97,6 +97,7 @@ export interface InstallSkillFromGitRequest {
   readonly sessionId: SessionId
   readonly source: string
   readonly target: SkillInstallTarget
+  /** When omitted / true, overwrite same-named managed installs. Pass false to refuse. */
   readonly force?: boolean
 }
 
@@ -110,6 +111,7 @@ export interface InstallSkillFromZipRequest {
   /** When omitted, the host opens a native zip file picker. */
   readonly zipPath?: string
   readonly target: SkillInstallTarget
+  /** When omitted / true, overwrite same-named managed installs. Pass false to refuse. */
   readonly force?: boolean
 }
 
@@ -129,4 +131,18 @@ export interface UpdateSkillFromGitRequest {
 export interface UpdateSkillFromGitResult {
   readonly updated: { readonly name: string, readonly path: string, readonly mode: 'link' | 'copy' }
   readonly snapshot: InstructionsSkillsSnapshot
+}
+
+/** Read SKILL.md for in-panel preview (main panel cannot open the Desktop rightbar). */
+export interface ReadSkillDocumentRequest {
+  readonly sessionId: SessionId
+  /** Skill folder or SKILL.md path from the catalog. */
+  readonly path: string
+}
+
+export interface ReadSkillDocumentResult {
+  readonly path: string
+  readonly absolutePath: string
+  readonly text: string
+  readonly bytes: number
 }

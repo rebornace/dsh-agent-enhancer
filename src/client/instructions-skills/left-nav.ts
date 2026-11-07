@@ -20,7 +20,7 @@ export interface InstallInstructionsSkillsLeftNavOptions {
   readonly enabled: () => boolean
   readonly t: TranslateNS<'agent-enhancer'>
   readonly remote: () => { readonly agentEnhancer: object } | undefined
-  readonly sidebarRight: FileEditNavigator | undefined
+  readonly sidebarRight: () => FileEditNavigator | undefined
 }
 
 function createSectionGate(register: () => () => void) {
@@ -132,6 +132,9 @@ export function installInstructionsSkillsLeftNav(
       remote: options.remote,
       sidebarRight: options.sidebarRight,
       t: options.t,
+      onLeaveForPreview: () => {
+        layout?.selectPanel(null)
+      },
     }))
     const offRow = ctx.slots.register({
       name: 'sidebar.panellist',

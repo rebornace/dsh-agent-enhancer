@@ -567,6 +567,18 @@ export const updateSkillFromGitResultSchema = z.strictObject({
   snapshot: instructionsSkillsSnapshotSchema,
 })
 export type UpdateSkillFromGitResult = z.infer<typeof updateSkillFromGitResultSchema>
+export const readSkillDocumentRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  path: z.string().min(1),
+})
+export type ReadSkillDocumentRequest = z.infer<typeof readSkillDocumentRequestSchema>
+export const readSkillDocumentResultSchema = z.strictObject({
+  path: z.string().min(1),
+  absolutePath: z.string().min(1),
+  text: z.string(),
+  bytes: z.number().int().nonnegative(),
+})
+export type ReadSkillDocumentResult = z.infer<typeof readSkillDocumentResultSchema>
 const installSkillFromGitRequestCodec = codec(
   'dsh-agent-enhancer#InstallSkillFromGitRequest',
   installSkillFromGitRequestSchema,
@@ -598,6 +610,14 @@ const updateSkillFromGitRequestCodec = codec(
 const updateSkillFromGitResultCodec = codec(
   'dsh-agent-enhancer#UpdateSkillFromGitResult',
   updateSkillFromGitResultSchema,
+)
+const readSkillDocumentRequestCodec = codec(
+  'dsh-agent-enhancer#ReadSkillDocumentRequest',
+  readSkillDocumentRequestSchema,
+)
+const readSkillDocumentResultCodec = codec(
+  'dsh-agent-enhancer#ReadSkillDocumentResult',
+  readSkillDocumentResultSchema,
 )
 
 export const remoteInfo = createTypertRemoteInfo({
@@ -906,6 +926,19 @@ export const remoteInfo = createTypertRemoteInfo({
       }],
       cancellation: { parameter: 'signal' },
       result: updateSkillFromGitResultCodec,
+    },
+    'agentEnhancer/readSkillDocument': {
+      service: 'agentEnhancer',
+      implementation: 'readSkillDocument',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: readSkillDocumentRequestCodec,
+        strictCodec: readSkillDocumentRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: readSkillDocumentResultCodec,
     },
   },
 }, z)

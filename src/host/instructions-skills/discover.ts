@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import type {
   InstructionFileEntry,
@@ -14,6 +14,7 @@ import {
   fileBytes,
   findProjectRoot,
   projectChainDirs,
+  previewSkillSearchRoots,
   samePath,
   skillRootsFor,
 } from './paths.ts'
@@ -122,10 +123,12 @@ export function discoverFilesystemSkills(options: DiscoverOptions & {
   readonly projectRoot: string
 }): readonly SkillCatalogEntry[] {
   const env = options.env ?? process.env
-  const roots = skillRootsFor(options.cwd, options.projectRoot, env)
+  const managed = skillRootsFor(options.cwd, options.projectRoot, env)
+  const roots = previewSkillSearchRoots(options.cwd, options.projectRoot, env)
   const byName = new Map<string, SkillCatalogEntry>()
 
   for (const root of roots) {
+    const managedRoot = managed.some(path => samePath(path, root))
     let names: string[]
     try {
       names = readdirSync(root)
@@ -140,11 +143,12 @@ export function discoverFilesystemSkills(options: DiscoverOptions & {
         id: `fs:${resolve(skillMd).toLowerCase()}`,
         name,
         description: descriptionFromSkillMd(skillMd),
-        path: skillMd,
+        path: resolve(skillMd),
         provider: dirnameLabel(root, options.projectRoot, env),
         modelInvocable: null,
         userInvocable: null,
-        removable: true,
+        // Only managed install roots are uninstallable from this panel.
+        removable: managedRoot,
         ...defaultSkillInstallMeta(),
       })
     }
@@ -158,7 +162,13 @@ function dirnameLabel(root: string, projectRoot: string, env: NodeJS.ProcessEnv)
   if (samePath(root, join(projectRoot, '.dsh', 'skills'))) return 'project-dsh'
   if (samePath(root, join(agentsHomeOf(env), 'skills'))) return 'shared'
   if (samePath(root, join(dshHomeOf(env), 'skills'))) return 'dsh-home'
-  return basename(dirname(root)) || 'filesystem'
+  const parent = basename(dirname(root)).toLowerCase()
+  const leaf = basename(root).toLowerCase()
+  if (parent === '.cursor' && leaf === 'skills') return 'cursor'
+  if (parent === '.cursor' && leaf === 'skills-cursor') return 'cursor-builtin'
+  if (parent === '.codex') return 'codex'
+  if (parent === '.claude') return 'claude'
+  return parent || 'filesystem'
 }
 
 export interface SoftSkillSummary {
@@ -208,6 +218,58 @@ export function normalizeRegistrySkills(
  * (common right after GitHub install — registry has not rescaned yet).
  * Filesystem wins for path/presence; registry enriches invocable flags / description.
  */
+/** Prefer a real SKILL.md path so the client can open document preview. */
+function coerceSkillDocumentPath(path: string | null, _name: string): string | null {
+  if (path === null || path.trim() === '') return null
+  const absolute = resolve(path.trim())
+  if (existsSync(absolute)) {
+    try {
+      if (statSync(absolute).isFile()) return absolute
+    } catch {
+      // fall through to SKILL.md join
+    }
+    const asFile = join(absolute, 'SKILL.md')
+    if (existsSync(asFile)) return asFile
+  }
+  const lower = absolute.toLowerCase()
+  if (lower.endsWith('skill.md') || lower.endsWith('.md')) return absolute
+  const nested = join(absolute, 'SKILL.md')
+  return existsSync(nested) ? nested : absolute
+}
+
+function resolveSkillPathFromRoots(
+  name: string,
+  cwd: string,
+  projectRoot: string,
+  env: NodeJS.ProcessEnv,
+): string | null {
+  for (const root of previewSkillSearchRoots(cwd, projectRoot, env)) {
+    const skillMd = join(root, name, 'SKILL.md')
+    if (existsSync(skillMd)) return resolve(skillMd)
+  }
+  return null
+}
+
+/** Fill missing paths and coerce directories → SKILL.md for preview. */
+export function hydrateSkillPreviewPaths(
+  skills: readonly SkillCatalogEntry[],
+  options: {
+    readonly cwd: string
+    readonly projectRoot: string
+    readonly env?: NodeJS.ProcessEnv
+  },
+): readonly SkillCatalogEntry[] {
+  const env = options.env ?? process.env
+  return skills.map(entry => {
+    const fromRoots = entry.path === null
+      ? resolveSkillPathFromRoots(entry.name, options.cwd, options.projectRoot, env)
+      : null
+    const path = coerceSkillDocumentPath(entry.path ?? fromRoots, entry.name)
+    if (path === entry.path) return entry
+    return { ...entry, path }
+  })
+}
+
 export function mergeSkillCatalogs(
   filesystem: readonly SkillCatalogEntry[],
   registry: readonly SkillCatalogEntry[] | undefined,
@@ -232,41 +294,55 @@ export function mergeSkillCatalogs(
     }
   }
 
+  let skills: SkillCatalogEntry[]
+  let source: 'filesystem' | 'registry' | 'merged'
   if (registry === undefined) {
-    return { skills: filesystem.map(withRemovable), source: 'filesystem' }
-  }
-  if (filesystem.length === 0) {
-    return { skills: registry.map(withRemovable), source: 'registry' }
+    skills = filesystem.map(withRemovable)
+    source = 'filesystem'
+  } else if (filesystem.length === 0) {
+    skills = registry.map(withRemovable)
+    source = 'registry'
+  } else {
+    const byName = new Map<string, SkillCatalogEntry>()
+    for (const entry of filesystem) {
+      byName.set(entry.name, withRemovable(entry))
+    }
+    for (const entry of registry) {
+      const existing = byName.get(entry.name)
+      if (existing === undefined) {
+        byName.set(entry.name, withRemovable(entry))
+        continue
+      }
+      byName.set(entry.name, {
+        id: existing.id,
+        name: existing.name,
+        description: existing.description !== '' ? existing.description : entry.description,
+        path: existing.path ?? entry.path,
+        provider: existing.provider,
+        modelInvocable: entry.modelInvocable ?? existing.modelInvocable,
+        userInvocable: entry.userInvocable ?? existing.userInvocable,
+        removable: existing.removable || withRemovable(entry).removable,
+        installChannel: existing.installChannel ?? entry.installChannel,
+        updateAvailable: existing.updateAvailable || entry.updateAvailable,
+        updateSourceLabel: existing.updateSourceLabel ?? entry.updateSourceLabel,
+        updateCheckFailed: existing.updateCheckFailed || entry.updateCheckFailed,
+      })
+    }
+    skills = [...byName.values()]
+    source = 'merged'
   }
 
-  const byName = new Map<string, SkillCatalogEntry>()
-  for (const entry of filesystem) {
-    byName.set(entry.name, withRemovable(entry))
+  if (options?.cwd !== undefined && options.projectRoot !== undefined) {
+    skills = [...hydrateSkillPreviewPaths(skills, {
+      cwd: options.cwd,
+      projectRoot: options.projectRoot,
+      env: options.env,
+    })]
   }
-  for (const entry of registry) {
-    const existing = byName.get(entry.name)
-    if (existing === undefined) {
-      byName.set(entry.name, withRemovable(entry))
-      continue
-    }
-    byName.set(entry.name, {
-      id: existing.id,
-      name: existing.name,
-      description: existing.description !== '' ? existing.description : entry.description,
-      path: existing.path ?? entry.path,
-      provider: existing.provider,
-      modelInvocable: entry.modelInvocable ?? existing.modelInvocable,
-      userInvocable: entry.userInvocable ?? existing.userInvocable,
-      removable: existing.removable || withRemovable(entry).removable,
-      installChannel: existing.installChannel ?? entry.installChannel,
-      updateAvailable: existing.updateAvailable || entry.updateAvailable,
-      updateSourceLabel: existing.updateSourceLabel ?? entry.updateSourceLabel,
-      updateCheckFailed: existing.updateCheckFailed || entry.updateCheckFailed,
-    })
-  }
+
   return {
-    skills: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)),
-    source: 'merged',
+    skills: skills.sort((a, b) => a.name.localeCompare(b.name)),
+    source,
   }
 }
 

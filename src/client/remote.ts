@@ -393,6 +393,21 @@ export const clientRemoteInfo = {
     }],
     cancellation: { parameter: 'signal' },
     result: codec('dsh-agent-enhancer#UpdateSkillFromGitResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/readSkillDocument',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'readSkillDocument',
+    implementation: 'readSkillDocument',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#ReadSkillDocumentRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#ReadSkillDocumentResult'),
   }, ...checkpointClientRemoteInfo.descriptors],
 } satisfies TypertRemoteContribution
 

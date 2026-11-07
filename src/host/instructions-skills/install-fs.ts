@@ -5,12 +5,12 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  rmSync,
   symlinkSync,
 } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { AuxiliaryError } from '../../errors.ts'
 import { isKebabCaseName, samePath } from './paths.ts'
+import { removePathRobust } from './uninstall.ts'
 
 export type SkillInstallTarget = 'user' | 'project'
 export type SkillInstallMode = 'link' | 'copy'
@@ -22,18 +22,40 @@ export interface SkillBundle {
   readonly kind: 'directory' | 'file'
 }
 
-export function descriptionFromSkillPath(path: string): string {
+function frontmatterBlock(path: string): string | null {
   try {
     const text = readFileSync(path, 'utf8')
     const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
-    if (match === null) return ''
-    const block = match[1]!
-    const desc = /^description:\s*(?:"([^"]*)"|'([^']*)'|(.+))\s*$/m.exec(block)
-    if (desc === null) return ''
-    return (desc[1] ?? desc[2] ?? desc[3] ?? '').trim()
+    return match?.[1] ?? null
   } catch {
-    return ''
+    return null
   }
+}
+
+export function descriptionFromSkillPath(path: string): string {
+  const block = frontmatterBlock(path)
+  if (block === null) return ''
+  const desc = /^description:\s*(?:"([^"]*)"|'([^']*)'|(.+))\s*$/m.exec(block)
+  if (desc === null) return ''
+  return (desc[1] ?? desc[2] ?? desc[3] ?? '').trim()
+}
+
+/**
+ * Prefer SKILL.md frontmatter `name:` over the folder basename.
+ * Zip/GitHub archives often unpack as `repo-hash/` which is a bad install id.
+ */
+export function nameFromSkillPath(path: string, fallback: string): string {
+  const block = frontmatterBlock(path)
+  if (block !== null) {
+    const named = /^name:\s*(?:"([^"]*)"|'([^']*)'|(.+))\s*$/m.exec(block)
+    const value = (named?.[1] ?? named?.[2] ?? named?.[3] ?? '').trim()
+    if (isKebabCaseName(value)) return value
+  }
+  return fallback
+}
+
+function directoryBundleName(dir: string, folderName: string): string {
+  return nameFromSkillPath(join(dir, 'SKILL.md'), folderName)
 }
 
 /** Discover skill bundles under a directory (single-level, official provider shape). */
@@ -44,7 +66,8 @@ export function findSkillBundles(root: string): readonly SkillBundle[] {
   // Root itself is a skill directory.
   const rootSkill = join(absolute, 'SKILL.md')
   if (existsSync(rootSkill)) {
-    const name = basename(absolute)
+    const folderName = basename(absolute)
+    const name = directoryBundleName(absolute, folderName)
     if (isKebabCaseName(name)) {
       return [{ name, sourcePath: absolute, kind: 'directory' }]
     }
@@ -60,8 +83,9 @@ export function findSkillBundles(root: string): readonly SkillBundle[] {
   for (const entry of entries) {
     const full = join(absolute, entry)
     if (existsSync(join(full, 'SKILL.md'))) {
-      if (!isKebabCaseName(entry)) continue
-      out.push({ name: entry, sourcePath: full, kind: 'directory' })
+      const name = directoryBundleName(full, entry)
+      if (!isKebabCaseName(name)) continue
+      out.push({ name, sourcePath: full, kind: 'directory' })
       continue
     }
     let isFile = false
@@ -94,7 +118,7 @@ export function resolveBundlesFromClone(
   // Explicit SKILL.md file path
   if (base.toLowerCase().endsWith('skill.md') && existsSync(base)) {
     const dir = dirname(base)
-    const name = basename(dir)
+    const name = directoryBundleName(dir, basename(dir))
     if (!isKebabCaseName(name)) {
       throw new AuxiliaryError('FILE_DENIED', `Skill directory name must be kebab-case: ${name}`)
     }
@@ -134,7 +158,39 @@ export function destinationForBundle(
 }
 
 function removeDestination(dest: string): void {
-  rmSync(dest, { recursive: true, force: true })
+  removePathRobust(dest)
+}
+
+/** Path exists including broken junctions / symlinks (Windows leftovers). */
+function destinationPresent(path: string): boolean {
+  try {
+    lstatSync(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * A leftover install target that is not a usable skill (empty dir, broken
+ * junction, or missing SKILL.md) — safe to clear without `force`.
+ */
+export function isStaleSkillDestination(
+  dest: string,
+  kind: SkillBundle['kind'],
+): boolean {
+  if (!destinationPresent(dest)) return false
+  if (kind === 'file') {
+    try {
+      const stat = lstatSync(dest)
+      if (stat.isSymbolicLink()) return !existsSync(dest)
+      return !stat.isFile()
+    } catch {
+      return true
+    }
+  }
+  // Directory bundle: must contain a readable SKILL.md (follow links).
+  return !existsSync(join(dest, 'SKILL.md'))
 }
 
 function linkOrCopy(
@@ -173,11 +229,12 @@ export function installBundle(options: {
   readonly mode: SkillInstallMode
 }): { readonly path: string, readonly name: string, readonly mode: 'link' | 'copy' } {
   const dest = destinationForBundle(options.targetDir, options.bundle)
-  if (existsSync(dest)) {
-    if (!options.force) {
+  if (destinationPresent(dest)) {
+    if (options.force || isStaleSkillDestination(dest, options.bundle.kind)) {
+      removeDestination(dest)
+    } else {
       throw new AuxiliaryError('FILE_DENIED', `A skill named ${options.bundle.name} already exists`)
     }
-    removeDestination(dest)
   }
   const used = linkOrCopy(options.bundle.sourcePath, dest, options.mode)
   return { path: dest, name: options.bundle.name, mode: used }

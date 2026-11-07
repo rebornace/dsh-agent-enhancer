@@ -109,15 +109,21 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'instructionsSkillsProviderUser' | 'instructionsSkillsProviderDsh' |
       'instructionsSkillsProviderProject' | 'instructionsSkillsProviderProjectDsh' |
       'instructionsSkillsProviderRegistry' |
+      'instructionsSkillsProviderCursor' | 'instructionsSkillsProviderCursorBuiltin' |
+      'instructionsSkillsProviderCodex' | 'instructionsSkillsProviderClaude' |
       'instructionsSkillsUninstall' | 'instructionsSkillsUninstallHint' |
       'instructionsSkillsUninstallConfirm' | 'instructionsSkillsUninstallCancel' |
       'instructionsSkillsUninstalling' | 'instructionsSkillsUninstalledNote' |
-      'instructionsSkillsUninstallDenied' |
+      'instructionsSkillsUninstallDenied' | 'instructionsSkillsRemoveBusy' |
       'instructionsSkillsInstallZip' | 'instructionsSkillsInstallZipHint' | 'instructionsSkillsZipInstalledNote' |
       'instructionsSkillsZipNoUpdateHint' |
       'instructionsSkillsUpdateAvailable' | 'instructionsSkillsUpdate' | 'instructionsSkillsUpdating' |
       'instructionsSkillsUpdatedNote' | 'instructionsSkillsUpdateCheckFailed' |
       'instructionsSkillsChannelGithub' | 'instructionsSkillsChannelZip' | 'instructionsSkillsChannelUnknown' |
+      'instructionsSkillsPreviewEmpty' | 'instructionsSkillsPreviewLoading' | 'instructionsSkillsPreviewBack' |
+      'instructionsSkillsOpenInSidebar' | 'instructionsSkillsOpenInSidebarHint' |
+      'instructionsSkillsMdCopy' | 'instructionsSkillsMdCopied' | 'instructionsSkillsMdFootnotes' |
+      'instructionsSkillsMdCode' | 'instructionsSkillsMdWrap' | 'instructionsSkillsMdUnwrap' |
       'fileEdit' | 'fileEditDescription' | 'fileEditTitle' | 'fileEditActionHint' |
       'fileEditLoading' | 'fileEditReady' | 'fileEditSaving' | 'fileEditSaved' |
       'fileEditSave' | 'fileEditSaveDirty' | 'fileEditSaveHint' |
@@ -336,7 +342,7 @@ export const agentLocales = {
     instructionsSkillsScope_project: '项目',
     instructionsSkillsProvider: '来源',
     instructionsSkillsInstallGit: '从 GitHub 安装',
-    instructionsSkillsInstallGitHint: '粘贴 owner/repo，或 owner/repo/skills/名称（单技能路径），或 GitHub 链接；装到 ~/.agents/skills，之后可检测更新',
+    instructionsSkillsInstallGitHint: '粘贴 owner/repo，或 owner/repo/skills/名称（单技能路径），或 GitHub 链接；装到 ~/.agents/skills（同名会覆盖），之后可检测更新',
     instructionsSkillsInstallGitPlaceholder: 'owner/repo 或 owner/repo/skills/name',
     instructionsSkillsInstall: '安装',
     instructionsSkillsInstalling: '安装中…',
@@ -344,9 +350,9 @@ export const agentLocales = {
     instructionsSkillsTargetUser: '用户 (~/.agents/skills)',
     instructionsSkillsTargetProject: '项目 (.agents/skills)',
     instructionsSkillsInstallZip: '从 Zip 安装',
-    instructionsSkillsInstallZipHint: '选择包含 SKILL.md 的技能包 Zip，安装到 ~/.agents/skills',
+    instructionsSkillsInstallZipHint: '选择包含 SKILL.md 的技能包 Zip，安装到 ~/.agents/skills（同名会覆盖）',
     instructionsSkillsZipInstalledNote: '已从 Zip 安装 {count} 个技能',
-    instructionsSkillsZipNoUpdateHint: 'Zip 安装不支持更新提示；需要新版本时请重新选择 Zip 安装（或改用 GitHub）。',
+    instructionsSkillsZipNoUpdateHint: 'Zip 安装不支持更新提示；需要新版本时请重新选择 Zip 安装（同名会覆盖，或改用 GitHub）。',
     instructionsSkillsUpdateAvailable: '可更新',
     instructionsSkillsUpdate: '更新',
     instructionsSkillsUpdating: '更新中…',
@@ -355,8 +361,19 @@ export const agentLocales = {
     instructionsSkillsChannelGithub: 'GitHub',
     instructionsSkillsChannelZip: 'Zip',
     instructionsSkillsChannelUnknown: '其他',
-    instructionsSkillsInstallHint: '安装后在输入框输入 / 打开官方技能菜单调用。不要在项目里手建空 Skill 目录。',
-    instructionsSkillsForceOverwrite: '已存在同名技能，请先删除或改名后再装',
+    instructionsSkillsPreviewEmpty: '选择左侧技能以预览 SKILL.md（技能页占用主栏时桌面端会隐藏右侧栏，故在此页内预览）',
+    instructionsSkillsPreviewLoading: '正在加载预览…',
+    instructionsSkillsPreviewBack: '返回列表',
+    instructionsSkillsOpenInSidebar: '在右侧打开',
+    instructionsSkillsOpenInSidebarHint: '退出技能页并在右侧栏打开官方文档预览（可编辑）',
+    instructionsSkillsMdCopy: '复制',
+    instructionsSkillsMdCopied: '已复制',
+    instructionsSkillsMdFootnotes: '脚注',
+    instructionsSkillsMdCode: '代码',
+    instructionsSkillsMdWrap: '自动换行',
+    instructionsSkillsMdUnwrap: '取消换行',
+    instructionsSkillsInstallHint: '安装后在输入框输入 / 打开官方技能菜单调用。同名技能会覆盖本地已装副本。不要在项目里手建空 Skill 目录。',
+    instructionsSkillsForceOverwrite: '已存在同名技能（若仍出现此提示，请完全退出 Desktop 后重开再装）',
     instructionsSkillsHostStale: '宿主插件未加载最新接口（常见于只热更新了客户端）。请完全退出 Desktop（含托盘）后重开。',
     instructionsSkillsInstallUnavailable: '安装能力暂不可用。请完全退出 Desktop 后重开再试。',
     instructionsSkillsPaneInstall: '安装',
@@ -378,6 +395,10 @@ export const agentLocales = {
     instructionsSkillsProviderProject: '项目 .agents/skills',
     instructionsSkillsProviderProjectDsh: '项目 .dsh/skills',
     instructionsSkillsProviderRegistry: '运行时注册',
+    instructionsSkillsProviderCursor: 'Cursor ~/.cursor/skills',
+    instructionsSkillsProviderCursorBuiltin: 'Cursor skills-cursor',
+    instructionsSkillsProviderCodex: 'Codex ~/.codex/skills',
+    instructionsSkillsProviderClaude: 'Claude ~/.claude/skills',
     instructionsSkillsUninstall: '卸载',
     instructionsSkillsUninstallHint: '从托管技能目录卸载（删除或取消链接）',
     instructionsSkillsUninstallConfirm: '确认卸载',
@@ -385,6 +406,7 @@ export const agentLocales = {
     instructionsSkillsUninstalling: '卸载中…',
     instructionsSkillsUninstalledNote: '已卸载 {name}',
     instructionsSkillsUninstallDenied: '该技能不在托管安装目录，无法在此卸载',
+    instructionsSkillsRemoveBusy: '无法删除该技能：文件正被占用。请先关闭技能预览或右侧文档页，稍后再试。',
     sessionDelete: '删除会话',
     sessionDeleteDescription: '在侧栏会话 ⋯ 菜单中永久删除会话及其本地数据（不可恢复）',
     sessionDeleteBusy: '会话运行中，无法删除',
@@ -774,7 +796,7 @@ export const agentLocales = {
     instructionsSkillsScope_project: 'Project',
     instructionsSkillsProvider: 'Source',
     instructionsSkillsInstallGit: 'Install from GitHub',
-    instructionsSkillsInstallGitHint: 'Paste owner/repo, owner/repo/skills/name for one skill, or a GitHub URL; installs into ~/.agents/skills and can check for updates later',
+    instructionsSkillsInstallGitHint: 'Paste owner/repo, owner/repo/skills/name for one skill, or a GitHub URL; installs into ~/.agents/skills (same name overwrites) and can check for updates later',
     instructionsSkillsInstallGitPlaceholder: 'owner/repo or owner/repo/skills/name',
     instructionsSkillsInstall: 'Install',
     instructionsSkillsInstalling: 'Installing…',
@@ -782,9 +804,9 @@ export const agentLocales = {
     instructionsSkillsTargetUser: 'User (~/.agents/skills)',
     instructionsSkillsTargetProject: 'Project (.agents/skills)',
     instructionsSkillsInstallZip: 'Install from Zip',
-    instructionsSkillsInstallZipHint: 'Pick a skill-pack zip that contains SKILL.md folders; installs into ~/.agents/skills',
+    instructionsSkillsInstallZipHint: 'Pick a skill-pack zip that contains SKILL.md folders; installs into ~/.agents/skills (same name overwrites)',
     instructionsSkillsZipInstalledNote: 'Installed {count} skill(s) from zip',
-    instructionsSkillsZipNoUpdateHint: 'Zip installs do not support update checks. Pick a new zip to upgrade, or install from GitHub instead.',
+    instructionsSkillsZipNoUpdateHint: 'Zip installs do not support update checks. Pick a new zip to upgrade (same name overwrites), or install from GitHub instead.',
     instructionsSkillsUpdateAvailable: 'Update available',
     instructionsSkillsUpdate: 'Update',
     instructionsSkillsUpdating: 'Updating…',
@@ -793,8 +815,19 @@ export const agentLocales = {
     instructionsSkillsChannelGithub: 'GitHub',
     instructionsSkillsChannelZip: 'Zip',
     instructionsSkillsChannelUnknown: 'Other',
-    instructionsSkillsInstallHint: 'After install, type / in the composer to open the official skills menu. Do not hand-create empty skill folders in the project.',
-    instructionsSkillsForceOverwrite: 'A skill with that name already exists; remove or rename it first',
+    instructionsSkillsPreviewEmpty: 'Select a skill on the left to preview SKILL.md (Desktop hides the right sidebar while this main panel is open, so preview stays in-page)',
+    instructionsSkillsPreviewLoading: 'Loading preview…',
+    instructionsSkillsPreviewBack: 'Back to list',
+    instructionsSkillsOpenInSidebar: 'Open in sidebar',
+    instructionsSkillsOpenInSidebarHint: 'Leave Skills and open the official document preview in the right sidebar (editable)',
+    instructionsSkillsMdCopy: 'Copy',
+    instructionsSkillsMdCopied: 'Copied',
+    instructionsSkillsMdFootnotes: 'Footnotes',
+    instructionsSkillsMdCode: 'Code',
+    instructionsSkillsMdWrap: 'Wrap',
+    instructionsSkillsMdUnwrap: 'Unwrap',
+    instructionsSkillsInstallHint: 'After install, type / in the composer to open the official skills menu. Same-named skills overwrite the local copy. Do not hand-create empty skill folders in the project.',
+    instructionsSkillsForceOverwrite: 'A skill with that name already exists (if this still appears, fully quit Desktop and retry the install)',
     instructionsSkillsHostStale: 'The host plugin is missing the latest APIs (often after a client-only hot reload). Fully quit Desktop (including tray) and reopen.',
     instructionsSkillsInstallUnavailable: 'Install is temporarily unavailable. Fully quit Desktop and reopen, then try again.',
     instructionsSkillsPaneInstall: 'Install',
@@ -816,6 +849,10 @@ export const agentLocales = {
     instructionsSkillsProviderProject: 'Project .agents/skills',
     instructionsSkillsProviderProjectDsh: 'Project .dsh/skills',
     instructionsSkillsProviderRegistry: 'Runtime registry',
+    instructionsSkillsProviderCursor: 'Cursor ~/.cursor/skills',
+    instructionsSkillsProviderCursorBuiltin: 'Cursor skills-cursor',
+    instructionsSkillsProviderCodex: 'Codex ~/.codex/skills',
+    instructionsSkillsProviderClaude: 'Claude ~/.claude/skills',
     instructionsSkillsUninstall: 'Uninstall',
     instructionsSkillsUninstallHint: 'Remove from a managed skills root (delete or unlink)',
     instructionsSkillsUninstallConfirm: 'Confirm',
@@ -823,6 +860,7 @@ export const agentLocales = {
     instructionsSkillsUninstalling: 'Uninstalling…',
     instructionsSkillsUninstalledNote: 'Uninstalled {name}',
     instructionsSkillsUninstallDenied: 'This skill is outside managed install roots and cannot be uninstalled here',
+    instructionsSkillsRemoveBusy: 'Could not remove this skill because files are in use. Close the skill preview or right-sidebar document tab, then try again.',
     sessionDelete: 'Delete session',
     sessionDeleteDescription: 'Permanently delete a session and its local data from the sidebar ⋯ menu (cannot be undone)',
     sessionDeleteBusy: 'Session is running; deletion unavailable',

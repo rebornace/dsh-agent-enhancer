@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
+import { isKebabCaseName } from './paths.ts'
 import { promisify } from 'node:util'
 import { AuxiliaryError } from '../../errors.ts'
 import { unwrapArchiveRoot } from './github-archive.ts'
@@ -17,6 +18,7 @@ import {
 import { upsertInstallRecord } from './install-ledger.ts'
 import { agentsHomeOf } from './paths.ts'
 import type { InstalledSkillRef } from './install.ts'
+import { purgeManagedSkillName } from './uninstall.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -86,6 +88,19 @@ export async function installSkillsFromZipFile(options: {
     const installed: InstalledSkillRef[] = []
     for (const bundle of bundles) {
       options.signal.throwIfAborted()
+      if (options.force) {
+        const folderName = basename(bundle.sourcePath)
+        const names = new Set<string>([bundle.name])
+        if (isKebabCaseName(folderName)) names.add(folderName)
+        for (const name of names) {
+          purgeManagedSkillName({
+            name,
+            cwd: options.projectRoot,
+            projectRoot: options.projectRoot,
+            env: options.env,
+          })
+        }
+      }
       const result = installBundle({
         bundle,
         targetDir,

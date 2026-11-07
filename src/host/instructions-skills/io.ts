@@ -1,8 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { existsSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { basename, join, resolve } from 'node:path'
 import { AuxiliaryError } from '../../errors.ts'
+import { FILE_EDIT_MAX_BYTES } from '../file-edit/types.ts'
 import { pickFileNow } from '../extra-folders/pick.ts'
 import { createWorkspaceAgentsFile, createWorkspaceSkill } from './create.ts'
 import {
@@ -14,7 +15,13 @@ import {
 import { parseGitSkillSource } from './git-source.ts'
 import { readInstallLedger } from './install-ledger.ts'
 import { installSkillsFromGit } from './install.ts'
-import { samePath, skillRootsFor } from './paths.ts'
+import {
+  findProjectRoot,
+  isInsideOrSame,
+  previewSkillSearchRoots,
+  samePath,
+  skillRootsFor,
+} from './paths.ts'
 import { uninstallManagedSkill } from './uninstall.ts'
 import { checkGithubSkillUpdate } from './update-check.ts'
 import { installSkillsFromZipFile } from './zip-install.ts'
@@ -29,6 +36,8 @@ import type {
   InstallSkillFromZipResult,
   InstructionsSkillsSnapshot,
   ListInstructionsSkillsRequest,
+  ReadSkillDocumentRequest,
+  ReadSkillDocumentResult,
   SkillCatalogEntry,
   SkillInstallTarget,
   UninstallSkillRequest,
@@ -288,7 +297,8 @@ export async function installSkillFromGitNow(options: {
     source: options.request.source,
     target: options.request.target,
     projectRoot: discovered.projectRoot,
-    force: options.request.force === true,
+    // Panel installs overwrite by default; pass force: false to refuse collisions.
+    force: options.request.force !== false,
     signal: options.signal,
     installLedgerRoot: options.installLedgerRoot,
   })
@@ -331,7 +341,8 @@ export async function installSkillFromZipNow(options: {
     zipPath,
     target: options.request.target,
     projectRoot: discovered.projectRoot,
-    force: options.request.force === true,
+    // Panel installs overwrite by default; pass force: false to refuse collisions.
+    force: options.request.force !== false,
     signal: options.signal,
     installLedgerRoot: options.installLedgerRoot,
   })
@@ -416,4 +427,67 @@ export async function updateSkillFromGitNow(options: {
     signal: options.signal,
   })
   return { updated, snapshot }
+}
+
+/** Resolve catalog path → SKILL.md (folder or file). */
+export function skillDocumentAbsolutePath(path: string): string {
+  const trimmed = path.replace(/[/\\]+$/, '')
+  if (/\.md$/i.test(trimmed)) return resolve(trimmed)
+  return resolve(trimmed, 'SKILL.md')
+}
+
+/**
+ * Read SKILL.md for the Skills main-panel preview.
+ * Paths must sit under preview roots (managed + Cursor/Codex/Claude browse roots).
+ */
+export async function readSkillDocumentNow(options: {
+  readonly ctx: Context
+  readonly request: ReadSkillDocumentRequest
+  readonly signal: AbortSignal
+}): Promise<ReadSkillDocumentResult> {
+  options.signal.throwIfAborted()
+  const agent = agentOf(options.ctx, options.request.sessionId)
+  const cwd = sessionCwd(agent.session)
+  const projectRoot = findProjectRoot(cwd)
+  const absolutePath = skillDocumentAbsolutePath(options.request.path)
+  const roots = previewSkillSearchRoots(cwd, projectRoot)
+  if (!roots.some(root => isInsideOrSame(root, absolutePath))) {
+    throw new AuxiliaryError('FILE_DENIED', 'Skill document is outside preview roots')
+  }
+  if (basename(absolutePath).toLowerCase() !== 'skill.md') {
+    throw new AuxiliaryError('FILE_DENIED', 'Only SKILL.md may be previewed')
+  }
+  options.signal.throwIfAborted()
+  if (!existsSync(absolutePath)) {
+    throw new AuxiliaryError('FILE_NOT_FOUND', 'Skill document not found')
+  }
+  try {
+    const stat = statSync(absolutePath)
+    if (!stat.isFile()) {
+      throw new AuxiliaryError('FILE_NOT_FOUND', 'Skill document not found')
+    }
+    if (stat.size > FILE_EDIT_MAX_BYTES) {
+      throw new AuxiliaryError('FILE_EDIT_FAILED', `File exceeds the ${FILE_EDIT_MAX_BYTES} byte preview limit`)
+    }
+  } catch (error) {
+    if (error instanceof AuxiliaryError) throw error
+    throw new AuxiliaryError('FILE_NOT_FOUND', 'Skill document not found')
+  }
+  options.signal.throwIfAborted()
+  let text: string
+  try {
+    text = readFileSync(absolutePath, 'utf8')
+  } catch {
+    throw new AuxiliaryError('FILE_NOT_FOUND', 'Skill document not found')
+  }
+  const bytes = Buffer.byteLength(text, 'utf8')
+  if (bytes > FILE_EDIT_MAX_BYTES) {
+    throw new AuxiliaryError('FILE_EDIT_FAILED', `File exceeds the ${FILE_EDIT_MAX_BYTES} byte preview limit`)
+  }
+  return {
+    path: options.request.path,
+    absolutePath,
+    text,
+    bytes,
+  }
 }

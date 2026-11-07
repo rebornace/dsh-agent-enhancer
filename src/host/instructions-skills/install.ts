@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { purgeManagedSkillName } from './uninstall.ts'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -173,6 +174,22 @@ export async function installSkillsFromGit(options: {
     const installed: InstalledSkillRef[] = []
     for (const bundle of bundles) {
       options.signal.throwIfAborted()
+      if (options.force) {
+        // Clear same-named leftovers under ~/.agents and ~/.dsh (etc.) first.
+        // Also clear archive folder basenames (e.g. repo-hash zips) that differ
+        // from the frontmatter install name.
+        const folderName = basename(bundle.sourcePath)
+        const names = new Set<string>([bundle.name])
+        if (isKebabCaseName(folderName)) names.add(folderName)
+        for (const name of names) {
+          purgeManagedSkillName({
+            name,
+            cwd: options.projectRoot,
+            projectRoot: options.projectRoot,
+            env: options.env,
+          })
+        }
+      }
       const result = installBundle({
         bundle,
         targetDir,
