@@ -8,6 +8,9 @@ import {
   writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { SoftPauseAction } from '../soft-pause/action.tsx'
+import type { SoftPauseController } from '../soft-pause/controller.ts'
+import { isLatestNonMarkerUserMessage } from '../soft-pause/visibility.ts'
 import styles from '../styles.module.css'
 import { RollbackMessageActions } from './actions.tsx'
 import { contentParts } from './content-parts.ts'
@@ -15,11 +18,18 @@ import type { RollbackController } from './controller.ts'
 import { isRollbackMarkerMessage, turnFromRollbackMarkerId } from './marker.ts'
 
 export type RollbackUserNodeProps = ChatNodeViewProps<'user'> & {
-  readonly rollback: RollbackController
+  readonly rollback: RollbackController | undefined
+  readonly softPause: SoftPauseController | undefined
   readonly tEnhancer: TranslateNS<'agent-enhancer'>
   readonly tChat: TranslateNS<'chat'>
   readonly onOpenTimeline?: (turn: number) => void
 }
+
+const DISABLED_ROLLBACK = {
+  enabled: false,
+  active: null,
+  coverageByTurn: {},
+} as const
 
 function turnOf(location: RollbackUserNodeProps['node']['location']): TurnLocation | null {
   return location.kind === 'turn' || location.kind === 'step' ? location.turn : null
@@ -78,8 +88,18 @@ export function RollbackUserNode(props: RollbackUserNodeProps) {
   const turn = turnOf(props.node.location)
   const isMarker = isRollbackMarkerMessage(data.source, messageId)
   const rollbackTurn = turnFromRollbackMarkerId(messageId) ?? turn?.turn
-  const snapshot = useSyncExternalStore(props.rollback.subscribe, props.rollback.getSnapshot)
+  const rollback = props.rollback
+  const snapshot = useSyncExternalStore(
+    listener => rollback?.subscribe(listener) ?? (() => {}),
+    () => rollback?.getSnapshot() ?? DISABLED_ROLLBACK,
+  )
   const rollbackEnabled = snapshot.enabled
+  const isLatestUser = props.useChat(chat => isLatestNonMarkerUserMessage(
+    chat,
+    props.node.key,
+    messageId,
+    data.source,
+  ))
 
   return <div className={styles.userMessageRow}>
     {props.renderFactorySlot('conversation.chat.user.content', {
@@ -90,9 +110,16 @@ export function RollbackUserNode(props: RollbackUserNodeProps) {
     })}
     <div className={styles.userMessageActions} data-clock="start">
       <UserCopyAction text={prepared.text} tChat={props.tChat} />
-      {rollbackEnabled && turn !== null && rollbackTurn !== undefined && !isMarker
+      {props.softPause === undefined ? null : <SoftPauseAction
+        softPause={props.softPause}
+        t={props.tEnhancer}
+        isLatestUser={isLatestUser}
+        isMarker={isMarker}
+        useSession={props.useSession}
+      />}
+      {rollbackEnabled && turn !== null && rollbackTurn !== undefined && !isMarker && rollback !== undefined
         ? <RollbackMessageActions
-          rollback={props.rollback}
+          rollback={rollback}
           t={props.tEnhancer}
           turn={turn}
           useSession={props.useSession}

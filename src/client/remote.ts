@@ -17,7 +17,12 @@ import type {
   UsageRange,
   UsageSummary,
 } from '../host/usage/types.ts'
-import type { RpcPayload } from '../host/rpc.ts'
+import type {
+  RpcPayload,
+  SoftPauseSetRequest,
+  SoftPauseSnapshotRequest,
+  SoftPauseState,
+} from '../host/rpc.ts'
 import type { AuxiliaryResult } from '../host/types.ts'
 import { checkpointClientRemoteInfo } from './rollback/remote.ts'
 
@@ -255,6 +260,34 @@ export const clientRemoteInfo = {
       codec: codec('dsh-agent-enhancer#ProviderBalancesRequest'),
     }],
     result: codec('dsh-agent-enhancer#ProviderBalances'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/softPauseSnapshot',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'softPauseSnapshot',
+    implementation: 'softPauseSnapshot',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#SoftPauseSnapshotRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#SoftPauseState'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/softPauseSet',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'softPauseSet',
+    implementation: 'softPauseSet',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#SoftPauseSetRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#SoftPauseState'),
   }, ...checkpointClientRemoteInfo.descriptors],
 } satisfies TypertRemoteContribution
 
@@ -421,6 +454,48 @@ export const agentEnhancerProviderBalances = {
     try {
       result = await call.call(namespace, request)
     } catch {
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    if (!result.ok) throw new AuxiliaryError('MODEL_FAILED')
+    return result.value
+  },
+}
+
+type SoftPauseSnapshotCall = (
+  request: SoftPauseSnapshotRequest,
+) => Promise<RemoteResult<SoftPauseState>>
+
+export const agentEnhancerSoftPauseSnapshot = {
+  async invoke(remote: unknown, request: SoftPauseSnapshotRequest, signal?: AbortSignal) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const namespace = Reflect.get(remote as object, 'agentEnhancer') as object
+    const call = Reflect.get(namespace, 'softPauseSnapshot') as SoftPauseSnapshotCall
+    let result: RemoteResult<SoftPauseState>
+    try {
+      result = await call.apply(namespace, [request])
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      throw new AuxiliaryError('MODEL_FAILED')
+    }
+    if (!result.ok) throw new AuxiliaryError('MODEL_FAILED')
+    return result.value
+  },
+}
+
+type SoftPauseSetCall = (
+  request: SoftPauseSetRequest,
+) => Promise<RemoteResult<SoftPauseState>>
+
+export const agentEnhancerSoftPauseSet = {
+  async invoke(remote: unknown, request: SoftPauseSetRequest, signal?: AbortSignal) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const namespace = Reflect.get(remote as object, 'agentEnhancer') as object
+    const call = Reflect.get(namespace, 'softPauseSet') as SoftPauseSetCall
+    let result: RemoteResult<SoftPauseState>
+    try {
+      result = await call.apply(namespace, [request])
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
       throw new AuxiliaryError('MODEL_FAILED')
     }
     if (!result.ok) throw new AuxiliaryError('MODEL_FAILED')

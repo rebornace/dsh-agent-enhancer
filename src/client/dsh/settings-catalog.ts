@@ -12,6 +12,7 @@ export type FeatureLabelKey =
   | 'predict'
   | 'quote'
   | 'rollback'
+  | 'softPause'
   | 'contextInspect'
   | 'usage'
   | 'sessionDelete'
@@ -23,6 +24,7 @@ export type FeatureDescriptionKey =
   | 'predictDescription'
   | 'quoteDescription'
   | 'rollbackDescription'
+  | 'softPauseDescription'
   | 'contextInspectDescription'
   | 'usageDescription'
   | 'sessionDeleteDescription'
@@ -75,6 +77,12 @@ export const SETTINGS_FEATURE_GROUPS: readonly SettingsFeatureGroup[] = [
         module: 'rollback',
         labelKey: 'rollback',
         descriptionKey: 'rollbackDescription',
+        modelFeature: null,
+      },
+      {
+        module: 'softPause',
+        labelKey: 'softPause',
+        descriptionKey: 'softPauseDescription',
         modelFeature: null,
       },
       {

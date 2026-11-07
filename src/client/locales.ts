@@ -40,7 +40,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'autoRouting' | 'autoRoutingDescription' |
       'autoClassifier' | 'autoClassifierDescription' | 'autoMappingTitle' |
       'autoTier_instant' | 'autoTier_thinking' | 'autoTier_pro' | 'autoTier_classifier' |
-      'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'dismissHint' |
+      'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'overlapSoftPause' | 'dismissHint' |
+      'softPause' | 'softPauseDescription' | 'softPausePause' | 'softPauseResume' |
       'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackUndoAction' |
       'rollbackUndoCommandDescription' |
       'rollbackTitle' | 'rollbackScope' | 'rollbackScopeAlready' | 'rollbackScopeCovered' | 'rollbackUndoTitle' | 'rollbackUndoScope' | 'rollbackUndoScopeConversation' |
@@ -262,7 +263,12 @@ export const agentLocales = {
     overlapHistory: '检测到另一个历史提示词功能。智能体增强的历史仍保持开启。',
     overlapOptimize: '检测到另一个提示词优化功能。智能体增强的优化仍保持开启。',
     overlapPredict: '检测到另一个回复建议功能。智能体增强的预测仍保持开启。',
+    overlapSoftPause: '检测到另一个软暂停插件（如 dsh-breather）。智能体增强的软暂停仍保持开启。',
     dismissHint: '关闭共存提示',
+    softPause: '软暂停',
+    softPauseDescription: '在最新用户气泡上暂停/恢复：挡住下一步模型调用以节省后续 token；当前流式回复与已发出工具会跑完。不替代官方停止。',
+    softPausePause: '暂停后续模型步',
+    softPauseResume: '恢复后续模型步',
     sessionDelete: '删除会话',
     sessionDeleteDescription: '在侧栏会话 ⋯ 菜单中永久删除会话及其本地数据（不可恢复）',
     sessionDeleteBusy: '会话运行中，无法删除',
@@ -615,7 +621,12 @@ export const agentLocales = {
     overlapHistory: 'Another prompt-history feature is enabled. Agent Enhance history remains enabled.',
     overlapOptimize: 'Another prompt-optimization feature is enabled. Agent Enhance optimization remains enabled.',
     overlapPredict: 'Another reply-suggestion feature is enabled. Agent Enhance prediction remains enabled.',
+    overlapSoftPause: 'Another soft-pause plugin (such as dsh-breather) is enabled. Agent Enhance soft pause remains enabled.',
     dismissHint: 'Dismiss coexistence notice',
+    softPause: 'Soft pause',
+    softPauseDescription: 'Pause / resume on the latest user bubble: hold the next model step to save later tokens; the current stream and in-flight tools still finish. Does not replace official Stop.',
+    softPausePause: 'Pause further model steps',
+    softPauseResume: 'Resume further model steps',
     sessionDelete: 'Delete session',
     sessionDeleteDescription: 'Permanently delete a session and its local data from the sidebar ⋯ menu (cannot be undone)',
     sessionDeleteBusy: 'Session is running; deletion unavailable',

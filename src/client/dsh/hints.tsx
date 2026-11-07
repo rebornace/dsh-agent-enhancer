@@ -1,7 +1,6 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useSyncExternalStore } from 'react'
-import type { ModuleName } from '../../config.ts'
 import type { OverlapHintStore } from './plugin-hints.ts'
 import styles from '../styles.module.css'
 
@@ -9,6 +8,7 @@ const HINT_KEYS = {
   history: 'overlapHistory',
   optimize: 'overlapOptimize',
   predict: 'overlapPredict',
+  softPause: 'overlapSoftPause',
 } as const
 
 export function CoexistenceHints({ store, t }: {

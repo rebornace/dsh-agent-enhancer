@@ -50,8 +50,11 @@ import {
   agentEnhancerProviderBalances,
   agentEnhancerCompactContext,
   agentEnhancerInspectContext,
+  agentEnhancerSoftPauseSet,
+  agentEnhancerSoftPauseSnapshot,
   clientRemoteInfo,
 } from './remote.ts'
+import { SoftPauseController } from './soft-pause/controller.ts'
 import { ProviderBalanceChip } from './dsh/provider-balance-chip.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -635,6 +638,46 @@ export function apply(ctx: Context): void {
     const tEnhancer = mountedCtx.locale.bind('agent-enhancer')
     const tChat = mountedCtx.locale.bind('chat')
     const rollbackEnabled = () => resolveSettings(form.getSnapshot().value).rollbackEnabled
+    const softPauseEnabled = () => resolveSettings(form.getSnapshot().value).softPauseEnabled
+    const softPauseSessions = new Map<SessionId, SoftPauseController>()
+    const softPauseRetentions = new Map<SessionId, () => void>()
+    const softPauseFor = (sessionId: SessionId) => {
+      let softPause = softPauseSessions.get(sessionId)
+      if (softPause === undefined) {
+        softPause = new SoftPauseController({
+          sessionId,
+          enabled: softPauseEnabled,
+          remote: {
+            snapshot: (id, signal) => withAgentRemote(
+              remote => agentEnhancerSoftPauseSnapshot.invoke(remote, { sessionId: id }, signal),
+            ),
+            set: (id, engaged, signal) => withAgentRemote(
+              remote => agentEnhancerSoftPauseSet.invoke(remote, { sessionId: id, engaged }, signal),
+            ),
+          },
+        })
+        softPauseSessions.set(sessionId, softPause)
+        const sessions = mountedCtx.get('sessions')
+        if (sessions !== undefined && !softPauseRetentions.has(sessionId)) {
+          const retention = sessions.retainInfo(sessionId)
+          softPauseRetentions.set(sessionId, retention.subscribe(() => {
+            if ((retention.getSnapshot().retainedBy.mainView ?? 0) === 0) {
+              softPauseSessions.get(sessionId)?.dispose()
+              softPauseSessions.delete(sessionId)
+              softPauseRetentions.get(sessionId)?.()
+              softPauseRetentions.delete(sessionId)
+            }
+          }))
+        }
+      }
+      return softPause
+    }
+    const disposeSoftPause = () => {
+      for (const softPause of softPauseSessions.values()) softPause.dispose()
+      softPauseSessions.clear()
+      for (const unsubscribe of softPauseRetentions.values()) unsubscribe()
+      softPauseRetentions.clear()
+    }
     const rollbackFor = (sessionId: SessionId) => {
       let rollback = rollbackSessions.get(sessionId)
       if (rollback === undefined) {
@@ -704,14 +747,17 @@ export function apply(ctx: Context): void {
         t: tEnhancer,
       },
     )
-    const rollbackUserNode = (props: ChatNodeViewProps<'user'>) => createElement(
+    const enhancerUserNode = (props: ChatNodeViewProps<'user'>) => createElement(
       RollbackUserNode,
       {
         ...props,
-        rollback: rollbackFor(props.sessionId),
+        rollback: rollbackEnabled() ? rollbackFor(props.sessionId) : undefined,
+        softPause: softPauseEnabled() ? softPauseFor(props.sessionId) : undefined,
         tEnhancer,
         tChat,
-        onOpenTimeline: turn => { openTimeline(props.sessionId, turn) },
+        onOpenTimeline: rollbackEnabled()
+          ? turn => { openTimeline(props.sessionId, turn) }
+          : undefined,
       },
     )
     const rollbackOverlay = (props: PropsRuntime<'conversation.input.overlay'>) => createElement(
@@ -726,73 +772,95 @@ export function apply(ctx: Context): void {
         onOpenTimeline: turn => { openTimeline(props.sessionId, turn) },
       },
     )
-    const disposers: Array<() => void> = []
-    const disableRollback = () => {
-      while (disposers.length > 0) disposers.pop()?.()
+    const userNodeDisposers: Array<() => void> = []
+    const rollbackChromeDisposers: Array<() => void> = []
+    const disableUserNode = () => {
+      while (userNodeDisposers.length > 0) userNodeDisposers.pop()?.()
+    }
+    const disableRollbackChrome = () => {
+      while (rollbackChromeDisposers.length > 0) rollbackChromeDisposers.pop()?.()
       for (const rollback of rollbackSessions.values()) rollback.dispose()
       for (const unsubscribe of rollbackRetentions.values()) unsubscribe()
       rollbackSessions.clear()
       rollbackRetentions.clear()
       undoTips.clear()
     }
+    const disableAll = () => {
+      disableUserNode()
+      disableRollbackChrome()
+      disposeSoftPause()
+    }
     mountedCtx.effect(() => {
       const synchronize = () => {
-        const enabled = rollbackEnabled()
-        if (!enabled) {
-          disableRollback()
-        } else if (disposers.length === 0) {
-          disposers.push(mountedCtx.sidebarRightTabs.register({
-            id: CHECKPOINT_TIMELINE_TAB_ID,
-            kind: CHECKPOINT_TIMELINE_TAB_KIND,
-            priority: 'extension',
-            title: () => tEnhancer('rollbackTimelineTitle'),
-          }))
-          disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab', () => mountedCtx.slots.register({
-            name: 'sidebar.right.pane.tab',
-            key: CHECKPOINT_TIMELINE_TAB_ID,
-            locale: 'agent-enhancer',
-          }, TimelineTab)))
-          disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab.title', () => mountedCtx.slots.register({
-            name: 'sidebar.right.pane.tab.title',
-            key: CHECKPOINT_TIMELINE_TAB_ID,
-            locale: 'agent-enhancer',
-          }, TimelineTitle)))
-          disposers.push(mountedCtx.slots.inject('conversation.chat.node', () => mountedCtx.slots.register({
-            name: 'conversation.chat.node', key: 'user', priority: -120,
-            registrant: 'agent-enhancer-rollback-user',
-          }, rollbackUserNode as never)))
-          // Keep the confirm dialog outside chat nodes so surface replace cannot tear it down.
-          disposers.push(mountedCtx.slots.inject('conversation.input.overlay', () => mountedCtx.slots.register({
-            name: 'conversation.input.overlay', id: 'agent-enhancer-rollback', order: 121,
-            locale: 'agent-enhancer',
-          }, rollbackOverlay as never)))
-          // Session-stats title stays after a full rollback when per-message buttons are gone.
-          disposers.push(mountedCtx.slots.inject('conversation.composer.dock', () => mountedCtx.slots.register({
-            name: 'conversation.composer.dock', id: 'agent-enhancer-checkpoint-stats', order: 55,
-            locale: 'agent-enhancer',
-          }, StatsCheckpointDock)))
-          // Chat only renders append-origin events; reshape the loaded window so
-          // surface-replaced history disappears and the rollback tip becomes visible.
-          disposers.push(installRollbackTranscriptFilter(mountedCtx, undoTips, cutCache))
-          // Host turnOutline keeps every turn; filter it so TurnNavigator drops rolled-back marks.
-          disposers.push(installRollbackTurnOutlineFilter(mountedCtx))
-          // No-op: do not rewrite Host sessionStats (official pill / stats page own whole-log counts).
-          disposers.push(installRollbackSessionStatsFilter(mountedCtx))
-          // + button and `/` share this menu; show undo only while a restore tip remains.
-          disposers.push(installRollbackUndoCommand({
-            ctx: mountedCtx,
-            tips: undoTips,
-            rollbackFor,
-            enabled: rollbackEnabled,
-            t: tEnhancer,
-          }))
+        const rb = rollbackEnabled()
+        const sp = softPauseEnabled()
+        if (!sp) disposeSoftPause()
+        else {
+          for (const softPause of softPauseSessions.values()) softPause.refreshSettings()
+        }
+        if (rb || sp) {
+          if (userNodeDisposers.length === 0) {
+            userNodeDisposers.push(mountedCtx.slots.inject('conversation.chat.node', () => mountedCtx.slots.register({
+              name: 'conversation.chat.node', key: 'user', priority: -120,
+              registrant: 'agent-enhancer-user',
+            }, enhancerUserNode as never)))
+          }
+        } else {
+          disableUserNode()
+        }
+        if (rb) {
+          if (rollbackChromeDisposers.length === 0) {
+            rollbackChromeDisposers.push(mountedCtx.sidebarRightTabs.register({
+              id: CHECKPOINT_TIMELINE_TAB_ID,
+              kind: CHECKPOINT_TIMELINE_TAB_KIND,
+              priority: 'extension',
+              title: () => tEnhancer('rollbackTimelineTitle'),
+            }))
+            rollbackChromeDisposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab', () => mountedCtx.slots.register({
+              name: 'sidebar.right.pane.tab',
+              key: CHECKPOINT_TIMELINE_TAB_ID,
+              locale: 'agent-enhancer',
+            }, TimelineTab)))
+            rollbackChromeDisposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab.title', () => mountedCtx.slots.register({
+              name: 'sidebar.right.pane.tab.title',
+              key: CHECKPOINT_TIMELINE_TAB_ID,
+              locale: 'agent-enhancer',
+            }, TimelineTitle)))
+            // Keep the confirm dialog outside chat nodes so surface replace cannot tear it down.
+            rollbackChromeDisposers.push(mountedCtx.slots.inject('conversation.input.overlay', () => mountedCtx.slots.register({
+              name: 'conversation.input.overlay', id: 'agent-enhancer-rollback', order: 121,
+              locale: 'agent-enhancer',
+            }, rollbackOverlay as never)))
+            // Session-stats title stays after a full rollback when per-message buttons are gone.
+            rollbackChromeDisposers.push(mountedCtx.slots.inject('conversation.composer.dock', () => mountedCtx.slots.register({
+              name: 'conversation.composer.dock', id: 'agent-enhancer-checkpoint-stats', order: 55,
+              locale: 'agent-enhancer',
+            }, StatsCheckpointDock)))
+            // Chat only renders append-origin events; reshape the loaded window so
+            // surface-replaced history disappears and the rollback tip becomes visible.
+            rollbackChromeDisposers.push(installRollbackTranscriptFilter(mountedCtx, undoTips, cutCache))
+            // Host turnOutline keeps every turn; filter it so TurnNavigator drops rolled-back marks.
+            rollbackChromeDisposers.push(installRollbackTurnOutlineFilter(mountedCtx))
+            // No-op: do not rewrite Host sessionStats (official pill / stats page own whole-log counts).
+            rollbackChromeDisposers.push(installRollbackSessionStatsFilter(mountedCtx))
+            // + button and `/` share this menu; show undo only while a restore tip remains.
+            rollbackChromeDisposers.push(installRollbackUndoCommand({
+              ctx: mountedCtx,
+              tips: undoTips,
+              rollbackFor,
+              enabled: rollbackEnabled,
+              t: tEnhancer,
+            }))
+          }
+        } else {
+          disableRollbackChrome()
         }
       }
       const unsubscribe = form.subscribe(synchronize)
       synchronize()
       return () => {
         unsubscribe()
-        disableRollback()
+        disableAll()
       }
     })
   }

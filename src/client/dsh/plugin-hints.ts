@@ -2,6 +2,7 @@ export const KNOWN_OVERLAPS = {
   history: ['dsh-composer-history', 'dsh-prompt-history', 'dsh-input-assistant'],
   optimize: ['dsh-input-assistant'],
   predict: ['dsh-reply-suggestions', 'dsh-prompt-history', 'dsh-input-assistant'],
+  softPause: ['dsh-breather'],
 } as const
 
 export type OverlapModule = keyof typeof KNOWN_OVERLAPS

@@ -77,6 +77,8 @@ import type {
 import { inspectContextCategory, pressureFromProjection } from './context-inspect.ts'
 import type { ContextInspectRequest, ContextInspectResult } from './context-inspect.ts'
 import { installAutoSessionRoute } from './auto-route/session-hook.ts'
+import { SoftPauseGate } from './soft-pause/gate.ts'
+import { installSoftPause } from './soft-pause/live.ts'
 import { AuxiliaryModels } from './model.ts'
 import {
   DEFAULT_BALANCE_REFRESH_MS,
@@ -102,7 +104,12 @@ import type {
   UsageSummaryReader,
 } from './usage/types.ts'
 import { checkpointRemoteInfo, remoteInfo } from './rpc.ts'
-import type { RpcPayload } from './rpc.ts'
+import type {
+  RpcPayload,
+  SoftPauseSetRequest,
+  SoftPauseSnapshotRequest,
+  SoftPauseState,
+} from './rpc.ts'
 import type { AuxiliaryResult } from './types.ts'
 import {
   applyPluginUpdateForHost,
@@ -130,6 +137,7 @@ export const Config = z.object({
   usageEnabled: z.boolean().default(true).volatile(),
   sessionDeleteEnabled: z.boolean().default(true).volatile(),
   fileEditEnabled: z.boolean().default(true).volatile(),
+  softPauseEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.
   optimizeProvider: z.string().default('').volatile(),
   optimizeModel: z.string().default('').volatile(),
@@ -189,6 +197,8 @@ export class AgentEnhancerService extends TypertRemoteService {
     private readonly extraFolders: ExtraFoldersStore = createExtraFoldersStore(
       join(homedir(), '.dsh', 'profiles', 'desktop', 'plugin-data', PACKAGE_NAME, 'extra-folders'),
     ),
+    private readonly softPause: SoftPauseGate = new SoftPauseGate(),
+    private readonly softPauseEnabled: () => boolean = () => true,
   ) {
     super(ctx, 'agentEnhancer')
   }
@@ -468,6 +478,28 @@ export class AgentEnhancerService extends TypertRemoteService {
     return this.balances.get(request.force === true, request.locale)
   }
 
+  /** Soft-pause gate snapshot for the latest-user-bubble Pause / Resume control. */
+  async softPauseSnapshot(request: SoftPauseSnapshotRequest): Promise<SoftPauseState> {
+    this.assertOwner()
+    if (!this.softPauseEnabled()) {
+      if (this.softPause.isEngaged(request.sessionId)) this.softPause.release(request.sessionId)
+      return { sessionId: request.sessionId, engaged: false }
+    }
+    return { sessionId: request.sessionId, engaged: this.softPause.isEngaged(request.sessionId) }
+  }
+
+  /** Engage or release the soft-pause gate (no new user turn on resume). */
+  async softPauseSet(request: SoftPauseSetRequest): Promise<SoftPauseState> {
+    this.assertOwner()
+    if (!this.softPauseEnabled()) {
+      this.softPause.release(request.sessionId)
+      return { sessionId: request.sessionId, engaged: false }
+    }
+    if (request.engaged) this.softPause.engage(request.sessionId)
+    else this.softPause.release(request.sessionId)
+    return { sessionId: request.sessionId, engaged: this.softPause.isEngaged(request.sessionId) }
+  }
+
   async applyUpdate(): Promise<ApplyUpdateResult> {
     this.assertOwner()
     return applyPluginUpdateForHost({
@@ -570,6 +602,7 @@ function readSettings(config: Config): EnhancerSettings {
     usageEnabled: config.usageEnabled.get(),
     sessionDeleteEnabled: config.sessionDeleteEnabled.get(),
     fileEditEnabled: config.fileEditEnabled.get(),
+    softPauseEnabled: config.softPauseEnabled.get(),
     optimizeProvider: config.optimizeProvider.get(),
     optimizeModel: config.optimizeModel.get(),
     optimizeReasoningEffort: config.optimizeReasoningEffort.get(),
@@ -636,6 +669,7 @@ export function apply(ctx: Context, config: Config): void {
   sessionCleanup.register(createCheckpointCleaner({ store, cutStore, storageRoot }))
   sessionCleanup.register(createContextExcludeCleaner(join(storageRoot, '..')))
   const extraFoldersStore = createExtraFoldersStore(join(storageRoot, '..', 'extra-folders'))
+  const softPauseGate = new SoftPauseGate()
   new AgentEnhancerService(ctx, models, {
       async summarize(range) {
         const stored = await usage.listCalls()
@@ -653,7 +687,13 @@ export function apply(ctx: Context, config: Config): void {
     balancesFacade,
     sessionCleanup,
     extraFoldersStore,
+    softPauseGate,
+    () => settings().softPauseEnabled,
   )
+  installSoftPause(ctx, {
+    gate: softPauseGate,
+    enabled: () => settings().softPauseEnabled,
+  })
   ctx.effect(() => ctx.typert.register(hostContribution))
   // Monaco is optional — never let route install throw and tear down this fiber
   // (that makes settings mutate report "Plugin entry is no longer configurable").

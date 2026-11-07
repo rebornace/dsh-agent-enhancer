@@ -2,9 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- **软暂停：** 最新用户气泡暂停/恢复；Host `agent/pre-step` 门闸挡住下一步模型调用以节省后续 token；官方 Stop 仍硬中断并清门闸。设置项 `softPauseEnabled`（默认开）。
+
+### Removed
+
+- **停止后继续执行：** 硬停后再发续跑文案不省 token，且无法替换官方发送/停止主按钮；已拆除（由步间软暂停替代续跑路径）。
+
 ### Docs
 
-- README 中英文合并重复表格：功能 / 用法 / 预览一表；安装与隐私改短述。
+- README / roadmap / session-delete：软暂停边界与「无落盘」说明。
 
 ## 0.3.5 - 2026-11-06
 

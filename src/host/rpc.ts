@@ -404,6 +404,30 @@ const providerBalancesRequestCodec = codec(
   providerBalancesRequestSchema,
 )
 
+export const softPauseSnapshotRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+})
+export type SoftPauseSnapshotRequest = z.infer<typeof softPauseSnapshotRequestSchema>
+export const softPauseSetRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  engaged: z.boolean(),
+})
+export type SoftPauseSetRequest = z.infer<typeof softPauseSetRequestSchema>
+export const softPauseStateSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  engaged: z.boolean(),
+})
+export type SoftPauseState = z.infer<typeof softPauseStateSchema>
+const softPauseSnapshotRequestCodec = codec(
+  'dsh-agent-enhancer#SoftPauseSnapshotRequest',
+  softPauseSnapshotRequestSchema,
+)
+const softPauseSetRequestCodec = codec(
+  'dsh-agent-enhancer#SoftPauseSetRequest',
+  softPauseSetRequestSchema,
+)
+const softPauseStateCodec = codec('dsh-agent-enhancer#SoftPauseState', softPauseStateSchema)
+
 export const remoteInfo = createTypertRemoteInfo({
   package: 'dsh-agent-enhancer',
   methods: {
@@ -595,6 +619,30 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: providerBalancesRequestCodec,
       }],
       result: providerBalancesCodec,
+    },
+    'agentEnhancer/softPauseSnapshot': {
+      service: 'agentEnhancer',
+      implementation: 'softPauseSnapshot',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: softPauseSnapshotRequestCodec,
+        strictCodec: softPauseSnapshotRequestCodec,
+      }],
+      result: softPauseStateCodec,
+    },
+    'agentEnhancer/softPauseSet': {
+      service: 'agentEnhancer',
+      implementation: 'softPauseSet',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: softPauseSetRequestCodec,
+        strictCodec: softPauseSetRequestCodec,
+      }],
+      result: softPauseStateCodec,
     },
   },
 }, z)
