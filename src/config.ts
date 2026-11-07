@@ -3,7 +3,7 @@ import type { AutoRouteMap } from './host/auto-route/types.ts'
 
 export const MODULES = [
   'history', 'optimize', 'predict', 'quote', 'rollback', 'softPause', 'contextInspect', 'usage',
-  'sessionDelete', 'fileEdit',
+  'sessionDelete', 'fileEdit', 'instructionsSkills',
 ] as const
 export type ModuleName = typeof MODULES[number]
 
@@ -61,6 +61,7 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   sessionDeleteEnabled: true,
   fileEditEnabled: true,
   softPauseEnabled: true,
+  instructionsSkillsEnabled: true,
   optimizeProvider: '',
   optimizeModel: '',
   optimizeReasoningEffort: '',
@@ -101,6 +102,7 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     sessionDeleteEnabled: value?.sessionDeleteEnabled ?? true,
     fileEditEnabled: value?.fileEditEnabled ?? true,
     softPauseEnabled: value?.softPauseEnabled ?? true,
+    instructionsSkillsEnabled: value?.instructionsSkillsEnabled ?? true,
     optimizeProvider: text(value?.optimizeProvider),
     optimizeModel: text(value?.optimizeModel),
     optimizeReasoningEffort: text(value?.optimizeReasoningEffort),

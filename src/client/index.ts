@@ -103,6 +103,7 @@ import {
   EXTRA_FOLDERS_TAB_KIND,
 } from './extra-folders/kind.ts'
 import { ExtraFoldersTab, ExtraFoldersTabTitle } from './extra-folders/tab.tsx'
+import { installInstructionsSkillsLeftNav } from './instructions-skills/left-nav.ts'
 import { installCss } from './styles.module.css'
 
 type InventoryRemote = ClientRemote & {
@@ -431,6 +432,7 @@ export function apply(ctx: Context): void {
       { ...props, t: tContext },
     )
     const fileEditEnabled = () => resolveSettings(form.getSnapshot().value).fileEditEnabled
+    const instructionsSkillsEnabled = () => resolveSettings(form.getSnapshot().value).instructionsSkillsEnabled
     const FileEditRightTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(FileEditTab, {
       ...props,
       remote: () => agentEnhancerRemote,
@@ -606,6 +608,19 @@ export function apply(ctx: Context): void {
       return () => {
         unsubscribe()
         while (disposers.length > 0) disposers.pop()?.()
+      }
+    })
+    mountedCtx.effect(() => {
+      const nav = installInstructionsSkillsLeftNav(mountedCtx, {
+        enabled: instructionsSkillsEnabled,
+        t: tContext,
+        remote: () => agentEnhancerRemote,
+        sidebarRight: mountedCtx.sidebarRight,
+      })
+      const unsubscribe = form.subscribe(() => nav.synchronize())
+      return () => {
+        unsubscribe()
+        nav.dispose()
       }
     })
   }

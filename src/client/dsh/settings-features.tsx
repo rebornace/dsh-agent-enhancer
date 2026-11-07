@@ -11,10 +11,12 @@ export interface SettingsFeaturesPanelProps {
   readonly t: TranslateNS<'agent-enhancer'>
   readonly onToggle: (module: ModuleName, checked: boolean) => void
   readonly onOpenModel: (feature: ConfigurableAuxiliaryFeature) => void
+  /** Optional per-module extra description (e.g. host capability warnings). */
+  readonly featureExtraDescription?: (module: ModuleName) => string | undefined
 }
 
 export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
-  const { settings, busy, t, onToggle, onOpenModel } = props
+  const { settings, busy, t, onToggle, onOpenModel, featureExtraDescription } = props
 
   return (
     <div className={styles.settingsPanel} data-settings-panel="features">
@@ -27,6 +29,11 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                 <div className={styles.settingText}>
                   <div className={styles.settingTitle}>{t(entry.labelKey)}</div>
                   <p className={styles.settingDescription}>{t(entry.descriptionKey)}</p>
+                  {featureExtraDescription?.(entry.module) !== undefined ? (
+                    <p className={styles.settingDescription} role="note">
+                      {featureExtraDescription(entry.module)}
+                    </p>
+                  ) : null}
                 </div>
                 <div className={styles.settingControls}>
                   {entry.modelFeature !== null && (

@@ -17,6 +17,7 @@ export type FeatureLabelKey =
   | 'usage'
   | 'sessionDelete'
   | 'fileEdit'
+  | 'instructionsSkills'
 
 export type FeatureDescriptionKey =
   | 'historyDescription'
@@ -29,6 +30,7 @@ export type FeatureDescriptionKey =
   | 'usageDescription'
   | 'sessionDeleteDescription'
   | 'fileEditDescription'
+  | 'instructionsSkillsDescription'
 
 export interface SettingsFeatureEntry {
   readonly module: ModuleName
@@ -113,6 +115,12 @@ export const SETTINGS_FEATURE_GROUPS: readonly SettingsFeatureGroup[] = [
         module: 'fileEdit',
         labelKey: 'fileEdit',
         descriptionKey: 'fileEditDescription',
+        modelFeature: null,
+      },
+      {
+        module: 'instructionsSkills',
+        labelKey: 'instructionsSkills',
+        descriptionKey: 'instructionsSkillsDescription',
         modelFeature: null,
       },
     ],

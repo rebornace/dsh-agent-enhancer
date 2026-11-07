@@ -74,6 +74,31 @@ import type {
   WriteWorkspaceFileRequest,
   WriteWorkspaceFileResult,
 } from './file-edit/types.ts'
+import {
+  createWorkspaceAgentsNow,
+  createWorkspaceSkillNow,
+  installSkillFromGitNow,
+  installSkillFromZipNow,
+  listInstructionsSkillsNow,
+  uninstallSkillNow,
+  updateSkillFromGitNow,
+} from './instructions-skills/io.ts'
+import type {
+  CreateWorkspaceAgentsRequest,
+  CreateWorkspaceAgentsResult,
+  CreateWorkspaceSkillRequest,
+  CreateWorkspaceSkillResult,
+  InstallSkillFromGitRequest,
+  InstallSkillFromGitResult,
+  InstallSkillFromZipRequest,
+  InstallSkillFromZipResult,
+  InstructionsSkillsSnapshot,
+  ListInstructionsSkillsRequest,
+  UninstallSkillRequest,
+  UninstallSkillResult,
+  UpdateSkillFromGitRequest,
+  UpdateSkillFromGitResult,
+} from './instructions-skills/types.ts'
 import { inspectContextCategory, pressureFromProjection } from './context-inspect.ts'
 import type { ContextInspectRequest, ContextInspectResult } from './context-inspect.ts'
 import { installAutoSessionRoute } from './auto-route/session-hook.ts'
@@ -138,6 +163,7 @@ export const Config = z.object({
   sessionDeleteEnabled: z.boolean().default(true).volatile(),
   fileEditEnabled: z.boolean().default(true).volatile(),
   softPauseEnabled: z.boolean().default(true).volatile(),
+  instructionsSkillsEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.
   optimizeProvider: z.string().default('').volatile(),
   optimizeModel: z.string().default('').volatile(),
@@ -199,6 +225,7 @@ export class AgentEnhancerService extends TypertRemoteService {
     ),
     private readonly softPause: SoftPauseGate = new SoftPauseGate(),
     private readonly softPauseEnabled: () => boolean = () => true,
+    private readonly installLedgerRoot: string | undefined = undefined,
   ) {
     super(ctx, 'agentEnhancer')
   }
@@ -478,6 +505,146 @@ export class AgentEnhancerService extends TypertRemoteService {
     return this.balances.get(request.force === true, request.locale)
   }
 
+  /** List AGENTS.md / CLAUDE.md chain + skills for the session workspace. */
+  async listInstructionsSkills(
+    request: ListInstructionsSkillsRequest,
+    signal: AbortSignal,
+  ): Promise<InstructionsSkillsSnapshot> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await listInstructionsSkillsNow({
+        ctx: this.ctx,
+        request,
+        signal,
+        installLedgerRoot: this.installLedgerRoot,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  /** Create workspace-root AGENTS.md when missing. */
+  async createWorkspaceAgents(
+    request: CreateWorkspaceAgentsRequest,
+    signal: AbortSignal,
+  ): Promise<CreateWorkspaceAgentsResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await createWorkspaceAgentsNow({
+        ctx: this.ctx,
+        request,
+        signal,
+        installLedgerRoot: this.installLedgerRoot,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  /** Create `.agents/skills/<name>/SKILL.md` under the project root. */
+  async createWorkspaceSkill(
+    request: CreateWorkspaceSkillRequest,
+    signal: AbortSignal,
+  ): Promise<CreateWorkspaceSkillResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await createWorkspaceSkillNow({
+        ctx: this.ctx,
+        request,
+        signal,
+        installLedgerRoot: this.installLedgerRoot,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  /** Shallow-clone a git/GitHub source and copy skill bundles into user or project skills. */
+  async installSkillFromGit(
+    request: InstallSkillFromGitRequest,
+    signal: AbortSignal,
+  ): Promise<InstallSkillFromGitResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await installSkillFromGitNow({
+        ctx: this.ctx,
+        request,
+        signal,
+        installLedgerRoot: this.installLedgerRoot,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  /** Remove a skill from a managed install root (user/project skills). */
+  async uninstallSkill(
+    request: UninstallSkillRequest,
+    signal: AbortSignal,
+  ): Promise<UninstallSkillResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await uninstallSkillNow({
+        ctx: this.ctx,
+        request,
+        signal,
+        installLedgerRoot: this.installLedgerRoot,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  /** Install skills from a local .zip (opens a file picker when zipPath is omitted). */
+  async installSkillFromZip(
+    request: InstallSkillFromZipRequest,
+    signal: AbortSignal,
+  ): Promise<InstallSkillFromZipResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await installSkillFromZipNow({
+        ctx: this.ctx,
+        request,
+        signal,
+        installLedgerRoot: this.installLedgerRoot,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  /** Re-install one GitHub-tracked skill from its ledger source with force overwrite. */
+  async updateSkillFromGit(
+    request: UpdateSkillFromGitRequest,
+    signal: AbortSignal,
+  ): Promise<UpdateSkillFromGitResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await updateSkillFromGitNow({
+        ctx: this.ctx,
+        request,
+        signal,
+        installLedgerRoot: this.installLedgerRoot,
+      })
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
   /** Soft-pause gate snapshot for the latest-user-bubble Pause / Resume control. */
   async softPauseSnapshot(request: SoftPauseSnapshotRequest): Promise<SoftPauseState> {
     this.assertOwner()
@@ -558,6 +725,16 @@ function extraFoldersRemoteError(error: unknown): RemoteError {
   })
 }
 
+function instructionsSkillsRemoteError(error: unknown): RemoteError {
+  if (error instanceof AuxiliaryError) {
+    return new RemoteError('agent-enhancer/failed', error.message, { code: error.code })
+  }
+  const detail = error instanceof Error ? error.message : String(error)
+  return new RemoteError('agent-enhancer/failed', detail || 'Instructions & skills failed', {
+    code: 'FILE_EDIT_FAILED',
+  })
+}
+
 function softService<T extends object>(
   ctx: Context,
   name: string,
@@ -603,6 +780,7 @@ function readSettings(config: Config): EnhancerSettings {
     sessionDeleteEnabled: config.sessionDeleteEnabled.get(),
     fileEditEnabled: config.fileEditEnabled.get(),
     softPauseEnabled: config.softPauseEnabled.get(),
+    instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
     optimizeProvider: config.optimizeProvider.get(),
     optimizeModel: config.optimizeModel.get(),
     optimizeReasoningEffort: config.optimizeReasoningEffort.get(),
@@ -633,6 +811,7 @@ export function apply(ctx: Context, config: Config): void {
   const models = new AuxiliaryModels(ctx, settings)
   installAutoSessionRoute(ctx, { settings })
   const storageRoot = resolveCheckpointRoot(process.env.DSH_HOME ?? join(homedir(), '.dsh'))
+  const pluginDataPackageRoot = join(storageRoot, '..')
   const usage = new UsageLedger(join(storageRoot, '..', 'usage'), message => {
     ctx.logger.warn(message)
   })
@@ -689,6 +868,7 @@ export function apply(ctx: Context, config: Config): void {
     extraFoldersStore,
     softPauseGate,
     () => settings().softPauseEnabled,
+    pluginDataPackageRoot,
   )
   installSoftPause(ctx, {
     gate: softPauseGate,

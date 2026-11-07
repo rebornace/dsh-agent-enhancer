@@ -82,6 +82,42 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'sessionDeleteConfirmAction' | 'sessionDeleteCancel' | 'sessionDeleteDeleting' |
       'sessionDeleteDone' | 'sessionDeleteDoneUnloaded' | 'sessionDeleteDoneHidden' |
       'sessionDeleteFailed' | 'sessionDeleteFailedDetail' |
+      'instructionsSkills' | 'instructionsSkillsDescription' | 'instructionsSkillsTitle' |
+      'instructionsSkillsGuideDescription' | 'instructionsSkillsLeftNavUnsupported' |
+      'instructionsSkillsSectionInstructions' | 'instructionsSkillsSectionSkills' |
+      'instructionsSkillsRefresh' | 'instructionsSkillsRefreshHint' |
+      'instructionsSkillsNewSkill' | 'instructionsSkillsNewSkillHint' |
+      'instructionsSkillsNewSkillPrompt' | 'instructionsSkillsNewAgents' | 'instructionsSkillsNewAgentsHint' |
+      'instructionsSkillsOpen' | 'instructionsSkillsMissing' | 'instructionsSkillsEmptySkills' |
+      'instructionsSkillsLoading' | 'instructionsSkillsNoSession' | 'instructionsSkillsFailed' |
+      'instructionsSkillsDenied' | 'instructionsSkillsNotFound' | 'instructionsSkillsSessionChanged' |
+      'instructionsSkillsInvalidName' | 'instructionsSkillsExists' | 'instructionsSkillsCreated' |
+      'instructionsSkillsScope_global' | 'instructionsSkillsScope_shared' | 'instructionsSkillsScope_project' |
+      'instructionsSkillsProvider' |
+      'instructionsSkillsInstallGit' | 'instructionsSkillsInstallGitHint' | 'instructionsSkillsInstallGitPlaceholder' |
+      'instructionsSkillsInstall' | 'instructionsSkillsInstalling' | 'instructionsSkillsInstallTarget' |
+      'instructionsSkillsTargetUser' | 'instructionsSkillsTargetProject' |
+      'instructionsSkillsInstallHint' | 'instructionsSkillsForceOverwrite' |
+      'instructionsSkillsHostStale' | 'instructionsSkillsInstallUnavailable' |
+      'instructionsSkillsPaneInstall' | 'instructionsSkillsPaneInstalled' |
+      'instructionsSkillsInstalledNote' |
+      'instructionsSkillsInstalledEmpty' | 'instructionsSkillsNetworkFailed' |
+      'instructionsSkillsRepoNotFound' |
+      'instructionsSkillsSearch' | 'instructionsSkillsSearchPlaceholder' | 'instructionsSkillsSearchEmpty' |
+      'instructionsSkillsFilter' | 'instructionsSkillsFilterAll' | 'instructionsSkillsFilterUser' |
+      'instructionsSkillsFilterProject' | 'instructionsSkillsFilterOther' |
+      'instructionsSkillsProviderUser' | 'instructionsSkillsProviderDsh' |
+      'instructionsSkillsProviderProject' | 'instructionsSkillsProviderProjectDsh' |
+      'instructionsSkillsProviderRegistry' |
+      'instructionsSkillsUninstall' | 'instructionsSkillsUninstallHint' |
+      'instructionsSkillsUninstallConfirm' | 'instructionsSkillsUninstallCancel' |
+      'instructionsSkillsUninstalling' | 'instructionsSkillsUninstalledNote' |
+      'instructionsSkillsUninstallDenied' |
+      'instructionsSkillsInstallZip' | 'instructionsSkillsInstallZipHint' | 'instructionsSkillsZipInstalledNote' |
+      'instructionsSkillsZipNoUpdateHint' |
+      'instructionsSkillsUpdateAvailable' | 'instructionsSkillsUpdate' | 'instructionsSkillsUpdating' |
+      'instructionsSkillsUpdatedNote' | 'instructionsSkillsUpdateCheckFailed' |
+      'instructionsSkillsChannelGithub' | 'instructionsSkillsChannelZip' | 'instructionsSkillsChannelUnknown' |
       'fileEdit' | 'fileEditDescription' | 'fileEditTitle' | 'fileEditActionHint' |
       'fileEditLoading' | 'fileEditReady' | 'fileEditSaving' | 'fileEditSaved' |
       'fileEditSave' | 'fileEditSaveDirty' | 'fileEditSaveHint' |
@@ -269,6 +305,86 @@ export const agentLocales = {
     softPauseDescription: '在最新用户气泡上暂停/恢复：挡住下一步模型调用以节省后续 token；当前流式回复与已发出工具会跑完。不替代官方停止。',
     softPausePause: '暂停后续模型步',
     softPauseResume: '恢复后续模型步',
+    instructionsSkills: '技能',
+    instructionsSkillsDescription: 'GitHub·Zip 安装到 ~/.agents/skills；GitHub 可检测更新；入口在左侧栏（需 Desktop 声明 sidebar.panellist）；安装后用官方 / 调用',
+    instructionsSkillsLeftNavUnsupported: '当前 Desktop 未提供左侧技能入口（无 sidebar.panellist）；请升级 Desktop 或在设置中确认功能已开启',
+    instructionsSkillsTitle: '技能',
+    instructionsSkillsGuideDescription: 'GitHub·Zip 安装到 ~/.agents/skills；GitHub 可检测更新；用官方 / 调用',
+    instructionsSkillsSectionInstructions: '指令文件',
+    instructionsSkillsSectionSkills: 'Skills',
+    instructionsSkillsRefresh: '刷新',
+    instructionsSkillsRefreshHint: '重新扫描指令与技能',
+    instructionsSkillsNewSkill: '新建 Skill',
+    instructionsSkillsNewSkillHint: '在工作区 .agents/skills 下创建 Skill 目录',
+    instructionsSkillsNewSkillPrompt: 'Skill 名称（kebab-case，如 my-workflow）',
+    instructionsSkillsNewAgents: '新建 AGENTS.md',
+    instructionsSkillsNewAgentsHint: '在工作区根目录创建 AGENTS.md',
+    instructionsSkillsOpen: '打开',
+    instructionsSkillsMissing: '尚未创建',
+    instructionsSkillsEmptySkills: '未发现 Skills。可新建，或将 SKILL.md 放到 .agents/skills/<name>/。',
+    instructionsSkillsLoading: '正在加载…',
+    instructionsSkillsNoSession: '当前没有可用会话',
+    instructionsSkillsFailed: '加载失败，请稍后重试',
+    instructionsSkillsDenied: '没有权限访问该路径',
+    instructionsSkillsNotFound: '文件或目录不存在',
+    instructionsSkillsSessionChanged: '会话工作区不可用，请切换会话后重试',
+    instructionsSkillsInvalidName: '名称须为 kebab-case（小写字母、数字与连字符）',
+    instructionsSkillsExists: '已存在同名文件或 Skill',
+    instructionsSkillsCreated: '已创建',
+    instructionsSkillsScope_global: '用户全局',
+    instructionsSkillsScope_shared: '共享 Agents',
+    instructionsSkillsScope_project: '项目',
+    instructionsSkillsProvider: '来源',
+    instructionsSkillsInstallGit: '从 GitHub 安装',
+    instructionsSkillsInstallGitHint: '粘贴 owner/repo，或 owner/repo/skills/名称（单技能路径），或 GitHub 链接；装到 ~/.agents/skills，之后可检测更新',
+    instructionsSkillsInstallGitPlaceholder: 'owner/repo 或 owner/repo/skills/name',
+    instructionsSkillsInstall: '安装',
+    instructionsSkillsInstalling: '安装中…',
+    instructionsSkillsInstallTarget: '安装到',
+    instructionsSkillsTargetUser: '用户 (~/.agents/skills)',
+    instructionsSkillsTargetProject: '项目 (.agents/skills)',
+    instructionsSkillsInstallZip: '从 Zip 安装',
+    instructionsSkillsInstallZipHint: '选择包含 SKILL.md 的技能包 Zip，安装到 ~/.agents/skills',
+    instructionsSkillsZipInstalledNote: '已从 Zip 安装 {count} 个技能',
+    instructionsSkillsZipNoUpdateHint: 'Zip 安装不支持更新提示；需要新版本时请重新选择 Zip 安装（或改用 GitHub）。',
+    instructionsSkillsUpdateAvailable: '可更新',
+    instructionsSkillsUpdate: '更新',
+    instructionsSkillsUpdating: '更新中…',
+    instructionsSkillsUpdatedNote: '已更新 {name}',
+    instructionsSkillsUpdateCheckFailed: '部分技能的更新检查失败，可稍后刷新重试',
+    instructionsSkillsChannelGithub: 'GitHub',
+    instructionsSkillsChannelZip: 'Zip',
+    instructionsSkillsChannelUnknown: '其他',
+    instructionsSkillsInstallHint: '安装后在输入框输入 / 打开官方技能菜单调用。不要在项目里手建空 Skill 目录。',
+    instructionsSkillsForceOverwrite: '已存在同名技能，请先删除或改名后再装',
+    instructionsSkillsHostStale: '宿主插件未加载最新接口（常见于只热更新了客户端）。请完全退出 Desktop（含托盘）后重开。',
+    instructionsSkillsInstallUnavailable: '安装能力暂不可用。请完全退出 Desktop 后重开再试。',
+    instructionsSkillsPaneInstall: '安装',
+    instructionsSkillsPaneInstalled: '已安装',
+    instructionsSkillsInstalledNote: '已安装。在输入框用 / 调用该技能。',
+    instructionsSkillsInstalledEmpty: '还没有已安装的 Skills。先到「安装」页添加。',
+    instructionsSkillsNetworkFailed: '无法从 GitHub 拉取（连接被重置或超时）。请检查网络/代理后重试；也可改用 Zip 安装。',
+    instructionsSkillsRepoNotFound: '找不到该 GitHub 仓库。请确认 owner/repo；单技能用 owner/repo/skills/名称（例如 TashanGKD/tashan-research-skills/skills/papercheck）。',
+    instructionsSkillsSearch: '搜索已安装技能',
+    instructionsSkillsSearchPlaceholder: '搜索名称或描述…',
+    instructionsSkillsSearchEmpty: '没有匹配的技能',
+    instructionsSkillsFilter: '按来源筛选',
+    instructionsSkillsFilterAll: '全部',
+    instructionsSkillsFilterUser: '用户',
+    instructionsSkillsFilterProject: '项目',
+    instructionsSkillsFilterOther: '其他',
+    instructionsSkillsProviderUser: '用户 ~/.agents/skills',
+    instructionsSkillsProviderDsh: '用户 ~/.dsh/skills',
+    instructionsSkillsProviderProject: '项目 .agents/skills',
+    instructionsSkillsProviderProjectDsh: '项目 .dsh/skills',
+    instructionsSkillsProviderRegistry: '运行时注册',
+    instructionsSkillsUninstall: '卸载',
+    instructionsSkillsUninstallHint: '从托管技能目录卸载（删除或取消链接）',
+    instructionsSkillsUninstallConfirm: '确认卸载',
+    instructionsSkillsUninstallCancel: '取消',
+    instructionsSkillsUninstalling: '卸载中…',
+    instructionsSkillsUninstalledNote: '已卸载 {name}',
+    instructionsSkillsUninstallDenied: '该技能不在托管安装目录，无法在此卸载',
     sessionDelete: '删除会话',
     sessionDeleteDescription: '在侧栏会话 ⋯ 菜单中永久删除会话及其本地数据（不可恢复）',
     sessionDeleteBusy: '会话运行中，无法删除',
@@ -627,6 +743,86 @@ export const agentLocales = {
     softPauseDescription: 'Pause / resume on the latest user bubble: hold the next model step to save later tokens; the current stream and in-flight tools still finish. Does not replace official Stop.',
     softPausePause: 'Pause further model steps',
     softPauseResume: 'Resume further model steps',
+    instructionsSkills: 'Skills',
+    instructionsSkillsDescription: 'GitHub·Zip into ~/.agents/skills; GitHub update checks; left-nav entry (requires Desktop sidebar.panellist); invoke with /',
+    instructionsSkillsLeftNavUnsupported: 'This Desktop build has no left Skills entry (sidebar.panellist missing). Upgrade Desktop or confirm the feature toggle is on',
+    instructionsSkillsTitle: 'Skills',
+    instructionsSkillsGuideDescription: 'GitHub·Zip into ~/.agents/skills; GitHub update checks; invoke with /',
+    instructionsSkillsSectionInstructions: 'Instruction files',
+    instructionsSkillsSectionSkills: 'Skills',
+    instructionsSkillsRefresh: 'Refresh',
+    instructionsSkillsRefreshHint: 'Rescan instructions and skills',
+    instructionsSkillsNewSkill: 'New skill',
+    instructionsSkillsNewSkillHint: 'Create a skill folder under workspace .agents/skills',
+    instructionsSkillsNewSkillPrompt: 'Skill name (kebab-case, e.g. my-workflow)',
+    instructionsSkillsNewAgents: 'New AGENTS.md',
+    instructionsSkillsNewAgentsHint: 'Create AGENTS.md at the workspace root',
+    instructionsSkillsOpen: 'Open',
+    instructionsSkillsMissing: 'Not created yet',
+    instructionsSkillsEmptySkills: 'No skills found. Create one, or place SKILL.md under .agents/skills/<name>/.',
+    instructionsSkillsLoading: 'Loading…',
+    instructionsSkillsNoSession: 'No session is available',
+    instructionsSkillsFailed: 'Load failed. Please try again.',
+    instructionsSkillsDenied: 'Permission denied for this path',
+    instructionsSkillsNotFound: 'File or directory not found',
+    instructionsSkillsSessionChanged: 'Session workspace is unavailable; switch sessions and retry',
+    instructionsSkillsInvalidName: 'Name must be kebab-case (lowercase letters, digits, and hyphens)',
+    instructionsSkillsExists: 'A file or skill with that name already exists',
+    instructionsSkillsCreated: 'Created',
+    instructionsSkillsScope_global: 'User global',
+    instructionsSkillsScope_shared: 'Shared agents',
+    instructionsSkillsScope_project: 'Project',
+    instructionsSkillsProvider: 'Source',
+    instructionsSkillsInstallGit: 'Install from GitHub',
+    instructionsSkillsInstallGitHint: 'Paste owner/repo, owner/repo/skills/name for one skill, or a GitHub URL; installs into ~/.agents/skills and can check for updates later',
+    instructionsSkillsInstallGitPlaceholder: 'owner/repo or owner/repo/skills/name',
+    instructionsSkillsInstall: 'Install',
+    instructionsSkillsInstalling: 'Installing…',
+    instructionsSkillsInstallTarget: 'Install to',
+    instructionsSkillsTargetUser: 'User (~/.agents/skills)',
+    instructionsSkillsTargetProject: 'Project (.agents/skills)',
+    instructionsSkillsInstallZip: 'Install from Zip',
+    instructionsSkillsInstallZipHint: 'Pick a skill-pack zip that contains SKILL.md folders; installs into ~/.agents/skills',
+    instructionsSkillsZipInstalledNote: 'Installed {count} skill(s) from zip',
+    instructionsSkillsZipNoUpdateHint: 'Zip installs do not support update checks. Pick a new zip to upgrade, or install from GitHub instead.',
+    instructionsSkillsUpdateAvailable: 'Update available',
+    instructionsSkillsUpdate: 'Update',
+    instructionsSkillsUpdating: 'Updating…',
+    instructionsSkillsUpdatedNote: 'Updated {name}',
+    instructionsSkillsUpdateCheckFailed: 'Update check failed for some skills. Refresh to try again later.',
+    instructionsSkillsChannelGithub: 'GitHub',
+    instructionsSkillsChannelZip: 'Zip',
+    instructionsSkillsChannelUnknown: 'Other',
+    instructionsSkillsInstallHint: 'After install, type / in the composer to open the official skills menu. Do not hand-create empty skill folders in the project.',
+    instructionsSkillsForceOverwrite: 'A skill with that name already exists; remove or rename it first',
+    instructionsSkillsHostStale: 'The host plugin is missing the latest APIs (often after a client-only hot reload). Fully quit Desktop (including tray) and reopen.',
+    instructionsSkillsInstallUnavailable: 'Install is temporarily unavailable. Fully quit Desktop and reopen, then try again.',
+    instructionsSkillsPaneInstall: 'Install',
+    instructionsSkillsPaneInstalled: 'Installed',
+    instructionsSkillsInstalledNote: 'Installed. Type / in the composer to run it.',
+    instructionsSkillsInstalledEmpty: 'No skills installed yet. Switch to Install to add some.',
+    instructionsSkillsNetworkFailed: 'Could not reach GitHub (connection reset or timeout). Check network/proxy, or install from Zip instead.',
+    instructionsSkillsRepoNotFound: 'GitHub repository not found. Check owner/repo; for a single skill use owner/repo/skills/name (e.g. TashanGKD/tashan-research-skills/skills/papercheck).',
+    instructionsSkillsSearch: 'Search installed skills',
+    instructionsSkillsSearchPlaceholder: 'Search by name or description…',
+    instructionsSkillsSearchEmpty: 'No matching skills',
+    instructionsSkillsFilter: 'Filter by source',
+    instructionsSkillsFilterAll: 'All',
+    instructionsSkillsFilterUser: 'User',
+    instructionsSkillsFilterProject: 'Project',
+    instructionsSkillsFilterOther: 'Other',
+    instructionsSkillsProviderUser: 'User ~/.agents/skills',
+    instructionsSkillsProviderDsh: 'User ~/.dsh/skills',
+    instructionsSkillsProviderProject: 'Project .agents/skills',
+    instructionsSkillsProviderProjectDsh: 'Project .dsh/skills',
+    instructionsSkillsProviderRegistry: 'Runtime registry',
+    instructionsSkillsUninstall: 'Uninstall',
+    instructionsSkillsUninstallHint: 'Remove from a managed skills root (delete or unlink)',
+    instructionsSkillsUninstallConfirm: 'Confirm',
+    instructionsSkillsUninstallCancel: 'Cancel',
+    instructionsSkillsUninstalling: 'Uninstalling…',
+    instructionsSkillsUninstalledNote: 'Uninstalled {name}',
+    instructionsSkillsUninstallDenied: 'This skill is outside managed install roots and cannot be uninstalled here',
     sessionDelete: 'Delete session',
     sessionDeleteDescription: 'Permanently delete a session and its local data from the sidebar ⋯ menu (cannot be undone)',
     sessionDeleteBusy: 'Session is running; deletion unavailable',

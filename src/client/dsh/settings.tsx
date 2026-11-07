@@ -18,6 +18,10 @@ import { SettingsAboutPanel } from './settings-about.tsx'
 import { SETTINGS_TABS } from './settings-catalog.ts'
 import type { AutoRouteTier, SettingsTabId } from './settings-catalog.ts'
 import { SettingsFeaturesPanel } from './settings-features.tsx'
+import {
+  skillsLeftNavPanellistSupported,
+  subscribeSkillsLeftNavPanellist,
+} from '../instructions-skills/left-nav.ts'
 import { SettingsModelsPanel } from './settings-models.tsx'
 import { autoTierFieldPrefix } from './settings-model-pill.tsx'
 
@@ -78,6 +82,11 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyU
     () => form.getSnapshot(),
   )
   const settings = resolveSettings(formState?.value)
+  const skillsLeftNavSeatReady = useSyncExternalStore(
+    subscribeSkillsLeftNavPanellist,
+    skillsLeftNavPanellistSupported,
+    () => false,
+  )
   const writable = formState?.writable !== false
   const [tab, setTab] = useState<SettingsTabId>('features')
   const [highlightFeature, setHighlightFeature] = useState<ConfigurableAuxiliaryFeature | null>(null)
@@ -285,6 +294,11 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyU
           onOpenModel={feature => {
             setHighlightFeature(feature)
             setTab('models')
+          }}
+          featureExtraDescription={module => {
+            if (module !== 'instructionsSkills') return undefined
+            if (!settings.instructionsSkillsEnabled || skillsLeftNavSeatReady) return undefined
+            return t('instructionsSkillsLeftNavUnsupported')
           }}
         />
       )

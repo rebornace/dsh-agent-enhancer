@@ -2765,6 +2765,500 @@
   flex: none;
 }
 
+/* Instructions & skills — peer of Extra folders / FilesBody row chrome */
+.instructionsSkillsPane {
+  display: flex;
+  flex-direction: column;
+  flex: auto;
+  height: 100%;
+  min-height: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.5;
+}
+
+.instructionsSkillsHeader {
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 38px;
+  padding: 0 6px 0 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.instructionsSkillsPath {
+  margin-right: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.instructionsSkillsTool {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.instructionsSkillsTool svg {
+  width: 15px;
+  height: 15px;
+}
+
+.instructionsSkillsTool:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.instructionsSkillsTool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.instructionsSkillsError {
+  flex: none;
+  padding: 8px 16px;
+  color: var(--dsw-alias-state-error-primary, #ef4444);
+  font-size: 12px;
+  line-height: 1.5;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #ef4444) 8%, transparent);
+}
+
+.instructionsSkillsNote {
+  flex: none;
+  padding: 8px 16px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.instructionsSkillsBody {
+  flex: auto;
+  min-height: 0;
+  margin-right: 2px;
+  padding: 0 0 16px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.instructionsSkillsStatus {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px;
+}
+
+.instructionsSkillsStatusLine {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.6;
+}
+
+.instructionsSkillsDock {
+  flex: none;
+  margin: 0 0 4px;
+  padding: 12px 16px 14px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-layer-1, transparent);
+}
+
+.instructionsSkillsDockHead {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 10px;
+}
+
+.instructionsSkillsDockTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.instructionsSkillsDockHint {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.instructionsSkillsSection {
+  margin: 12px 0 0;
+  padding: 0 8px 0 8px;
+}
+
+.instructionsSkillsSectionHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 8px 4px;
+}
+
+.instructionsSkillsSectionTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.instructionsSkillsCount {
+  flex: none;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.instructionsSkillsList {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.instructionsSkillsItem {
+  margin: 0;
+}
+
+.instructionsSkillsRow {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.instructionsSkillsRow:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.instructionsSkillsRow:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.instructionsSkillsFileIcon {
+  flex: none;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.instructionsSkillsFileIcon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.instructionsSkillsNameCol {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.instructionsSkillsName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  color: var(--dsw-alias-label-primary);
+}
+
+.instructionsSkillsDesc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.instructionsSkillsMeta {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.instructionsSkillsMissing {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.instructionsSkillsTitleIcon {
+  flex: none;
+  margin-right: 6px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.instructionsSkillsTabs {
+  flex: none;
+  padding: 10px 12px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.instructionsSkillsHint {
+  margin: 0 8px 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.instructionsSkillsFoot {
+  margin: 16px 16px 0;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.instructionsSkillsFormRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.instructionsSkillsInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.instructionsSkillsRowStatic {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+}
+
+.instructionsSkillsRowStatic:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.instructionsSkillsEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 8px 8px 0;
+  padding: 20px 12px;
+}
+
+.instructionsSkillsEmptyIcon {
+  width: 22px;
+  height: 22px;
+  color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary));
+}
+
+.instructionsSkillsLocalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 8px 10px;
+}
+
+.instructionsSkillsToolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 8px 10px;
+}
+
+.instructionsSkillsSearch {
+  width: 100%;
+  min-width: 0;
+}
+
+.instructionsSkillsFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.instructionsSkillsFilter,
+.instructionsSkillsFilterActive {
+  flex: none;
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 24px;
+  cursor: pointer;
+}
+
+.instructionsSkillsFilter:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.instructionsSkillsFilterActive {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.instructionsSkillsFilter:disabled,
+.instructionsSkillsFilterActive:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.instructionsSkillsGroup {
+  margin: 0 0 12px;
+}
+
+.instructionsSkillsRowWrap {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 2px;
+}
+
+.instructionsSkillsRowWrap .instructionsSkillsRow {
+  flex: 1;
+  min-width: 0;
+}
+
+.instructionsSkillsRemove {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.instructionsSkillsRemove svg {
+  width: 14px;
+  height: 14px;
+}
+
+.instructionsSkillsRemove:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.instructionsSkillsRemove:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.instructionsSkillsConfirm {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 4px;
+}
+
+.instructionsSkillsZipWarn {
+  margin: 6px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.instructionsSkillsUpdateWarn {
+  flex: none;
+  padding: 8px 16px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.instructionsSkillsUpdatePill {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--dsw-radius-sm, 6px);
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.instructionsSkillsRowActions {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 4px;
+}
+
+.instructionsSkillsNavIconWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.instructionsSkillsNavDot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-business-primary);
+  pointer-events: none;
+}
+
+.instructionsSkillsStatus .instructionsSkillsStatusLine {
+  margin-bottom: 12px;
+}
+
 /* Mirror ChatView floating chrome (toBottom): fill + elevation, no card border.
    Keep an opaque layer fill so preview / Monaco text cannot show through on hover. */
 .quoteSelectionButton {

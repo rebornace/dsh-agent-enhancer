@@ -428,6 +428,178 @@ const softPauseSetRequestCodec = codec(
 )
 const softPauseStateCodec = codec('dsh-agent-enhancer#SoftPauseState', softPauseStateSchema)
 
+const instructionScopeSchema = z.enum(['global', 'shared', 'project'])
+const instructionFileEntrySchema = z.strictObject({
+  id: z.string().min(1),
+  scope: instructionScopeSchema,
+  name: z.string().min(1),
+  path: z.string().min(1),
+  exists: z.boolean(),
+  bytes: z.number().int().nonnegative().nullable(),
+  createable: z.boolean(),
+})
+const skillInstallChannelSchema = z.enum(['github', 'zip', 'unknown'])
+const skillCatalogEntrySchema = z.strictObject({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string(),
+  path: z.string().min(1).nullable(),
+  provider: z.string(),
+  modelInvocable: z.boolean().nullable(),
+  userInvocable: z.boolean().nullable(),
+  removable: z.boolean(),
+  installChannel: skillInstallChannelSchema.nullable(),
+  updateAvailable: z.boolean(),
+  updateSourceLabel: z.string().nullable(),
+  updateCheckFailed: z.boolean(),
+})
+export const listInstructionsSkillsRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+})
+export type ListInstructionsSkillsRequest = z.infer<typeof listInstructionsSkillsRequestSchema>
+export const instructionsSkillsSnapshotSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  cwd: z.string().min(1),
+  projectRoot: z.string().min(1),
+  instructions: z.array(instructionFileEntrySchema),
+  skills: z.array(skillCatalogEntrySchema),
+  skillsSource: z.enum(['registry', 'filesystem', 'merged']),
+})
+export type InstructionsSkillsSnapshot = z.infer<typeof instructionsSkillsSnapshotSchema>
+export const createWorkspaceAgentsRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+})
+export type CreateWorkspaceAgentsRequest = z.infer<typeof createWorkspaceAgentsRequestSchema>
+export const createWorkspaceAgentsResultSchema = z.strictObject({
+  path: z.string().min(1),
+  created: z.boolean(),
+  snapshot: instructionsSkillsSnapshotSchema,
+})
+export type CreateWorkspaceAgentsResult = z.infer<typeof createWorkspaceAgentsResultSchema>
+export const createWorkspaceSkillRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  name: z.string().min(1),
+})
+export type CreateWorkspaceSkillRequest = z.infer<typeof createWorkspaceSkillRequestSchema>
+export const createWorkspaceSkillResultSchema = z.strictObject({
+  path: z.string().min(1),
+  created: z.boolean(),
+  snapshot: instructionsSkillsSnapshotSchema,
+})
+export type CreateWorkspaceSkillResult = z.infer<typeof createWorkspaceSkillResultSchema>
+const listInstructionsSkillsRequestCodec = codec(
+  'dsh-agent-enhancer#ListInstructionsSkillsRequest',
+  listInstructionsSkillsRequestSchema,
+)
+const instructionsSkillsSnapshotCodec = codec(
+  'dsh-agent-enhancer#InstructionsSkillsSnapshot',
+  instructionsSkillsSnapshotSchema,
+)
+const createWorkspaceAgentsRequestCodec = codec(
+  'dsh-agent-enhancer#CreateWorkspaceAgentsRequest',
+  createWorkspaceAgentsRequestSchema,
+)
+const createWorkspaceAgentsResultCodec = codec(
+  'dsh-agent-enhancer#CreateWorkspaceAgentsResult',
+  createWorkspaceAgentsResultSchema,
+)
+const createWorkspaceSkillRequestCodec = codec(
+  'dsh-agent-enhancer#CreateWorkspaceSkillRequest',
+  createWorkspaceSkillRequestSchema,
+)
+const createWorkspaceSkillResultCodec = codec(
+  'dsh-agent-enhancer#CreateWorkspaceSkillResult',
+  createWorkspaceSkillResultSchema,
+)
+
+const skillInstallTargetSchema = z.enum(['user', 'project'])
+const skillInstallModeSchema = z.enum(['link', 'copy'])
+const installedSkillRefSchema = z.strictObject({
+  name: z.string().min(1),
+  path: z.string().min(1),
+  mode: skillInstallModeSchema,
+})
+export const installSkillFromGitRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  source: z.string().min(1),
+  target: skillInstallTargetSchema,
+  force: z.boolean().optional(),
+})
+export type InstallSkillFromGitRequest = z.infer<typeof installSkillFromGitRequestSchema>
+export const installSkillFromGitResultSchema = z.strictObject({
+  installed: z.array(installedSkillRefSchema),
+  snapshot: instructionsSkillsSnapshotSchema,
+})
+export type InstallSkillFromGitResult = z.infer<typeof installSkillFromGitResultSchema>
+export const installSkillFromZipRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  zipPath: z.string().min(1).optional(),
+  target: skillInstallTargetSchema,
+  force: z.boolean().optional(),
+})
+export type InstallSkillFromZipRequest = z.infer<typeof installSkillFromZipRequestSchema>
+export const installSkillFromZipResultSchema = z.strictObject({
+  cancelled: z.boolean(),
+  installed: z.array(installedSkillRefSchema),
+  zipPath: z.string().min(1).nullable(),
+  snapshot: instructionsSkillsSnapshotSchema,
+})
+export type InstallSkillFromZipResult = z.infer<typeof installSkillFromZipResultSchema>
+export const uninstallSkillRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  name: z.string().min(1),
+  path: z.string().min(1),
+})
+export type UninstallSkillRequest = z.infer<typeof uninstallSkillRequestSchema>
+export const uninstallSkillResultSchema = z.strictObject({
+  name: z.string().min(1),
+  removedPath: z.string().min(1),
+  snapshot: instructionsSkillsSnapshotSchema,
+})
+export type UninstallSkillResult = z.infer<typeof uninstallSkillResultSchema>
+export const updateSkillFromGitRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+  name: z.string().min(1),
+})
+export type UpdateSkillFromGitRequest = z.infer<typeof updateSkillFromGitRequestSchema>
+export const updateSkillFromGitResultSchema = z.strictObject({
+  updated: installedSkillRefSchema,
+  snapshot: instructionsSkillsSnapshotSchema,
+})
+export type UpdateSkillFromGitResult = z.infer<typeof updateSkillFromGitResultSchema>
+const installSkillFromGitRequestCodec = codec(
+  'dsh-agent-enhancer#InstallSkillFromGitRequest',
+  installSkillFromGitRequestSchema,
+)
+const installSkillFromGitResultCodec = codec(
+  'dsh-agent-enhancer#InstallSkillFromGitResult',
+  installSkillFromGitResultSchema,
+)
+const uninstallSkillRequestCodec = codec(
+  'dsh-agent-enhancer#UninstallSkillRequest',
+  uninstallSkillRequestSchema,
+)
+const uninstallSkillResultCodec = codec(
+  'dsh-agent-enhancer#UninstallSkillResult',
+  uninstallSkillResultSchema,
+)
+const installSkillFromZipRequestCodec = codec(
+  'dsh-agent-enhancer#InstallSkillFromZipRequest',
+  installSkillFromZipRequestSchema,
+)
+const installSkillFromZipResultCodec = codec(
+  'dsh-agent-enhancer#InstallSkillFromZipResult',
+  installSkillFromZipResultSchema,
+)
+const updateSkillFromGitRequestCodec = codec(
+  'dsh-agent-enhancer#UpdateSkillFromGitRequest',
+  updateSkillFromGitRequestSchema,
+)
+const updateSkillFromGitResultCodec = codec(
+  'dsh-agent-enhancer#UpdateSkillFromGitResult',
+  updateSkillFromGitResultSchema,
+)
+
 export const remoteInfo = createTypertRemoteInfo({
   package: 'dsh-agent-enhancer',
   methods: {
@@ -643,6 +815,97 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: softPauseSetRequestCodec,
       }],
       result: softPauseStateCodec,
+    },
+    'agentEnhancer/listInstructionsSkills': {
+      service: 'agentEnhancer',
+      implementation: 'listInstructionsSkills',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: listInstructionsSkillsRequestCodec,
+        strictCodec: listInstructionsSkillsRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: instructionsSkillsSnapshotCodec,
+    },
+    'agentEnhancer/createWorkspaceAgents': {
+      service: 'agentEnhancer',
+      implementation: 'createWorkspaceAgents',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: createWorkspaceAgentsRequestCodec,
+        strictCodec: createWorkspaceAgentsRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: createWorkspaceAgentsResultCodec,
+    },
+    'agentEnhancer/createWorkspaceSkill': {
+      service: 'agentEnhancer',
+      implementation: 'createWorkspaceSkill',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: createWorkspaceSkillRequestCodec,
+        strictCodec: createWorkspaceSkillRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: createWorkspaceSkillResultCodec,
+    },
+    'agentEnhancer/installSkillFromGit': {
+      service: 'agentEnhancer',
+      implementation: 'installSkillFromGit',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: installSkillFromGitRequestCodec,
+        strictCodec: installSkillFromGitRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: installSkillFromGitResultCodec,
+    },
+    'agentEnhancer/uninstallSkill': {
+      service: 'agentEnhancer',
+      implementation: 'uninstallSkill',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: uninstallSkillRequestCodec,
+        strictCodec: uninstallSkillRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: uninstallSkillResultCodec,
+    },
+    'agentEnhancer/installSkillFromZip': {
+      service: 'agentEnhancer',
+      implementation: 'installSkillFromZip',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: installSkillFromZipRequestCodec,
+        strictCodec: installSkillFromZipRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: installSkillFromZipResultCodec,
+    },
+    'agentEnhancer/updateSkillFromGit': {
+      service: 'agentEnhancer',
+      implementation: 'updateSkillFromGit',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: updateSkillFromGitRequestCodec,
+        strictCodec: updateSkillFromGitRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: updateSkillFromGitResultCodec,
     },
   },
 }, z)

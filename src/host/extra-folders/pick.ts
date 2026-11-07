@@ -118,3 +118,142 @@ export async function pickDirectoryNow(signal: AbortSignal): Promise<PickDirecto
     'No directory picker is available in this environment',
   )
 }
+
+export interface PickFileOptions {
+  readonly title?: string
+  /** Electron/Windows style extension filters, e.g. `[{ name: 'Zip', extensions: ['zip'] }]`. */
+  readonly filters?: readonly { readonly name: string, readonly extensions: readonly string[] }[]
+}
+
+export interface PickFileResult {
+  readonly path: string | null
+}
+
+async function pickFileViaElectron(options: PickFileOptions): Promise<string | null | undefined> {
+  try {
+    const electron = nodeRequire('electron') as {
+      readonly dialog?: {
+        showOpenDialog(options: {
+          readonly properties: readonly string[]
+          readonly title?: string
+          readonly filters?: readonly { readonly name: string, readonly extensions: readonly string[] }[]
+        }): Promise<{ readonly canceled: boolean, readonly filePaths: readonly string[] }>
+      }
+    }
+    if (electron.dialog === undefined || typeof electron.dialog.showOpenDialog !== 'function') {
+      return undefined
+    }
+    const result = await electron.dialog.showOpenDialog({
+      properties: ['openFile'],
+      title: options.title ?? 'Select file',
+      filters: options.filters === undefined ? undefined : [...options.filters],
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    const path = result.filePaths[0]
+    return typeof path === 'string' && path.trim() !== '' ? path : null
+  } catch {
+    return undefined
+  }
+}
+
+async function pickFileViaWindowsForms(options: PickFileOptions): Promise<string | null | undefined> {
+  if (process.platform !== 'win32') return undefined
+  const filters = options.filters ?? [{ name: 'All files', extensions: ['*'] }]
+  const filterParts = filters.map(filter => {
+    const patterns = filter.extensions.map(ext => (ext === '*' ? '*.*' : `*.${ext}`)).join(';')
+    return `${filter.name} (${patterns})|${patterns}`
+  })
+  const filterLiteral = [...filterParts, 'All files (*.*)|*.*'].join('|').replace(/'/g, "''")
+  const title = (options.title ?? 'Select file').replace(/'/g, "''")
+  const script = [
+    'Add-Type -AssemblyName System.Windows.Forms | Out-Null',
+    '$dialog = New-Object System.Windows.Forms.OpenFileDialog',
+    `$dialog.Title = '${title}'`,
+    `$dialog.Filter = '${filterLiteral}'`,
+    '$dialog.Multiselect = $false',
+    '$result = $dialog.ShowDialog()',
+    'if ($result -eq [System.Windows.Forms.DialogResult]::OK) {',
+    '  [Console]::Out.Write($dialog.FileName)',
+    '}',
+  ].join('; ')
+  try {
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
+      ['-NoProfile', '-STA', '-Command', script],
+      { windowsHide: true, encoding: 'utf8', timeout: 120_000 },
+    )
+    const path = stdout.trim()
+    return path === '' ? null : path
+  } catch {
+    return undefined
+  }
+}
+
+async function pickFileViaOsascript(options: PickFileOptions): Promise<string | null | undefined> {
+  if (process.platform !== 'darwin') return undefined
+  const extensions = (options.filters ?? [])
+    .flatMap(filter => filter.extensions)
+    .filter(ext => ext !== '*')
+  const ofType = extensions.length === 0
+    ? ''
+    : ` of type {${extensions.map(ext => `"${ext}"`).join(', ')}}`
+  try {
+    const { stdout } = await execFileAsync(
+      'osascript',
+      ['-e', `POSIX path of (choose file with prompt "${(options.title ?? 'Select file').replace(/"/g, '\\"')}"${ofType})`],
+      { encoding: 'utf8', timeout: 120_000 },
+    )
+    const path = stdout.trim().replace(/\/$/, '')
+    return path === '' ? null : path
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (/User canceled|(-128)/i.test(message)) return null
+    return undefined
+  }
+}
+
+async function pickFileViaZenity(options: PickFileOptions): Promise<string | null | undefined> {
+  if (process.platform === 'win32' || process.platform === 'darwin') return undefined
+  const args = ['--file-selection', `--title=${options.title ?? 'Select file'}`]
+  for (const filter of options.filters ?? []) {
+    const patterns = filter.extensions.map(ext => (ext === '*' ? '*' : `*.${ext}`)).join(' ')
+    args.push(`--file-filter=${filter.name} | ${patterns}`)
+  }
+  try {
+    const { stdout } = await execFileAsync('zenity', args, {
+      encoding: 'utf8',
+      timeout: 120_000,
+    })
+    const path = stdout.trim()
+    return path === '' ? null : path
+  } catch (error) {
+    const code = error !== null && typeof error === 'object'
+      ? Reflect.get(error, 'code')
+      : undefined
+    if (code === 1) return null
+    return undefined
+  }
+}
+
+/** Open a native file chooser; null = cancelled. */
+export async function pickFileNow(
+  signal: AbortSignal,
+  options: PickFileOptions = {},
+): Promise<PickFileResult> {
+  signal.throwIfAborted()
+  const attempts = [
+    () => pickFileViaElectron(options),
+    () => pickFileViaWindowsForms(options),
+    () => pickFileViaOsascript(options),
+    () => pickFileViaZenity(options),
+  ]
+  for (const attempt of attempts) {
+    signal.throwIfAborted()
+    const path = await attempt()
+    if (path !== undefined) return { path }
+  }
+  throw new ExtraFoldersError(
+    'FILE_EDIT_FAILED',
+    'No file picker is available in this environment',
+  )
+}

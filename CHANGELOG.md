@@ -5,6 +5,8 @@
 ### Added
 
 - **软暂停：** 最新用户气泡暂停/恢复；Host `agent/pre-step` 门闸挡住下一步模型调用以节省后续 token；官方 Stop 仍硬中断并清门闸。设置项 `softPauseEnabled`（默认开）。
+- **指令与技能：** 左侧一级「技能」面板（`sidebar.panellist` + `main`）管理安装与已安装列表；设置项 `instructionsSkillsEnabled`（默认开）。
+- **Skill 安装：** 从 GitHub/`owner/repo` 浅克隆拷贝，或本机 Zip 安装到 `~/.agents/skills`（或项目 `.agents/skills`）；GitHub 安装可检测更新并一键强制重装；Zip 无更新提示。安装后用官方 `/` 菜单调用。
 
 ### Removed
 
