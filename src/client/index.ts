@@ -104,6 +104,7 @@ import {
 } from './extra-folders/kind.ts'
 import { ExtraFoldersTab, ExtraFoldersTabTitle } from './extra-folders/tab.tsx'
 import { installInstructionsSkillsLeftNav } from './instructions-skills/left-nav.ts'
+import { installMcpConnectorsLeftNav } from './mcp-connectors/left-nav.ts'
 import { installCss } from './styles.module.css'
 
 type InventoryRemote = ClientRemote & {
@@ -433,6 +434,7 @@ export function apply(ctx: Context): void {
     )
     const fileEditEnabled = () => resolveSettings(form.getSnapshot().value).fileEditEnabled
     const instructionsSkillsEnabled = () => resolveSettings(form.getSnapshot().value).instructionsSkillsEnabled
+    const mcpConnectorsEnabled = () => resolveSettings(form.getSnapshot().value).mcpConnectorsEnabled
     const FileEditRightTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(FileEditTab, {
       ...props,
       remote: () => agentEnhancerRemote,
@@ -616,6 +618,18 @@ export function apply(ctx: Context): void {
         t: tContext,
         remote: () => agentEnhancerRemote,
         sidebarRight: () => mountedCtx.sidebarRight,
+      })
+      const unsubscribe = form.subscribe(() => nav.synchronize())
+      return () => {
+        unsubscribe()
+        nav.dispose()
+      }
+    })
+    mountedCtx.effect(() => {
+      const nav = installMcpConnectorsLeftNav(mountedCtx, {
+        enabled: mcpConnectorsEnabled,
+        t: tContext,
+        remote: () => agentEnhancerRemote,
       })
       const unsubscribe = form.subscribe(() => nav.synchronize())
       return () => {

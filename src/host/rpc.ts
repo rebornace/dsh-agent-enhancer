@@ -620,6 +620,193 @@ const readSkillDocumentResultCodec = codec(
   readSkillDocumentResultSchema,
 )
 
+const mcpInstallChannelSchema = z.enum(['manual', 'npx', 'github', 'mcpJson'])
+const mcpStdioTransportSchema = z.strictObject({
+  transport: z.literal('stdio'),
+  command: z.string().min(1),
+  args: z.array(z.string()),
+  env: z.record(z.string(), z.string()),
+  cwd: z.string(),
+})
+const mcpHttpTransportSchema = z.strictObject({
+  transport: z.literal('streamable-http'),
+  url: z.string().min(1),
+  headers: z.record(z.string(), z.string()),
+})
+const mcpTransportSchema = z.discriminatedUnion('transport', [
+  mcpStdioTransportSchema,
+  mcpHttpTransportSchema,
+])
+const mcpConnectorEntrySchema = z.strictObject({
+  id: z.string().min(1),
+  serverName: z.string().min(1),
+  enabled: z.boolean(),
+  channel: mcpInstallChannelSchema,
+  sourceLabel: z.string().nullable(),
+  transport: mcpTransportSchema,
+  createdAt: z.number(),
+  updatedAt: z.number(),
+})
+export const mcpConnectorsSnapshotSchema = z.strictObject({
+  connectors: z.array(mcpConnectorEntrySchema),
+  bridgeAvailable: z.boolean(),
+  bridgeError: z.string().nullable(),
+})
+export type McpConnectorsSnapshotWire = z.infer<typeof mcpConnectorsSnapshotSchema>
+export const listMcpConnectorsRequestSchema = z.strictObject({})
+export type ListMcpConnectorsRequestWire = z.infer<typeof listMcpConnectorsRequestSchema>
+export const upsertMcpConnectorRequestSchema = z.strictObject({
+  id: z.string().min(1).optional(),
+  serverName: z.string().min(1),
+  enabled: z.boolean().optional(),
+  channel: mcpInstallChannelSchema.optional(),
+  sourceLabel: z.string().nullable().optional(),
+  transport: mcpTransportSchema,
+})
+export type UpsertMcpConnectorRequestWire = z.infer<typeof upsertMcpConnectorRequestSchema>
+export const upsertMcpConnectorResultSchema = z.strictObject({
+  connector: mcpConnectorEntrySchema,
+  snapshot: mcpConnectorsSnapshotSchema,
+})
+export type UpsertMcpConnectorResultWire = z.infer<typeof upsertMcpConnectorResultSchema>
+export const setMcpConnectorEnabledRequestSchema = z.strictObject({
+  id: z.string().min(1),
+  enabled: z.boolean(),
+})
+export type SetMcpConnectorEnabledRequestWire = z.infer<typeof setMcpConnectorEnabledRequestSchema>
+export const setMcpConnectorEnabledResultSchema = z.strictObject({
+  connector: mcpConnectorEntrySchema,
+  snapshot: mcpConnectorsSnapshotSchema,
+})
+export type SetMcpConnectorEnabledResultWire = z.infer<typeof setMcpConnectorEnabledResultSchema>
+export const uninstallMcpConnectorRequestSchema = z.strictObject({
+  id: z.string().min(1),
+})
+export type UninstallMcpConnectorRequestWire = z.infer<typeof uninstallMcpConnectorRequestSchema>
+export const uninstallMcpConnectorResultSchema = z.strictObject({
+  id: z.string().min(1),
+  snapshot: mcpConnectorsSnapshotSchema,
+})
+export type UninstallMcpConnectorResultWire = z.infer<typeof uninstallMcpConnectorResultSchema>
+export const installMcpFromNpxRequestSchema = z.strictObject({
+  serverName: z.string().min(1),
+  packageName: z.string().min(1),
+  extraArgs: z.array(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+  enabled: z.boolean().optional(),
+  force: z.boolean().optional(),
+})
+export type InstallMcpFromNpxRequestWire = z.infer<typeof installMcpFromNpxRequestSchema>
+export const installMcpFromNpxResultSchema = z.strictObject({
+  connector: mcpConnectorEntrySchema,
+  snapshot: mcpConnectorsSnapshotSchema,
+})
+export type InstallMcpFromNpxResultWire = z.infer<typeof installMcpFromNpxResultSchema>
+export const installMcpFromGitRequestSchema = z.strictObject({
+  serverName: z.string().min(1),
+  source: z.string().min(1),
+  command: z.string().min(1).optional(),
+  args: z.array(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+  enabled: z.boolean().optional(),
+  force: z.boolean().optional(),
+})
+export type InstallMcpFromGitRequestWire = z.infer<typeof installMcpFromGitRequestSchema>
+export const installMcpFromGitResultSchema = z.strictObject({
+  connector: mcpConnectorEntrySchema,
+  snapshot: mcpConnectorsSnapshotSchema,
+})
+export type InstallMcpFromGitResultWire = z.infer<typeof installMcpFromGitResultSchema>
+export const importMcpJsonRequestSchema = z.strictObject({
+  jsonText: z.string().min(1),
+  enabled: z.boolean().optional(),
+  force: z.boolean().optional(),
+})
+export type ImportMcpJsonRequestWire = z.infer<typeof importMcpJsonRequestSchema>
+export const importMcpJsonResultSchema = z.strictObject({
+  imported: z.array(mcpConnectorEntrySchema),
+  skipped: z.array(z.string()),
+  snapshot: mcpConnectorsSnapshotSchema,
+})
+export type ImportMcpJsonResultWire = z.infer<typeof importMcpJsonResultSchema>
+export const listMcpConnectorToolsRequestSchema = z.strictObject({
+  serverName: z.string().min(1),
+})
+export type ListMcpConnectorToolsRequestWire = z.infer<typeof listMcpConnectorToolsRequestSchema>
+export const listMcpConnectorToolsResultSchema = z.strictObject({
+  serverName: z.string().min(1),
+  tools: z.array(z.strictObject({
+    name: z.string().min(1),
+    description: z.string(),
+  })),
+})
+export type ListMcpConnectorToolsResultWire = z.infer<typeof listMcpConnectorToolsResultSchema>
+
+const listMcpConnectorsRequestCodec = codec(
+  'dsh-agent-enhancer#ListMcpConnectorsRequest',
+  listMcpConnectorsRequestSchema,
+)
+const mcpConnectorsSnapshotCodec = codec(
+  'dsh-agent-enhancer#McpConnectorsSnapshot',
+  mcpConnectorsSnapshotSchema,
+)
+const upsertMcpConnectorRequestCodec = codec(
+  'dsh-agent-enhancer#UpsertMcpConnectorRequest',
+  upsertMcpConnectorRequestSchema,
+)
+const upsertMcpConnectorResultCodec = codec(
+  'dsh-agent-enhancer#UpsertMcpConnectorResult',
+  upsertMcpConnectorResultSchema,
+)
+const setMcpConnectorEnabledRequestCodec = codec(
+  'dsh-agent-enhancer#SetMcpConnectorEnabledRequest',
+  setMcpConnectorEnabledRequestSchema,
+)
+const setMcpConnectorEnabledResultCodec = codec(
+  'dsh-agent-enhancer#SetMcpConnectorEnabledResult',
+  setMcpConnectorEnabledResultSchema,
+)
+const uninstallMcpConnectorRequestCodec = codec(
+  'dsh-agent-enhancer#UninstallMcpConnectorRequest',
+  uninstallMcpConnectorRequestSchema,
+)
+const uninstallMcpConnectorResultCodec = codec(
+  'dsh-agent-enhancer#UninstallMcpConnectorResult',
+  uninstallMcpConnectorResultSchema,
+)
+const installMcpFromNpxRequestCodec = codec(
+  'dsh-agent-enhancer#InstallMcpFromNpxRequest',
+  installMcpFromNpxRequestSchema,
+)
+const installMcpFromNpxResultCodec = codec(
+  'dsh-agent-enhancer#InstallMcpFromNpxResult',
+  installMcpFromNpxResultSchema,
+)
+const installMcpFromGitRequestCodec = codec(
+  'dsh-agent-enhancer#InstallMcpFromGitRequest',
+  installMcpFromGitRequestSchema,
+)
+const installMcpFromGitResultCodec = codec(
+  'dsh-agent-enhancer#InstallMcpFromGitResult',
+  installMcpFromGitResultSchema,
+)
+const importMcpJsonRequestCodec = codec(
+  'dsh-agent-enhancer#ImportMcpJsonRequest',
+  importMcpJsonRequestSchema,
+)
+const importMcpJsonResultCodec = codec(
+  'dsh-agent-enhancer#ImportMcpJsonResult',
+  importMcpJsonResultSchema,
+)
+const listMcpConnectorToolsRequestCodec = codec(
+  'dsh-agent-enhancer#ListMcpConnectorToolsRequest',
+  listMcpConnectorToolsRequestSchema,
+)
+const listMcpConnectorToolsResultCodec = codec(
+  'dsh-agent-enhancer#ListMcpConnectorToolsResult',
+  listMcpConnectorToolsResultSchema,
+)
+
 export const remoteInfo = createTypertRemoteInfo({
   package: 'dsh-agent-enhancer',
   methods: {
@@ -939,6 +1126,110 @@ export const remoteInfo = createTypertRemoteInfo({
       }],
       cancellation: { parameter: 'signal' },
       result: readSkillDocumentResultCodec,
+    },
+    'agentEnhancer/listMcpConnectors': {
+      service: 'agentEnhancer',
+      implementation: 'listMcpConnectors',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: listMcpConnectorsRequestCodec,
+        strictCodec: listMcpConnectorsRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: mcpConnectorsSnapshotCodec,
+    },
+    'agentEnhancer/upsertMcpConnector': {
+      service: 'agentEnhancer',
+      implementation: 'upsertMcpConnector',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: upsertMcpConnectorRequestCodec,
+        strictCodec: upsertMcpConnectorRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: upsertMcpConnectorResultCodec,
+    },
+    'agentEnhancer/setMcpConnectorEnabled': {
+      service: 'agentEnhancer',
+      implementation: 'setMcpConnectorEnabled',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: setMcpConnectorEnabledRequestCodec,
+        strictCodec: setMcpConnectorEnabledRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: setMcpConnectorEnabledResultCodec,
+    },
+    'agentEnhancer/uninstallMcpConnector': {
+      service: 'agentEnhancer',
+      implementation: 'uninstallMcpConnector',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: uninstallMcpConnectorRequestCodec,
+        strictCodec: uninstallMcpConnectorRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: uninstallMcpConnectorResultCodec,
+    },
+    'agentEnhancer/installMcpFromNpx': {
+      service: 'agentEnhancer',
+      implementation: 'installMcpFromNpx',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: installMcpFromNpxRequestCodec,
+        strictCodec: installMcpFromNpxRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: installMcpFromNpxResultCodec,
+    },
+    'agentEnhancer/installMcpFromGit': {
+      service: 'agentEnhancer',
+      implementation: 'installMcpFromGit',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: installMcpFromGitRequestCodec,
+        strictCodec: installMcpFromGitRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: installMcpFromGitResultCodec,
+    },
+    'agentEnhancer/importMcpJson': {
+      service: 'agentEnhancer',
+      implementation: 'importMcpJson',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: importMcpJsonRequestCodec,
+        strictCodec: importMcpJsonRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: importMcpJsonResultCodec,
+    },
+    'agentEnhancer/listMcpConnectorTools': {
+      service: 'agentEnhancer',
+      implementation: 'listMcpConnectorTools',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: listMcpConnectorToolsRequestCodec,
+        strictCodec: listMcpConnectorToolsRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: listMcpConnectorToolsResultCodec,
     },
   },
 }, z)

@@ -84,6 +84,37 @@ import {
   uninstallSkillNow,
   updateSkillFromGitNow,
 } from './instructions-skills/io.ts'
+import {
+  importMcpJsonNow,
+  installMcpFromGitNow,
+  installMcpFromNpxNow,
+  listMcpConnectorToolsNow,
+  listMcpConnectorsNow,
+  setMcpConnectorEnabledNow,
+  uninstallMcpConnectorNow,
+  upsertMcpConnectorNow,
+} from './mcp-connectors/io.ts'
+import type { McpConnectorsHost } from './mcp-connectors/io.ts'
+import { createMcpConnectorsStore } from './mcp-connectors/store.ts'
+import { McpConnectorRuntime } from './mcp-connectors/runtime.ts'
+import { mcpConnectorsRoot } from './mcp-connectors/paths.ts'
+import type {
+  ImportMcpJsonRequest,
+  ImportMcpJsonResult,
+  InstallMcpFromGitRequest,
+  InstallMcpFromGitResult,
+  InstallMcpFromNpxRequest,
+  InstallMcpFromNpxResult,
+  ListMcpConnectorToolsRequest,
+  ListMcpConnectorToolsResult,
+  McpConnectorsSnapshot,
+  SetMcpConnectorEnabledRequest,
+  SetMcpConnectorEnabledResult,
+  UninstallMcpConnectorRequest,
+  UninstallMcpConnectorResult,
+  UpsertMcpConnectorRequest,
+  UpsertMcpConnectorResult,
+} from './mcp-connectors/types.ts'
 import type {
   CreateWorkspaceAgentsRequest,
   CreateWorkspaceAgentsResult,
@@ -167,6 +198,7 @@ export const Config = z.object({
   fileEditEnabled: z.boolean().default(true).volatile(),
   softPauseEnabled: z.boolean().default(true).volatile(),
   instructionsSkillsEnabled: z.boolean().default(true).volatile(),
+  mcpConnectorsEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.
   optimizeProvider: z.string().default('').volatile(),
   optimizeModel: z.string().default('').volatile(),
@@ -229,8 +261,18 @@ export class AgentEnhancerService extends TypertRemoteService {
     private readonly softPause: SoftPauseGate = new SoftPauseGate(),
     private readonly softPauseEnabled: () => boolean = () => true,
     private readonly installLedgerRoot: string | undefined = undefined,
+    private readonly mcpHost: McpConnectorsHost | null = null,
   ) {
     super(ctx, 'agentEnhancer')
+  }
+
+  private requireMcpHost(): McpConnectorsHost {
+    if (this.mcpHost === null) {
+      throw new RemoteError('agent-enhancer/failed', 'MCP connectors host is unavailable', {
+        code: 'FILE_EDIT_FAILED',
+      })
+    }
+    return this.mcpHost
   }
 
   private extraRootsForSession(sessionId: SessionId): readonly string[] {
@@ -671,6 +713,118 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
   }
 
+  async listMcpConnectors(
+    _request: Record<string, never>,
+    signal: AbortSignal,
+  ): Promise<McpConnectorsSnapshot> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await listMcpConnectorsNow(this.requireMcpHost())
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  async upsertMcpConnector(
+    request: UpsertMcpConnectorRequest,
+    signal: AbortSignal,
+  ): Promise<UpsertMcpConnectorResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await upsertMcpConnectorNow(this.requireMcpHost(), request)
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  async setMcpConnectorEnabled(
+    request: SetMcpConnectorEnabledRequest,
+    signal: AbortSignal,
+  ): Promise<SetMcpConnectorEnabledResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await setMcpConnectorEnabledNow(this.requireMcpHost(), request)
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  async uninstallMcpConnector(
+    request: UninstallMcpConnectorRequest,
+    signal: AbortSignal,
+  ): Promise<UninstallMcpConnectorResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await uninstallMcpConnectorNow(this.requireMcpHost(), request)
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  async installMcpFromNpx(
+    request: InstallMcpFromNpxRequest,
+    signal: AbortSignal,
+  ): Promise<InstallMcpFromNpxResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await installMcpFromNpxNow(this.requireMcpHost(), request)
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  async installMcpFromGit(
+    request: InstallMcpFromGitRequest,
+    signal: AbortSignal,
+  ): Promise<InstallMcpFromGitResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await installMcpFromGitNow(this.requireMcpHost(), request, signal)
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  async importMcpJson(
+    request: ImportMcpJsonRequest,
+    signal: AbortSignal,
+  ): Promise<ImportMcpJsonResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await importMcpJsonNow(this.requireMcpHost(), request)
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  async listMcpConnectorTools(
+    request: ListMcpConnectorToolsRequest,
+    signal: AbortSignal,
+  ): Promise<ListMcpConnectorToolsResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return listMcpConnectorToolsNow(this.requireMcpHost(), request)
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
   /** Soft-pause gate snapshot for the latest-user-bubble Pause / Resume control. */
   async softPauseSnapshot(request: SoftPauseSnapshotRequest): Promise<SoftPauseState> {
     this.assertOwner()
@@ -807,6 +961,7 @@ function readSettings(config: Config): EnhancerSettings {
     fileEditEnabled: config.fileEditEnabled.get(),
     softPauseEnabled: config.softPauseEnabled.get(),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
+    mcpConnectorsEnabled: config.mcpConnectorsEnabled.get(),
     optimizeProvider: config.optimizeProvider.get(),
     optimizeModel: config.optimizeModel.get(),
     optimizeReasoningEffort: config.optimizeReasoningEffort.get(),
@@ -875,6 +1030,14 @@ export function apply(ctx: Context, config: Config): void {
   sessionCleanup.register(createContextExcludeCleaner(join(storageRoot, '..')))
   const extraFoldersStore = createExtraFoldersStore(join(storageRoot, '..', 'extra-folders'))
   const softPauseGate = new SoftPauseGate()
+  const mcpStore = createMcpConnectorsStore(mcpConnectorsRoot(pluginDataPackageRoot))
+  const mcpRuntime = new McpConnectorRuntime(ctx, mcpStore)
+  mcpRuntime.setFeatureEnabled(settings().mcpConnectorsEnabled)
+  const mcpHost: McpConnectorsHost = { ctx, store: mcpStore, runtime: mcpRuntime }
+  void mcpRuntime.sync().catch(error => {
+    const detail = error instanceof Error ? error.message : String(error)
+    ctx.logger.warn(`agent-enhancer: initial MCP connector sync failed: ${detail}`)
+  })
   new AgentEnhancerService(ctx, models, {
       async summarize(range) {
         const stored = await usage.listCalls()
@@ -895,7 +1058,23 @@ export function apply(ctx: Context, config: Config): void {
     softPauseGate,
     () => settings().softPauseEnabled,
     pluginDataPackageRoot,
+    mcpHost,
   )
+  ctx.effect(() => {
+    const unsubscribe = ctx.on('internal/update', (resolvedConfig, next) => {
+      const enabled = (resolvedConfig as Config).mcpConnectorsEnabled.get()
+      mcpRuntime.setFeatureEnabled(enabled)
+      void mcpRuntime.sync().catch(error => {
+        const detail = error instanceof Error ? error.message : String(error)
+        ctx.logger.warn(`agent-enhancer: MCP connector sync after settings update failed: ${detail}`)
+      })
+      return next()
+    })
+    return async () => {
+      unsubscribe()
+      await mcpRuntime.disposeAll()
+    }
+  })
   installSoftPause(ctx, {
     gate: softPauseGate,
     enabled: () => settings().softPauseEnabled,

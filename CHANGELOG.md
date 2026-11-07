@@ -4,9 +4,13 @@
 
 ### Added
 
-- **软暂停：** 最新用户气泡暂停/恢复；Host `agent/pre-step` 门闸挡住下一步模型调用以节省后续 token；官方 Stop 仍硬中断并清门闸。设置项 `softPauseEnabled`（默认开）。
-- **指令与技能：** 左侧一级「技能」面板（`sidebar.panellist` + `main`）管理安装与已安装列表；设置项 `instructionsSkillsEnabled`（默认开）。
-- **Skill 安装：** 从 GitHub/`owner/repo` 浅克隆拷贝，或本机 Zip 安装到 `~/.agents/skills`（或项目 `.agents/skills`）；GitHub 安装可检测更新并一键强制重装；Zip 无更新提示。安装后用官方 `/` 菜单调用。
+- **软暂停：** 最新用户气泡工具栏暂停/恢复（‖）；Host `agent/pre-step` 门闸挡住下一步模型调用以节省后续 token；官方 Stop 仍硬中断并清门闸。设置项 `softPauseEnabled`（默认开）。
+- **技能：** 左侧栏一级入口（`sidebar.panellist` + `main`，chrome 对齐官方插件页：列表 · 添加对话框 · 详情）；GitHub/`owner/repo` 或 Zip 安装到 `~/.agents/skills`；GitHub 可检测更新；安装后用官方 `/` 调用。设置项 `instructionsSkillsEnabled`（默认开）。
+- **连接器（MCP）：** 左侧栏一级入口（与技能同套 Plugins 页 chrome）；`mcp.json` 添加 Stdio/Remote，列表 `Switch`，详情看工具；经官方 `dsh-mcp-client` 挂载。设置项 `mcpConnectorsEnabled`（默认开）。
+
+### Changed
+
+- 技能 / 连接器管理壳改为对齐 `dsh-client-ui-plugin-manager`（去掉 SegmentedControl 管理壳；添加走官方 `Modal`）。
 
 ### Removed
 
@@ -14,7 +18,7 @@
 
 ### Docs
 
-- README / roadmap / session-delete：软暂停边界与「无落盘」说明。
+- README 中英文补技能/连接器左侧栏与软暂停工具栏截图；功能表与边界说明同步十二开关（含 `mcpConnectors`）。
 
 ## 0.3.5 - 2026-11-06
 

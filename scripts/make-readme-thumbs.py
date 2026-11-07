@@ -15,11 +15,22 @@ LEFT_BIAS = {
   'token-usage-meter.png',
   'select-to-quote.png',
   'session-delete.png',
+  'skills-mcp-left-nav.png',
+}
+
+# Wide short chrome (icon rows): pad to square so the whole strip stays visible.
+PAD_SQUARE = {
+  'soft-pause-action.png',
 }
 
 
 def square_crop(im: Image.Image, name: str) -> Image.Image:
   w, h = im.size
+  if name in PAD_SQUARE:
+    side = max(w, h)
+    canvas = Image.new('RGBA', (side, side), (255, 255, 255, 255))
+    canvas.paste(im, ((side - w) // 2, (side - h) // 2), im if im.mode == 'RGBA' else None)
+    return canvas.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
   side = min(w, h)
   if w == h:
     box = (0, 0, w, h)

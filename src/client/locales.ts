@@ -83,6 +83,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'sessionDeleteDone' | 'sessionDeleteDoneUnloaded' | 'sessionDeleteDoneHidden' |
       'sessionDeleteFailed' | 'sessionDeleteFailedDetail' |
       'instructionsSkills' | 'instructionsSkillsDescription' | 'instructionsSkillsTitle' |
+      'instructionsSkillsIntro' | 'instructionsSkillsAdd' |
       'instructionsSkillsGuideDescription' | 'instructionsSkillsLeftNavUnsupported' |
       'instructionsSkillsSectionInstructions' | 'instructionsSkillsSectionSkills' |
       'instructionsSkillsRefresh' | 'instructionsSkillsRefreshHint' |
@@ -122,6 +123,20 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'instructionsSkillsChannelGithub' | 'instructionsSkillsChannelZip' | 'instructionsSkillsChannelUnknown' |
       'instructionsSkillsPreviewEmpty' | 'instructionsSkillsPreviewLoading' | 'instructionsSkillsPreviewBack' |
       'instructionsSkillsOpenInSidebar' | 'instructionsSkillsOpenInSidebarHint' |
+      'mcpConnectors' | 'mcpConnectorsDescription' | 'mcpConnectorsLeftNavUnsupported' |
+      'mcpConnectorsTitle' | 'mcpConnectorsIntro' | 'mcpConnectorsAdd' |
+      'mcpConnectorsRefresh' | 'mcpConnectorsRefreshHint' |
+      'mcpConnectorsPaneServers' | 'mcpConnectorsPaneAdd' | 'mcpConnectorsAddHint' |
+      'mcpConnectorsTransportStdio' | 'mcpConnectorsTransportRemote' |
+      'mcpConnectorsEnabled' | 'mcpConnectorsDisabled' |
+      'mcpConnectorsJson' |
+      'mcpConnectorsImport' | 'mcpConnectorsImporting' | 'mcpConnectorsImportedNote' |
+      'mcpConnectorsUninstall' | 'mcpConnectorsUninstallHint' | 'mcpConnectorsUninstallConfirm' |
+      'mcpConnectorsUninstallCancel' | 'mcpConnectorsUninstalling' | 'mcpConnectorsUninstalledNote' |
+      'mcpConnectorsEmpty' | 'mcpConnectorsLoading' | 'mcpConnectorsFailed' |
+      'mcpConnectorsBridgeMissing' | 'mcpConnectorsToolsTitle' | 'mcpConnectorsToolsEmpty' |
+      'mcpConnectorsToolsDisabled' | 'mcpConnectorsToolsPick' |
+      'mcpConnectorsToolsLoading' | 'mcpConnectorsForceOverwrite' | 'mcpConnectorsHostStale' |
       'instructionsSkillsMdCopy' | 'instructionsSkillsMdCopied' | 'instructionsSkillsMdFootnotes' |
       'instructionsSkillsMdCode' | 'instructionsSkillsMdWrap' | 'instructionsSkillsMdUnwrap' |
       'fileEdit' | 'fileEditDescription' | 'fileEditTitle' | 'fileEditActionHint' |
@@ -312,10 +327,12 @@ export const agentLocales = {
     softPausePause: '暂停后续模型步',
     softPauseResume: '恢复后续模型步',
     instructionsSkills: '技能',
-    instructionsSkillsDescription: 'GitHub·Zip 安装到 ~/.agents/skills；GitHub 可检测更新；入口在左侧栏（需 Desktop 声明 sidebar.panellist）；安装后用官方 / 调用',
+    instructionsSkillsDescription: 'GitHub·Zip 安装到 ~/.agents/skills；入口在左侧栏；安装后用官方 / 调用',
     instructionsSkillsLeftNavUnsupported: '当前 Desktop 未提供左侧技能入口（无 sidebar.panellist）；请升级 Desktop 或在设置中确认功能已开启',
     instructionsSkillsTitle: '技能',
-    instructionsSkillsGuideDescription: 'GitHub·Zip 安装到 ~/.agents/skills；GitHub 可检测更新；用官方 / 调用',
+    instructionsSkillsIntro: '安装到 ~/.agents/skills，用 / 调用',
+    instructionsSkillsAdd: '添加',
+    instructionsSkillsGuideDescription: 'GitHub·Zip 安装到 ~/.agents/skills；用官方 / 调用',
     instructionsSkillsSectionInstructions: '指令文件',
     instructionsSkillsSectionSkills: 'Skills',
     instructionsSkillsRefresh: '刷新',
@@ -407,6 +424,42 @@ export const agentLocales = {
     instructionsSkillsUninstalledNote: '已卸载 {name}',
     instructionsSkillsUninstallDenied: '该技能不在托管安装目录，无法在此卸载',
     instructionsSkillsRemoveBusy: '无法删除该技能：文件正被占用。请先关闭技能预览或右侧文档页，稍后再试。',
+    mcpConnectors: '连接器',
+    mcpConnectorsDescription: '用 mcp.json 管理 MCP，入口在左侧栏',
+    mcpConnectorsLeftNavUnsupported: '当前 Desktop 无左侧连接器入口，请升级或确认功能已开启',
+    mcpConnectorsTitle: '连接器',
+    mcpConnectorsIntro: '用 mcp.json 添加服务器',
+    mcpConnectorsAdd: '添加',
+    mcpConnectorsRefresh: '刷新',
+    mcpConnectorsRefreshHint: '刷新',
+    mcpConnectorsPaneServers: '服务器',
+    mcpConnectorsPaneAdd: '添加',
+    mcpConnectorsAddHint: '添加',
+    mcpConnectorsTransportStdio: 'Stdio',
+    mcpConnectorsTransportRemote: 'Remote',
+    mcpConnectorsEnabled: '已启用',
+    mcpConnectorsDisabled: '已禁用',
+    mcpConnectorsJson: 'mcp.json',
+    mcpConnectorsImport: '应用',
+    mcpConnectorsImporting: '应用中…',
+    mcpConnectorsImportedNote: '已应用 {count} 个服务器',
+    mcpConnectorsUninstall: '删除',
+    mcpConnectorsUninstallHint: '删除',
+    mcpConnectorsUninstallConfirm: '确认删除',
+    mcpConnectorsUninstallCancel: '取消',
+    mcpConnectorsUninstalling: '删除中…',
+    mcpConnectorsUninstalledNote: '已删除 {name}',
+    mcpConnectorsEmpty: '还没有服务器',
+    mcpConnectorsLoading: '正在加载…',
+    mcpConnectorsFailed: '加载失败',
+    mcpConnectorsBridgeMissing: '未找到 dsh-mcp-client，无法挂载工具',
+    mcpConnectorsToolsTitle: '工具',
+    mcpConnectorsToolsEmpty: '暂无工具',
+    mcpConnectorsToolsDisabled: '已禁用',
+    mcpConnectorsToolsPick: '选择服务器查看工具',
+    mcpConnectorsToolsLoading: '正在读取…',
+    mcpConnectorsForceOverwrite: '覆盖同名',
+    mcpConnectorsHostStale: '请完全退出 Desktop（含托盘）后重开',
     sessionDelete: '删除会话',
     sessionDeleteDescription: '在侧栏会话 ⋯ 菜单中永久删除会话及其本地数据（不可恢复）',
     sessionDeleteBusy: '会话运行中，无法删除',
@@ -766,10 +819,12 @@ export const agentLocales = {
     softPausePause: 'Pause further model steps',
     softPauseResume: 'Resume further model steps',
     instructionsSkills: 'Skills',
-    instructionsSkillsDescription: 'GitHub·Zip into ~/.agents/skills; GitHub update checks; left-nav entry (requires Desktop sidebar.panellist); invoke with /',
+    instructionsSkillsDescription: 'GitHub·Zip into ~/.agents/skills; left-nav entry; invoke with /',
     instructionsSkillsLeftNavUnsupported: 'This Desktop build has no left Skills entry (sidebar.panellist missing). Upgrade Desktop or confirm the feature toggle is on',
     instructionsSkillsTitle: 'Skills',
-    instructionsSkillsGuideDescription: 'GitHub·Zip into ~/.agents/skills; GitHub update checks; invoke with /',
+    instructionsSkillsIntro: 'Install into ~/.agents/skills, invoke with /',
+    instructionsSkillsAdd: 'Add',
+    instructionsSkillsGuideDescription: 'GitHub·Zip into ~/.agents/skills; invoke with /',
     instructionsSkillsSectionInstructions: 'Instruction files',
     instructionsSkillsSectionSkills: 'Skills',
     instructionsSkillsRefresh: 'Refresh',
@@ -861,6 +916,42 @@ export const agentLocales = {
     instructionsSkillsUninstalledNote: 'Uninstalled {name}',
     instructionsSkillsUninstallDenied: 'This skill is outside managed install roots and cannot be uninstalled here',
     instructionsSkillsRemoveBusy: 'Could not remove this skill because files are in use. Close the skill preview or right-sidebar document tab, then try again.',
+    mcpConnectors: 'Connectors',
+    mcpConnectorsDescription: 'Manage MCP with mcp.json; left-nav entry',
+    mcpConnectorsLeftNavUnsupported: 'No left Connectors entry on this Desktop. Upgrade or confirm the feature is on',
+    mcpConnectorsTitle: 'Connectors',
+    mcpConnectorsIntro: 'Add servers with mcp.json',
+    mcpConnectorsAdd: 'Add',
+    mcpConnectorsRefresh: 'Refresh',
+    mcpConnectorsRefreshHint: 'Refresh',
+    mcpConnectorsPaneServers: 'Servers',
+    mcpConnectorsPaneAdd: 'Add',
+    mcpConnectorsAddHint: 'Add',
+    mcpConnectorsTransportStdio: 'Stdio',
+    mcpConnectorsTransportRemote: 'Remote',
+    mcpConnectorsEnabled: 'Enabled',
+    mcpConnectorsDisabled: 'Disabled',
+    mcpConnectorsJson: 'mcp.json',
+    mcpConnectorsImport: 'Apply',
+    mcpConnectorsImporting: 'Applying…',
+    mcpConnectorsImportedNote: 'Applied {count} server(s)',
+    mcpConnectorsUninstall: 'Remove',
+    mcpConnectorsUninstallHint: 'Remove',
+    mcpConnectorsUninstallConfirm: 'Confirm',
+    mcpConnectorsUninstallCancel: 'Cancel',
+    mcpConnectorsUninstalling: 'Removing…',
+    mcpConnectorsUninstalledNote: 'Removed {name}',
+    mcpConnectorsEmpty: 'No servers yet',
+    mcpConnectorsLoading: 'Loading…',
+    mcpConnectorsFailed: 'Failed to load',
+    mcpConnectorsBridgeMissing: 'dsh-mcp-client missing; tools cannot mount',
+    mcpConnectorsToolsTitle: 'Tools',
+    mcpConnectorsToolsEmpty: 'No tools',
+    mcpConnectorsToolsDisabled: 'Disabled',
+    mcpConnectorsToolsPick: 'Select a server to see tools',
+    mcpConnectorsToolsLoading: 'Reading…',
+    mcpConnectorsForceOverwrite: 'Overwrite existing',
+    mcpConnectorsHostStale: 'Fully quit Desktop (including tray) and reopen',
     sessionDelete: 'Delete session',
     sessionDeleteDescription: 'Permanently delete a session and its local data from the sidebar ⋯ menu (cannot be undone)',
     sessionDeleteBusy: 'Session is running; deletion unavailable',

@@ -22,6 +22,10 @@ import {
   skillsLeftNavPanellistSupported,
   subscribeSkillsLeftNavPanellist,
 } from '../instructions-skills/left-nav.ts'
+import {
+  mcpConnectorsLeftNavPanellistSupported,
+  subscribeMcpConnectorsLeftNavPanellist,
+} from '../mcp-connectors/left-nav.ts'
 import { SettingsModelsPanel } from './settings-models.tsx'
 import { autoTierFieldPrefix } from './settings-model-pill.tsx'
 
@@ -85,6 +89,11 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyU
   const skillsLeftNavSeatReady = useSyncExternalStore(
     subscribeSkillsLeftNavPanellist,
     skillsLeftNavPanellistSupported,
+    () => false,
+  )
+  const mcpConnectorsLeftNavSeatReady = useSyncExternalStore(
+    subscribeMcpConnectorsLeftNavPanellist,
+    mcpConnectorsLeftNavPanellistSupported,
     () => false,
   )
   const writable = formState?.writable !== false
@@ -296,9 +305,15 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyU
             setTab('models')
           }}
           featureExtraDescription={module => {
-            if (module !== 'instructionsSkills') return undefined
-            if (!settings.instructionsSkillsEnabled || skillsLeftNavSeatReady) return undefined
-            return t('instructionsSkillsLeftNavUnsupported')
+            if (module === 'instructionsSkills') {
+              if (!settings.instructionsSkillsEnabled || skillsLeftNavSeatReady) return undefined
+              return t('instructionsSkillsLeftNavUnsupported')
+            }
+            if (module === 'mcpConnectors') {
+              if (!settings.mcpConnectorsEnabled || mcpConnectorsLeftNavSeatReady) return undefined
+              return t('mcpConnectorsLeftNavUnsupported')
+            }
+            return undefined
           }}
         />
       )

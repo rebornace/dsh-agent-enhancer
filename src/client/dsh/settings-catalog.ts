@@ -18,6 +18,7 @@ export type FeatureLabelKey =
   | 'sessionDelete'
   | 'fileEdit'
   | 'instructionsSkills'
+  | 'mcpConnectors'
 
 export type FeatureDescriptionKey =
   | 'historyDescription'
@@ -31,6 +32,7 @@ export type FeatureDescriptionKey =
   | 'sessionDeleteDescription'
   | 'fileEditDescription'
   | 'instructionsSkillsDescription'
+  | 'mcpConnectorsDescription'
 
 export interface SettingsFeatureEntry {
   readonly module: ModuleName
@@ -121,6 +123,12 @@ export const SETTINGS_FEATURE_GROUPS: readonly SettingsFeatureGroup[] = [
         module: 'instructionsSkills',
         labelKey: 'instructionsSkills',
         descriptionKey: 'instructionsSkillsDescription',
+        modelFeature: null,
+      },
+      {
+        module: 'mcpConnectors',
+        labelKey: 'mcpConnectors',
+        descriptionKey: 'mcpConnectorsDescription',
         modelFeature: null,
       },
     ],

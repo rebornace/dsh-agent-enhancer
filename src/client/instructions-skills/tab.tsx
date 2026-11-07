@@ -1,7 +1,7 @@
 /**
- * Skills install shell — peer chrome of Extra folders / FilesBody.
+ * Skills manager — peer PluginManagerPage IA (list + Add sheet + detail).
+ * Peer: `@deepseek-ai/dsh-client-ui-plugin-manager`.
  * Primary job: install into ~/.agents/skills (official discovery), then use Desktop `/`.
- * Installed: search + scope filter + preview open + uninstall managed roots.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GlobalStandardProps, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -11,11 +11,9 @@ import {
   Button,
   FileTypeIcon,
   IconCloseOutlineRegular,
-  IconPlusOutlineRegular,
   IconRefreshOutlineRegular,
   IconSkillOutlineRegular,
   Input,
-  SegmentedControl,
   classifyFileType,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { AuxiliaryError } from '../../errors.ts'
@@ -23,7 +21,14 @@ import { skillScopeBucket } from '../../host/instructions-skills/scope.ts'
 import type {
   InstructionsSkillsSnapshot,
   SkillCatalogEntry,
+  SkillInstallChannelLabel,
 } from '../../host/instructions-skills/types.ts'
+import {
+  ManagerAddSheet,
+  ManagerDetail,
+  ManagerPage,
+  ManagerPageHead,
+} from '../manager-shell.tsx'
 import styles from '../styles.module.css'
 import { scheduleOpenSkillDocument } from '../file-edit/open-tab.ts'
 import type { FileEditNavigator } from '../file-edit/open-tab.ts'
@@ -38,7 +43,6 @@ import {
   agentEnhancerUpdateSkillFromGit,
 } from './remote.ts'
 import { setSkillsNavHasUpdates } from './nav-update-hints.ts'
-import type { SkillInstallChannelLabel } from '../../host/instructions-skills/types.ts'
 import { SkillMarkdownPreview } from './markdown-preview.tsx'
 import { SKILLS_PANEL_ID } from './kind.ts'
 import './slot-types.ts'
@@ -64,7 +68,6 @@ export type InstructionsSkillsTabProps = InstructionsSkillsPanelProps
 export type InstructionsSkillsMainPanelProps = InstructionsSkillsPanelProps
   & PropsRuntime<'main', typeof SKILLS_PANEL_ID>
 
-type Pane = 'install' | 'installed'
 type ScopeFilter = 'all' | 'user' | 'project' | 'other'
 
 function paramsOf(raw: unknown): InstructionsSkillsTabParams | null {
@@ -199,13 +202,13 @@ function resolveSidebarRight(
 
 function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
   const sessionId = useInstructionsSkillsSessionId(props)
-  const [pane, setPane] = useState<Pane>('install')
   const [snapshot, setSnapshot] = useState<InstructionsSkillsSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [refreshToken, setRefreshToken] = useState(0)
+  const [addOpen, setAddOpen] = useState(false)
   const [gitSource, setGitSource] = useState('')
   const [installingName, setInstallingName] = useState<string | null>(null)
   const [installedQuery, setInstalledQuery] = useState('')
@@ -317,14 +320,6 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
     return groups.filter(group => group.items.length > 0)
   }, [filteredInstalled])
 
-  const scopeCounts = useMemo(() => {
-    const counts = { all: installedSkills.length, user: 0, project: 0, other: 0 }
-    for (const entry of installedSkills) {
-      counts[skillScopeBucket(entry.provider)] += 1
-    }
-    return counts
-  }, [installedSkills])
-
   const anyUpdateCheckFailed = useMemo(
     () => installedSkills.some(entry => entry.updateCheckFailed),
     [installedSkills],
@@ -332,8 +327,6 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
 
   const onOpenSkill = (entry: SkillCatalogEntry) => {
     if (entry.path === null || sessionId === undefined) return
-    // Desktop RightbarRoot sets visible = activePanelId === null, so the right
-    // sidebar cannot show while Skills (main) is selected. Preview in-page.
     setPreviewEntry(entry)
     setConfirmUninstall(null)
   }
@@ -368,7 +361,7 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
       setSnapshot(result.snapshot)
       setGitSource('')
       setNote(props.t('instructionsSkillsInstalledNote'))
-      setPane('installed')
+      setAddOpen(false)
       refresh()
     } catch (err) {
       setError(instructionsSkillsErrorMessage(err, props.t))
@@ -398,7 +391,7 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
         props.t('instructionsSkillsZipInstalledNote')
           .replace('{count}', String(result.installed.length)),
       )
-      setPane('installed')
+      setAddOpen(false)
       refresh()
     } catch (err) {
       setError(instructionsSkillsErrorMessage(err, props.t))
@@ -436,7 +429,6 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
     if (sessionId === undefined || entry.path === null || !entry.removable) return
     setNote(null)
     setError(null)
-    // Drop in-panel preview first so Windows can release the skill folder.
     if (previewEntry?.id === entry.id) {
       setPreviewEntry(null)
       setPreviewText(null)
@@ -445,7 +437,6 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
     setBusy(true)
     setInstallingName(entry.name)
     try {
-      // One frame so MarkdownText unmounts before host rm (avoid long sleeps).
       await new Promise<void>(resolve => {
         requestAnimationFrame(() => resolve())
       })
@@ -484,40 +475,32 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
     }
   }
 
-  const renderSkillRow = (entry: SkillCatalogEntry) => {
+  const renderSkillCard = (entry: SkillCatalogEntry) => {
     const confirming = confirmUninstall === entry.name
     const canPreview = sessionId !== undefined && entry.path !== null && !busy
-    const selected = previewEntry?.id === entry.id
     const subtitle = skillSourceSubtitle(entry, props.t)
-    const rowClass = !canPreview
-      ? styles.instructionsSkillsRowStatic
-      : [
-        styles.instructionsSkillsRow,
-        selected ? styles.instructionsSkillsRowSelected : '',
-      ].filter(Boolean).join(' ')
     return (
-      <li key={entry.id} className={styles.instructionsSkillsItem}>
-        <div className={styles.instructionsSkillsRowWrap}>
-          <button
-            type="button"
-            className={rowClass}
-            disabled={!canPreview}
-            aria-pressed={selected || undefined}
-            title={entry.path ?? props.t('instructionsSkillsMissing')}
-            onClick={() => onOpenSkill(entry)}
-          >
-            <FileTypeIcon
-              kind={classifyFileType('SKILL.md')}
-              size={16}
-              className={styles.instructionsSkillsFileIcon}
-            />
-            <span className={styles.instructionsSkillsName}>{entry.name}</span>
-            <span className={styles.instructionsSkillsMeta}>{subtitle}</span>
-          </button>
-          <div className={styles.instructionsSkillsRowActions}>
+      <li key={entry.id} className={styles.managerCard}>
+        <div className={styles.managerCardHead}>
+          <span className={styles.managerCardIcon} aria-hidden>
+            <FileTypeIcon kind={classifyFileType('SKILL.md')} size={22} />
+          </span>
+          <div className={styles.managerCardMain}>
+            <button
+              type="button"
+              className={styles.managerCardOpen}
+              disabled={!canPreview}
+              title={entry.path ?? props.t('instructionsSkillsMissing')}
+              onClick={() => onOpenSkill(entry)}
+            >
+              <span className={styles.managerCardTitle}>{entry.name}</span>
+            </button>
+            <span className={styles.managerCardDesc}>{subtitle}</span>
+          </div>
+          <div className={styles.managerCardEnd}>
             {skillShowsGitUpdate(entry) ? (
               <>
-                <span className={styles.instructionsSkillsUpdatePill}>
+                <span className={styles.managerUpdatePill}>
                   {props.t('instructionsSkillsUpdateAvailable')}
                 </span>
                 <Button
@@ -534,7 +517,7 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
             ) : null}
             {entry.removable ? (
               confirming ? (
-                <div className={styles.instructionsSkillsConfirm}>
+                <div className={styles.managerConfirm}>
                   <Button
                     variant="primary"
                     size="sm"
@@ -557,13 +540,13 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
               ) : (
                 <button
                   type="button"
-                  className={styles.instructionsSkillsRemove}
+                  className={styles.managerDeleteButton}
                   disabled={busy}
                   title={props.t('instructionsSkillsUninstallHint')}
                   aria-label={props.t('instructionsSkillsUninstall')}
                   onClick={() => setConfirmUninstall(entry.name)}
                 >
-                  <IconCloseOutlineRegular />
+                  <IconCloseOutlineRegular size={16} />
                 </button>
               )
             ) : null}
@@ -575,248 +558,226 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
 
   const sessionBlocked = sessionId === undefined
 
-  return (
-    <div className={styles.instructionsSkillsPane} data-skills-state={sessionBlocked ? 'no-session' : 'tree'}>
-      <div className={styles.instructionsSkillsHeader}>
-        <span className={styles.instructionsSkillsPath}>{props.t('instructionsSkillsTitle')}</span>
-        <button
-          type="button"
-          className={styles.instructionsSkillsTool}
-          title={props.t('instructionsSkillsRefreshHint')}
-          aria-label={props.t('instructionsSkillsRefresh')}
-          disabled={loading || busy}
-          onClick={refresh}
-        >
-          <IconRefreshOutlineRegular />
-        </button>
-      </div>
-
-      <div className={styles.instructionsSkillsTabs}>
-        <SegmentedControl
-          id="agent-enhancer-skills-pane"
-          label={props.t('instructionsSkillsTitle')}
-          value={pane}
-          disabled={busy || sessionBlocked}
-          options={[
-            { value: 'install', label: props.t('instructionsSkillsPaneInstall') },
-            {
-              value: 'installed',
-              label: installedSkills.length > 0
-                ? `${props.t('instructionsSkillsPaneInstalled')} · ${installedSkills.length}`
-                : props.t('instructionsSkillsPaneInstalled'),
-            },
-          ]}
-          onChange={next => {
-            setPane(next)
-            setConfirmUninstall(null)
-            if (next !== 'installed') setPreviewEntry(null)
-          }}
-        />
-      </div>
-
-      {error !== null ? <div className={styles.instructionsSkillsError} role="alert">{error}</div> : null}
-      {!sessionBlocked && anyUpdateCheckFailed ? (
-        <div className={styles.instructionsSkillsUpdateWarn} role="status">
-          {props.t('instructionsSkillsUpdateCheckFailed')}
-        </div>
-      ) : null}
-      {note !== null ? <div className={styles.instructionsSkillsBanner}>{note}</div> : null}
-
-      <div className={styles.instructionsSkillsBody}>
-        {sessionBlocked ? (
-          <div className={styles.instructionsSkillsStatus}>
-            <p className={styles.instructionsSkillsStatusLine}>{props.t('instructionsSkillsNoSession')}</p>
-          </div>
-        ) : null}
-
-        {sessionBlocked ? null : loading && snapshot === null ? (
-          <div className={styles.instructionsSkillsStatus}>
-            <p className={styles.instructionsSkillsStatusLine}>{props.t('instructionsSkillsLoading')}</p>
-          </div>
-        ) : null}
-
-        {sessionBlocked ? null : pane === 'install' ? (
-          <ul className={styles.instructionsSkillsList}>
-            <li className={styles.instructionsSkillsNote}>{props.t('instructionsSkillsInstallGit')}</li>
-            <li className={styles.instructionsSkillsItem}>
-              <div className={styles.instructionsSkillsInstallBlock}>
-                <p className={styles.instructionsSkillsDockHint}>{props.t('instructionsSkillsInstallGitHint')}</p>
-                <div className={styles.instructionsSkillsFormRow}>
-                  <Input
-                    className={styles.instructionsSkillsInput}
-                    value={gitSource}
-                    disabled={busy}
-                    placeholder={props.t('instructionsSkillsInstallGitPlaceholder')}
-                    onChange={event => setGitSource(event.target.value)}
-                    onKeyDown={event => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        void onInstallGit()
-                      }
-                    }}
-                  />
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={busy || gitSource.trim() === ''}
-                    onClick={() => { void onInstallGit() }}
-                  >
-                    {installingName === 'git'
-                      ? props.t('instructionsSkillsInstalling')
-                      : props.t('instructionsSkillsInstall')}
-                  </Button>
-                </div>
-              </div>
-            </li>
-            <li className={styles.instructionsSkillsNote}>{props.t('instructionsSkillsInstallZip')}</li>
-            <li className={styles.instructionsSkillsItem}>
-              <div className={styles.instructionsSkillsInstallBlock}>
-                <p className={styles.instructionsSkillsDockHint}>{props.t('instructionsSkillsInstallZipHint')}</p>
-                <p className={styles.instructionsSkillsZipWarn}>{props.t('instructionsSkillsZipNoUpdateHint')}</p>
-                <div className={styles.instructionsSkillsLocalActions}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => { void onInstallZip() }}
-                  >
-                    {installingName === 'zip'
-                      ? props.t('instructionsSkillsInstalling')
-                      : props.t('instructionsSkillsInstallZip')}
-                  </Button>
-                </div>
-              </div>
-            </li>
-            <li className={styles.instructionsSkillsNote}>{props.t('instructionsSkillsInstallHint')}</li>
-          </ul>
-        ) : installedSkills.length === 0 ? (
-          <ul className={styles.instructionsSkillsList}>
-            <li className={styles.instructionsSkillsNote}>{props.t('instructionsSkillsInstalledEmpty')}</li>
-            <li className={styles.instructionsSkillsItem}>
-              <button
-                type="button"
-                className={styles.instructionsSkillsRow}
-                onClick={() => setPane('install')}
-              >
-                <IconPlusOutlineRegular className={styles.instructionsSkillsFileIcon} />
-                <span className={styles.instructionsSkillsName}>{props.t('instructionsSkillsPaneInstall')}</span>
-              </button>
-            </li>
-          </ul>
-        ) : (
-          <div className={styles.instructionsSkillsSplit}>
-            <div className={styles.instructionsSkillsListCol}>
-              <div className={styles.instructionsSkillsToolbar}>
-                <Input
-                  className={styles.instructionsSkillsSearch}
-                  value={installedQuery}
+  if (previewEntry !== null) {
+    return (
+      <ManagerPage data-state={sessionBlocked ? 'no-session' : 'tree'}>
+        {error !== null ? <div className={styles.managerFailure} role="alert">{error}</div> : null}
+        {note !== null ? <p className={styles.managerBanner}>{note}</p> : null}
+        <ManagerDetail
+          crumbLabel={props.t('instructionsSkillsTitle')}
+          onBack={() => setPreviewEntry(null)}
+          title={previewEntry.name}
+          description={skillSourceSubtitle(previewEntry, props.t)}
+          actions={(
+            <>
+              {props.onLeaveForPreview !== undefined ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy || previewEntry.path === null}
+                  title={props.t('instructionsSkillsOpenInSidebarHint')}
+                  onClick={() => onOpenInSidebar(previewEntry)}
+                >
+                  {props.t('instructionsSkillsOpenInSidebar')}
+                </Button>
+              ) : null}
+              {skillShowsGitUpdate(previewEntry) ? (
+                <Button
+                  variant="primary"
+                  size="sm"
                   disabled={busy}
-                  placeholder={props.t('instructionsSkillsSearchPlaceholder')}
-                  aria-label={props.t('instructionsSkillsSearch')}
-                  onChange={event => setInstalledQuery(event.target.value)}
-                />
-                <div className={styles.instructionsSkillsFilters} role="group" aria-label={props.t('instructionsSkillsFilter')}>
-                  {(['all', 'user', 'project', 'other'] as const).map(bucket => {
-                    if (bucket !== 'all' && scopeCounts[bucket] === 0) return null
-                    const active = scopeFilter === bucket
-                    const label = bucket === 'all'
-                      ? `${scopeLabel(bucket)} · ${scopeCounts.all}`
-                      : `${scopeLabel(bucket)} · ${scopeCounts[bucket]}`
-                    return (
-                      <button
-                        key={bucket}
-                        type="button"
-                        className={active
-                          ? styles.instructionsSkillsFilterActive
-                          : styles.instructionsSkillsFilter}
-                        aria-pressed={active}
-                        disabled={busy}
-                        onClick={() => {
-                          setScopeFilter(bucket)
-                          setConfirmUninstall(null)
-                        }}
-                      >
-                        {label}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {filteredInstalled.length === 0 ? (
-                <p className={styles.instructionsSkillsNote}>{props.t('instructionsSkillsSearchEmpty')}</p>
-              ) : scopeFilter === 'all' ? (
-                groupedInstalled.map(group => (
-                  <div key={group.bucket} className={styles.instructionsSkillsGroup}>
-                    <p className={styles.instructionsSkillsNote}>
-                      {scopeLabel(group.bucket)}
-                      {' · '}
-                      {group.items.length}
-                    </p>
-                    <ul className={styles.instructionsSkillsList}>
-                      {group.items.map(renderSkillRow)}
-                    </ul>
-                  </div>
-                ))
-              ) : (
-                <ul className={styles.instructionsSkillsList}>
-                  {filteredInstalled.map(renderSkillRow)}
-                </ul>
-              )}
-            </div>
-
-            <aside
-              className={styles.instructionsSkillsPreviewCol}
-              aria-label={previewEntry?.name ?? props.t('instructionsSkillsTitle')}
-            >
-              {previewEntry === null ? (
-                <p className={styles.instructionsSkillsPreviewEmpty}>
-                  {props.t('instructionsSkillsPreviewEmpty')}
-                </p>
-              ) : (
-                <>
-                  <div className={styles.instructionsSkillsPreviewHead}>
-                    <span className={styles.instructionsSkillsPreviewTitle}>{previewEntry.name}</span>
-                    <div className={styles.instructionsSkillsPreviewActions}>
-                      {props.onLeaveForPreview !== undefined ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={busy || previewEntry.path === null}
-                          title={props.t('instructionsSkillsOpenInSidebarHint')}
-                          onClick={() => onOpenInSidebar(previewEntry)}
-                        >
-                          {props.t('instructionsSkillsOpenInSidebar')}
-                        </Button>
-                      ) : null}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => setPreviewEntry(null)}
-                      >
-                        {props.t('instructionsSkillsPreviewBack')}
-                      </Button>
-                    </div>
-                  </div>
-                  {previewLoading ? (
-                    <p className={styles.instructionsSkillsStatusLine}>
-                      {props.t('instructionsSkillsPreviewLoading')}
-                    </p>
-                  ) : null}
-                  {previewError !== null ? (
-                    <div className={styles.instructionsSkillsError} role="alert">{previewError}</div>
-                  ) : null}
-                  {previewText !== null ? (
-                    <SkillMarkdownPreview text={previewText} t={props.t} />
-                  ) : null}
-                </>
-              )}
-            </aside>
+                  onClick={() => { void onUpdateFromGit(previewEntry) }}
+                >
+                  {installingName === previewEntry.name
+                    ? props.t('instructionsSkillsUpdating')
+                    : props.t('instructionsSkillsUpdate')}
+                </Button>
+              ) : null}
+            </>
+          )}
+        >
+          <div className={styles.managerDetailSection}>
+            {previewLoading ? (
+              <p className={styles.managerStatus}>{props.t('instructionsSkillsPreviewLoading')}</p>
+            ) : null}
+            {previewError !== null ? (
+              <div className={styles.managerFailure} role="alert">{previewError}</div>
+            ) : null}
+            {previewText !== null ? (
+              <SkillMarkdownPreview text={previewText} t={props.t} />
+            ) : null}
           </div>
+        </ManagerDetail>
+      </ManagerPage>
+    )
+  }
+
+  return (
+    <ManagerPage data-state={sessionBlocked ? 'no-session' : 'tree'}>
+      <ManagerPageHead
+        title={props.t('instructionsSkillsTitle')}
+        intro={props.t('instructionsSkillsIntro')}
+        toolbar={(
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={loading || busy || sessionBlocked}
+              onClick={refresh}
+            >
+              <IconRefreshOutlineRegular size={16} />
+              {' '}
+              {props.t('instructionsSkillsRefresh')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={busy || sessionBlocked}
+              onClick={() => {
+                setAddOpen(true)
+                setConfirmUninstall(null)
+                setError(null)
+              }}
+            >
+              {props.t('instructionsSkillsAdd')}
+            </Button>
+          </>
         )}
-      </div>
-    </div>
+      />
+
+      {error !== null ? <div className={styles.managerFailure} role="alert">{error}</div> : null}
+      {!sessionBlocked && anyUpdateCheckFailed ? (
+        <p className={styles.managerBanner} role="status">
+          {props.t('instructionsSkillsUpdateCheckFailed')}
+        </p>
+      ) : null}
+      {note !== null ? <p className={styles.managerBanner}>{note}</p> : null}
+
+      {sessionBlocked ? (
+        <p className={styles.managerStatus}>{props.t('instructionsSkillsNoSession')}</p>
+      ) : loading && snapshot === null ? (
+        <p className={styles.managerStatus}>{props.t('instructionsSkillsLoading')}</p>
+      ) : installedSkills.length === 0 ? (
+        <div className={styles.managerEmptyBlock}>
+          <p className={styles.managerEmpty}>{props.t('instructionsSkillsInstalledEmpty')}</p>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={busy}
+            onClick={() => setAddOpen(true)}
+          >
+            {props.t('instructionsSkillsAdd')}
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className={styles.managerToolbar}>
+            <Input
+              className={styles.managerSearch}
+              value={installedQuery}
+              disabled={busy}
+              placeholder={props.t('instructionsSkillsSearchPlaceholder')}
+              aria-label={props.t('instructionsSkillsSearch')}
+              onChange={event => setInstalledQuery(event.target.value)}
+            />
+            <select
+              className={styles.managerScopeSelect}
+              value={scopeFilter}
+              disabled={busy}
+              aria-label={props.t('instructionsSkillsFilter')}
+              onChange={event => {
+                setScopeFilter(event.target.value as ScopeFilter)
+                setConfirmUninstall(null)
+              }}
+            >
+              <option value="all">{scopeLabel('all')}</option>
+              <option value="user">{scopeLabel('user')}</option>
+              <option value="project">{scopeLabel('project')}</option>
+              <option value="other">{scopeLabel('other')}</option>
+            </select>
+          </div>
+
+          {filteredInstalled.length === 0 ? (
+            <p className={styles.managerEmpty}>{props.t('instructionsSkillsSearchEmpty')}</p>
+          ) : scopeFilter === 'all' ? (
+            groupedInstalled.map(group => (
+              <div key={group.bucket} className={styles.managerGroup}>
+                <p className={styles.managerGroupTitle}>
+                  {scopeLabel(group.bucket)}
+                  {' · '}
+                  {group.items.length}
+                </p>
+                <ul className={styles.managerCards}>
+                  {group.items.map(renderSkillCard)}
+                </ul>
+              </div>
+            ))
+          ) : (
+            <ul className={styles.managerCards}>
+              {filteredInstalled.map(renderSkillCard)}
+            </ul>
+          )}
+        </>
+      )}
+
+      <ManagerAddSheet
+        open={addOpen}
+        title={props.t('instructionsSkillsAdd')}
+        closeLabel={props.t('instructionsSkillsUninstallCancel')}
+        onClose={() => setAddOpen(false)}
+        footer={(
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => setAddOpen(false)}
+          >
+            {props.t('instructionsSkillsUninstallCancel')}
+          </Button>
+        )}
+      >
+        <label className={styles.managerField}>
+          <span className={styles.managerFieldLabel}>{props.t('instructionsSkillsInstallGit')}</span>
+          <div className={styles.managerFormRow}>
+            <Input
+              value={gitSource}
+              disabled={busy}
+              placeholder={props.t('instructionsSkillsInstallGitPlaceholder')}
+              onChange={event => setGitSource(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void onInstallGit()
+                }
+              }}
+            />
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={busy || gitSource.trim() === ''}
+              onClick={() => { void onInstallGit() }}
+            >
+              {installingName === 'git'
+                ? props.t('instructionsSkillsInstalling')
+                : props.t('instructionsSkillsInstall')}
+            </Button>
+          </div>
+        </label>
+        <label className={styles.managerField}>
+          <span className={styles.managerFieldLabel}>{props.t('instructionsSkillsInstallZip')}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => { void onInstallZip() }}
+          >
+            {installingName === 'zip'
+              ? props.t('instructionsSkillsInstalling')
+              : props.t('instructionsSkillsInstallZip')}
+          </Button>
+        </label>
+      </ManagerAddSheet>
+    </ManagerPage>
   )
 }
 

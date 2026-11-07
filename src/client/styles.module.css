@@ -2788,6 +2788,13 @@
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
+.instructionsSkillsHeaderActions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .instructionsSkillsPath {
   margin-right: 12px;
   min-width: 0;
@@ -3382,6 +3389,537 @@
 
 .instructionsSkillsStatus .instructionsSkillsStatusLine {
   margin-bottom: 12px;
+}
+
+/* MCP connectors install form — reuse Skills chrome tokens. */
+.instructionsSkillsDock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 10px 12px;
+}
+
+.instructionsSkillsDockHead {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.instructionsSkillsDockTitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.instructionsSkillsField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.instructionsSkillsTextarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1, transparent);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.instructionsSkillsCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.instructionsSkillsDockActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/*
+ * Skills / MCP manager chrome — peer `@deepseek-ai/dsh-client-ui-plugin-manager`
+ * PluginManagerPage (pageHead / cards / InstallDialog / detail crumb).
+ */
+.managerPage {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  height: 100%;
+  padding: 0 clamp(24px, 4vw, 48px) 48px;
+  overflow: auto;
+  color: var(--dsw-alias-label-primary);
+}
+
+.managerPage > * {
+  width: 100%;
+  max-width: 960px;
+}
+
+/* Modal is body-portaled; keep sheet card width independent of page column. */
+.managerSheet {
+  width: min(560px, calc(100vw - 48px));
+  max-width: min(560px, calc(100vw - 48px));
+}
+
+.managerPageHead {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding-top: 28px;
+}
+
+:global([data-platform='darwin']) .managerPageHead {
+  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+}
+
+.managerPageHeading {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.managerPageTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 28px;
+}
+
+.managerPageIntro {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.managerToolbar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.managerStatus,
+.managerEmpty {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.managerFailure {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.managerBanner {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.managerSearch {
+  width: min(280px, 100%);
+}
+
+.managerCards {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.managerCard {
+  margin: 0 -8px;
+  min-width: 0;
+  border-radius: var(--dsw-radius-xl);
+}
+
+.managerCardHead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px;
+}
+
+.managerCardIcon {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-lg);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.managerCardMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.managerCardTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.managerCardOpen {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.managerCardOpen:hover .managerCardTitle {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.managerCardDesc {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.managerCardEnd {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.managerIconButton {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-caption);
+  cursor: pointer;
+}
+
+.managerIconButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.managerIconButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.managerIconButton:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.managerDeleteButton {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-state-error-primary);
+  cursor: pointer;
+}
+
+.managerDeleteButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger, var(--dsw-alias-interactive-bg-hover));
+}
+
+.managerDeleteButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.managerDeleteButton:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.managerConfirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.managerGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.managerGroupTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.managerDetailTop {
+  display: flex;
+  flex-direction: column;
+  padding-top: 28px;
+}
+
+:global([data-platform='darwin']) .managerDetailTop {
+  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+}
+
+.managerCrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.managerCrumb:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.managerDetailHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 0;
+}
+
+.managerDetailTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 28px;
+}
+
+.managerDetailActions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.managerDetailDesc {
+  margin: 12px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.managerDetailSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.managerSectionTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.managerRows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.managerRow {
+  padding: 12px 2px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.managerRow:last-child {
+  border-bottom: 0;
+}
+
+.managerRowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.managerRowId {
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.managerRowMeta {
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.managerSheetBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.managerSheetFooter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.managerField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.managerFieldLabel {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.managerTextarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 180px;
+  padding: 10px 14px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+  outline: none;
+}
+
+.managerTextarea:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+  box-shadow: inset 0 0 0 0.5px var(--dsw-alias-state-business-primary);
+}
+
+.managerCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+}
+
+.managerUpdatePill {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: var(--dsw-radius-sm);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
+  color: var(--dsw-alias-state-business-primary);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.managerEmptyBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.managerFormRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.managerFormRow > :first-child {
+  flex: 1;
+  min-width: 160px;
+}
+
+.managerScopeSelect {
+  height: 32px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
 }
 
 /* Mirror ChatView floating chrome (toBottom): fill + elevation, no card border.
