@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+## 0.3.8 - 2026-11-08
+
 ### Added
 
 - **运行提醒：** 长跑结束、等待批准/提问/计划审阅或会话出错时拉回注意力；默认级别「失焦时」（覆盖双屏 / 同屏其他应用）；可选「仅后台」「总是」；失焦时经 Host 走 Electron / Windows 通知中心（AUMID 归在 DeepSeek Harness，不再显示为 PowerShell；不再依赖页面 Web Notification），不可用则回焦后 Toast；设置项 `runAlertsEnabled` + `runAlertsLevel`。
+
+### Docs
+
+- README 中英文钉到 `0.3.8`。
 
 ## 0.3.7 - 2026-11-08
 

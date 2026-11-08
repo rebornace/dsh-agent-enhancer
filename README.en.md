@@ -41,7 +41,7 @@ Targets **Desktop / the `desktop` profile** (do not validate with `web`). Quit D
 | Method | Steps |
 | --- | --- |
 | **In-app (recommended)** | **Settings → Plugins** → search `dsh-agent-enhancer` / **Agent Enhance** → install → restart |
-| **CLI** | `dsh plugin --profile desktop add dsh-agent-enhancer@0.3.7` |
+| **CLI** | `dsh plugin --profile desktop add dsh-agent-enhancer@0.3.8` |
 | **Dev** | `corepack pnpm install --frozen-lockfile` → `corepack pnpm desktop:link` → restart; back to npm: `corepack pnpm desktop:npm` |
 
 Optional market: [dsh-market](https://github.com/dsh-market/dsh-market) (in-app search `dshmarket`; do not use the `web` profile). Remove legacy `dsh-composer-enhancer` before installing this package.
