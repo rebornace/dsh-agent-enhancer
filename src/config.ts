@@ -2,10 +2,25 @@ import { AUTO_MODEL, AUTO_PROVIDER } from './host/auto-route/sentinel.ts'
 import type { AutoRouteMap } from './host/auto-route/types.ts'
 
 export const MODULES = [
-  'history', 'optimize', 'predict', 'quote', 'rollback', 'softPause', 'contextInspect', 'usage',
+  'history', 'optimize', 'predict', 'quote', 'rollback', 'softPause', 'runAlerts', 'contextInspect', 'usage',
   'sessionDelete', 'fileEdit', 'instructionsSkills', 'mcpConnectors',
 ] as const
 export type ModuleName = typeof MODULES[number]
+
+/** When run alerts are enabled: how “away” must be before notifying. */
+export const RUN_ALERTS_LEVELS = ['hidden', 'unfocused', 'always'] as const
+export type RunAlertsLevel = typeof RUN_ALERTS_LEVELS[number]
+
+export function resolveRunAlertsLevel(value: string | undefined): RunAlertsLevel {
+  switch (value) {
+    case 'hidden':
+    case 'unfocused':
+    case 'always':
+      return value
+    default:
+      return 'unfocused'
+  }
+}
 
 /** Features with dedicated provider/model settings fields. */
 export type ConfigurableAuxiliaryFeature = 'optimize' | 'predict' | 'compact'
@@ -20,6 +35,7 @@ export interface AuxiliaryModelSettings {
 }
 
 export type EnhancerSettings = Readonly<Record<`${ModuleName}Enabled`, boolean>> & {
+  readonly runAlertsLevel: RunAlertsLevel
   readonly optimizeProvider: string
   readonly optimizeModel: string
   readonly optimizeReasoningEffort: string
@@ -61,6 +77,8 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   sessionDeleteEnabled: true,
   fileEditEnabled: true,
   softPauseEnabled: true,
+  runAlertsEnabled: true,
+  runAlertsLevel: 'unfocused',
   instructionsSkillsEnabled: true,
   mcpConnectorsEnabled: true,
   optimizeProvider: '',
@@ -103,6 +121,8 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     sessionDeleteEnabled: value?.sessionDeleteEnabled ?? true,
     fileEditEnabled: value?.fileEditEnabled ?? true,
     softPauseEnabled: value?.softPauseEnabled ?? true,
+    runAlertsEnabled: value?.runAlertsEnabled ?? true,
+    runAlertsLevel: resolveRunAlertsLevel(value?.runAlertsLevel),
     instructionsSkillsEnabled: value?.instructionsSkillsEnabled ?? true,
     mcpConnectorsEnabled: value?.mcpConnectorsEnabled ?? true,
     optimizeProvider: text(value?.optimizeProvider),

@@ -429,6 +429,26 @@ const softPauseSetRequestCodec = codec(
 )
 const softPauseStateCodec = codec('dsh-agent-enhancer#SoftPauseState', softPauseStateSchema)
 
+export const showOsNotificationRequestSchema = z.strictObject({
+  title: z.string().min(1).max(120),
+  body: z.string().min(1).max(240),
+  tag: z.string().max(120).optional(),
+})
+export type ShowOsNotificationRequest = z.infer<typeof showOsNotificationRequestSchema>
+export const showOsNotificationResultSchema = z.strictObject({
+  shown: z.boolean(),
+  channel: z.enum(['electron', 'windows', 'none']),
+})
+export type ShowOsNotificationResult = z.infer<typeof showOsNotificationResultSchema>
+const showOsNotificationRequestCodec = codec(
+  'dsh-agent-enhancer#ShowOsNotificationRequest',
+  showOsNotificationRequestSchema,
+)
+const showOsNotificationResultCodec = codec(
+  'dsh-agent-enhancer#ShowOsNotificationResult',
+  showOsNotificationResultSchema,
+)
+
 const instructionScopeSchema = z.enum(['global', 'shared', 'project'])
 const instructionFileEntrySchema = z.strictObject({
   id: z.string().min(1),
@@ -1046,6 +1066,18 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: softPauseSetRequestCodec,
       }],
       result: softPauseStateCodec,
+    },
+    'agentEnhancer/showOsNotification': {
+      service: 'agentEnhancer',
+      implementation: 'showOsNotification',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: showOsNotificationRequestCodec,
+        strictCodec: showOsNotificationRequestCodec,
+      }],
+      result: showOsNotificationResultCodec,
     },
     'agentEnhancer/listInstructionsSkills': {
       service: 'agentEnhancer',

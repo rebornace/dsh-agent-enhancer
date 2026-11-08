@@ -6,7 +6,7 @@ import z from '@deepseek-ai/schemastery'
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
-import { resolveSettings } from '../config.ts'
+import { resolveRunAlertsLevel, resolveSettings } from '../config.ts'
 import type { EnhancerSettings } from '../config.ts'
 import { AuxiliaryError } from '../errors.ts'
 import {
@@ -168,10 +168,13 @@ import type {
 import { checkpointRemoteInfo, remoteInfo } from './rpc.ts'
 import type {
   RpcPayload,
+  ShowOsNotificationRequest,
+  ShowOsNotificationResult,
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
   SoftPauseState,
 } from './rpc.ts'
+import { showOsNotificationNow } from './run-alerts/notify.ts'
 import type { AuxiliaryResult } from './types.ts'
 import {
   applyPluginUpdateForHost,
@@ -200,6 +203,9 @@ export const Config = z.object({
   sessionDeleteEnabled: z.boolean().default(true).volatile(),
   fileEditEnabled: z.boolean().default(true).volatile(),
   softPauseEnabled: z.boolean().default(true).volatile(),
+  runAlertsEnabled: z.boolean().default(true).volatile(),
+  /** Coerced via resolveRunAlertsLevel in readSettings (`hidden` | `unfocused` | `always`). */
+  runAlertsLevel: z.string().default('unfocused').volatile(),
   instructionsSkillsEnabled: z.boolean().default(true).volatile(),
   mcpConnectorsEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.
@@ -860,6 +866,12 @@ export class AgentEnhancerService extends TypertRemoteService {
     return { sessionId: request.sessionId, engaged: this.softPause.isEngaged(request.sessionId) }
   }
 
+  /** Desktop OS notification for run alerts (Electron / Windows Action Center). */
+  async showOsNotification(request: ShowOsNotificationRequest): Promise<ShowOsNotificationResult> {
+    this.assertOwner()
+    return await showOsNotificationNow(request)
+  }
+
   async applyUpdate(): Promise<ApplyUpdateResult> {
     this.assertOwner()
     return applyPluginUpdateForHost({
@@ -973,6 +985,8 @@ function readSettings(config: Config): EnhancerSettings {
     sessionDeleteEnabled: config.sessionDeleteEnabled.get(),
     fileEditEnabled: config.fileEditEnabled.get(),
     softPauseEnabled: config.softPauseEnabled.get(),
+    runAlertsEnabled: config.runAlertsEnabled.get(),
+    runAlertsLevel: resolveRunAlertsLevel(config.runAlertsLevel.get()),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
     mcpConnectorsEnabled: config.mcpConnectorsEnabled.get(),
     optimizeProvider: config.optimizeProvider.get(),

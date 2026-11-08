@@ -13,6 +13,7 @@ export type FeatureLabelKey =
   | 'quote'
   | 'rollback'
   | 'softPause'
+  | 'runAlerts'
   | 'contextInspect'
   | 'usage'
   | 'sessionDelete'
@@ -27,6 +28,7 @@ export type FeatureDescriptionKey =
   | 'quoteDescription'
   | 'rollbackDescription'
   | 'softPauseDescription'
+  | 'runAlertsDescription'
   | 'contextInspectDescription'
   | 'usageDescription'
   | 'sessionDeleteDescription'
@@ -87,6 +89,12 @@ export const SETTINGS_FEATURE_GROUPS: readonly SettingsFeatureGroup[] = [
         module: 'softPause',
         labelKey: 'softPause',
         descriptionKey: 'softPauseDescription',
+        modelFeature: null,
+      },
+      {
+        module: 'runAlerts',
+        labelKey: 'runAlerts',
+        descriptionKey: 'runAlertsDescription',
         modelFeature: null,
       },
       {

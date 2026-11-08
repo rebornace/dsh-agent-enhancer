@@ -42,6 +42,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'autoTier_instant' | 'autoTier_thinking' | 'autoTier_pro' | 'autoTier_classifier' |
       'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'overlapSoftPause' | 'dismissHint' |
       'softPause' | 'softPauseDescription' | 'softPausePause' | 'softPauseResume' |
+      'runAlerts' | 'runAlertsDescription' | 'runAlertsLevel' |
+      'runAlertsLevel_hidden' | 'runAlertsLevel_unfocused' | 'runAlertsLevel_always' |
+      'runAlertsFinished' | 'runAlertsWaitingApproval' | 'runAlertsWaitingQuestion' |
+      'runAlertsWaitingPlanReview' | 'runAlertsWaiting' | 'runAlertsError' |
       'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackUndoAction' |
       'rollbackUndoCommandDescription' |
       'rollbackTitle' | 'rollbackScope' | 'rollbackScopeAlready' | 'rollbackScopeCovered' | 'rollbackUndoTitle' | 'rollbackUndoScope' | 'rollbackUndoScopeConversation' |
@@ -334,6 +338,18 @@ export const agentLocales = {
     softPauseDescription: '在最新用户气泡上暂停/恢复：挡住下一步模型调用以节省后续 token；当前流式回复与已发出工具会跑完。不替代官方停止。',
     softPausePause: '暂停后续模型步',
     softPauseResume: '恢复后续模型步',
+    runAlerts: '运行提醒',
+    runAlertsDescription: '长跑结束、等待批准或出错时拉回注意力。可选手动级别：仅后台 / 失焦（双屏或切到其他应用，推荐）/ 总是。系统通知不可用时会在回焦后用 Toast 补一条。',
+    runAlertsLevel: '提醒级别',
+    runAlertsLevel_hidden: '仅后台',
+    runAlertsLevel_unfocused: '失焦时',
+    runAlertsLevel_always: '总是',
+    runAlertsFinished: '{title}：已完成',
+    runAlertsWaitingApproval: '{title}：等待批准',
+    runAlertsWaitingQuestion: '{title}：等待回答',
+    runAlertsWaitingPlanReview: '{title}：等待审阅计划',
+    runAlertsWaiting: '{title}：等待你的操作',
+    runAlertsError: '{title}：出错 — {message}',
     instructionsSkills: '技能',
     instructionsSkillsDescription: 'GitHub·Zip 可选装到 .agents/skills 或 .dsh/skills；入口在左侧栏；安装后用官方 / 调用',
     instructionsSkillsLeftNavUnsupported: '当前 Desktop 未提供左侧技能入口（无 sidebar.panellist）；请升级 Desktop 或在设置中确认功能已开启',
@@ -840,6 +856,18 @@ export const agentLocales = {
     softPauseDescription: 'Pause / resume on the latest user bubble: hold the next model step to save later tokens; the current stream and in-flight tools still finish. Does not replace official Stop.',
     softPausePause: 'Pause further model steps',
     softPauseResume: 'Resume further model steps',
+    runAlerts: 'Run alerts',
+    runAlertsDescription: 'Pull you back when a run finishes, waits for approval, or errors. Choose a level: background only / unfocused (dual-monitor or another app — recommended) / always. If system notifications are unavailable, a Toast appears when you return.',
+    runAlertsLevel: 'Alert level',
+    runAlertsLevel_hidden: 'Background only',
+    runAlertsLevel_unfocused: 'When unfocused',
+    runAlertsLevel_always: 'Always',
+    runAlertsFinished: '{title}: finished',
+    runAlertsWaitingApproval: '{title}: waiting for approval',
+    runAlertsWaitingQuestion: '{title}: waiting for your answer',
+    runAlertsWaitingPlanReview: '{title}: waiting for plan review',
+    runAlertsWaiting: '{title}: waiting for you',
+    runAlertsError: '{title}: error — {message}',
     instructionsSkills: 'Skills',
     instructionsSkillsDescription: 'GitHub·Zip into .agents/skills or .dsh/skills; left-nav entry; invoke with /',
     instructionsSkillsLeftNavUnsupported: 'This Desktop build has no left Skills entry (sidebar.panellist missing). Upgrade Desktop or confirm the feature toggle is on',

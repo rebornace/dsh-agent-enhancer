@@ -8,6 +8,7 @@ import type {
   ConfigurableAuxiliaryFeature,
   EnhancerSettings,
   ModuleName,
+  RunAlertsLevel,
 } from '../../config.ts'
 import type { ApplyUpdateResult, UpdateCheckResult } from '../../host/update/types.ts'
 import { AUTO_MODEL, AUTO_PROVIDER } from '../../host/auto-route/sentinel.ts'
@@ -180,6 +181,20 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyU
     }
   }
 
+  const onRunAlertsLevel = async (level: RunAlertsLevel) => {
+    setSaving('runAlertsLevel')
+    setError(false)
+    setSaveDetail(null)
+    try {
+      await writeOps([{ op: 'set', path: ['runAlertsLevel'], value: level }])
+    } catch (cause) {
+      setError(true)
+      setSaveDetail(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(null)
+    }
+  }
+
   const saveFields = async (fields: ReadonlyArray<readonly [keyof EnhancerSettings, string]>) => {
     setSaving(fields.map(([field]) => field).join(','))
     setError(false)
@@ -300,6 +315,7 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyU
           busy={busy}
           t={t}
           onToggle={(module, checked) => { void onToggle(module, checked) }}
+          onRunAlertsLevel={level => { void onRunAlertsLevel(level) }}
           onOpenModel={feature => {
             setHighlightFeature(feature)
             setTab('models')

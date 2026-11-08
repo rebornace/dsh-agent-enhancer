@@ -19,6 +19,8 @@ import type {
 } from '../host/usage/types.ts'
 import type {
   RpcPayload,
+  ShowOsNotificationRequest,
+  ShowOsNotificationResult,
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
   SoftPauseState,
@@ -288,6 +290,20 @@ export const clientRemoteInfo = {
       codec: codec('dsh-agent-enhancer#SoftPauseSetRequest'),
     }],
     result: codec('dsh-agent-enhancer#SoftPauseState'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/showOsNotification',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'showOsNotification',
+    implementation: 'showOsNotification',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#ShowOsNotificationRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#ShowOsNotificationResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/listInstructionsSkills',
     service: 'agentEnhancer',
@@ -755,6 +771,33 @@ export const agentEnhancerSoftPauseSet = {
     }
     if (!result.ok) throw new AuxiliaryError('MODEL_FAILED')
     return result.value
+  },
+}
+
+type ShowOsNotificationCall = (
+  request: ShowOsNotificationRequest,
+) => Promise<RemoteResult<ShowOsNotificationResult>>
+
+export const agentEnhancerShowOsNotification = {
+  async invoke(remote: unknown, request: ShowOsNotificationRequest, signal?: AbortSignal) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return { shown: false, channel: 'none' as const }
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') {
+      return { shown: false, channel: 'none' as const }
+    }
+    const call = Reflect.get(namespace, 'showOsNotification') as ShowOsNotificationCall | undefined
+    if (typeof call !== 'function') return { shown: false, channel: 'none' as const }
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) return { shown: false, channel: 'none' as const }
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return { shown: false, channel: 'none' as const }
+    }
   },
 }
 

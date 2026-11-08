@@ -218,6 +218,25 @@
   cursor: not-allowed;
 }
 
+.settingsSelect {
+  max-width: 140px;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--dsw-alias-stroke-secondary, transparent);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-interactive-bg, transparent);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.settingsSelect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .settingsConfigure,
 .settingsActionPrimary {
   display: inline-flex;

@@ -92,6 +92,7 @@ import { QuoteExternalHosts } from './quote/external-hosts.tsx'
 import { QuoteSurface } from './quote/surface.tsx'
 import { SessionDeleteMenuItem } from './session-delete/menu.tsx'
 import { SessionDeleteOverlay } from './session-delete/overlay.tsx'
+import { RunAlertsHost } from './run-alerts/host.tsx'
 import { basenameOfPath, parseWorkspaceFileAddress } from './file-edit/address.ts'
 import { FileEditDocumentAction } from './file-edit/action.tsx'
 import { FILE_EDIT_TAB_ID, FILE_EDIT_TAB_KIND } from './file-edit/kind.ts'
@@ -269,6 +270,36 @@ export function apply(ctx: Context): void {
         remote: agentEnhancerRemote,
         t,
         ctx,
+      }))))
+    }
+    const unsubscribe = form.subscribe(synchronize)
+    synchronize()
+    return () => {
+      unsubscribe()
+      clear()
+    }
+  })
+
+  // Run alerts: finish / pending / error when the user is not watching that session.
+  ctx.effect(() => {
+    const disposers: Array<() => void> = []
+    const clear = () => {
+      while (disposers.length > 0) disposers.pop()?.()
+    }
+    const synchronize = () => {
+      clear()
+      const enabled = resolveSettings(form.getSnapshot().value).runAlertsEnabled
+      if (!enabled) return
+      disposers.push(ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: 'agent-enhancer-run-alerts',
+        order: 165,
+      }, (props: PropsRuntime<'shell.overlay'>) => createElement(RunAlertsHost, {
+        ...props,
+        t,
+        ctx,
+        getLevel: () => resolveSettings(form.getSnapshot().value).runAlertsLevel,
+        getRemote: () => agentEnhancerRemote,
       }))))
     }
     const unsubscribe = form.subscribe(synchronize)
