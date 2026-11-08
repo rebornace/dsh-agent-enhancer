@@ -1,7 +1,7 @@
 /** Canonical package / plugin identity after the Composer → Agent rename. */
 export const PACKAGE_NAME = 'dsh-agent-enhancer'
 export const PLUGIN_ID = 'agent-enhancer'
-export const PACKAGE_VERSION = '0.3.4'
+export const PACKAGE_VERSION = '0.3.7'
 
 /** Pre-0.2.0 identity — keep reading markers and plugin-data written under these names. */
 export const LEGACY_PACKAGE_NAME = 'dsh-composer-enhancer'

@@ -898,7 +898,7 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
           )
         )}
       >
-        <label className={styles.managerField}>
+        <div className={styles.managerField}>
           <span className={styles.managerFieldLabel}>{props.t('instructionsSkillsInstallTarget')}</span>
           <select
             className={styles.managerScopeSelect}
@@ -913,8 +913,8 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
             <option value="project-dsh">{props.t('instructionsSkillsTargetProjectDsh')}</option>
           </select>
           <span className={styles.managerFieldHint}>{props.t('instructionsSkillsInstallGitHint')}</span>
-        </label>
-        <label className={styles.managerField}>
+        </div>
+        <div className={styles.managerField}>
           <span className={styles.managerFieldLabel}>{props.t('instructionsSkillsInstallGit')}</span>
           <div className={styles.managerFormRow}>
             <Input
@@ -945,8 +945,8 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
               {gitInstallStatusLine}
             </p>
           ) : null}
-        </label>
-        <label className={styles.managerField}>
+        </div>
+        <div className={styles.managerField}>
           <span className={styles.managerFieldLabel}>{props.t('instructionsSkillsInstallZip')}</span>
           <span className={styles.managerFieldHint}>{props.t('instructionsSkillsInstallZipHint')}</span>
           <Button
@@ -959,7 +959,7 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
               ? props.t('instructionsSkillsInstalling')
               : props.t('instructionsSkillsInstallZip')}
           </Button>
-        </label>
+        </div>
       </ManagerAddSheet>
     </ManagerPage>
   )
