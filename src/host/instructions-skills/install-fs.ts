@@ -5,14 +5,27 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   symlinkSync,
 } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { AuxiliaryError } from '../../errors.ts'
+import { busyPathHint, isWindowsPathBusyError } from './fs-access.ts'
 import { isKebabCaseName, samePath } from './paths.ts'
+import {
+  isTransientSkillEntryName,
+  removeQuietly,
+  skillTransientWorkPath,
+  sweepTransientSkillEntries,
+} from './transient-paths.ts'
 import { removePathRobust } from './uninstall.ts'
 
-export type SkillInstallTarget = 'user' | 'project'
+/**
+ * Where to materialize a skill tree.
+ * - `user` / `project` → `.agents/skills` (cross-tool Agents convention)
+ * - `user-dsh` / `project-dsh` → `.dsh/skills` (Harness-local store)
+ */
+export type SkillInstallTarget = 'user' | 'user-dsh' | 'project' | 'project-dsh'
 export type SkillInstallMode = 'link' | 'copy'
 
 export interface SkillBundle {
@@ -81,6 +94,7 @@ export function findSkillBundles(root: string): readonly SkillBundle[] {
     return []
   }
   for (const entry of entries) {
+    if (isTransientSkillEntryName(entry)) continue
     const full = join(absolute, entry)
     if (existsSync(join(full, 'SKILL.md'))) {
       const name = directoryBundleName(full, entry)
@@ -142,10 +156,22 @@ export function installTargetDir(
   target: SkillInstallTarget,
   projectRoot: string,
   agentsHome: string,
+  dshHome: string,
 ): string {
-  return target === 'user'
-    ? join(resolve(agentsHome), 'skills')
-    : join(resolve(projectRoot), '.agents', 'skills')
+  switch (target) {
+    case 'user':
+      return join(resolve(agentsHome), 'skills')
+    case 'user-dsh':
+      return join(resolve(dshHome), 'skills')
+    case 'project':
+      return join(resolve(projectRoot), '.agents', 'skills')
+    case 'project-dsh':
+      return join(resolve(projectRoot), '.dsh', 'skills')
+    default: {
+      const _exhaustive: never = target
+      return _exhaustive
+    }
+  }
 }
 
 export function destinationForBundle(
@@ -193,14 +219,65 @@ export function isStaleSkillDestination(
   return !existsSync(join(dest, 'SKILL.md'))
 }
 
+function copySkillTree(source: string, dest: string): void {
+  try {
+    cpSync(source, dest, { recursive: true })
+  } catch (error) {
+    if (isWindowsPathBusyError(error)) {
+      throw new AuxiliaryError('FILE_EDIT_FAILED', busyPathHint(basename(dest)))
+    }
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new AuxiliaryError(
+      'FILE_EDIT_FAILED',
+      `Failed to copy skill into ${basename(dest)}: ${detail.slice(0, 400)}`,
+    )
+  }
+}
+
+/**
+ * Copy into OS-temp staging, then rename over `dest`.
+ * Avoids writing through a leftover Windows junction into skills-manager,
+ * and never leaves discoverable siblings under the skills root.
+ */
+function copySkillTreeAtomic(source: string, dest: string, kind: SkillBundle['kind']): void {
+  mkdirSync(dirname(dest), { recursive: true })
+  if (kind === 'file') {
+    if (destinationPresent(dest)) removeDestination(dest)
+    copySkillTree(source, dest)
+    return
+  }
+  const staging = skillTransientWorkPath('installing', basename(dest))
+  try {
+    copySkillTree(source, staging)
+    if (destinationPresent(dest)) removeDestination(dest)
+    if (destinationPresent(dest)) {
+      throw new AuxiliaryError('FILE_EDIT_FAILED', busyPathHint(basename(dest)))
+    }
+    try {
+      renameSync(staging, dest)
+    } catch (error) {
+      if (isWindowsPathBusyError(error)) {
+        throw new AuxiliaryError('FILE_EDIT_FAILED', busyPathHint(basename(dest)))
+      }
+      // Last resort: copy into place if rename across volumes fails.
+      copySkillTree(staging, dest)
+      removeQuietly(staging)
+    }
+  } catch (error) {
+    removeQuietly(staging)
+    throw error
+  }
+}
+
 function linkOrCopy(
   source: string,
   dest: string,
   mode: SkillInstallMode,
+  kind: SkillBundle['kind'],
 ): 'link' | 'copy' {
   mkdirSync(dirname(dest), { recursive: true })
   if (mode === 'copy') {
-    cpSync(source, dest, { recursive: true })
+    copySkillTreeAtomic(source, dest, kind)
     return 'copy'
   }
   try {
@@ -217,7 +294,7 @@ function linkOrCopy(
     symlinkSync(source, dest)
     return 'link'
   } catch {
-    cpSync(source, dest, { recursive: true })
+    copySkillTreeAtomic(source, dest, kind)
     return 'copy'
   }
 }
@@ -228,6 +305,7 @@ export function installBundle(options: {
   readonly force: boolean
   readonly mode: SkillInstallMode
 }): { readonly path: string, readonly name: string, readonly mode: 'link' | 'copy' } {
+  sweepTransientSkillEntries(options.targetDir)
   const dest = destinationForBundle(options.targetDir, options.bundle)
   if (destinationPresent(dest)) {
     if (options.force || isStaleSkillDestination(dest, options.bundle.kind)) {
@@ -236,7 +314,9 @@ export function installBundle(options: {
       throw new AuxiliaryError('FILE_DENIED', `A skill named ${options.bundle.name} already exists`)
     }
   }
-  const used = linkOrCopy(options.bundle.sourcePath, dest, options.mode)
+  // Empty Windows shells can look "present" after removePathRobust treats them as
+  // effectively gone — atomic copy clears leftovers again before rename.
+  const used = linkOrCopy(options.bundle.sourcePath, dest, options.mode, options.bundle.kind)
   return { path: dest, name: options.bundle.name, mode: used }
 }
 

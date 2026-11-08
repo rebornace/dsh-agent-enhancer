@@ -4,6 +4,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { z } from 'zod'
 import type { AuxiliaryErrorCode } from '../errors.ts'
 import type { CheckpointRollbackErrorCode } from './checkpoint/service.ts'
+import { SKILL_INSTALL_STAGES } from './instructions-skills/install-progress.ts'
 import { APPLY_UPDATE_CODES } from './update/types.ts'
 import { USAGE_RANGES, USAGE_SOURCES } from './usage/types.ts'
 
@@ -455,6 +456,7 @@ const skillCatalogEntrySchema = z.strictObject({
 })
 export const listInstructionsSkillsRequestSchema = z.strictObject({
   sessionId: sessionIdSchema,
+  checkUpdates: z.boolean().optional(),
 })
 export type ListInstructionsSkillsRequest = z.infer<typeof listInstructionsSkillsRequestSchema>
 export const instructionsSkillsSnapshotSchema = z.strictObject({
@@ -512,7 +514,7 @@ const createWorkspaceSkillResultCodec = codec(
   createWorkspaceSkillResultSchema,
 )
 
-const skillInstallTargetSchema = z.enum(['user', 'project'])
+const skillInstallTargetSchema = z.enum(['user', 'user-dsh', 'project', 'project-dsh'])
 const skillInstallModeSchema = z.enum(['link', 'copy'])
 const installedSkillRefSchema = z.strictObject({
   name: z.string().min(1),
@@ -528,6 +530,7 @@ export const installSkillFromGitRequestSchema = z.strictObject({
 export type InstallSkillFromGitRequest = z.infer<typeof installSkillFromGitRequestSchema>
 export const installSkillFromGitResultSchema = z.strictObject({
   installed: z.array(installedSkillRefSchema),
+  skippedBusy: z.array(z.string().min(1)).default([]),
   snapshot: instructionsSkillsSnapshotSchema,
 })
 export type InstallSkillFromGitResult = z.infer<typeof installSkillFromGitResultSchema>
@@ -579,6 +582,19 @@ export const readSkillDocumentResultSchema = z.strictObject({
   bytes: z.number().int().nonnegative(),
 })
 export type ReadSkillDocumentResult = z.infer<typeof readSkillDocumentResultSchema>
+export const getSkillInstallProgressRequestSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+})
+export type GetSkillInstallProgressRequest = z.infer<typeof getSkillInstallProgressRequestSchema>
+export const getSkillInstallProgressResultSchema = z.strictObject({
+  sessionId: z.string(),
+  stage: z.enum(SKILL_INSTALL_STAGES),
+  detail: z.string().nullable(),
+  bytesReceived: z.number().nonnegative().nullable(),
+  bytesTotal: z.number().positive().nullable(),
+  startedAt: z.number().nonnegative().nullable(),
+})
+export type GetSkillInstallProgressResult = z.infer<typeof getSkillInstallProgressResultSchema>
 const installSkillFromGitRequestCodec = codec(
   'dsh-agent-enhancer#InstallSkillFromGitRequest',
   installSkillFromGitRequestSchema,
@@ -618,6 +634,14 @@ const readSkillDocumentRequestCodec = codec(
 const readSkillDocumentResultCodec = codec(
   'dsh-agent-enhancer#ReadSkillDocumentResult',
   readSkillDocumentResultSchema,
+)
+const getSkillInstallProgressRequestCodec = codec(
+  'dsh-agent-enhancer#GetSkillInstallProgressRequest',
+  getSkillInstallProgressRequestSchema,
+)
+const getSkillInstallProgressResultCodec = codec(
+  'dsh-agent-enhancer#GetSkillInstallProgressResult',
+  getSkillInstallProgressResultSchema,
 )
 
 const mcpInstallChannelSchema = z.enum(['manual', 'npx', 'github', 'mcpJson'])
@@ -1126,6 +1150,19 @@ export const remoteInfo = createTypertRemoteInfo({
       }],
       cancellation: { parameter: 'signal' },
       result: readSkillDocumentResultCodec,
+    },
+    'agentEnhancer/getSkillInstallProgress': {
+      service: 'agentEnhancer',
+      implementation: 'getSkillInstallProgress',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: getSkillInstallProgressRequestCodec,
+        strictCodec: getSkillInstallProgressRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: getSkillInstallProgressResultCodec,
     },
     'agentEnhancer/listMcpConnectors': {
       service: 'agentEnhancer',

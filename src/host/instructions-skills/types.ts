@@ -1,4 +1,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SkillInstallProgress, SkillInstallStage } from './install-progress.ts'
+
+export type { SkillInstallProgress, SkillInstallStage }
 
 export type InstructionScope = 'global' | 'shared' | 'project'
 
@@ -67,6 +70,11 @@ export interface UninstallSkillResult {
 
 export interface ListInstructionsSkillsRequest {
   readonly sessionId: SessionId
+  /**
+   * When true, fetch GitHub trees to set updateAvailable (slow).
+   * Default / omit = ledger metadata only so the Skills panel can open instantly.
+   */
+  readonly checkUpdates?: boolean
 }
 
 export interface CreateWorkspaceAgentsRequest {
@@ -90,7 +98,8 @@ export interface CreateWorkspaceSkillResult {
   readonly snapshot: InstructionsSkillsSnapshot
 }
 
-export type SkillInstallTarget = 'user' | 'project'
+/** Install destination: Agents (`.agents/skills`) or Harness (`.dsh/skills`), user or project. */
+export type SkillInstallTarget = 'user' | 'user-dsh' | 'project' | 'project-dsh'
 export type SkillInstallMode = 'link' | 'copy'
 
 export interface InstallSkillFromGitRequest {
@@ -103,6 +112,8 @@ export interface InstallSkillFromGitRequest {
 
 export interface InstallSkillFromGitResult {
   readonly installed: readonly { readonly name: string, readonly path: string, readonly mode: 'link' | 'copy' }[]
+  /** Skill names skipped because the destination path was locked / access-denied. */
+  readonly skippedBusy: readonly string[]
   readonly snapshot: InstructionsSkillsSnapshot
 }
 
@@ -146,3 +157,9 @@ export interface ReadSkillDocumentResult {
   readonly text: string
   readonly bytes: number
 }
+
+export interface GetSkillInstallProgressRequest {
+  readonly sessionId: SessionId
+}
+
+export type GetSkillInstallProgressResult = SkillInstallProgress

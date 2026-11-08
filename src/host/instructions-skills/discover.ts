@@ -18,6 +18,7 @@ import {
   samePath,
   skillRootsFor,
 } from './paths.ts'
+import { isTransientSkillEntryName, sweepTransientSkillEntries } from './transient-paths.ts'
 import { isRemovableManagedSkillPath } from './uninstall.ts'
 
 export interface DiscoverOptions {
@@ -129,6 +130,7 @@ export function discoverFilesystemSkills(options: DiscoverOptions & {
 
   for (const root of roots) {
     const managedRoot = managed.some(path => samePath(path, root))
+    if (managedRoot) sweepTransientSkillEntries(root)
     let names: string[]
     try {
       names = readdirSync(root)
@@ -136,6 +138,7 @@ export function discoverFilesystemSkills(options: DiscoverOptions & {
       continue
     }
     for (const name of names) {
+      if (isTransientSkillEntryName(name)) continue
       const skillMd = join(root, name, 'SKILL.md')
       if (!existsSync(skillMd)) continue
       if (byName.has(name)) continue

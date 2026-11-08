@@ -16,7 +16,7 @@ import {
   type SkillInstallTarget,
 } from './install-fs.ts'
 import { upsertInstallRecord } from './install-ledger.ts'
-import { agentsHomeOf } from './paths.ts'
+import { agentsHomeOf, dshHomeOf } from './paths.ts'
 import type { InstalledSkillRef } from './install.ts'
 import { purgeManagedSkillName } from './uninstall.ts'
 
@@ -84,10 +84,20 @@ export async function installSkillsFromZipFile(options: {
       options.target,
       options.projectRoot,
       agentsHomeOf(options.env),
+      dshHomeOf(options.env),
     )
     const installed: InstalledSkillRef[] = []
     for (const bundle of bundles) {
       options.signal.throwIfAborted()
+      // Install/replace target first; purge sibling managed roots only after
+      // success so a failed overwrite cannot drop skills-manager source_ref paths.
+      const result = installBundle({
+        bundle,
+        targetDir,
+        force: options.force,
+        mode: 'copy',
+      })
+      installed.push(result)
       if (options.force) {
         const folderName = basename(bundle.sourcePath)
         const names = new Set<string>([bundle.name])
@@ -98,16 +108,10 @@ export async function installSkillsFromZipFile(options: {
             cwd: options.projectRoot,
             projectRoot: options.projectRoot,
             env: options.env,
+            exceptPaths: name === result.name ? [result.path] : [],
           })
         }
       }
-      const result = installBundle({
-        bundle,
-        targetDir,
-        force: options.force,
-        mode: 'copy',
-      })
-      installed.push(result)
       const ledgerRoot = options.installLedgerRoot?.trim()
       if (ledgerRoot !== undefined && ledgerRoot !== '') {
         upsertInstallRecord(ledgerRoot, {

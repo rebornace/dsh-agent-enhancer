@@ -393,7 +393,7 @@ export const clientRemoteInfo = {
     }],
     cancellation: { parameter: 'signal' },
     result: codec('dsh-agent-enhancer#UpdateSkillFromGitResult'),
-  }, {
+  },   {
     id: 'dsh-agent-enhancer#agentEnhancer/readSkillDocument',
     service: 'agentEnhancer',
     namespace: 'agentEnhancer',
@@ -408,6 +408,21 @@ export const clientRemoteInfo = {
     }],
     cancellation: { parameter: 'signal' },
     result: codec('dsh-agent-enhancer#ReadSkillDocumentResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/getSkillInstallProgress',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'getSkillInstallProgress',
+    implementation: 'getSkillInstallProgress',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#GetSkillInstallProgressRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#GetSkillInstallProgressResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/listMcpConnectors',
     service: 'agentEnhancer',

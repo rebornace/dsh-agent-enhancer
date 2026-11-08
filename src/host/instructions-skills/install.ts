@@ -1,10 +1,11 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { purgeManagedSkillName } from './uninstall.ts'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { AuxiliaryError } from '../../errors.ts'
+import { isWindowsPathBusyError } from './fs-access.ts'
 import { parseGitSkillSource, type ParsedGitSkillSource } from './git-source.ts'
 import { fetchGithubRepoArchive } from './github-archive.ts'
 import {
@@ -18,9 +19,18 @@ import {
 } from './install-fs.ts'
 import { contentRevisionOfDir } from './content-revision.ts'
 import { upsertInstallRecord } from './install-ledger.ts'
-import { agentsHomeOf, isKebabCaseName } from './paths.ts'
+import {
+  setSkillInstallBytes,
+  setSkillInstallStage,
+} from './install-progress.ts'
+import { agentsHomeOf, dshHomeOf, isKebabCaseName } from './paths.ts'
 
 const execFileAsync = promisify(execFile)
+
+export interface GitInstallBatchResult {
+  readonly installed: readonly InstalledSkillRef[]
+  readonly skippedBusy: readonly string[]
+}
 
 export interface InstalledSkillRef {
   readonly name: string
@@ -62,10 +72,18 @@ async function assertGitAvailable(signal: AbortSignal): Promise<void> {
   }
 }
 
+function parseGitClonePercent(chunk: string): number | null {
+  const match = /(?:Receiving objects|Resolving deltas):\s+(\d+)%/i.exec(chunk)
+  if (match === null) return null
+  const value = Number(match[1])
+  return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : null
+}
+
 async function shallowClone(
   cloneUrl: string,
   dest: string,
   signal: AbortSignal,
+  onClonePercent?: (percent: number) => void,
 ): Promise<void> {
   signal.throwIfAborted()
   const attempts = 2
@@ -73,14 +91,54 @@ async function shallowClone(
   for (let i = 0; i < attempts; i += 1) {
     signal.throwIfAborted()
     try {
-      await execFileAsync(
-        'git',
-        ['-c', 'http.version=HTTP/1.1', 'clone', '--depth', '1', '--', cloneUrl, dest],
-        { windowsHide: true, timeout: 180_000 },
-      )
+      await new Promise<void>((resolveClone, rejectClone) => {
+        const child = spawn(
+          'git',
+          [
+            '-c', 'http.version=HTTP/1.1',
+            'clone', '--depth', '1', '--progress',
+            '--', cloneUrl, dest,
+          ],
+          { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] },
+        )
+        let stderr = ''
+        const onAbort = () => {
+          try {
+            child.kill()
+          } catch {
+            // best-effort
+          }
+        }
+        signal.addEventListener('abort', onAbort, { once: true })
+        child.stderr?.setEncoding('utf8')
+        child.stderr?.on('data', (chunk: string) => {
+          stderr += chunk
+          if (stderr.length > 8_000) stderr = stderr.slice(-4_000)
+          const percent = parseGitClonePercent(chunk)
+          if (percent !== null) onClonePercent?.(percent)
+        })
+        child.on('error', error => {
+          signal.removeEventListener('abort', onAbort)
+          rejectClone(error)
+        })
+        child.on('close', code => {
+          signal.removeEventListener('abort', onAbort)
+          if (signal.aborted) {
+            rejectClone(Object.assign(new Error('Aborted'), { name: 'AbortError' }))
+            return
+          }
+          if (code === 0) {
+            resolveClone()
+            return
+          }
+          rejectClone(new Error(stderr.trim() || `git clone exited ${String(code)}`))
+        })
+      })
       signal.throwIfAborted()
+      onClonePercent?.(100)
       return
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw error
       lastDetail = execDetail(error)
       rmSync(dest, { recursive: true, force: true })
     }
@@ -92,16 +150,18 @@ export async function materializeSkillGitTreeFromSource(
   source: string,
   workDir: string,
   signal: AbortSignal,
+  progressSessionId?: string,
 ): Promise<{ readonly rootDir: string, readonly parsed: ParsedGitSkillSource }> {
   const parsed = (() => {
     try {
       return parseGitSkillSource(source)
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
-      throw new AuxiliaryError('FILE_DENIED', detail)
+      // Not FILE_DENIED — the client maps that to a generic「没有权限」string.
+      throw new AuxiliaryError('FILE_EDIT_FAILED', detail)
     }
   })()
-  const rootDir = await materializeRepo(parsed, workDir, signal)
+  const rootDir = await materializeRepo(parsed, workDir, signal, progressSessionId)
   return { rootDir, parsed }
 }
 
@@ -109,9 +169,11 @@ async function materializeRepo(
   parsed: ParsedGitSkillSource,
   workDir: string,
   signal: AbortSignal,
+  progressSessionId?: string,
 ): Promise<string> {
   const cloneDir = join(workDir, 'repo')
   const archiveErrors: string[] = []
+  const sessionId = progressSessionId?.trim() ?? ''
 
   if (parsed.github !== null) {
     try {
@@ -120,6 +182,14 @@ async function materializeRepo(
         repo: parsed.github.repo,
         workDir,
         signal,
+        onStage: (stage, detail) => {
+          if (sessionId === '') return
+          setSkillInstallStage(sessionId, stage, detail ?? parsed.label)
+        },
+        onDownloadProgress: (received, total) => {
+          if (sessionId === '') return
+          setSkillInstallBytes(sessionId, received, total)
+        },
       })
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') throw error
@@ -128,8 +198,12 @@ async function materializeRepo(
   }
 
   await assertGitAvailable(signal)
+  if (sessionId !== '') setSkillInstallStage(sessionId, 'cloning', parsed.label)
   try {
-    await shallowClone(parsed.cloneUrl, cloneDir, signal)
+    await shallowClone(parsed.cloneUrl, cloneDir, signal, percent => {
+      if (sessionId === '') return
+      setSkillInstallBytes(sessionId, percent, 100)
+    })
     return cloneDir
   } catch (cloneError) {
     const cloneDetail = cloneError instanceof Error ? cloneError.message : String(cloneError)
@@ -151,13 +225,17 @@ export async function installSkillsFromGit(options: {
   readonly env?: NodeJS.ProcessEnv
   readonly signal: AbortSignal
   readonly installLedgerRoot?: string
-}): Promise<readonly InstalledSkillRef[]> {
+  /** When set, updates the in-memory install progress tracker for this session. */
+  readonly progressSessionId?: string
+}): Promise<GitInstallBatchResult> {
   const tempRoot = tempWorkDir('ae-skill-git-')
+  const progressSessionId = options.progressSessionId?.trim() ?? ''
   try {
     const { rootDir: cloneDir, parsed: materialized } = await materializeSkillGitTreeFromSource(
       options.source,
       tempRoot,
       options.signal,
+      progressSessionId === '' ? undefined : progressSessionId,
     )
     const bundles = resolveBundlesFromClone(cloneDir, materialized.subpath)
     if (bundles.length === 0) {
@@ -170,46 +248,86 @@ export async function installSkillsFromGit(options: {
       options.target,
       options.projectRoot,
       agentsHomeOf(options.env),
+      dshHomeOf(options.env),
     )
+    if (progressSessionId !== '') {
+      setSkillInstallStage(progressSessionId, 'copying', materialized.label)
+    }
     const installed: InstalledSkillRef[] = []
+    const skippedBusy: string[] = []
     for (const bundle of bundles) {
       options.signal.throwIfAborted()
-      if (options.force) {
-        // Clear same-named leftovers under ~/.agents and ~/.dsh (etc.) first.
-        // Also clear archive folder basenames (e.g. repo-hash zips) that differ
-        // from the frontmatter install name.
-        const folderName = basename(bundle.sourcePath)
-        const names = new Set<string>([bundle.name])
-        if (isKebabCaseName(folderName)) names.add(folderName)
-        for (const name of names) {
-          purgeManagedSkillName({
-            name,
-            cwd: options.projectRoot,
-            projectRoot: options.projectRoot,
-            env: options.env,
+      try {
+        if (progressSessionId !== '') {
+          setSkillInstallStage(
+            progressSessionId,
+            'copying',
+            `${bundle.name} · ${installed.length + skippedBusy.length + 1}/${bundles.length}`,
+          )
+        }
+        // Atomic replace at target first. Never purge other roots beforehand —
+        // a busy/skip after pre-purge left ~/.agents/skills/<name> missing and
+        // skills-manager reported its source_ref (原路径) as lost.
+        const result = installBundle({
+          bundle,
+          targetDir,
+          force: options.force,
+          mode: 'copy',
+        })
+        installed.push(result)
+        if (options.force) {
+          const folderName = basename(bundle.sourcePath)
+          const names = new Set<string>([bundle.name])
+          if (isKebabCaseName(folderName)) names.add(folderName)
+          for (const name of names) {
+            purgeManagedSkillName({
+              name,
+              cwd: options.projectRoot,
+              projectRoot: options.projectRoot,
+              env: options.env,
+              exceptPaths: name === result.name ? [result.path] : [],
+            })
+          }
+        }
+        const ledgerRoot = options.installLedgerRoot?.trim()
+        if (ledgerRoot !== undefined && ledgerRoot !== '') {
+          upsertInstallRecord(ledgerRoot, {
+            name: result.name,
+            channel: 'github',
+            source: options.source.trim(),
+            contentRevision: contentRevisionOfDir(result.path),
+            installedAt: new Date().toISOString(),
+            updateCheck: true,
           })
         }
-      }
-      const result = installBundle({
-        bundle,
-        targetDir,
-        force: options.force,
-        mode: 'copy',
-      })
-      installed.push(result)
-      const ledgerRoot = options.installLedgerRoot?.trim()
-      if (ledgerRoot !== undefined && ledgerRoot !== '') {
-        upsertInstallRecord(ledgerRoot, {
-          name: result.name,
-          channel: 'github',
-          source: options.source.trim(),
-          contentRevision: contentRevisionOfDir(result.path),
-          installedAt: new Date().toISOString(),
-          updateCheck: true,
-        })
+      } catch (error) {
+        if (isWindowsPathBusyError(error) || (
+          error instanceof AuxiliaryError
+          && error.code === 'FILE_EDIT_FAILED'
+          && isWindowsPathBusyError(error)
+        )) {
+          skippedBusy.push(bundle.name)
+          continue
+        }
+        // Auxiliary busy hints use our own message text.
+        if (
+          error instanceof AuxiliaryError
+          && error.code === 'FILE_EDIT_FAILED'
+          && /still present|file in use|EPERM|EIO/i.test(error.message)
+        ) {
+          skippedBusy.push(bundle.name)
+          continue
+        }
+        throw error
       }
     }
-    return installed
+    if (installed.length === 0 && skippedBusy.length > 0) {
+      throw new AuxiliaryError(
+        'FILE_EDIT_FAILED',
+        `Failed to update ${skippedBusy[0]}: still present (EPERM / EIO / file in use — close skill preview or Desktop file tabs, then retry)`,
+      )
+    }
+    return { installed, skippedBusy }
   } finally {
     try {
       rmSync(tempRoot, { recursive: true, force: true })
@@ -280,6 +398,7 @@ export function installSkillFromLocalPath(options: {
     options.target,
     options.projectRoot,
     agentsHomeOf(options.env),
+    dshHomeOf(options.env),
   )
   return installBundle({
     bundle,

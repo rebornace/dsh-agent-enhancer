@@ -120,6 +120,8 @@ import type {
   CreateWorkspaceAgentsResult,
   CreateWorkspaceSkillRequest,
   CreateWorkspaceSkillResult,
+  GetSkillInstallProgressRequest,
+  GetSkillInstallProgressResult,
   InstallSkillFromGitRequest,
   InstallSkillFromGitResult,
   InstallSkillFromZipRequest,
@@ -133,6 +135,7 @@ import type {
   UpdateSkillFromGitRequest,
   UpdateSkillFromGitResult,
 } from './instructions-skills/types.ts'
+import { getSkillInstallProgressSnapshot } from './instructions-skills/install-progress.ts'
 import { inspectContextCategory, pressureFromProjection } from './context-inspect.ts'
 import type { ContextInspectRequest, ContextInspectResult } from './context-inspect.ts'
 import { installAutoSessionRoute } from './auto-route/session-hook.ts'
@@ -628,6 +631,16 @@ export class AgentEnhancerService extends TypertRemoteService {
       if (signal.aborted) throw error
       throw instructionsSkillsRemoteError(error)
     }
+  }
+
+  /** Poll GitHub skill install/update stage while installSkillFromGit / updateSkillFromGit runs. */
+  async getSkillInstallProgress(
+    request: GetSkillInstallProgressRequest,
+    signal: AbortSignal,
+  ): Promise<GetSkillInstallProgressResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    return getSkillInstallProgressSnapshot(String(request.sessionId))
   }
 
   /** Remove a skill from a managed install root (user/project skills). */

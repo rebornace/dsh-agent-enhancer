@@ -1,9 +1,9 @@
 /**
  * Skills manager — peer PluginManagerPage IA (list + Add sheet + detail).
  * Peer: `@deepseek-ai/dsh-client-ui-plugin-manager`.
- * Primary job: install into ~/.agents/skills (official discovery), then use Desktop `/`.
+ * Primary job: install into .agents/skills or .dsh/skills, then use Desktop `/`.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GlobalStandardProps, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -22,6 +22,8 @@ import type {
   InstructionsSkillsSnapshot,
   SkillCatalogEntry,
   SkillInstallChannelLabel,
+  SkillInstallProgress,
+  SkillInstallTarget,
 } from '../../host/instructions-skills/types.ts'
 import {
   ManagerAddSheet,
@@ -33,8 +35,10 @@ import styles from '../styles.module.css'
 import { scheduleOpenSkillDocument } from '../file-edit/open-tab.ts'
 import type { FileEditNavigator } from '../file-edit/open-tab.ts'
 import { instructionsSkillsErrorMessage } from './errors.ts'
+import { formatSkillInstallProgressLine } from './install-progress-ui.ts'
 import type { InstructionsSkillsTabParams } from './kind.ts'
 import {
+  agentEnhancerGetSkillInstallProgress,
   agentEnhancerInstallSkillFromGit,
   agentEnhancerInstallSkillFromZip,
   agentEnhancerListInstructionsSkills,
@@ -46,6 +50,13 @@ import { setSkillsNavHasUpdates } from './nav-update-hints.ts'
 import { SkillMarkdownPreview } from './markdown-preview.tsx'
 import { SKILLS_PANEL_ID } from './kind.ts'
 import './slot-types.ts'
+
+const GIT_INSTALL_PROGRESS_POLL_MS = 400
+
+function isAbortError(error: unknown): boolean {
+  return (error instanceof Error && error.name === 'AbortError')
+    || (typeof error === 'object' && error !== null && Reflect.get(error, 'name') === 'AbortError')
+}
 
 export interface InstructionsSkillsPanelProps {
   readonly remote: () => { readonly agentEnhancer: object } | undefined
@@ -178,10 +189,34 @@ function providerLabel(provider: string, t: TranslateNS<'agent-enhancer'>): stri
   }
 }
 
-function matchesQuery(entry: SkillCatalogEntry, query: string): boolean {
+/** Normalize GitHub-ish text so `owner/repo` matches URLs and full labels. */
+export function normalizeSkillSearchText(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^git@github\.com:/, '')
+    .replace(/^https?:\/\/(www\.)?github\.com\//, '')
+    .replace(/\.git$/, '')
+}
+
+/**
+ * Match name/description, slash-command form, and GitHub install source
+ * (`owner/repo`, `owner/repo/skills/name`, or github.com URLs).
+ */
+export function matchesQuery(entry: SkillCatalogEntry, query: string): boolean {
   if (query === '') return true
-  const hay = `${entry.name}\n${entry.description}\n/${entry.name}`.toLowerCase()
-  return hay.includes(query)
+  const q = normalizeSkillSearchText(query)
+  if (q === '') return true
+  const source = entry.updateSourceLabel?.trim() ?? ''
+  const channel = entry.installChannel ?? ''
+  const hay = normalizeSkillSearchText([
+    entry.name,
+    entry.description,
+    `/${entry.name}`,
+    source,
+    channel,
+  ].join('\n'))
+  return hay.includes(q)
 }
 
 export function InstructionsSkillsMainPanel(props: InstructionsSkillsMainPanelProps) {
@@ -210,6 +245,7 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
   const [refreshToken, setRefreshToken] = useState(0)
   const [addOpen, setAddOpen] = useState(false)
   const [gitSource, setGitSource] = useState('')
+  const [installTarget, setInstallTarget] = useState<SkillInstallTarget>('user')
   const [installingName, setInstallingName] = useState<string | null>(null)
   const [installedQuery, setInstalledQuery] = useState('')
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all')
@@ -218,6 +254,10 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
   const [previewText, setPreviewText] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const [trackingGitInstall, setTrackingGitInstall] = useState(false)
+  const [installProgress, setInstallProgress] = useState<SkillInstallProgress | null>(null)
+  const [progressTick, setProgressTick] = useState(0)
+  const installAbortRef = useRef<AbortController | null>(null)
 
   const load = useCallback(async (signal: AbortSignal) => {
     if (sessionId === undefined) {
@@ -230,14 +270,34 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
     try {
       const face = props.remote()
       if (face === undefined) throw new AuxiliaryError('FILE_EDIT_FAILED', 'unavailable')
-      const next = await agentEnhancerListInstructionsSkills.invoke(face, { sessionId }, signal)
+      // Fast path: no GitHub download. Update badges fill in below.
+      const next = await agentEnhancerListInstructionsSkills.invoke(
+        face,
+        { sessionId, checkUpdates: false },
+        signal,
+      )
       if (signal.aborted) return
       setSnapshot(next)
+      if (!signal.aborted) setLoading(false)
+      void (async () => {
+        try {
+          const withUpdates = await agentEnhancerListInstructionsSkills.invoke(
+            face,
+            { sessionId, checkUpdates: true },
+            signal,
+          )
+          if (signal.aborted) return
+          setSnapshot(withUpdates)
+        } catch (err) {
+          if (signal.aborted || (err instanceof Error && err.name === 'AbortError')) return
+          // Keep the fast snapshot; surface a soft note via updateCheckFailed rows when possible.
+          void err
+        }
+      })()
     } catch (err) {
       if (signal.aborted || (err instanceof Error && err.name === 'AbortError')) return
       setSnapshot(null)
       setError(instructionsSkillsErrorMessage(err, props.t))
-    } finally {
       if (!signal.aborted) setLoading(false)
     }
   }, [props, sessionId])
@@ -253,11 +313,49 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
     setSkillsNavHasUpdates(skills.some(entry => skillShowsGitUpdate(entry)))
   }, [snapshot])
 
+  useEffect(() => {
+    if (!trackingGitInstall || sessionId === undefined) {
+      setInstallProgress(null)
+      return
+    }
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const face = props.remote()
+        if (face === undefined) return
+        const next = await agentEnhancerGetSkillInstallProgress.invoke(face, { sessionId })
+        if (!cancelled) setInstallProgress(next)
+      } catch {
+        // Poll failures are non-fatal; install RPC owns the real error.
+      }
+    }
+    void poll()
+    const timer = window.setInterval(() => {
+      void poll()
+      setProgressTick(tick => tick + 1)
+    }, GIT_INSTALL_PROGRESS_POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [trackingGitInstall, sessionId, props])
+
   const refresh = () => {
     setNote(null)
     setConfirmUninstall(null)
     setRefreshToken(token => token + 1)
   }
+
+  const onCancelGitInstall = () => {
+    installAbortRef.current?.abort()
+  }
+
+  const gitInstallStatusLine = (() => {
+    if (!trackingGitInstall) return null
+    void progressTick
+    if (installProgress === null) return props.t('instructionsSkillsInstalling')
+    return formatSkillInstallProgressLine(installProgress, Date.now(), props.t)
+  })()
 
   useEffect(() => {
     const path = previewEntry?.path ?? null
@@ -344,30 +442,51 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
 
   const onInstallGit = async () => {
     if (sessionId === undefined) return
+    if (installAbortRef.current !== null) return
     const source = gitSource.trim()
     if (source === '') return
     setNote(null)
     setError(null)
     setBusy(true)
     setInstallingName('git')
+    setTrackingGitInstall(true)
+    const controller = new AbortController()
+    installAbortRef.current = controller
     try {
       const face = props.remote()
       if (face === undefined) throw new AuxiliaryError('FILE_EDIT_FAILED', 'unavailable')
       const result = await agentEnhancerInstallSkillFromGit.invoke(
         face,
-        { sessionId, source, target: 'user', force: true },
-        new AbortController().signal,
+        { sessionId, source, target: installTarget, force: true },
+        controller.signal,
       )
       setSnapshot(result.snapshot)
       setGitSource('')
-      setNote(props.t('instructionsSkillsInstalledNote'))
+      const skipped = result.skippedBusy ?? []
+      if (skipped.length > 0) {
+        setNote(
+          props.t('instructionsSkillsInstalledPartialNote')
+            .replace('{installed}', String(result.installed.length))
+            .replace('{skipped}', String(skipped.length))
+            .replace('{names}', skipped.slice(0, 8).join(', ') + (skipped.length > 8 ? '…' : '')),
+        )
+      } else {
+        setNote(props.t('instructionsSkillsInstalledNote'))
+      }
       setAddOpen(false)
       refresh()
     } catch (err) {
-      setError(instructionsSkillsErrorMessage(err, props.t))
+      if (controller.signal.aborted || isAbortError(err)) {
+        setNote(props.t('instructionsSkillsInstallCancelled'))
+      } else {
+        setError(instructionsSkillsErrorMessage(err, props.t))
+      }
     } finally {
+      if (installAbortRef.current === controller) installAbortRef.current = null
       setBusy(false)
       setInstallingName(null)
+      setTrackingGitInstall(false)
+      setInstallProgress(null)
     }
   }
 
@@ -382,7 +501,7 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
       if (face === undefined) throw new AuxiliaryError('FILE_EDIT_FAILED', 'unavailable')
       const result = await agentEnhancerInstallSkillFromZip.invoke(
         face,
-        { sessionId, target: 'user', force: true },
+        { sessionId, target: installTarget, force: true },
         new AbortController().signal,
       )
       if (result.cancelled) return
@@ -407,21 +526,31 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
     setError(null)
     setBusy(true)
     setInstallingName(entry.name)
+    setTrackingGitInstall(true)
+    const controller = new AbortController()
+    installAbortRef.current = controller
     try {
       const face = props.remote()
       if (face === undefined) throw new AuxiliaryError('FILE_EDIT_FAILED', 'unavailable')
       const result = await agentEnhancerUpdateSkillFromGit.invoke(
         face,
         { sessionId, name: entry.name },
-        new AbortController().signal,
+        controller.signal,
       )
       setSnapshot(result.snapshot)
       setNote(props.t('instructionsSkillsUpdatedNote').replace('{name}', entry.name))
     } catch (err) {
-      setError(instructionsSkillsErrorMessage(err, props.t))
+      if (controller.signal.aborted || isAbortError(err)) {
+        setNote(props.t('instructionsSkillsInstallCancelled'))
+      } else {
+        setError(instructionsSkillsErrorMessage(err, props.t))
+      }
     } finally {
+      if (installAbortRef.current === controller) installAbortRef.current = null
       setBusy(false)
       setInstallingName(null)
+      setTrackingGitInstall(false)
+      setInstallProgress(null)
     }
   }
 
@@ -563,6 +692,16 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
       <ManagerPage data-state={sessionBlocked ? 'no-session' : 'tree'}>
         {error !== null ? <div className={styles.managerFailure} role="alert">{error}</div> : null}
         {note !== null ? <p className={styles.managerBanner}>{note}</p> : null}
+        {trackingGitInstall && gitInstallStatusLine !== null ? (
+          <div className={styles.managerFormRow}>
+            <p className={styles.managerInstallProgress} role="status" aria-live="polite">
+              {gitInstallStatusLine}
+            </p>
+            <Button variant="outline" size="sm" onClick={onCancelGitInstall}>
+              {props.t('instructionsSkillsInstallCancel')}
+            </Button>
+          </div>
+        ) : null}
         <ManagerDetail
           crumbLabel={props.t('instructionsSkillsTitle')}
           onBack={() => setPreviewEntry(null)}
@@ -652,6 +791,16 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
         </p>
       ) : null}
       {note !== null ? <p className={styles.managerBanner}>{note}</p> : null}
+      {trackingGitInstall && installingName !== 'git' && gitInstallStatusLine !== null ? (
+        <div className={styles.managerFormRow}>
+          <p className={styles.managerInstallProgress} role="status" aria-live="polite">
+            {gitInstallStatusLine}
+          </p>
+          <Button variant="outline" size="sm" onClick={onCancelGitInstall}>
+            {props.t('instructionsSkillsInstallCancel')}
+          </Button>
+        </div>
+      ) : null}
 
       {sessionBlocked ? (
         <p className={styles.managerStatus}>{props.t('instructionsSkillsNoSession')}</p>
@@ -724,18 +873,47 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
         open={addOpen}
         title={props.t('instructionsSkillsAdd')}
         closeLabel={props.t('instructionsSkillsUninstallCancel')}
-        onClose={() => setAddOpen(false)}
+        onClose={() => {
+          if (installingName === 'git') onCancelGitInstall()
+          else if (!busy) setAddOpen(false)
+        }}
         footer={(
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => setAddOpen(false)}
-          >
-            {props.t('instructionsSkillsUninstallCancel')}
-          </Button>
+          installingName === 'git' ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onCancelGitInstall}
+            >
+              {props.t('instructionsSkillsInstallCancel')}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => setAddOpen(false)}
+            >
+              {props.t('instructionsSkillsUninstallCancel')}
+            </Button>
+          )
         )}
       >
+        <label className={styles.managerField}>
+          <span className={styles.managerFieldLabel}>{props.t('instructionsSkillsInstallTarget')}</span>
+          <select
+            className={styles.managerScopeSelect}
+            value={installTarget}
+            disabled={busy}
+            aria-label={props.t('instructionsSkillsInstallTarget')}
+            onChange={event => setInstallTarget(event.target.value as SkillInstallTarget)}
+          >
+            <option value="user">{props.t('instructionsSkillsTargetUser')}</option>
+            <option value="user-dsh">{props.t('instructionsSkillsTargetUserDsh')}</option>
+            <option value="project">{props.t('instructionsSkillsTargetProject')}</option>
+            <option value="project-dsh">{props.t('instructionsSkillsTargetProjectDsh')}</option>
+          </select>
+          <span className={styles.managerFieldHint}>{props.t('instructionsSkillsInstallGitHint')}</span>
+        </label>
         <label className={styles.managerField}>
           <span className={styles.managerFieldLabel}>{props.t('instructionsSkillsInstallGit')}</span>
           <div className={styles.managerFormRow}>
@@ -762,9 +940,15 @@ function InstructionsSkillsPanel(props: InstructionsSkillsPanelProps) {
                 : props.t('instructionsSkillsInstall')}
             </Button>
           </div>
+          {installingName === 'git' && gitInstallStatusLine !== null ? (
+            <p className={styles.managerInstallProgress} role="status" aria-live="polite">
+              {gitInstallStatusLine}
+            </p>
+          ) : null}
         </label>
         <label className={styles.managerField}>
           <span className={styles.managerFieldLabel}>{props.t('instructionsSkillsInstallZip')}</span>
+          <span className={styles.managerFieldHint}>{props.t('instructionsSkillsInstallZipHint')}</span>
           <Button
             variant="outline"
             size="sm"

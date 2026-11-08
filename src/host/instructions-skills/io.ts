@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { basename, join, resolve } from 'node:path'
+import { basename, join, resolve, sep } from 'node:path'
 import { AuxiliaryError } from '../../errors.ts'
 import { FILE_EDIT_MAX_BYTES } from '../file-edit/types.ts'
 import { pickFileNow } from '../extra-folders/pick.ts'
@@ -16,6 +16,13 @@ import { parseGitSkillSource } from './git-source.ts'
 import { readInstallLedger } from './install-ledger.ts'
 import { installSkillsFromGit } from './install.ts'
 import {
+  beginSkillInstallProgress,
+  clearSkillInstallProgress,
+  setSkillInstallStage,
+} from './install-progress.ts'
+import {
+  agentsHomeOf,
+  dshHomeOf,
   findProjectRoot,
   isInsideOrSame,
   previewSkillSearchRoots,
@@ -133,6 +140,11 @@ export async function enrichSkillsFromLedger(
   options: {
     readonly installLedgerRoot?: string
     readonly signal: AbortSignal
+    /**
+     * When false/omitted, only attach ledger channel/source (fast path for panel open).
+     * When true, download/clone each GitHub source to set updateAvailable.
+     */
+    readonly checkUpdates?: boolean
   },
 ): Promise<readonly SkillCatalogEntry[]> {
   const ledgerRoot = options.installLedgerRoot?.trim()
@@ -140,6 +152,7 @@ export async function enrichSkillsFromLedger(
     return skills.map(skill => ({ ...defaultSkillInstallMeta(), ...skill }))
   }
   const ledger = readInstallLedger(ledgerRoot)
+  const checkUpdates = options.checkUpdates === true
   const out: SkillCatalogEntry[] = []
   for (const skill of skills) {
     const record = ledger[skill.name]
@@ -153,7 +166,7 @@ export async function enrichSkillsFromLedger(
       installChannel: record.channel,
       updateSourceLabel: ledgerSourceLabel(record.source),
     }
-    if (record.channel === 'github' && record.updateCheck) {
+    if (checkUpdates && record.channel === 'github' && record.updateCheck) {
       try {
         const check = await checkGithubSkillUpdate(record, { signal: options.signal })
         entry = {
@@ -185,12 +198,24 @@ function inferSkillInstallTarget(
   const roots = skillRootsFor(cwd, projectRoot, env)
   const projectAgents = join(resolve(projectRoot), '.agents', 'skills')
   const projectDsh = join(resolve(projectRoot), '.dsh', 'skills')
+  const userAgents = join(agentsHomeOf(env), 'skills')
+  const userDsh = join(dshHomeOf(env), 'skills')
   for (const root of roots) {
     const present = existsSync(join(root, name, 'SKILL.md'))
       || existsSync(join(root, `${name}.md`))
     if (!present) continue
-    if (samePath(root, projectAgents) || samePath(root, projectDsh)) return 'project'
-    return 'user'
+    if (samePath(root, projectAgents)) return 'project'
+    if (samePath(root, projectDsh)) return 'project-dsh'
+    if (samePath(root, userAgents)) return 'user'
+    if (samePath(root, userDsh)) return 'user-dsh'
+    // Tip/cwd variants that were not deduped against the four canonical roots.
+    const normalized = root.toLowerCase().split(/[/\\]/).join(sep)
+    const dshMarker = `${sep}.dsh${sep}skills`
+    const underProject = isInsideOrSame(resolve(projectRoot), root)
+    if (normalized.includes(dshMarker) || normalized.endsWith(`${sep}.dsh${sep}skills`)) {
+      return underProject ? 'project-dsh' : 'user-dsh'
+    }
+    return underProject ? 'project' : 'user'
   }
   throw new AuxiliaryError('FILE_NOT_FOUND', `Skill is not installed in a managed skills root: ${name}`)
 }
@@ -202,6 +227,7 @@ async function buildSnapshot(
   options?: {
     readonly installLedgerRoot?: string
     readonly signal?: AbortSignal
+    readonly checkUpdates?: boolean
   },
 ): Promise<InstructionsSkillsSnapshot> {
   const discovered = discoverInstructionFiles({ cwd })
@@ -218,6 +244,7 @@ async function buildSnapshot(
   const skills = await enrichSkillsFromLedger(merged.skills, {
     installLedgerRoot: options?.installLedgerRoot,
     signal,
+    checkUpdates: options?.checkUpdates === true,
   })
   return {
     sessionId,
@@ -242,6 +269,7 @@ export async function listInstructionsSkillsNow(options: {
   return buildSnapshot(options.ctx, options.request.sessionId, cwd, {
     installLedgerRoot: options.installLedgerRoot,
     signal: options.signal,
+    checkUpdates: options.request.checkUpdates === true,
   })
 }
 
@@ -290,24 +318,36 @@ export async function installSkillFromGitNow(options: {
   readonly installLedgerRoot?: string
 }): Promise<InstallSkillFromGitResult> {
   options.signal.throwIfAborted()
-  const agent = agentOf(options.ctx, options.request.sessionId)
-  const cwd = sessionCwd(agent.session)
-  const discovered = discoverInstructionFiles({ cwd })
-  const installed = await installSkillsFromGit({
-    source: options.request.source,
-    target: options.request.target,
-    projectRoot: discovered.projectRoot,
-    // Panel installs overwrite by default; pass force: false to refuse collisions.
-    force: options.request.force !== false,
-    signal: options.signal,
-    installLedgerRoot: options.installLedgerRoot,
-  })
-  options.signal.throwIfAborted()
-  const snapshot = await buildSnapshot(options.ctx, options.request.sessionId, cwd, {
-    installLedgerRoot: options.installLedgerRoot,
-    signal: options.signal,
-  })
-  return { installed, snapshot }
+  const sessionId = String(options.request.sessionId)
+  beginSkillInstallProgress(sessionId, options.request.source)
+  try {
+    const agent = agentOf(options.ctx, options.request.sessionId)
+    const cwd = sessionCwd(agent.session)
+    const discovered = discoverInstructionFiles({ cwd })
+    const batch = await installSkillsFromGit({
+      source: options.request.source,
+      target: options.request.target,
+      projectRoot: discovered.projectRoot,
+      // Panel installs overwrite by default; pass force: false to refuse collisions.
+      force: options.request.force !== false,
+      signal: options.signal,
+      installLedgerRoot: options.installLedgerRoot,
+      progressSessionId: sessionId,
+    })
+    options.signal.throwIfAborted()
+    setSkillInstallStage(sessionId, 'finishing', options.request.source)
+    const snapshot = await buildSnapshot(options.ctx, options.request.sessionId, cwd, {
+      installLedgerRoot: options.installLedgerRoot,
+      signal: options.signal,
+    })
+    return {
+      installed: batch.installed,
+      skippedBusy: batch.skippedBusy,
+      snapshot,
+    }
+  } finally {
+    clearSkillInstallProgress(sessionId)
+  }
 }
 
 export async function installSkillFromZipNow(options: {
@@ -398,35 +438,43 @@ export async function updateSkillFromGitNow(options: {
   if (source === '') {
     throw new AuxiliaryError('FILE_DENIED', 'Install record is missing a git source')
   }
-  const agent = agentOf(options.ctx, options.request.sessionId)
-  const cwd = sessionCwd(agent.session)
-  const discovered = discoverInstructionFiles({ cwd })
-  const target = inferSkillInstallTarget(
-    options.request.name,
-    cwd,
-    discovered.projectRoot,
-  )
-  const installed = await installSkillsFromGit({
-    source,
-    target,
-    projectRoot: discovered.projectRoot,
-    force: true,
-    signal: options.signal,
-    installLedgerRoot: ledgerRoot,
-  })
-  options.signal.throwIfAborted()
-  const updated = installed.find(entry => entry.name === options.request.name)
-  if (updated === undefined) {
-    throw new AuxiliaryError(
-      'FILE_NOT_FOUND',
-      `Skill ${options.request.name} was not present in the git source`,
+  const sessionId = String(options.request.sessionId)
+  beginSkillInstallProgress(sessionId, source)
+  try {
+    const agent = agentOf(options.ctx, options.request.sessionId)
+    const cwd = sessionCwd(agent.session)
+    const discovered = discoverInstructionFiles({ cwd })
+    const target = inferSkillInstallTarget(
+      options.request.name,
+      cwd,
+      discovered.projectRoot,
     )
+    const batch = await installSkillsFromGit({
+      source,
+      target,
+      projectRoot: discovered.projectRoot,
+      force: true,
+      signal: options.signal,
+      installLedgerRoot: ledgerRoot,
+      progressSessionId: sessionId,
+    })
+    options.signal.throwIfAborted()
+    const updated = batch.installed.find(entry => entry.name === options.request.name)
+    if (updated === undefined) {
+      throw new AuxiliaryError(
+        'FILE_NOT_FOUND',
+        `Skill ${options.request.name} was not present in the git source`,
+      )
+    }
+    setSkillInstallStage(sessionId, 'finishing', source)
+    const snapshot = await buildSnapshot(options.ctx, options.request.sessionId, cwd, {
+      installLedgerRoot: ledgerRoot,
+      signal: options.signal,
+    })
+    return { updated, snapshot }
+  } finally {
+    clearSkillInstallProgress(sessionId)
   }
-  const snapshot = await buildSnapshot(options.ctx, options.request.sessionId, cwd, {
-    installLedgerRoot: ledgerRoot,
-    signal: options.signal,
-  })
-  return { updated, snapshot }
 }
 
 /** Resolve catalog path → SKILL.md (folder or file). */

@@ -91,6 +91,10 @@ export function isRemovableManagedSkillPath(
 /**
  * Remove every managed-root entry for `name` (folder and flat `.md`, including
  * broken links). Used by uninstall and by overwrite installs.
+ *
+ * Overwrite installs must call this **after** a successful write into the
+ * install target — never before — otherwise a busy/skip failure leaves
+ * `~/.agents/skills/<name>` missing and skills-manager reports 原路径丢失.
  */
 export function purgeManagedSkillName(options: {
   readonly name: string
@@ -99,11 +103,14 @@ export function purgeManagedSkillName(options: {
   readonly env?: NodeJS.ProcessEnv
   /** Extra absolute paths to remove even if outside the name scan. */
   readonly also?: readonly string[]
+  /** Skip these paths (e.g. the skill just installed into the target root). */
+  readonly exceptPaths?: readonly string[]
 }): readonly string[] {
   const name = options.name.trim()
   if (!isKebabCaseName(name)) {
     throw new AuxiliaryError('FILE_DENIED', `Invalid skill name: ${name}`)
   }
+  const except = (options.exceptPaths ?? []).map(entry => resolve(entry))
   const roots = skillRootsFor(options.cwd, options.projectRoot, options.env)
   const purgeTargets = new Set<string>()
   for (const extra of options.also ?? []) {
@@ -116,6 +123,7 @@ export function purgeManagedSkillName(options: {
   }
   const removed: string[] = []
   for (const entry of purgeTargets) {
+    if (except.some(skip => samePath(skip, entry))) continue
     removePathRobust(entry)
     removed.push(entry)
   }

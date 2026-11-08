@@ -6,6 +6,8 @@ import type {
   CreateWorkspaceAgentsResult,
   CreateWorkspaceSkillRequest,
   CreateWorkspaceSkillResult,
+  GetSkillInstallProgressRequest,
+  GetSkillInstallProgressResult,
   InstallSkillFromGitRequest,
   InstallSkillFromGitResult,
   InstructionsSkillsSnapshot,
@@ -158,6 +160,11 @@ type ReadSkillDocumentCall = (
   signal?: AbortSignal,
 ) => Promise<RemoteResult<ReadSkillDocumentResult>>
 
+type GetSkillInstallProgressCall = (
+  request: GetSkillInstallProgressRequest,
+  signal?: AbortSignal,
+) => Promise<RemoteResult<GetSkillInstallProgressResult>>
+
 export const agentEnhancerInstallSkillFromGit = {
   async invoke(
     remote: unknown,
@@ -262,6 +269,29 @@ export const agentEnhancerReadSkillDocument = {
       throw new AuxiliaryError('FILE_EDIT_FAILED', 'readSkillDocument remote is unavailable')
     }
     let result: RemoteResult<ReadSkillDocumentResult>
+    try {
+      result = await call.apply(namespace, [request, signal])
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      throw new AuxiliaryError('FILE_EDIT_FAILED')
+    }
+    if (!result.ok) throwRemoteFailure(result)
+    return result.value
+  },
+}
+
+export const agentEnhancerGetSkillInstallProgress = {
+  async invoke(
+    remote: unknown,
+    request: GetSkillInstallProgressRequest,
+    signal?: AbortSignal,
+  ): Promise<GetSkillInstallProgressResult> {
+    const namespace = agentFace(remote)
+    const call = Reflect.get(namespace, 'getSkillInstallProgress') as GetSkillInstallProgressCall | undefined
+    if (typeof call !== 'function') {
+      throw new AuxiliaryError('FILE_EDIT_FAILED', 'getSkillInstallProgress remote is unavailable')
+    }
+    let result: RemoteResult<GetSkillInstallProgressResult>
     try {
       result = await call.apply(namespace, [request, signal])
     } catch (error) {

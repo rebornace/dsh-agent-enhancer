@@ -1,6 +1,9 @@
 /**
  * Fetch a GitHub repository as a zip archive (codeload / zipball).
  * Prefer this over `git clone` when HTTPS clone is reset or flaky.
+ *
+ * Resolves the default branch once, then downloads a single archive URL so the
+ * UI does not restart "downloading" for every fallback candidate.
  */
 import { execFile } from 'node:child_process'
 import {
@@ -32,7 +35,17 @@ function detailOf(error: unknown): string {
   return body.slice(0, 800)
 }
 
-async function downloadUrl(url: string, destFile: string, signal: AbortSignal): Promise<void> {
+export type SkillArchiveDownloadProgress = (
+  bytesReceived: number,
+  bytesTotal: number | null,
+) => void
+
+async function downloadUrl(
+  url: string,
+  destFile: string,
+  signal: AbortSignal,
+  onBytes?: SkillArchiveDownloadProgress,
+): Promise<void> {
   signal.throwIfAborted()
   const response = await fetch(url, {
     signal,
@@ -48,11 +61,21 @@ async function downloadUrl(url: string, destFile: string, signal: AbortSignal): 
   if (response.body === null) {
     throw new Error(`Empty body from ${url}`)
   }
-  await pipeline(
-    Readable.fromWeb(response.body as NodeReadableStream),
-    createWriteStream(destFile),
-  )
+  const lengthHeader = response.headers.get('content-length')
+  const parsedTotal = lengthHeader !== null ? Number(lengthHeader) : Number.NaN
+  const bytesTotal = Number.isFinite(parsedTotal) && parsedTotal > 0 ? parsedTotal : null
+  let bytesReceived = 0
+  onBytes?.(0, bytesTotal)
+
+  const source = Readable.fromWeb(response.body as NodeReadableStream)
+  source.on('data', (chunk: Buffer | string) => {
+    const size = typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.byteLength
+    bytesReceived += size
+    onBytes?.(bytesReceived, bytesTotal)
+  })
+  await pipeline(source, createWriteStream(destFile))
   signal.throwIfAborted()
+  onBytes?.(bytesReceived, bytesTotal)
 }
 
 async function extractZip(zipPath: string, destDir: string, signal: AbortSignal): Promise<void> {
@@ -87,36 +110,84 @@ export function unwrapArchiveRoot(extractDir: string): string {
   return only
 }
 
+async function resolveDefaultBranch(
+  owner: string,
+  repo: string,
+  signal: AbortSignal,
+): Promise<string | null> {
+  signal.throwIfAborted()
+  try {
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      signal,
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'dsh-agent-enhancer-skill-install',
+      },
+    })
+    if (!response.ok) return null
+    const body = await response.json() as { readonly default_branch?: unknown }
+    return typeof body.default_branch === 'string' && body.default_branch.trim() !== ''
+      ? body.default_branch.trim()
+      : null
+  } catch {
+    return null
+  }
+}
+
+function archiveCandidates(owner: string, repo: string, defaultBranch: string | null): string[] {
+  const urls: string[] = []
+  if (defaultBranch !== null) {
+    urls.push(`https://codeload.github.com/${owner}/${repo}/zip/refs/heads/${encodeURIComponent(defaultBranch)}`)
+  }
+  urls.push(
+    `https://api.github.com/repos/${owner}/${repo}/zipball`,
+    `https://codeload.github.com/${owner}/${repo}/zip/refs/heads/main`,
+    `https://codeload.github.com/${owner}/${repo}/zip/refs/heads/master`,
+  )
+  return [...new Set(urls)]
+}
+
 /**
  * Download the default-branch zipball for owner/repo into `workDir/repo`.
- * Tries API zipball first (follows default branch), then codeload main/master.
+ * Emits `downloading` once; retries keep the same stage (detail may change).
  */
 export async function fetchGithubRepoArchive(options: {
   readonly owner: string
   readonly repo: string
   readonly workDir: string
   readonly signal: AbortSignal
+  readonly onDownloadProgress?: SkillArchiveDownloadProgress
+  readonly onStage?: (stage: 'downloading' | 'extracting', detail?: string) => void
 }): Promise<string> {
-  const { owner, repo, workDir, signal } = options
+  const { owner, repo, workDir, signal, onDownloadProgress, onStage } = options
   mkdirSync(workDir, { recursive: true })
   const zipPath = join(workDir, 'repo.zip')
   const extractDir = join(workDir, 'extract')
   mkdirSync(extractDir, { recursive: true })
 
-  const candidates = [
-    `https://api.github.com/repos/${owner}/${repo}/zipball`,
-    `https://codeload.github.com/${owner}/${repo}/zip/refs/heads/main`,
-    `https://codeload.github.com/${owner}/${repo}/zip/refs/heads/master`,
-  ]
-
+  const defaultBranch = await resolveDefaultBranch(owner, repo, signal)
+  const candidates = archiveCandidates(owner, repo, defaultBranch)
   const errors: string[] = []
-  for (const url of candidates) {
+  let downloadStarted = false
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const url = candidates[index]!
     signal.throwIfAborted()
     try {
       rmSync(zipPath, { force: true })
       rmSync(extractDir, { recursive: true, force: true })
       mkdirSync(extractDir, { recursive: true })
-      await downloadUrl(url, zipPath, signal)
+      const detail = index === 0
+        ? `${owner}/${repo}`
+        : `${owner}/${repo} · retry ${index + 1}/${candidates.length}`
+      if (!downloadStarted) {
+        onStage?.('downloading', detail)
+        downloadStarted = true
+      } else {
+        onStage?.('downloading', detail)
+      }
+      await downloadUrl(url, zipPath, signal, onDownloadProgress)
+      onStage?.('extracting', `${owner}/${repo}`)
       await extractZip(zipPath, extractDir, signal)
       const root = unwrapArchiveRoot(extractDir)
       const repoDir = join(workDir, 'repo')
