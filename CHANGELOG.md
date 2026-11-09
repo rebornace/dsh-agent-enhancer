@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.9 - 2026-11-09
+
 ### Changed
 
 - **浏览器 Agent 驱动：** 关键路径改为 **Playwright-core 持久化 Context**（独立 `user-data-dir` + 显式 Chrome/Edge）。MV3 扩展桥退役，源码归档 `extensions/chrome-legacy/`（不进发布包）。
@@ -15,7 +17,7 @@
 
 ### Docs
 
-- README 中英文、路线图、`docs/architecture/browser-agent-playwright.md`、`docs/architecture/session-delete.md` 与当前路径对齐。
+- README 中英文钉到 `0.3.9`；路线图与架构说明与 Playwright 路径对齐。
 
 ## 0.3.8 - 2026-11-08
 

@@ -74,6 +74,15 @@ if (packedManifest.engines?.dsh !== '>=0.2.2-rc.1 <0.3.0-0') {
 }
 
 const absolutePath = /(?:file:\/\/\/|(?:^|[^a-zA-Z])[A-Z]:[\\/]|\/Users\/|\/home\/)/
+/**
+ * Browser-agent ships intentional Chromium install fallbacks when env is stripped.
+ * Bundled JS keeps them as escaped `C:\\Program Files\\...` string literals.
+ */
+const intentionalWinBrowserFallback =
+  /C:\\\\Program Files(?: \(x86\))?(?:\\\\(?:Google\\\\Chrome|Microsoft\\\\Edge)\\\\Application\\\\(?:chrome|msedge)\.exe)?/g
+function stripIntentionalFallbacks(text) {
+  return text.replace(intentionalWinBrowserFallback, '')
+}
 // Vendored Monaco ships Windows `file:///` conversion helpers — not leaked build paths.
 for (const path of files.filter(path =>
   path !== 'package/package.json'
@@ -84,12 +93,14 @@ for (const path of files.filter(path =>
   if (path.endsWith('.map')) {
     const map = JSON.parse(contents)
     const sources = Array.isArray(map.sources) ? map.sources : []
-    if (sources.some(source => typeof source === 'string' && absolutePath.test(source))) {
+    if (sources.some(source =>
+      typeof source === 'string' && absolutePath.test(stripIntentionalFallbacks(source))
+    )) {
       throw new Error(`Package contains an absolute source path: ${path}`)
     }
     continue
   }
-  if (absolutePath.test(contents)) {
+  if (absolutePath.test(stripIntentionalFallbacks(contents))) {
     throw new Error(`Package contains an absolute source path: ${path}`)
   }
 }

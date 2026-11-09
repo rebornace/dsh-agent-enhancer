@@ -1,6 +1,6 @@
 {
   "name": "dsh-agent-enhancer",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "author": "rebornace",
   "license": "MIT",
   "repository": {
@@ -63,6 +63,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm test && pnpm build && node scripts/verify-package.mjs",
+    "verify": "node scripts/verify-package.mjs",
     "desktop:link": "node scripts/desktop-install.mjs link",
     "desktop:npm": "node scripts/desktop-install.mjs npm"
   },
