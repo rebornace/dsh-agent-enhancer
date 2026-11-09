@@ -153,6 +153,9 @@ export async function showOsNotificationNow(
   const title = input.title.trim()
   const body = input.body.trim()
   if (title === '' || body === '') return { shown: false, channel: 'none' }
+  // Vitest loads this module in Node, where Electron Notification is missing and
+  // the Windows fallback would post a real Action Center toast. Never do that.
+  if (process.env.VITEST === 'true') return { shown: false, channel: 'none' }
   const payload = {
     title: title.slice(0, 120),
     body: body.slice(0, 240),

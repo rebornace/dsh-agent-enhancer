@@ -18,3 +18,4 @@ tests/
 .tmp-*/
 THIRD-PARTY-NOTICES.md
 scripts/skills-ui-prototype.html
+extensions/

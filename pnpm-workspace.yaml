@@ -91,3 +91,4 @@ minimumReleaseAgeExclude:
 overrides:
   rollup: 4.52.5
   zod: 4.6.6
+verifyDepsBeforeRun: false

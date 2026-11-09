@@ -41,7 +41,7 @@ const host = await build({
   target: 'node22',
   sourcemap: true,
   metafile: true,
-  external: [...external, 'zod', 'zod/*'],
+  external: [...external, 'zod', 'zod/*', 'ws', 'ws/*', 'playwright-core', 'playwright-core/*'],
 })
 assertExternalRuntime(host, 'Host')
 

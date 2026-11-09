@@ -3,7 +3,7 @@ import type { AutoRouteMap } from './host/auto-route/types.ts'
 
 export const MODULES = [
   'history', 'optimize', 'predict', 'quote', 'rollback', 'softPause', 'runAlerts', 'contextInspect', 'usage',
-  'sessionDelete', 'fileEdit', 'instructionsSkills', 'mcpConnectors',
+  'sessionDelete', 'fileEdit', 'instructionsSkills', 'mcpConnectors', 'browserAgent',
 ] as const
 export type ModuleName = typeof MODULES[number]
 
@@ -22,6 +22,21 @@ export function resolveRunAlertsLevel(value: string | undefined): RunAlertsLevel
   }
 }
 
+/** Which desktop browser the dedicated agent window launches. */
+export const BROWSER_AGENT_BROWSERS = ['auto', 'chrome', 'edge'] as const
+export type BrowserAgentBrowser = typeof BROWSER_AGENT_BROWSERS[number]
+
+export function resolveBrowserAgentBrowser(value: string | undefined): BrowserAgentBrowser {
+  switch (value) {
+    case 'auto':
+    case 'chrome':
+    case 'edge':
+      return value
+    default:
+      return 'auto'
+  }
+}
+
 /** Features with dedicated provider/model settings fields. */
 export type ConfigurableAuxiliaryFeature = 'optimize' | 'predict' | 'compact'
 export type AuxiliaryFeature = ConfigurableAuxiliaryFeature
@@ -36,6 +51,8 @@ export interface AuxiliaryModelSettings {
 
 export type EnhancerSettings = Readonly<Record<`${ModuleName}Enabled`, boolean>> & {
   readonly runAlertsLevel: RunAlertsLevel
+  /** Dedicated window: auto (Windows prefers Edge), or force Chrome / Edge. */
+  readonly browserAgentBrowser: BrowserAgentBrowser
   readonly optimizeProvider: string
   readonly optimizeModel: string
   readonly optimizeReasoningEffort: string
@@ -79,6 +96,8 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   softPauseEnabled: true,
   runAlertsEnabled: true,
   runAlertsLevel: 'unfocused',
+  browserAgentEnabled: false,
+  browserAgentBrowser: 'auto',
   instructionsSkillsEnabled: true,
   mcpConnectorsEnabled: true,
   optimizeProvider: '',
@@ -123,6 +142,8 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     softPauseEnabled: value?.softPauseEnabled ?? true,
     runAlertsEnabled: value?.runAlertsEnabled ?? true,
     runAlertsLevel: resolveRunAlertsLevel(value?.runAlertsLevel),
+    browserAgentEnabled: value?.browserAgentEnabled ?? false,
+    browserAgentBrowser: resolveBrowserAgentBrowser(value?.browserAgentBrowser),
     instructionsSkillsEnabled: value?.instructionsSkillsEnabled ?? true,
     mcpConnectorsEnabled: value?.mcpConnectorsEnabled ?? true,
     optimizeProvider: text(value?.optimizeProvider),

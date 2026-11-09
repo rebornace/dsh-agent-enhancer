@@ -5,6 +5,7 @@ import { Component, useEffect, useState, useSyncExternalStore } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { resolveSettings } from '../../config.ts'
 import type {
+  BrowserAgentBrowser,
   ConfigurableAuxiliaryFeature,
   EnhancerSettings,
   ModuleName,
@@ -29,6 +30,7 @@ import {
 } from '../mcp-connectors/left-nav.ts'
 import { SettingsModelsPanel } from './settings-models.tsx'
 import { autoTierFieldPrefix } from './settings-model-pill.tsx'
+import { agentEnhancerBrowserAgentSetBrowser } from '../remote.ts'
 
 type SettingsForm = Pick<ConfigForm<EnhancerSettings>, 'getSnapshot' | 'subscribe' | 'set' | 'mutate'>
 
@@ -40,6 +42,8 @@ export interface PluginSettingsProps {
   readonly loadCatalog?: () => Promise<ModelCatalog>
   readonly checkUpdate?: () => Promise<UpdateCheckResult>
   readonly applyUpdate?: () => Promise<ApplyUpdateResult>
+  /** Host remote — sync browser preference live so Agent tools honor Settings without Launch. */
+  readonly getRemote?: () => unknown
 }
 
 class SettingsErrorBoundary extends Component<
@@ -80,7 +84,7 @@ function tabLabel(
   }
 }
 
-function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyUpdate }: PluginSettingsProps) {
+function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyUpdate, getRemote }: PluginSettingsProps) {
   const formState = useSyncExternalStore(
     listener => form.subscribe(listener),
     () => form.getSnapshot(),
@@ -187,6 +191,24 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyU
     setSaveDetail(null)
     try {
       await writeOps([{ op: 'set', path: ['runAlertsLevel'], value: level }])
+    } catch (cause) {
+      setError(true)
+      setSaveDetail(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const onBrowserAgentBrowser = async (browser: BrowserAgentBrowser) => {
+    setSaving('browserAgentBrowser')
+    setError(false)
+    setSaveDetail(null)
+    try {
+      // Live host sync first — Agent tools must see Chrome↔Edge immediately.
+      if (getRemote !== undefined) {
+        await agentEnhancerBrowserAgentSetBrowser.invoke(getRemote(), { browser })
+      }
+      await writeOps([{ op: 'set', path: ['browserAgentBrowser'], value: browser }])
     } catch (cause) {
       setError(true)
       setSaveDetail(cause instanceof Error ? cause.message : String(cause))
@@ -316,6 +338,7 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyU
           t={t}
           onToggle={(module, checked) => { void onToggle(module, checked) }}
           onRunAlertsLevel={level => { void onRunAlertsLevel(level) }}
+          onBrowserAgentBrowser={browser => { void onBrowserAgentBrowser(browser) }}
           onOpenModel={feature => {
             setHighlightFeature(feature)
             setTab('models')

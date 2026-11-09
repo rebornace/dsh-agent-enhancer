@@ -26,6 +26,8 @@ export function runAlertBody(
           return fill(t('runAlertsWaitingQuestion'), { title: safeTitle })
         case 'plan-review':
           return fill(t('runAlertsWaitingPlanReview'), { title: safeTitle })
+        case 'browser-human':
+          return fill(t('runAlertsWaitingBrowserHuman'), { title: safeTitle })
         default:
           return fill(t('runAlertsWaiting'), { title: safeTitle })
       }

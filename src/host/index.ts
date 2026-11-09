@@ -6,8 +6,15 @@ import z from '@deepseek-ai/schemastery'
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
-import { resolveRunAlertsLevel, resolveSettings } from '../config.ts'
+import {
+  resolveBrowserAgentBrowser,
+  resolveRunAlertsLevel,
+  resolveSettings,
+} from '../config.ts'
 import type { EnhancerSettings } from '../config.ts'
+import { installBrowserAgent } from './browser-agent/install.ts'
+import type { BrowserAgentRuntime } from './browser-agent/install.ts'
+import { defaultBrowserAgentProfileDir } from './browser-agent/launch.ts'
 import { AuxiliaryError } from '../errors.ts'
 import {
   LEGACY_PACKAGE_NAME,
@@ -170,6 +177,21 @@ import type {
   RpcPayload,
   ShowOsNotificationRequest,
   ShowOsNotificationResult,
+  BrowserAgentSnapshot,
+  BrowserAgentResolveRequest,
+  BrowserAgentResolveResult,
+  BrowserAgentResolveTabConflictRequest,
+  BrowserAgentResolveTabConflictResult,
+  BrowserAgentAcknowledgeHumanRequest,
+  BrowserAgentAcknowledgeHumanResult,
+  BrowserAgentOpenUrlRequest,
+  BrowserAgentOpenUrlResult,
+  BrowserAgentQuotePageRequest,
+  BrowserAgentQuotePageResult,
+  BrowserAgentLaunchBrowserRequest,
+  BrowserAgentSetBrowserRequest,
+  BrowserAgentSetBrowserResult,
+  BrowserAgentLaunchBrowserResult,
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
   SoftPauseState,
@@ -206,6 +228,9 @@ export const Config = z.object({
   runAlertsEnabled: z.boolean().default(true).volatile(),
   /** Coerced via resolveRunAlertsLevel in readSettings (`hidden` | `unfocused` | `always`). */
   runAlertsLevel: z.string().default('unfocused').volatile(),
+  /** High-risk; default off. */
+  browserAgentEnabled: z.boolean().default(false).volatile(),
+  browserAgentBrowser: z.string().default('auto').volatile(),
   instructionsSkillsEnabled: z.boolean().default(true).volatile(),
   mcpConnectorsEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.
@@ -271,8 +296,78 @@ export class AgentEnhancerService extends TypertRemoteService {
     private readonly softPauseEnabled: () => boolean = () => true,
     private readonly installLedgerRoot: string | undefined = undefined,
     private readonly mcpHost: McpConnectorsHost | null = null,
+    private readonly browserAgent: BrowserAgentRuntime | null = null,
+    private readonly browserAgentSettings: () => {
+      readonly enabled: boolean
+      readonly browser: 'auto' | 'chrome' | 'edge'
+    } = () => ({
+      enabled: false,
+      browser: 'auto',
+    }),
+    /** Apply an explicit launch preference (client form) before ensureReady. */
+    private readonly setBrowserAgentBrowser: (browser: 'auto' | 'chrome' | 'edge') => void = () => undefined,
+    private readonly browserAgentProfileDir: string = defaultBrowserAgentProfileDir(
+      join(homedir(), '.dsh', 'profiles', 'desktop', 'plugin-data', PACKAGE_NAME),
+    ),
   ) {
     super(ctx, 'agentEnhancer')
+  }
+
+  private browserSnapshotNow(): BrowserAgentSnapshot {
+    const settings = this.browserAgentSettings()
+    const driverStatus = this.browserAgent?.driverStatus()
+    const pending = this.browserAgent?.approval.current() ?? null
+    const conflict = this.browserAgent?.sessions.currentConflict() ?? null
+    const waiting = this.browserAgent?.human.current() ?? null
+    const needsHuman = waiting !== null
+      ? {
+        sessionId: waiting.sessionId,
+        detail: waiting.prompt.trim() !== '' ? waiting.prompt : waiting.detail,
+      }
+      : (this.browserAgent?.sessions.anyNeedsHuman() ?? null)
+    const boundTabId = pending !== null
+      ? (this.browserAgent?.sessions.tabOf(pending.sessionId) ?? null)
+      : (conflict !== null
+        ? conflict.boundTabId
+        : (needsHuman !== null
+          ? (this.browserAgent?.sessions.tabOf(needsHuman.sessionId) ?? null)
+          : null))
+    const connected = driverStatus?.ready === true
+    const endpoint = driverStatus?.endpoint ?? 'playwright:unlaunched'
+    // Exact channel tokens only — do not match `playwright:unlaunched:chrome`.
+    const launched = endpoint === 'playwright:msedge'
+      ? 'edge' as const
+      : endpoint === 'playwright:chrome'
+        ? 'chrome' as const
+        : null
+    return {
+      enabled: settings.enabled,
+      browser: settings.browser,
+      launchedBrowser: launched,
+      driver: 'playwright',
+      allowedOrigins: [...(this.browserAgent?.approval.allowedOriginList() ?? [])],
+      // Wire field kept as `bridge` for client compatibility; values come from Playwright.
+      bridge: {
+        listening: driverStatus?.listening === true,
+        port: 0,
+        extensionConnected: connected,
+        lastError: driverStatus?.lastError
+          ?? (this.browserAgent === null ? 'runtime unavailable' : null),
+      },
+      pending: pending === null ? null : {
+        id: pending.id,
+        sessionId: pending.sessionId,
+        tool: pending.tool,
+        summary: pending.summary,
+        ...(pending.url === undefined ? {} : { url: pending.url }),
+        ...(pending.origin === undefined ? {} : { origin: pending.origin }),
+      },
+      tabConflict: conflict,
+      needsHuman,
+      boundTabId,
+      audit: [...(this.browserAgent?.sessions.recentAudit(12) ?? [])],
+      profileDir: this.browserAgent?.activeProfileDir() ?? this.browserAgentProfileDir,
+    }
   }
 
   private requireMcpHost(): McpConnectorsHost {
@@ -872,6 +967,107 @@ export class AgentEnhancerService extends TypertRemoteService {
     return await showOsNotificationNow(request)
   }
 
+  async browserAgentSnapshot(): Promise<BrowserAgentSnapshot> {
+    this.assertOwner()
+    return this.browserSnapshotNow()
+  }
+
+  async browserAgentResolve(request: BrowserAgentResolveRequest): Promise<BrowserAgentResolveResult> {
+    this.assertOwner()
+    const ok = this.browserAgent?.approval.resolve(request.id, request.decision) ?? false
+    return { ok, snapshot: this.browserSnapshotNow() }
+  }
+
+  async browserAgentResolveTabConflict(
+    request: BrowserAgentResolveTabConflictRequest,
+  ): Promise<BrowserAgentResolveTabConflictResult> {
+    this.assertOwner()
+    const result = await this.browserAgent?.resolveTabConflict(request.decision)
+    return { ok: result?.ok === true, snapshot: this.browserSnapshotNow() }
+  }
+
+  async browserAgentAcknowledgeHuman(
+    request: BrowserAgentAcknowledgeHumanRequest,
+  ): Promise<BrowserAgentAcknowledgeHumanResult> {
+    this.assertOwner()
+    const ok = this.browserAgent?.acknowledgeHuman(request.sessionId) === true
+    return { ok, snapshot: this.browserSnapshotNow() }
+  }
+
+  async browserAgentOpenUrl(request: BrowserAgentOpenUrlRequest): Promise<BrowserAgentOpenUrlResult> {
+    this.assertOwner()
+    const result = await this.browserAgent?.openUrl({
+      sessionId: request.sessionId,
+      url: request.url,
+    })
+    return {
+      ok: result?.ok === true,
+      ...(result?.url === undefined ? {} : { url: result.url }),
+      ...(result?.title === undefined ? {} : { title: result.title }),
+      ...(result?.error === undefined ? {} : { error: result.error }),
+      snapshot: this.browserSnapshotNow(),
+    }
+  }
+
+  async browserAgentQuotePage(request: BrowserAgentQuotePageRequest): Promise<BrowserAgentQuotePageResult> {
+    this.assertOwner()
+    const result = await this.browserAgent?.quotePage(request.sessionId)
+    return {
+      ok: result?.ok === true,
+      ...(result?.text === undefined ? {} : { text: result.text }),
+      ...(result?.url === undefined ? {} : { url: result.url }),
+      ...(result?.title === undefined ? {} : { title: result.title }),
+      ...(result?.error === undefined ? {} : { error: result.error }),
+      snapshot: this.browserSnapshotNow(),
+    }
+  }
+
+  async browserAgentLaunchBrowser(
+    request: BrowserAgentLaunchBrowserRequest,
+  ): Promise<BrowserAgentLaunchBrowserResult> {
+    this.assertOwner()
+    const settings = this.browserAgentSettings()
+    if (!settings.enabled) {
+      return {
+        ok: false,
+        profileDir: this.browserAgentProfileDir,
+        error: 'Browser agent is disabled in settings.',
+        snapshot: this.browserSnapshotNow(),
+      }
+    }
+    // Client-selected browser is authoritative for this launch (not cached Cordis config).
+    const preference = request.browser ?? settings.browser
+    this.setBrowserAgentBrowser(preference)
+    const launched = await this.browserAgent?.launchDedicated(undefined, preference)
+    const snapshot = this.browserSnapshotNow()
+    return {
+      ok: launched?.ok === true,
+      profileDir: this.browserAgent?.activeProfileDir() ?? this.browserAgentProfileDir,
+      ...(snapshot.launchedBrowser === null ? {} : { browser: snapshot.launchedBrowser }),
+      ...(launched?.error === undefined ? {} : { error: launched.error }),
+      snapshot,
+    }
+  }
+
+  async browserAgentSetBrowser(
+    request: BrowserAgentSetBrowserRequest,
+  ): Promise<BrowserAgentSetBrowserResult> {
+    this.assertOwner()
+    // Immediate live mirror — do not wait for Cordis internal/update (Settings
+    // write alone left Agent tools on the previous Chrome/Edge until Launch).
+    this.setBrowserAgentBrowser(request.browser)
+    const settings = this.browserAgentSettings()
+    if (settings.enabled && this.browserAgent?.driverStatus()?.ready === true) {
+      // Already headed: hard-switch now so Settings takes effect without the overlay Launch button.
+      await this.browserAgent.alignToPreference()
+    }
+    return {
+      ok: true,
+      browser: request.browser,
+      snapshot: this.browserSnapshotNow(),
+    }
+  }
+
   async applyUpdate(): Promise<ApplyUpdateResult> {
     this.assertOwner()
     return applyPluginUpdateForHost({
@@ -987,6 +1183,8 @@ function readSettings(config: Config): EnhancerSettings {
     softPauseEnabled: config.softPauseEnabled.get(),
     runAlertsEnabled: config.runAlertsEnabled.get(),
     runAlertsLevel: resolveRunAlertsLevel(config.runAlertsLevel.get()),
+    browserAgentEnabled: config.browserAgentEnabled.get(),
+    browserAgentBrowser: resolveBrowserAgentBrowser(config.browserAgentBrowser.get()),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
     mcpConnectorsEnabled: config.mcpConnectorsEnabled.get(),
     optimizeProvider: config.optimizeProvider.get(),
@@ -1065,6 +1263,37 @@ export function apply(ctx: Context, config: Config): void {
     const detail = error instanceof Error ? error.message : String(error)
     ctx.logger.warn(`agent-enhancer: initial MCP connector sync failed: ${detail}`)
   })
+  const browserAgentProfileDir = defaultBrowserAgentProfileDir(pluginDataPackageRoot)
+  // Cordis volatile updates: apply()'s `config` getters can lag. Keep a live
+  // mirror from resolvedConfig (never re-read stale apply config after next()).
+  const browserAgentLive = {
+    enabled: settings().browserAgentEnabled,
+    browser: settings().browserAgentBrowser,
+  }
+  const browserAgent = installBrowserAgent(ctx, {
+    enabled: () => browserAgentLive.enabled,
+    browserPreference: () => browserAgentLive.browser,
+    profileRoot: pluginDataPackageRoot,
+    softPause: softPauseGate,
+    softPauseEnabled: () => settings().softPauseEnabled,
+    onBrowserMutation: info => {
+      try {
+        ctx.emit('agent-enhancer/browser-agent/mutation' as never, info as never)
+      } catch {
+        // Optional event for skills / future checkpoint tips.
+      }
+    },
+  })
+  sessionCleanup.register({
+    id: 'browser-agent',
+    label: 'Browser agent session memory',
+    async purge(sessionId) {
+      browserAgent.approval.clearSession(sessionId)
+      browserAgent.human.clearSession(sessionId)
+      browserAgent.sessions.clearSession(sessionId)
+      softPauseGate.release(sessionId)
+    },
+  })
   new AgentEnhancerService(ctx, models, {
       async summarize(range) {
         const stored = await usage.listCalls()
@@ -1086,20 +1315,51 @@ export function apply(ctx: Context, config: Config): void {
     () => settings().softPauseEnabled,
     pluginDataPackageRoot,
     mcpHost,
+    browserAgent,
+    () => ({
+      enabled: browserAgentLive.enabled,
+      browser: browserAgentLive.browser,
+    }),
+    browser => {
+      // Preference only — do not refresh/remount here. launchDedicated hard-resets.
+      browserAgentLive.browser = resolveBrowserAgentBrowser(browser)
+    },
+    browserAgentProfileDir,
   )
   ctx.effect(() => {
     const unsubscribe = ctx.on('internal/update', (resolvedConfig, next) => {
-      const enabled = (resolvedConfig as Config).mcpConnectorsEnabled.get()
+      const cfg = resolvedConfig as Config
+      const enabled = cfg.mcpConnectorsEnabled.get()
       mcpRuntime.setFeatureEnabled(enabled)
       void mcpRuntime.sync().catch(error => {
         const detail = error instanceof Error ? error.message : String(error)
         ctx.logger.warn(`agent-enhancer: MCP connector sync after settings update failed: ${detail}`)
       })
+      const prevEnabled = browserAgentLive.enabled
+      const prevBrowser = browserAgentLive.browser
+      browserAgentLive.enabled = cfg.browserAgentEnabled.get()
+      browserAgentLive.browser = resolveBrowserAgentBrowser(cfg.browserAgentBrowser.get())
+      // Remount only when the feature is toggled on/off — not on every Chrome↔Edge
+      // change (that raced with Launch and left the first browser stuck).
+      if (prevEnabled !== browserAgentLive.enabled) {
+        browserAgent.refresh()
+      } else if (
+        browserAgentLive.enabled
+        && prevBrowser !== browserAgentLive.browser
+        && browserAgent.driverStatus()?.ready === true
+      ) {
+        // Cordis Settings Chrome↔Edge while headed: hard-align without requiring Launch.
+        void browserAgent.alignToPreference().catch(error => {
+          const detail = error instanceof Error ? error.message : String(error)
+          ctx.logger.warn(`agent-enhancer: browser preference align after settings failed: ${detail}`)
+        })
+      }
       return next()
     })
     return async () => {
       unsubscribe()
       await mcpRuntime.disposeAll()
+      await browserAgent.dispose()
     }
   })
   installSoftPause(ctx, {

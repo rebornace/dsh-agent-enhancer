@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Changed
+
+- **浏览器 Agent 驱动：** 关键路径改为 **Playwright-core 持久化 Context**（独立 `user-data-dir` + 显式 Chrome/Edge）。MV3 扩展桥退役，源码归档 `extensions/chrome-legacy/`（不进发布包）。
+- **浏览器 Agent 交互：** 去掉「启动浏览器 Agent」弹框；对话 `browser_*` / Alt+点击自动启动。设置或侧栏切换 Chrome/Edge 立刻同步（已运行则硬切）；右侧栏可选手动启动与看状态。
+- **浏览器 Agent 设置：** 仅保留功能开关 + `browserAgentBrowser`（`auto` / `chrome` / `edge`）。变更批准只走弹框；去掉单独批准级别与信任源白名单设置项。
+
+### Added
+
+- **浏览器 Agent（v1）：** `browser_*` 工具集、变更批准弹框、登录墙「我已完成」、会话↔tab / Follow·Stay、Alt+点击链接、页引用、system-prompt 引导；会话删除内存 cleaner `browser-agent`。
+- **浏览器 Agent 切换：** 分槽 profile；Windows 孤儿进程杀除（命令行斜杠归一化）；`browserAgentSetBrowser` live 同步；工具打开前 `alignToPreference`。
+
+### Docs
+
+- README 中英文、路线图、`docs/architecture/browser-agent-playwright.md`、`docs/architecture/session-delete.md` 与当前路径对齐。
+
 ## 0.3.8 - 2026-11-08
 
 ### Added

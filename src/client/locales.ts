@@ -45,7 +45,27 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'runAlerts' | 'runAlertsDescription' | 'runAlertsLevel' |
       'runAlertsLevel_hidden' | 'runAlertsLevel_unfocused' | 'runAlertsLevel_always' |
       'runAlertsFinished' | 'runAlertsWaitingApproval' | 'runAlertsWaitingQuestion' |
-      'runAlertsWaitingPlanReview' | 'runAlertsWaiting' | 'runAlertsError' |
+      'runAlertsWaitingPlanReview' | 'runAlertsWaitingBrowserHuman' | 'runAlertsWaiting' | 'runAlertsError' |
+      'browserAgent' | 'browserAgentDescription' |
+      'browserAgentBrowser' | 'browserAgentBrowser_auto' |
+      'browserAgentBrowser_chrome' | 'browserAgentBrowser_edge' |
+      'browserAgentSwitchHint' | 'browserAgentRunningAs' |
+      'browserAgentConnectHint' | 'browserAgentApproveTitle' |
+      'browserAgentAllowOnce' | 'browserAgentAllowOrigin' | 'browserAgentDeny' |
+      'browserAgentLaunch' | 'browserAgentLaunchHint' | 'browserAgentLaunchStarted' |
+      'browserAgentLaunchFailed' |
+      'browserAgentClose' |
+      'browserAgentTabConflictTitle' | 'browserAgentTabConflictBody' |
+      'browserAgentTabFollow' | 'browserAgentTabStay' |
+      'browserAgentNeedsHumanTitle' | 'browserAgentNeedsHumanBody' |
+      'browserAgentNeedsHumanContinue' |
+      'browserAgentBoundTab' | 'browserAgentSessionOrigins' | 'browserAgentAudit' |
+      'browserAgentQuotePage' |
+      'browserAgentQuoteOk' | 'browserAgentQuoteFailed' | 'browserAgentQuoteNoSession' |
+      'browserAgentOpenLinkHint' |
+      'browserAgentGuideDescription' | 'browserAgentSidebarHint' |
+      'browserAgentSidebarLoading' | 'browserAgentSidebarConnected' |
+      'browserAgentSidebarDisconnected' | 'browserAgentSidebarChatHint' |
       'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackUndoAction' |
       'rollbackUndoCommandDescription' |
       'rollbackTitle' | 'rollbackScope' | 'rollbackScopeAlready' | 'rollbackScopeCovered' | 'rollbackUndoTitle' | 'rollbackUndoScope' | 'rollbackUndoScopeConversation' |
@@ -348,8 +368,48 @@ export const agentLocales = {
     runAlertsWaitingApproval: '{title}：等待批准',
     runAlertsWaitingQuestion: '{title}：等待回答',
     runAlertsWaitingPlanReview: '{title}：等待审阅计划',
+    runAlertsWaitingBrowserHuman: '{title}：浏览器需要登录或验证',
     runAlertsWaiting: '{title}：等待你的操作',
     runAlertsError: '{title}：出错 — {message}',
+    browserAgent: '浏览器 Agent',
+    browserAgentDescription: '让 Agent 通过本机专用 Chrome/Edge 操作网页（打开、读取、批准后点击/填写、截图）。高风险，默认关。开启后对话里用 browser_* 会自动启动专用浏览器；设置里可切换 Chrome/Edge。不等于官方侧栏网页观看器。变更操作在弹框中批准（可本站本会话免再问）。',
+    browserAgentBrowser: '专用浏览器',
+    browserAgentBrowser_auto: '自动（Windows 优先 Edge）',
+    browserAgentBrowser_chrome: 'Google Chrome',
+    browserAgentBrowser_edge: 'Microsoft Edge',
+    browserAgentSwitchHint: '可随时切换 Chrome/Edge（设置或此处）。选完即生效：已在运行会立刻重开；未启动时对话里 Agent 下次打开网页会用新选择。',
+    browserAgentRunningAs: '当前已启动',
+    browserAgentConnectHint: '专用浏览器未就绪。对话里让 Agent 打开网页会自动启动；也可在侧栏手动启动。',
+    browserAgentLaunch: '启动浏览器 Agent',
+    browserAgentLaunchHint: '用 Playwright 打开独立窗口（独立配置目录，可保留登录态）。在设置或侧栏切换 Chrome/Edge 后会立即生效；未启动时也可先选好再让对话里的 Agent 打开网页。不影响你平时的浏览器。',
+    browserAgentLaunchStarted: '已启动专用浏览器…',
+    browserAgentLaunchFailed: '无法启动浏览器。请确认已安装 Chrome 或 Edge。',
+    browserAgentGuideDescription: '启动专用浏览器、查看连接状态；聊天里也可用 browser_* 工具与 Alt+点击链接。',
+    browserAgentSidebarHint: '选择 Chrome/Edge 后即可；对话里 Agent 打开网页会自动启动（也可点下方手动启动）。',
+    browserAgentSidebarLoading: '正在读取连接状态…',
+    browserAgentSidebarConnected: '浏览器已就绪（尚未绑定标签；Agent 导航后会绑定）',
+    browserAgentSidebarDisconnected: '浏览器未就绪',
+    browserAgentSidebarChatHint: '对话中可直接让 Agent 使用 browser_* 工具打开/操作页面；Alt+点击链接也会在绑定标签中打开。',
+    browserAgentClose: '关闭',
+    browserAgentApproveTitle: '浏览器操作待批准',
+    browserAgentAllowOnce: '允许本次',
+    browserAgentAllowOrigin: '允许本站本次会话',
+    browserAgentDeny: '拒绝',
+    browserAgentTabConflictTitle: '浏览器标签焦点冲突',
+    browserAgentTabConflictBody: 'Agent 绑定的标签是 {bound}，你切到了 {active}。跟过去继续，还是留在原标签？',
+    browserAgentTabFollow: '跟过去',
+    browserAgentTabStay: '留在原标签',
+    browserAgentNeedsHumanTitle: '浏览器需要人工操作',
+    browserAgentNeedsHumanBody: 'Agent 正在等待你：请在专用浏览器窗口完成登录/验证码/二次验证，然后点「我已完成，继续」。点完后工具会立刻把结果交回模型并自动继续，无需你再发一条「继续」。不要反复点同一按钮，也不要改用日常浏览器。',
+    browserAgentNeedsHumanContinue: '我已完成，继续',
+    browserAgentBoundTab: '已绑定标签 {tabId}',
+    browserAgentSessionOrigins: '本会话已允许源',
+    browserAgentAudit: '最近操作',
+    browserAgentQuotePage: '引用当前页',
+    browserAgentQuoteOk: '已插入引用',
+    browserAgentQuoteFailed: '无法插入引用',
+    browserAgentQuoteNoSession: '没有活动会话，无法引用',
+    browserAgentOpenLinkHint: 'Alt+点击对话中的链接可在浏览器 Agent 绑定标签中打开',
     instructionsSkills: '技能',
     instructionsSkillsDescription: 'GitHub·Zip 可选装到 .agents/skills 或 .dsh/skills；入口在左侧栏；安装后用官方 / 调用',
     instructionsSkillsLeftNavUnsupported: '当前 Desktop 未提供左侧技能入口（无 sidebar.panellist）；请升级 Desktop 或在设置中确认功能已开启',
@@ -866,8 +926,48 @@ export const agentLocales = {
     runAlertsWaitingApproval: '{title}: waiting for approval',
     runAlertsWaitingQuestion: '{title}: waiting for your answer',
     runAlertsWaitingPlanReview: '{title}: waiting for plan review',
+    runAlertsWaitingBrowserHuman: '{title}: browser needs login or verification',
     runAlertsWaiting: '{title}: waiting for you',
     runAlertsError: '{title}: error — {message}',
+    browserAgent: 'Browser agent',
+    browserAgentDescription: 'Let the agent drive web pages via a dedicated Chrome/Edge (open, read, approve click/type, screenshot). High risk; off by default. When enabled, browser_* tools auto-launch the dedicated browser; switch Chrome/Edge in Settings. Not the official sidebar web viewer. Mutations are approved in the dialog (optionally allow origin for the session).',
+    browserAgentBrowser: 'Dedicated browser',
+    browserAgentBrowser_auto: 'Auto (Windows prefers Edge)',
+    browserAgentBrowser_chrome: 'Google Chrome',
+    browserAgentBrowser_edge: 'Microsoft Edge',
+    browserAgentSwitchHint: 'Switch Chrome/Edge anytime (Settings or here). Applies immediately: relaunches if already running; otherwise the next Agent browser open uses it.',
+    browserAgentRunningAs: 'Running as',
+    browserAgentConnectHint: 'Dedicated browser is not ready. Asking the agent to open a page will auto-launch; or launch manually from the sidebar.',
+    browserAgentLaunch: 'Launch browser agent',
+    browserAgentLaunchHint: 'Opens a dedicated Playwright window (separate profile, keeps login state). Chrome/Edge from Settings or the sidebar applies immediately; if not launched yet, Agent chat will open with that choice. Your everyday browser is untouched.',
+    browserAgentLaunchStarted: 'Dedicated browser started…',
+    browserAgentLaunchFailed: 'Could not launch a browser. Install Google Chrome or Microsoft Edge, then try again.',
+    browserAgentGuideDescription: 'Launch the dedicated browser and check connection. Chat can also drive pages via browser_* tools and Alt+click links.',
+    browserAgentSidebarHint: 'Pick Chrome/Edge; Agent chat auto-launches when needed (or use Launch below).',
+    browserAgentSidebarLoading: 'Reading connection status…',
+    browserAgentSidebarConnected: 'Browser ready (no bound tab yet; binding happens after agent navigation)',
+    browserAgentSidebarDisconnected: 'Browser not ready',
+    browserAgentSidebarChatHint: 'In chat, ask the agent to use browser_* tools to open and drive pages; Alt+click links also open in the bound tab.',
+    browserAgentClose: 'Close',
+    browserAgentApproveTitle: 'Browser action needs approval',
+    browserAgentAllowOnce: 'Allow once',
+    browserAgentAllowOrigin: 'Allow origin this session',
+    browserAgentDeny: 'Deny',
+    browserAgentTabConflictTitle: 'Browser tab focus conflict',
+    browserAgentTabConflictBody: 'The agent is bound to tab {bound}, but you focused tab {active}. Follow the new tab, or stay on the bound one?',
+    browserAgentTabFollow: 'Follow',
+    browserAgentTabStay: 'Stay',
+    browserAgentNeedsHumanTitle: 'Browser needs you',
+    browserAgentNeedsHumanBody: 'The agent is waiting on you: finish login / captcha / 2FA in the dedicated browser window, then click “I’m done — continue”. That unblocks the open tool call so the model resumes automatically — no need to type “continue” in chat. Do not keep clicking the same control or switch to your everyday browser.',
+    browserAgentNeedsHumanContinue: 'I’m done — continue',
+    browserAgentBoundTab: 'Bound tab {tabId}',
+    browserAgentSessionOrigins: 'Session-allowed origins',
+    browserAgentAudit: 'Recent actions',
+    browserAgentQuotePage: 'Quote page',
+    browserAgentQuoteOk: 'Quote inserted',
+    browserAgentQuoteFailed: 'Could not insert quote',
+    browserAgentQuoteNoSession: 'No active session to quote into',
+    browserAgentOpenLinkHint: 'Alt+click a chat link to open it in the browser-agent bound tab',
     instructionsSkills: 'Skills',
     instructionsSkillsDescription: 'GitHub·Zip into .agents/skills or .dsh/skills; left-nav entry; invoke with /',
     instructionsSkillsLeftNavUnsupported: 'This Desktop build has no left Skills entry (sidebar.panellist missing). Upgrade Desktop or confirm the feature toggle is on',

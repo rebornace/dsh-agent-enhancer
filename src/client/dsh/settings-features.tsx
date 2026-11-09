@@ -1,10 +1,13 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { IconChevronRightOutlineRegular, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
+  BROWSER_AGENT_BROWSERS,
   RUN_ALERTS_LEVELS,
+  resolveBrowserAgentBrowser,
   resolveRunAlertsLevel,
 } from '../../config.ts'
 import type {
+  BrowserAgentBrowser,
   ConfigurableAuxiliaryFeature,
   EnhancerSettings,
   ModuleName,
@@ -19,6 +22,7 @@ export interface SettingsFeaturesPanelProps {
   readonly t: TranslateNS<'agent-enhancer'>
   readonly onToggle: (module: ModuleName, checked: boolean) => void
   readonly onRunAlertsLevel?: (level: RunAlertsLevel) => void
+  readonly onBrowserAgentBrowser?: (browser: BrowserAgentBrowser) => void
   readonly onOpenModel: (feature: ConfigurableAuxiliaryFeature) => void
   /** Optional per-module extra description (e.g. host capability warnings). */
   readonly featureExtraDescription?: (module: ModuleName) => string | undefined
@@ -42,6 +46,24 @@ function runAlertsLevelLabel(
   }
 }
 
+function browserAgentBrowserLabel(
+  browser: BrowserAgentBrowser,
+  t: TranslateNS<'agent-enhancer'>,
+): string {
+  switch (browser) {
+    case 'auto':
+      return t('browserAgentBrowser_auto')
+    case 'chrome':
+      return t('browserAgentBrowser_chrome')
+    case 'edge':
+      return t('browserAgentBrowser_edge')
+    default: {
+      const _exhaustive: never = browser
+      return _exhaustive
+    }
+  }
+}
+
 export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
   const {
     settings,
@@ -49,6 +71,7 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
     t,
     onToggle,
     onRunAlertsLevel,
+    onBrowserAgentBrowser,
     onOpenModel,
     featureExtraDescription,
   } = props
@@ -68,6 +91,29 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                     <p className={styles.settingDescription} role="note">
                       {featureExtraDescription(entry.module)}
                     </p>
+                  ) : null}
+                  {entry.module === 'browserAgent' && settings.browserAgentEnabled ? (
+                    <div className={styles.browserAgentExtras}>
+                      <label className={styles.browserAgentExtraRow}>
+                        <span>{t('browserAgentBrowser')}</span>
+                        <select
+                          className={styles.settingsSelect}
+                          aria-label={t('browserAgentBrowser')}
+                          disabled={busy || onBrowserAgentBrowser === undefined}
+                          value={settings.browserAgentBrowser}
+                          onChange={event => {
+                            onBrowserAgentBrowser?.(resolveBrowserAgentBrowser(event.target.value))
+                          }}
+                        >
+                          {BROWSER_AGENT_BROWSERS.map(browser => (
+                            <option key={browser} value={browser}>
+                              {browserAgentBrowserLabel(browser, t)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <p className={styles.settingDescription}>{t('browserAgentOpenLinkHint')}</p>
+                    </div>
                   ) : null}
                 </div>
                 <div className={styles.settingControls}>

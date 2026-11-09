@@ -54,6 +54,14 @@ import {
   agentEnhancerSoftPauseSnapshot,
   clientRemoteInfo,
 } from './remote.ts'
+import { installBrowserChatLinks } from './browser-agent/chat-links.ts'
+import { BrowserAgentGuideIcon } from './browser-agent/guide-icon.tsx'
+import {
+  BROWSER_AGENT_TAB_ID,
+  BROWSER_AGENT_TAB_KIND,
+} from './browser-agent/kind.ts'
+import { BrowserAgentOverlay } from './browser-agent/overlay.tsx'
+import { BrowserAgentTab, BrowserAgentTabTitle } from './browser-agent/tab.tsx'
 import { SoftPauseController } from './soft-pause/controller.ts'
 import { ProviderBalanceChip } from './dsh/provider-balance-chip.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
@@ -217,6 +225,7 @@ export function apply(ctx: Context): void {
       loadCatalog,
       checkUpdate,
       applyUpdate,
+      getRemote: () => agentEnhancerRemote,
     })
   )
   ctx.effect(() => ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
@@ -299,6 +308,39 @@ export function apply(ctx: Context): void {
         t,
         ctx,
         getLevel: () => resolveSettings(form.getSnapshot().value).runAlertsLevel,
+        getRemote: () => agentEnhancerRemote,
+        browserAgentEnabled: () => resolveSettings(form.getSnapshot().value).browserAgentEnabled,
+      }))))
+    }
+    const unsubscribe = form.subscribe(synchronize)
+    synchronize()
+    return () => {
+      unsubscribe()
+      clear()
+    }
+  })
+
+  // Browser agent: approval / conflict / needsHuman overlays + chat Alt+click.
+  // No launch dialog — Agent tools and Alt+click auto-launch the dedicated browser.
+  ctx.effect(() => {
+    const disposers: Array<() => void> = []
+    const clear = () => {
+      while (disposers.length > 0) disposers.pop()?.()
+    }
+    const synchronize = () => {
+      clear()
+      const enabled = resolveSettings(form.getSnapshot().value).browserAgentEnabled
+      if (!enabled) return
+      disposers.push(installBrowserChatLinks({
+        enabled: () => resolveSettings(form.getSnapshot().value).browserAgentEnabled,
+        getRemote: () => agentEnhancerRemote,
+      }))
+      disposers.push(ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: 'agent-enhancer-browser-agent',
+        order: 166,
+      }, () => createElement(BrowserAgentOverlay, {
+        t,
         getRemote: () => agentEnhancerRemote,
       }))))
     }
@@ -464,6 +506,7 @@ export function apply(ctx: Context): void {
       { ...props, t: tContext },
     )
     const fileEditEnabled = () => resolveSettings(form.getSnapshot().value).fileEditEnabled
+    const browserAgentEnabled = () => resolveSettings(form.getSnapshot().value).browserAgentEnabled
     const instructionsSkillsEnabled = () => resolveSettings(form.getSnapshot().value).instructionsSkillsEnabled
     const mcpConnectorsEnabled = () => resolveSettings(form.getSnapshot().value).mcpConnectorsEnabled
     const FileEditRightTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(FileEditTab, {
@@ -497,6 +540,22 @@ export function apply(ctx: Context): void {
     )
     const ExtraFoldersRightTitle = (props: PropsRuntime<'sidebar.right.pane.tab.title'>) => createElement(
       ExtraFoldersTabTitle,
+      { ...props, t: tContext },
+    )
+    const BrowserAgentRightTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(
+      BrowserAgentTab,
+      {
+        ...props,
+        remote: () => agentEnhancerRemote,
+        browserPreference: () => resolveSettings(form.getSnapshot().value).browserAgentBrowser,
+        persistBrowserPreference: browser => {
+          void persist([{ op: 'set', path: ['browserAgentBrowser'], value: browser }])
+        },
+        t: tContext,
+      },
+    )
+    const BrowserAgentRightTitle = (props: PropsRuntime<'sidebar.right.pane.tab.title'>) => createElement(
+      BrowserAgentTabTitle,
       { ...props, t: tContext },
     )
     mountedCtx.effect(() => {
@@ -635,6 +694,47 @@ export function apply(ctx: Context): void {
           key: EXTRA_FOLDERS_TAB_ID,
           locale: 'agent-enhancer',
         }, ExtraFoldersRightTitle)))
+      }
+      const unsubscribe = form.subscribe(synchronize)
+      synchronize()
+      return () => {
+        unsubscribe()
+        while (disposers.length > 0) disposers.pop()?.()
+      }
+    })
+    mountedCtx.effect(() => {
+      const disposers: Array<() => void> = []
+      const synchronize = () => {
+        const enabled = browserAgentEnabled()
+        if (!enabled) {
+          while (disposers.length > 0) disposers.pop()?.()
+          return
+        }
+        if (disposers.length > 0) return
+        disposers.push(mountedCtx.sidebarRightTabs.register({
+          id: BROWSER_AGENT_TAB_ID,
+          kind: BROWSER_AGENT_TAB_KIND,
+          priority: 'extension',
+          title: () => tContext('browserAgent'),
+          // Peer of official 浏览器 guide capsule — EntryBox + GuideArtworkBrowser.
+          guide: [{
+            id: 'browser-agent',
+            order: 36,
+            title: () => tContext('browserAgent'),
+            description: () => tContext('browserAgentGuideDescription'),
+            icon: BrowserAgentGuideIcon,
+          }],
+        }))
+        disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab', () => mountedCtx.slots.register({
+          name: 'sidebar.right.pane.tab',
+          key: BROWSER_AGENT_TAB_ID,
+          locale: 'agent-enhancer',
+        }, BrowserAgentRightTab)))
+        disposers.push(mountedCtx.slots.inject('sidebar.right.pane.tab.title', () => mountedCtx.slots.register({
+          name: 'sidebar.right.pane.tab.title',
+          key: BROWSER_AGENT_TAB_ID,
+          locale: 'agent-enhancer',
+        }, BrowserAgentRightTitle)))
       }
       const unsubscribe = form.subscribe(synchronize)
       synchronize()

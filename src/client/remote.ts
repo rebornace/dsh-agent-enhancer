@@ -18,6 +18,21 @@ import type {
   UsageSummary,
 } from '../host/usage/types.ts'
 import type {
+  BrowserAgentResolveRequest,
+  BrowserAgentResolveResult,
+  BrowserAgentResolveTabConflictRequest,
+  BrowserAgentResolveTabConflictResult,
+  BrowserAgentAcknowledgeHumanRequest,
+  BrowserAgentAcknowledgeHumanResult,
+  BrowserAgentOpenUrlRequest,
+  BrowserAgentOpenUrlResult,
+  BrowserAgentQuotePageRequest,
+  BrowserAgentQuotePageResult,
+  BrowserAgentLaunchBrowserRequest,
+  BrowserAgentLaunchBrowserResult,
+  BrowserAgentSetBrowserRequest,
+  BrowserAgentSetBrowserResult,
+  BrowserAgentSnapshot,
   RpcPayload,
   ShowOsNotificationRequest,
   ShowOsNotificationResult,
@@ -304,6 +319,113 @@ export const clientRemoteInfo = {
       codec: codec('dsh-agent-enhancer#ShowOsNotificationRequest'),
     }],
     result: codec('dsh-agent-enhancer#ShowOsNotificationResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentSnapshot',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentSnapshot',
+    implementation: 'browserAgentSnapshot',
+    invocation: { kind: 'direct' },
+    parameters: [],
+    result: codec('dsh-agent-enhancer#BrowserAgentSnapshot'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentResolve',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentResolve',
+    implementation: 'browserAgentResolve',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentResolveRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentResolveResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentResolveTabConflict',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentResolveTabConflict',
+    implementation: 'browserAgentResolveTabConflict',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentResolveTabConflictRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentResolveTabConflictResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentAcknowledgeHuman',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentAcknowledgeHuman',
+    implementation: 'browserAgentAcknowledgeHuman',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentAcknowledgeHumanRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentAcknowledgeHumanResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentOpenUrl',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentOpenUrl',
+    implementation: 'browserAgentOpenUrl',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentOpenUrlRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentOpenUrlResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentQuotePage',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentQuotePage',
+    implementation: 'browserAgentQuotePage',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentQuotePageRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentQuotePageResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentLaunchBrowser',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentLaunchBrowser',
+    implementation: 'browserAgentLaunchBrowser',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentLaunchBrowserRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentLaunchBrowserResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentSetBrowser',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentSetBrowser',
+    implementation: 'browserAgentSetBrowser',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentSetBrowserRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentSetBrowserResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/listInstructionsSkills',
     service: 'agentEnhancer',
@@ -797,6 +919,277 @@ export const agentEnhancerShowOsNotification = {
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
       return { shown: false, channel: 'none' as const }
+    }
+  },
+}
+
+type BrowserAgentSnapshotCall = () => Promise<RemoteResult<BrowserAgentSnapshot>>
+type BrowserAgentResolveCall = (
+  request: BrowserAgentResolveRequest,
+) => Promise<RemoteResult<BrowserAgentResolveResult>>
+type BrowserAgentResolveTabConflictCall = (
+  request: BrowserAgentResolveTabConflictRequest,
+) => Promise<RemoteResult<BrowserAgentResolveTabConflictResult>>
+type BrowserAgentAcknowledgeHumanCall = (
+  request: BrowserAgentAcknowledgeHumanRequest,
+) => Promise<RemoteResult<BrowserAgentAcknowledgeHumanResult>>
+type BrowserAgentOpenUrlCall = (
+  request: BrowserAgentOpenUrlRequest,
+) => Promise<RemoteResult<BrowserAgentOpenUrlResult>>
+type BrowserAgentQuotePageCall = (
+  request: BrowserAgentQuotePageRequest,
+) => Promise<RemoteResult<BrowserAgentQuotePageResult>>
+
+function emptyBrowserAgentSnapshot(): BrowserAgentSnapshot {
+  return {
+    enabled: false,
+    browser: 'auto',
+    launchedBrowser: null,
+    driver: 'playwright',
+    allowedOrigins: [],
+    bridge: { listening: false, extensionConnected: false, port: 0, lastError: null },
+    pending: null,
+    tabConflict: null,
+    needsHuman: null,
+    boundTabId: null,
+    audit: [],
+    profileDir: 'browser-agent/profile-auto',
+  }
+}
+
+export const agentEnhancerBrowserAgentSnapshot = {
+  async invoke(remote: unknown, signal?: AbortSignal): Promise<BrowserAgentSnapshot> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty = emptyBrowserAgentSnapshot()
+    if (remote === null || remote === undefined || typeof remote !== 'object') return empty
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') return empty
+    const call = Reflect.get(namespace, 'browserAgentSnapshot') as BrowserAgentSnapshotCall | undefined
+    if (typeof call !== 'function') return empty
+    try {
+      const result = await call.apply(namespace, [])
+      if (!result.ok) return empty
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty
+    }
+  },
+}
+
+export const agentEnhancerBrowserAgentResolve = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentResolveRequest,
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentResolveResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty: BrowserAgentResolveResult = {
+      ok: false,
+      snapshot: emptyBrowserAgentSnapshot(),
+    }
+    if (remote === null || remote === undefined || typeof remote !== 'object') return empty
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') return empty
+    const call = Reflect.get(namespace, 'browserAgentResolve') as BrowserAgentResolveCall | undefined
+    if (typeof call !== 'function') return empty
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) return empty
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty
+    }
+  },
+}
+
+export const agentEnhancerBrowserAgentResolveTabConflict = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentResolveTabConflictRequest,
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentResolveTabConflictResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty: BrowserAgentResolveTabConflictResult = {
+      ok: false,
+      snapshot: emptyBrowserAgentSnapshot(),
+    }
+    if (remote === null || remote === undefined || typeof remote !== 'object') return empty
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') return empty
+    const call = Reflect.get(namespace, 'browserAgentResolveTabConflict') as BrowserAgentResolveTabConflictCall | undefined
+    if (typeof call !== 'function') return empty
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) return empty
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty
+    }
+  },
+}
+
+export const agentEnhancerBrowserAgentAcknowledgeHuman = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentAcknowledgeHumanRequest = {},
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentAcknowledgeHumanResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty: BrowserAgentAcknowledgeHumanResult = {
+      ok: false,
+      snapshot: emptyBrowserAgentSnapshot(),
+    }
+    if (remote === null || remote === undefined || typeof remote !== 'object') return empty
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') return empty
+    const call = Reflect.get(namespace, 'browserAgentAcknowledgeHuman') as BrowserAgentAcknowledgeHumanCall | undefined
+    if (typeof call !== 'function') return empty
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) return empty
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty
+    }
+  },
+}
+
+export const agentEnhancerBrowserAgentOpenUrl = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentOpenUrlRequest,
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentOpenUrlResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty: BrowserAgentOpenUrlResult = {
+      ok: false,
+      snapshot: emptyBrowserAgentSnapshot(),
+    }
+    if (remote === null || remote === undefined || typeof remote !== 'object') return empty
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') return empty
+    const call = Reflect.get(namespace, 'browserAgentOpenUrl') as BrowserAgentOpenUrlCall | undefined
+    if (typeof call !== 'function') return empty
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) return empty
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty
+    }
+  },
+}
+
+export const agentEnhancerBrowserAgentQuotePage = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentQuotePageRequest,
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentQuotePageResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty: BrowserAgentQuotePageResult = {
+      ok: false,
+      snapshot: emptyBrowserAgentSnapshot(),
+    }
+    if (remote === null || remote === undefined || typeof remote !== 'object') return empty
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') return empty
+    const call = Reflect.get(namespace, 'browserAgentQuotePage') as BrowserAgentQuotePageCall | undefined
+    if (typeof call !== 'function') return empty
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) return empty
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty
+    }
+  },
+}
+
+type BrowserAgentLaunchBrowserCall = (
+  request: BrowserAgentLaunchBrowserRequest,
+) => Promise<RemoteResult<BrowserAgentLaunchBrowserResult>>
+
+export const agentEnhancerBrowserAgentLaunchBrowser = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentLaunchBrowserRequest = {},
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentLaunchBrowserResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty = (error: string): BrowserAgentLaunchBrowserResult => ({
+      ok: false,
+      profileDir: emptyBrowserAgentSnapshot().profileDir,
+      error,
+      snapshot: emptyBrowserAgentSnapshot(),
+    })
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return empty('Host remote unavailable')
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') {
+      return empty('agentEnhancer remote missing — reload the plugin')
+    }
+    const call = Reflect.get(namespace, 'browserAgentLaunchBrowser') as BrowserAgentLaunchBrowserCall | undefined
+    if (typeof call !== 'function') {
+      return empty('browserAgentLaunchBrowser missing — reload Desktop / reinstall the plugin')
+    }
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) {
+        const message = typeof (result as { error?: { message?: string } }).error?.message === 'string'
+          ? (result as { error: { message: string } }).error.message
+          : 'Launch RPC failed'
+        return empty(message)
+      }
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty(error instanceof Error ? error.message : String(error))
+    }
+  },
+}
+
+type BrowserAgentSetBrowserCall = (
+  request: BrowserAgentSetBrowserRequest,
+) => Promise<RemoteResult<BrowserAgentSetBrowserResult>>
+
+export const agentEnhancerBrowserAgentSetBrowser = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentSetBrowserRequest,
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentSetBrowserResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty = (browser: BrowserAgentSetBrowserRequest['browser']): BrowserAgentSetBrowserResult => ({
+      ok: false,
+      browser,
+      snapshot: emptyBrowserAgentSnapshot(),
+    })
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return empty(request.browser)
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') {
+      return empty(request.browser)
+    }
+    const call = Reflect.get(namespace, 'browserAgentSetBrowser') as BrowserAgentSetBrowserCall | undefined
+    if (typeof call !== 'function') {
+      return empty(request.browser)
+    }
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) return empty(request.browser)
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty(request.browser)
     }
   },
 }

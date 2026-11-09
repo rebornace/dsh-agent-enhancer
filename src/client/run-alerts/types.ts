@@ -1,7 +1,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
-/** Pending kinds that match workspace sidebar presentation. */
-export type RunAlertPendingKind = 'approval' | 'question' | 'plan-review'
+/** Pending kinds that match workspace sidebar presentation (+ browser human wait). */
+export type RunAlertPendingKind = 'approval' | 'question' | 'plan-review' | 'browser-human'
 
 export type RunAlertKind = 'finished' | 'pending' | 'error'
 

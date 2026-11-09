@@ -449,6 +449,220 @@ const showOsNotificationResultCodec = codec(
   showOsNotificationResultSchema,
 )
 
+export const browserAgentApprovalDecisionSchema = z.enum(['allow-once', 'allow-origin', 'deny'])
+export type BrowserAgentApprovalDecisionWire = z.infer<typeof browserAgentApprovalDecisionSchema>
+
+export const browserAgentPendingSchema = z.strictObject({
+  id: z.string().min(1),
+  sessionId: z.string().min(1),
+  tool: z.string().min(1),
+  summary: z.string().min(1),
+  url: z.string().optional(),
+  origin: z.string().optional(),
+})
+export type BrowserAgentPendingWire = z.infer<typeof browserAgentPendingSchema>
+
+export const browserAgentTabConflictSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  boundTabId: z.number().int(),
+  activeTabId: z.number().int(),
+})
+export type BrowserAgentTabConflictWire = z.infer<typeof browserAgentTabConflictSchema>
+
+export const browserAgentNeedsHumanSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  detail: z.string().min(1),
+})
+export type BrowserAgentNeedsHumanWire = z.infer<typeof browserAgentNeedsHumanSchema>
+
+export const browserAgentAuditEntrySchema = z.strictObject({
+  at: z.number(),
+  sessionId: z.string().min(1),
+  tool: z.string().min(1),
+  summary: z.string().min(1),
+  url: z.string().optional(),
+  outcome: z.enum(['ok', 'denied', 'error', 'needs_human']),
+})
+export type BrowserAgentAuditEntryWire = z.infer<typeof browserAgentAuditEntrySchema>
+
+export const browserAgentSnapshotSchema = z.strictObject({
+  enabled: z.boolean(),
+  /** Settings preference (auto / chrome / edge). */
+  browser: z.enum(['auto', 'chrome', 'edge']),
+  /** Actually launched channel once ready; null when not running. */
+  launchedBrowser: z.enum(['chrome', 'edge']).nullable(),
+  /** Shipping driver (Playwright only after MV3 retirement). */
+  driver: z.literal('playwright'),
+  allowedOrigins: z.array(z.string()),
+  /** Connection status (field name kept for client compatibility). */
+  bridge: z.strictObject({
+    listening: z.boolean(),
+    port: z.number().int(),
+    extensionConnected: z.boolean(),
+    lastError: z.string().nullable(),
+  }),
+  pending: browserAgentPendingSchema.nullable(),
+  tabConflict: browserAgentTabConflictSchema.nullable(),
+  needsHuman: browserAgentNeedsHumanSchema.nullable(),
+  boundTabId: z.number().int().nullable(),
+  audit: z.array(browserAgentAuditEntrySchema),
+  /** Dedicated Chromium profile used by one-click launch (user-level). */
+  profileDir: z.string().min(1),
+})
+export type BrowserAgentSnapshot = z.infer<typeof browserAgentSnapshotSchema>
+const browserAgentSnapshotCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentSnapshot',
+  browserAgentSnapshotSchema,
+)
+
+export const browserAgentResolveRequestSchema = z.strictObject({
+  id: z.string().min(1),
+  decision: browserAgentApprovalDecisionSchema,
+})
+export type BrowserAgentResolveRequest = z.infer<typeof browserAgentResolveRequestSchema>
+const browserAgentResolveRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentResolveRequest',
+  browserAgentResolveRequestSchema,
+)
+
+export const browserAgentResolveResultSchema = z.strictObject({
+  ok: z.boolean(),
+  snapshot: browserAgentSnapshotSchema,
+})
+export type BrowserAgentResolveResult = z.infer<typeof browserAgentResolveResultSchema>
+const browserAgentResolveResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentResolveResult',
+  browserAgentResolveResultSchema,
+)
+
+export const browserAgentResolveTabConflictRequestSchema = z.strictObject({
+  decision: z.enum(['follow', 'stay']),
+})
+export type BrowserAgentResolveTabConflictRequest = z.infer<typeof browserAgentResolveTabConflictRequestSchema>
+const browserAgentResolveTabConflictRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentResolveTabConflictRequest',
+  browserAgentResolveTabConflictRequestSchema,
+)
+
+export const browserAgentResolveTabConflictResultSchema = z.strictObject({
+  ok: z.boolean(),
+  snapshot: browserAgentSnapshotSchema,
+})
+export type BrowserAgentResolveTabConflictResult = z.infer<typeof browserAgentResolveTabConflictResultSchema>
+const browserAgentResolveTabConflictResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentResolveTabConflictResult',
+  browserAgentResolveTabConflictResultSchema,
+)
+
+export const browserAgentAcknowledgeHumanRequestSchema = z.strictObject({
+  sessionId: z.string().min(1).optional(),
+})
+export type BrowserAgentAcknowledgeHumanRequest = z.infer<typeof browserAgentAcknowledgeHumanRequestSchema>
+const browserAgentAcknowledgeHumanRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentAcknowledgeHumanRequest',
+  browserAgentAcknowledgeHumanRequestSchema,
+)
+
+export const browserAgentAcknowledgeHumanResultSchema = z.strictObject({
+  ok: z.boolean(),
+  snapshot: browserAgentSnapshotSchema,
+})
+export type BrowserAgentAcknowledgeHumanResult = z.infer<typeof browserAgentAcknowledgeHumanResultSchema>
+const browserAgentAcknowledgeHumanResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentAcknowledgeHumanResult',
+  browserAgentAcknowledgeHumanResultSchema,
+)
+
+export const browserAgentOpenUrlRequestSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  url: z.string().min(1),
+})
+export type BrowserAgentOpenUrlRequest = z.infer<typeof browserAgentOpenUrlRequestSchema>
+const browserAgentOpenUrlRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentOpenUrlRequest',
+  browserAgentOpenUrlRequestSchema,
+)
+
+export const browserAgentOpenUrlResultSchema = z.strictObject({
+  ok: z.boolean(),
+  url: z.string().optional(),
+  title: z.string().optional(),
+  error: z.string().optional(),
+  snapshot: browserAgentSnapshotSchema,
+})
+export type BrowserAgentOpenUrlResult = z.infer<typeof browserAgentOpenUrlResultSchema>
+const browserAgentOpenUrlResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentOpenUrlResult',
+  browserAgentOpenUrlResultSchema,
+)
+
+export const browserAgentQuotePageRequestSchema = z.strictObject({
+  sessionId: z.string().min(1),
+})
+export type BrowserAgentQuotePageRequest = z.infer<typeof browserAgentQuotePageRequestSchema>
+const browserAgentQuotePageRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentQuotePageRequest',
+  browserAgentQuotePageRequestSchema,
+)
+
+export const browserAgentQuotePageResultSchema = z.strictObject({
+  ok: z.boolean(),
+  text: z.string().optional(),
+  url: z.string().optional(),
+  title: z.string().optional(),
+  error: z.string().optional(),
+  snapshot: browserAgentSnapshotSchema,
+})
+export type BrowserAgentQuotePageResult = z.infer<typeof browserAgentQuotePageResultSchema>
+const browserAgentQuotePageResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentQuotePageResult',
+  browserAgentQuotePageResultSchema,
+)
+
+export const browserAgentLaunchBrowserRequestSchema = z.strictObject({
+  browser: z.enum(['auto', 'chrome', 'edge']).optional(),
+})
+export type BrowserAgentLaunchBrowserRequest = z.infer<typeof browserAgentLaunchBrowserRequestSchema>
+const browserAgentLaunchBrowserRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentLaunchBrowserRequest',
+  browserAgentLaunchBrowserRequestSchema,
+)
+
+export const browserAgentLaunchBrowserResultSchema = z.strictObject({
+  ok: z.boolean(),
+  browser: z.enum(['chrome', 'edge']).optional(),
+  executable: z.string().optional(),
+  profileDir: z.string().min(1),
+  error: z.string().optional(),
+  snapshot: browserAgentSnapshotSchema,
+})
+export type BrowserAgentLaunchBrowserResult = z.infer<typeof browserAgentLaunchBrowserResultSchema>
+const browserAgentLaunchBrowserResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentLaunchBrowserResult',
+  browserAgentLaunchBrowserResultSchema,
+)
+
+/** Immediate live preference sync (sidebar select) so Agent tools do not wait on Cordis. */
+export const browserAgentSetBrowserRequestSchema = z.strictObject({
+  browser: z.enum(['auto', 'chrome', 'edge']),
+})
+export type BrowserAgentSetBrowserRequest = z.infer<typeof browserAgentSetBrowserRequestSchema>
+const browserAgentSetBrowserRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentSetBrowserRequest',
+  browserAgentSetBrowserRequestSchema,
+)
+
+export const browserAgentSetBrowserResultSchema = z.strictObject({
+  ok: z.boolean(),
+  browser: z.enum(['auto', 'chrome', 'edge']),
+  snapshot: browserAgentSnapshotSchema,
+})
+export type BrowserAgentSetBrowserResult = z.infer<typeof browserAgentSetBrowserResultSchema>
+const browserAgentSetBrowserResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentSetBrowserResult',
+  browserAgentSetBrowserResultSchema,
+)
+
 const instructionScopeSchema = z.enum(['global', 'shared', 'project'])
 const instructionFileEntrySchema = z.strictObject({
   id: z.string().min(1),
@@ -1078,6 +1292,97 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: showOsNotificationRequestCodec,
       }],
       result: showOsNotificationResultCodec,
+    },
+    'agentEnhancer/browserAgentSnapshot': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentSnapshot',
+      invocation: { kind: 'direct' },
+      parameters: [],
+      result: browserAgentSnapshotCodec,
+    },
+    'agentEnhancer/browserAgentResolve': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentResolve',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentResolveRequestCodec,
+        strictCodec: browserAgentResolveRequestCodec,
+      }],
+      result: browserAgentResolveResultCodec,
+    },
+    'agentEnhancer/browserAgentResolveTabConflict': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentResolveTabConflict',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentResolveTabConflictRequestCodec,
+        strictCodec: browserAgentResolveTabConflictRequestCodec,
+      }],
+      result: browserAgentResolveTabConflictResultCodec,
+    },
+    'agentEnhancer/browserAgentAcknowledgeHuman': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentAcknowledgeHuman',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentAcknowledgeHumanRequestCodec,
+        strictCodec: browserAgentAcknowledgeHumanRequestCodec,
+      }],
+      result: browserAgentAcknowledgeHumanResultCodec,
+    },
+    'agentEnhancer/browserAgentOpenUrl': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentOpenUrl',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentOpenUrlRequestCodec,
+        strictCodec: browserAgentOpenUrlRequestCodec,
+      }],
+      result: browserAgentOpenUrlResultCodec,
+    },
+    'agentEnhancer/browserAgentQuotePage': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentQuotePage',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentQuotePageRequestCodec,
+        strictCodec: browserAgentQuotePageRequestCodec,
+      }],
+      result: browserAgentQuotePageResultCodec,
+    },
+    'agentEnhancer/browserAgentLaunchBrowser': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentLaunchBrowser',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentLaunchBrowserRequestCodec,
+        strictCodec: browserAgentLaunchBrowserRequestCodec,
+      }],
+      result: browserAgentLaunchBrowserResultCodec,
+    },
+    'agentEnhancer/browserAgentSetBrowser': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentSetBrowser',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentSetBrowserRequestCodec,
+        strictCodec: browserAgentSetBrowserRequestCodec,
+      }],
+      result: browserAgentSetBrowserResultCodec,
     },
     'agentEnhancer/listInstructionsSkills': {
       service: 'agentEnhancer',

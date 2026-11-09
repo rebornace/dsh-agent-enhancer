@@ -20,6 +20,7 @@ export type FeatureLabelKey =
   | 'fileEdit'
   | 'instructionsSkills'
   | 'mcpConnectors'
+  | 'browserAgent'
 
 export type FeatureDescriptionKey =
   | 'historyDescription'
@@ -35,6 +36,7 @@ export type FeatureDescriptionKey =
   | 'fileEditDescription'
   | 'instructionsSkillsDescription'
   | 'mcpConnectorsDescription'
+  | 'browserAgentDescription'
 
 export interface SettingsFeatureEntry {
   readonly module: ModuleName
@@ -137,6 +139,12 @@ export const SETTINGS_FEATURE_GROUPS: readonly SettingsFeatureGroup[] = [
         module: 'mcpConnectors',
         labelKey: 'mcpConnectors',
         descriptionKey: 'mcpConnectorsDescription',
+        modelFeature: null,
+      },
+      {
+        module: 'browserAgent',
+        labelKey: 'browserAgent',
+        descriptionKey: 'browserAgentDescription',
         modelFeature: null,
       },
     ],

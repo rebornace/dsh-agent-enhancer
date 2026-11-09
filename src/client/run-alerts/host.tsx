@@ -3,6 +3,8 @@ import { Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RunAlertsLevel } from '../../config.ts'
+import type { BrowserAgentSnapshot } from '../../host/rpc.ts'
+import { agentEnhancerBrowserAgentSnapshot } from '../remote.ts'
 import { runAlertBody } from './copy.ts'
 import { RunAlertDedupe } from './dedupe.ts'
 import { detectSessionError, detectStatusEdges } from './detect.ts'
@@ -19,6 +21,8 @@ export interface RunAlertsHostProps {
   readonly getLevel: () => RunAlertsLevel
   /** Host remote for Electron / Windows OS notifications. */
   readonly getRemote?: () => unknown
+  /** When true, also synthesize alerts from browser-agent pending / needsHuman. */
+  readonly browserAgentEnabled?: () => boolean
 }
 
 interface ToastBanner {
@@ -205,6 +209,71 @@ export function RunAlertsHost(props: RunAlertsHostProps) {
       if (typeof off === 'function') off()
     }
   }, [props.ctx?.remote])
+
+  const browserPrevRef = useRef<{
+    pendingId: string | null
+    needsHumanKey: string | null
+    conflictKey: string | null
+  }>({ pendingId: null, needsHumanKey: null, conflictKey: null })
+
+  useEffect(() => {
+    const getRemote = props.getRemote
+    if (getRemote === undefined) return
+    let cancelled = false
+    const tick = async () => {
+      if (props.browserAgentEnabled?.() !== true) {
+        browserPrevRef.current = { pendingId: null, needsHumanKey: null, conflictKey: null }
+        return
+      }
+      let snap: BrowserAgentSnapshot
+      try {
+        snap = await agentEnhancerBrowserAgentSnapshot.invoke(getRemote())
+      } catch {
+        return
+      }
+      if (cancelled || !snap.enabled) return
+      const prev = browserPrevRef.current
+      const pendingId = snap.pending?.id ?? null
+      if (pendingId !== null && pendingId !== prev.pendingId && snap.pending !== null) {
+        deliver({
+          sessionId: snap.pending.sessionId as SessionId,
+          kind: 'pending',
+          pendingKind: 'approval',
+        })
+      }
+      const needsKey = snap.needsHuman === null
+        ? null
+        : `${snap.needsHuman.sessionId}:${snap.needsHuman.detail}`
+      if (needsKey !== null && needsKey !== prev.needsHumanKey && snap.needsHuman !== null) {
+        deliver({
+          sessionId: snap.needsHuman.sessionId as SessionId,
+          kind: 'pending',
+          pendingKind: 'browser-human',
+        })
+      }
+      const conflictKey = snap.tabConflict === null
+        ? null
+        : `${snap.tabConflict.sessionId}:${snap.tabConflict.boundTabId}:${snap.tabConflict.activeTabId}`
+      if (conflictKey !== null && conflictKey !== prev.conflictKey && snap.tabConflict !== null) {
+        deliver({
+          sessionId: snap.tabConflict.sessionId as SessionId,
+          kind: 'pending',
+          pendingKind: 'approval',
+        })
+      }
+      browserPrevRef.current = {
+        pendingId,
+        needsHumanKey: needsKey,
+        conflictKey,
+      }
+    }
+    void tick()
+    const timer = setInterval(() => { void tick() }, 1_000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [props.getRemote, props.browserAgentEnabled])
 
   if (toast === null) return null
   return createElement(Toast, {
