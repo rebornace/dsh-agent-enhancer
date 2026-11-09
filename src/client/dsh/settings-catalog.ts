@@ -20,6 +20,7 @@ export type FeatureLabelKey =
   | 'fileEdit'
   | 'instructionsSkills'
   | 'mcpConnectors'
+  | 'webChatBridge'
   | 'browserAgent'
 
 export type FeatureDescriptionKey =
@@ -36,6 +37,7 @@ export type FeatureDescriptionKey =
   | 'fileEditDescription'
   | 'instructionsSkillsDescription'
   | 'mcpConnectorsDescription'
+  | 'webChatBridgeDescription'
   | 'browserAgentDescription'
 
 export interface SettingsFeatureEntry {
@@ -139,6 +141,12 @@ export const SETTINGS_FEATURE_GROUPS: readonly SettingsFeatureGroup[] = [
         module: 'mcpConnectors',
         labelKey: 'mcpConnectors',
         descriptionKey: 'mcpConnectorsDescription',
+        modelFeature: null,
+      },
+      {
+        module: 'webChatBridge',
+        labelKey: 'webChatBridge',
+        descriptionKey: 'webChatBridgeDescription',
         modelFeature: null,
       },
       {

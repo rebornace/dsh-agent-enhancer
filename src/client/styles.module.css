@@ -4160,3 +4160,234 @@
   pointer-events: auto;
   isolation: isolate;
 }
+
+/* Full-bleed guest: ManagerPage caps children at 960px / overflow:auto — override for embed. */
+.webChatBridgePage {
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.webChatBridgePage > * {
+  max-width: none;
+}
+
+.webChatBridgePage .managerPageHead {
+  flex: none;
+  padding-left: clamp(24px, 4vw, 48px);
+  padding-right: clamp(24px, 4vw, 48px);
+}
+
+.webChatBridgeBody {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.webChatBridgeGuest {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  background: var(--dsw-alias-surface-default, #fff);
+}
+
+.webChatBridgeGuestError {
+  margin: 0;
+  padding: 24px clamp(24px, 4vw, 48px);
+  text-align: center;
+}
+
+.webChatBridgeGuestHost {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Hide until closeUnsafeEnvWarn settles so the site banner never flashes. */
+.webChatBridgeGuestHost:not([data-ready='true']) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.webChatBridgeGuestWebview {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: var(--dsw-alias-surface-default, transparent);
+}
+
+.webChatChooserIntro {
+  margin: 0 0 12px;
+  color: var(--dsw-alias-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.webChatChooserOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.webChatChooserOption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-radius: var(--dsw-radius-sm, 6px);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.webChatChooserOption:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.webChatChooserOption:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.webChatChooserOptionTitle {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.webChatChooserOptionDesc {
+  color: var(--dsw-alias-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.webChatChooserShare {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--dsw-radius-sm, 6px);
+}
+
+.webChatChooserShare:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.webChatChooserShareRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.webChatChooserShareRow > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.webChatPreviewMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.webChatPreviewWorkspaceRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.webChatPreviewWorkspaceRow .managerField {
+  margin: 0;
+}
+
+.webChatPreviewWorkspaceRow > button {
+  align-self: flex-start;
+}
+
+.webChatPreviewTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.webChatPreviewSource {
+  margin: 0;
+  color: var(--dsw-alias-text-secondary);
+  font-size: 12px;
+}
+
+.webChatPreviewPartial {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-sm, 6px);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-text-primary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.webChatPreviewTurnCount {
+  margin: 12px 0 8px;
+  color: var(--dsw-alias-text-secondary);
+  font-size: 12px;
+}
+
+.webChatPreviewTurns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.webChatPreviewTurn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-sm, 6px);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.webChatPreviewTurnRole {
+  color: var(--dsw-alias-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.webChatPreviewTurnText {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.webChatPreviewError {
+  margin: 12px 0 0;
+  color: var(--dsw-alias-text-error, #c62828);
+  font-size: 12px;
+}

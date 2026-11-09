@@ -41,6 +41,7 @@ import type {
   SoftPauseState,
 } from '../host/rpc.ts'
 import type { AuxiliaryResult } from '../host/types.ts'
+import type { WebChatLoginSnapshot } from '../host/web-chat-bridge/login-snapshot-types.ts'
 import { checkpointClientRemoteInfo } from './rollback/remote.ts'
 
 type Call = (payload: RpcPayload, signal?: AbortSignal) => Promise<RemoteResult<AuxiliaryResult | null>>
@@ -681,6 +682,126 @@ export const clientRemoteInfo = {
     }],
     cancellation: { parameter: 'signal' },
     result: codec('dsh-agent-enhancer#ListMcpConnectorToolsResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/listWebChatWorkspaces',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'listWebChatWorkspaces',
+    implementation: 'listWebChatWorkspaces',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#ListWebChatWorkspacesRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#ListWebChatWorkspacesResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/createWebChatWorkspace',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'createWebChatWorkspace',
+    implementation: 'createWebChatWorkspace',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#CreateWebChatWorkspaceRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#CreateWebChatWorkspaceResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/importWebChatHistory',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'importWebChatHistory',
+    implementation: 'importWebChatHistory',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#ImportWebChatHistoryRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#ImportWebChatHistoryResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/parseWebChatExport',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'parseWebChatExport',
+    implementation: 'parseWebChatExport',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#ParseWebChatExportRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#ParseWebChatExportResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/resolveWebChatShareLink',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'resolveWebChatShareLink',
+    implementation: 'resolveWebChatShareLink',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#ResolveWebChatShareLinkRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#ResolveWebChatShareLinkResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/loadWebChatLoginSnapshot',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'loadWebChatLoginSnapshot',
+    implementation: 'loadWebChatLoginSnapshot',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#LoadWebChatLoginSnapshotRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#LoadWebChatLoginSnapshotResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/saveWebChatLoginSnapshot',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'saveWebChatLoginSnapshot',
+    implementation: 'saveWebChatLoginSnapshot',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#SaveWebChatLoginSnapshotRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#SaveWebChatLoginSnapshotResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/clearWebChatLoginSnapshot',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'clearWebChatLoginSnapshot',
+    implementation: 'clearWebChatLoginSnapshot',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#ClearWebChatLoginSnapshotRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#ClearWebChatLoginSnapshotResult'),
   }, ...checkpointClientRemoteInfo.descriptors],
 } satisfies TypertRemoteContribution
 
@@ -1191,6 +1312,88 @@ export const agentEnhancerBrowserAgentSetBrowser = {
       if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
       return empty(request.browser)
     }
+  },
+}
+
+type WebChatLoginRemoteSource = () => { readonly agentEnhancer: object } | undefined
+
+type LoadWebChatLoginCall = (
+  request: Record<string, never>,
+  signal?: AbortSignal,
+) => Promise<RemoteResult<{ snapshot: WebChatLoginSnapshot | null }>>
+
+export const agentEnhancerLoadWebChatLogin = {
+  async invoke(
+    remoteSource: WebChatLoginRemoteSource,
+    signal?: AbortSignal,
+  ): Promise<{ snapshot: WebChatLoginSnapshot | null }> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty = { snapshot: null }
+    const remote = remoteSource()
+    if (remote === undefined) return empty
+    const namespace = remote.agentEnhancer
+    if (typeof namespace !== 'object') return empty
+    const call = Reflect.get(namespace, 'loadWebChatLoginSnapshot') as LoadWebChatLoginCall | undefined
+    if (typeof call !== 'function') return empty
+    const result = await call.apply(namespace, [{} as Record<string, never>, signal])
+    if (!result.ok) return empty
+    return result.value
+  },
+}
+
+type SaveWebChatLoginCall = (
+  request: {
+    readonly localStorage: Readonly<Record<string, string>>
+    readonly cookie: string
+    readonly savedAt: string
+  },
+  signal?: AbortSignal,
+) => Promise<RemoteResult<{ ok: true }>>
+
+export const agentEnhancerSaveWebChatLogin = {
+  async invoke(
+    remoteSource: WebChatLoginRemoteSource,
+    request: {
+      readonly localStorage: Readonly<Record<string, string>>
+      readonly cookie: string
+      readonly savedAt: string
+    },
+    signal?: AbortSignal,
+  ): Promise<{ ok: true }> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const remote = remoteSource()
+    if (remote === undefined) return { ok: true }
+    const namespace = remote.agentEnhancer
+    if (typeof namespace !== 'object') return { ok: true }
+    const call = Reflect.get(namespace, 'saveWebChatLoginSnapshot') as SaveWebChatLoginCall | undefined
+    if (typeof call !== 'function') return { ok: true }
+    const result = await call.apply(namespace, [request, signal])
+    if (!result.ok) return { ok: true }
+    return result.value
+  },
+}
+
+type ClearWebChatLoginCall = (
+  request: Record<string, never>,
+  signal?: AbortSignal,
+) => Promise<RemoteResult<{ cleared: boolean }>>
+
+export const agentEnhancerClearWebChatLogin = {
+  async invoke(
+    remoteSource: WebChatLoginRemoteSource,
+    signal?: AbortSignal,
+  ): Promise<{ cleared: boolean }> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty = { cleared: false }
+    const remote = remoteSource()
+    if (remote === undefined) return empty
+    const namespace = remote.agentEnhancer
+    if (typeof namespace !== 'object') return empty
+    const call = Reflect.get(namespace, 'clearWebChatLoginSnapshot') as ClearWebChatLoginCall | undefined
+    if (typeof call !== 'function') return empty
+    const result = await call.apply(namespace, [{} as Record<string, never>, signal])
+    if (!result.ok) return empty
+    return result.value
   },
 }
 

@@ -28,6 +28,10 @@ import {
   mcpConnectorsLeftNavPanellistSupported,
   subscribeMcpConnectorsLeftNavPanellist,
 } from '../mcp-connectors/left-nav.ts'
+import {
+  subscribeWebChatBridgeLeftNavPanellist,
+  webChatBridgeLeftNavPanellistSupported,
+} from '../web-chat-bridge/left-nav.ts'
 import { SettingsModelsPanel } from './settings-models.tsx'
 import { autoTierFieldPrefix } from './settings-model-pill.tsx'
 import { agentEnhancerBrowserAgentSetBrowser } from '../remote.ts'
@@ -99,6 +103,11 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyU
   const mcpConnectorsLeftNavSeatReady = useSyncExternalStore(
     subscribeMcpConnectorsLeftNavPanellist,
     mcpConnectorsLeftNavPanellistSupported,
+    () => false,
+  )
+  const webChatBridgeLeftNavSeatReady = useSyncExternalStore(
+    subscribeWebChatBridgeLeftNavPanellist,
+    webChatBridgeLeftNavPanellistSupported,
     () => false,
   )
   const writable = formState?.writable !== false
@@ -351,6 +360,10 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyU
             if (module === 'mcpConnectors') {
               if (!settings.mcpConnectorsEnabled || mcpConnectorsLeftNavSeatReady) return undefined
               return t('mcpConnectorsLeftNavUnsupported')
+            }
+            if (module === 'webChatBridge') {
+              if (!settings.webChatBridgeEnabled || webChatBridgeLeftNavSeatReady) return undefined
+              return t('webChatLeftNavUnsupported')
             }
             return undefined
           }}

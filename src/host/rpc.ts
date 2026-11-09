@@ -3,6 +3,7 @@ import type { TypertRemoteCodecSpec } from '@deepseek-ai/dsh-typert-protocol'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { z } from 'zod'
 import type { AuxiliaryErrorCode } from '../errors.ts'
+import type { WebChatImportErrorCode } from './web-chat-bridge/import-session.ts'
 import type { CheckpointRollbackErrorCode } from './checkpoint/service.ts'
 import { SKILL_INSTALL_STAGES } from './instructions-skills/install-progress.ts'
 import { APPLY_UPDATE_CODES } from './update/types.ts'
@@ -182,6 +183,158 @@ export const deleteSessionResultSchema = z.strictObject({
 })
 const deleteSessionRequestCodec = codec('dsh-agent-enhancer#DeleteSessionRequest', deleteSessionRequestSchema)
 const deleteSessionResultCodec = codec('dsh-agent-enhancer#DeleteSessionResult', deleteSessionResultSchema)
+
+const webChatTurnSchema = z.strictObject({
+  role: z.enum(['user', 'assistant']),
+  text: z.string(),
+})
+export const webChatTranscriptSchema = z.strictObject({
+  title: z.string(),
+  partial: z.boolean(),
+  turns: z.array(webChatTurnSchema).min(1),
+  source: z.strictObject({
+    kind: z.enum(['rendered-capture', 'official-export', 'share-link', 'account-history']),
+    url: z.string().optional(),
+    chatSessionId: z.string().optional(),
+    capturedAt: z.string(),
+    filename: z.string().optional(),
+  }),
+})
+export const listWebChatWorkspacesRequestSchema = z.strictObject({})
+export const listWebChatWorkspacesResultSchema = z.strictObject({
+  items: z.array(z.strictObject({
+    id: z.string(),
+    title: z.string(),
+    cwd: z.string(),
+  })),
+})
+export const createWebChatWorkspaceRequestSchema = z.strictObject({})
+export const createWebChatWorkspaceResultSchema = z.strictObject({
+  cancelled: z.boolean(),
+  workspace: z.strictObject({
+    id: z.string(),
+    title: z.string(),
+    cwd: z.string(),
+  }).nullable(),
+})
+export const importWebChatHistoryRequestSchema = z.strictObject({
+  workspaceId: z.string().min(1),
+  transcript: webChatTranscriptSchema,
+})
+export const importWebChatHistoryResultSchema = z.strictObject({
+  sessionId: sessionIdSchema,
+})
+export const parseWebChatExportRequestSchema = z.strictObject({
+  filename: z.string().min(1),
+  bytesBase64: z.string().min(1),
+})
+export const webChatExportCatalogItemSchema = z.strictObject({
+  id: z.string().min(1),
+  title: z.string(),
+  turnCount: z.number().int().nonnegative(),
+  preview: z.string(),
+  transcript: webChatTranscriptSchema.optional(),
+})
+export const parseWebChatExportResultSchema = z.strictObject({
+  items: z.array(webChatExportCatalogItemSchema).min(1),
+  truncated: z.boolean(),
+})
+export const resolveWebChatShareLinkRequestSchema = z.strictObject({
+  shareUrl: z.string().min(1),
+  /** Optional guest-fetched JSON string; when set, Host skips network fetch. */
+  payloadJson: z.string().optional(),
+})
+export const resolveWebChatShareLinkResultSchema = z.strictObject({
+  transcript: webChatTranscriptSchema,
+})
+const listWebChatWorkspacesRequestCodec = codec(
+  'dsh-agent-enhancer#ListWebChatWorkspacesRequest',
+  listWebChatWorkspacesRequestSchema,
+)
+const listWebChatWorkspacesResultCodec = codec(
+  'dsh-agent-enhancer#ListWebChatWorkspacesResult',
+  listWebChatWorkspacesResultSchema,
+)
+const createWebChatWorkspaceRequestCodec = codec(
+  'dsh-agent-enhancer#CreateWebChatWorkspaceRequest',
+  createWebChatWorkspaceRequestSchema,
+)
+const createWebChatWorkspaceResultCodec = codec(
+  'dsh-agent-enhancer#CreateWebChatWorkspaceResult',
+  createWebChatWorkspaceResultSchema,
+)
+const importWebChatHistoryRequestCodec = codec(
+  'dsh-agent-enhancer#ImportWebChatHistoryRequest',
+  importWebChatHistoryRequestSchema,
+)
+const importWebChatHistoryResultCodec = codec(
+  'dsh-agent-enhancer#ImportWebChatHistoryResult',
+  importWebChatHistoryResultSchema,
+)
+const parseWebChatExportRequestCodec = codec(
+  'dsh-agent-enhancer#ParseWebChatExportRequest',
+  parseWebChatExportRequestSchema,
+)
+const parseWebChatExportResultCodec = codec(
+  'dsh-agent-enhancer#ParseWebChatExportResult',
+  parseWebChatExportResultSchema,
+)
+const resolveWebChatShareLinkRequestCodec = codec(
+  'dsh-agent-enhancer#ResolveWebChatShareLinkRequest',
+  resolveWebChatShareLinkRequestSchema,
+)
+const resolveWebChatShareLinkResultCodec = codec(
+  'dsh-agent-enhancer#ResolveWebChatShareLinkResult',
+  resolveWebChatShareLinkResultSchema,
+)
+
+const webChatLoginSnapshotSchema = z.strictObject({
+  version: z.literal(1),
+  origin: z.string(),
+  localStorage: z.record(z.string(), z.string()),
+  cookie: z.string(),
+  savedAt: z.string(),
+})
+export const loadWebChatLoginSnapshotRequestSchema = z.strictObject({})
+export const loadWebChatLoginSnapshotResultSchema = z.strictObject({
+  snapshot: webChatLoginSnapshotSchema.nullable(),
+})
+export const saveWebChatLoginSnapshotRequestSchema = z.strictObject({
+  localStorage: z.record(z.string(), z.string()),
+  cookie: z.string(),
+  savedAt: z.string(),
+})
+export const saveWebChatLoginSnapshotResultSchema = z.strictObject({
+  ok: z.literal(true),
+})
+export const clearWebChatLoginSnapshotRequestSchema = z.strictObject({})
+export const clearWebChatLoginSnapshotResultSchema = z.strictObject({
+  cleared: z.boolean(),
+})
+const loadWebChatLoginSnapshotRequestCodec = codec(
+  'dsh-agent-enhancer#LoadWebChatLoginSnapshotRequest',
+  loadWebChatLoginSnapshotRequestSchema,
+)
+const loadWebChatLoginSnapshotResultCodec = codec(
+  'dsh-agent-enhancer#LoadWebChatLoginSnapshotResult',
+  loadWebChatLoginSnapshotResultSchema,
+)
+const saveWebChatLoginSnapshotRequestCodec = codec(
+  'dsh-agent-enhancer#SaveWebChatLoginSnapshotRequest',
+  saveWebChatLoginSnapshotRequestSchema,
+)
+const saveWebChatLoginSnapshotResultCodec = codec(
+  'dsh-agent-enhancer#SaveWebChatLoginSnapshotResult',
+  saveWebChatLoginSnapshotResultSchema,
+)
+const clearWebChatLoginSnapshotRequestCodec = codec(
+  'dsh-agent-enhancer#ClearWebChatLoginSnapshotRequest',
+  clearWebChatLoginSnapshotRequestSchema,
+)
+const clearWebChatLoginSnapshotResultCodec = codec(
+  'dsh-agent-enhancer#ClearWebChatLoginSnapshotResult',
+  clearWebChatLoginSnapshotResultSchema,
+)
 
 export const readWorkspaceFileRequestSchema = z.strictObject({
   sessionId: sessionIdSchema,
@@ -1605,13 +1758,121 @@ export const remoteInfo = createTypertRemoteInfo({
       cancellation: { parameter: 'signal' },
       result: listMcpConnectorToolsResultCodec,
     },
+    'agentEnhancer/listWebChatWorkspaces': {
+      service: 'agentEnhancer',
+      implementation: 'listWebChatWorkspaces',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: listWebChatWorkspacesRequestCodec,
+        strictCodec: listWebChatWorkspacesRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: listWebChatWorkspacesResultCodec,
+    },
+    'agentEnhancer/createWebChatWorkspace': {
+      service: 'agentEnhancer',
+      implementation: 'createWebChatWorkspace',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: createWebChatWorkspaceRequestCodec,
+        strictCodec: createWebChatWorkspaceRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: createWebChatWorkspaceResultCodec,
+    },
+    'agentEnhancer/importWebChatHistory': {
+      service: 'agentEnhancer',
+      implementation: 'importWebChatHistory',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: importWebChatHistoryRequestCodec,
+        strictCodec: importWebChatHistoryRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: importWebChatHistoryResultCodec,
+    },
+    'agentEnhancer/parseWebChatExport': {
+      service: 'agentEnhancer',
+      implementation: 'parseWebChatExport',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: parseWebChatExportRequestCodec,
+        strictCodec: parseWebChatExportRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: parseWebChatExportResultCodec,
+    },
+    'agentEnhancer/resolveWebChatShareLink': {
+      service: 'agentEnhancer',
+      implementation: 'resolveWebChatShareLink',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: resolveWebChatShareLinkRequestCodec,
+        strictCodec: resolveWebChatShareLinkRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: resolveWebChatShareLinkResultCodec,
+    },
+    'agentEnhancer/loadWebChatLoginSnapshot': {
+      service: 'agentEnhancer',
+      implementation: 'loadWebChatLoginSnapshot',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: loadWebChatLoginSnapshotRequestCodec,
+        strictCodec: loadWebChatLoginSnapshotRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: loadWebChatLoginSnapshotResultCodec,
+    },
+    'agentEnhancer/saveWebChatLoginSnapshot': {
+      service: 'agentEnhancer',
+      implementation: 'saveWebChatLoginSnapshot',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: saveWebChatLoginSnapshotRequestCodec,
+        strictCodec: saveWebChatLoginSnapshotRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: saveWebChatLoginSnapshotResultCodec,
+    },
+    'agentEnhancer/clearWebChatLoginSnapshot': {
+      service: 'agentEnhancer',
+      implementation: 'clearWebChatLoginSnapshot',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: clearWebChatLoginSnapshotRequestCodec,
+        strictCodec: clearWebChatLoginSnapshotRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: clearWebChatLoginSnapshotResultCodec,
+    },
   },
 }, z)
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
     'agent-enhancer/forbidden': {}
-    'agent-enhancer/failed': { code: AuxiliaryErrorCode }
+    'agent-enhancer/failed': {
+      code: AuxiliaryErrorCode
+      webChatCode?: WebChatImportErrorCode
+      sessionId?: SessionId
+    }
   }
 }
 

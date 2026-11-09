@@ -3,7 +3,7 @@ import type { AutoRouteMap } from './host/auto-route/types.ts'
 
 export const MODULES = [
   'history', 'optimize', 'predict', 'quote', 'rollback', 'softPause', 'runAlerts', 'contextInspect', 'usage',
-  'sessionDelete', 'fileEdit', 'instructionsSkills', 'mcpConnectors', 'browserAgent',
+  'sessionDelete', 'fileEdit', 'instructionsSkills', 'mcpConnectors', 'webChatBridge', 'browserAgent',
 ] as const
 export type ModuleName = typeof MODULES[number]
 
@@ -98,6 +98,7 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   runAlertsLevel: 'unfocused',
   browserAgentEnabled: false,
   browserAgentBrowser: 'auto',
+  webChatBridgeEnabled: true,
   instructionsSkillsEnabled: true,
   mcpConnectorsEnabled: true,
   optimizeProvider: '',
@@ -144,6 +145,7 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     runAlertsLevel: resolveRunAlertsLevel(value?.runAlertsLevel),
     browserAgentEnabled: value?.browserAgentEnabled ?? false,
     browserAgentBrowser: resolveBrowserAgentBrowser(value?.browserAgentBrowser),
+    webChatBridgeEnabled: value?.webChatBridgeEnabled ?? true,
     instructionsSkillsEnabled: value?.instructionsSkillsEnabled ?? true,
     mcpConnectorsEnabled: value?.mcpConnectorsEnabled ?? true,
     optimizeProvider: text(value?.optimizeProvider),

@@ -16,6 +16,7 @@ LEFT_BIAS = {
   'select-to-quote.png',
   'session-delete.png',
   'skills-mcp-left-nav.png',
+  'web-chat-left-nav.png',
 }
 
 # Wide short chrome (icon rows): pad to square so the whole strip stays visible.

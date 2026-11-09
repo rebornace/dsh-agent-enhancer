@@ -9,10 +9,14 @@ import styles from './styles.module.css'
 
 export function ManagerPage(props: {
   readonly children: ReactNode
+  readonly className?: string
   readonly 'data-state'?: string
 }) {
+  const className = props.className === undefined || props.className === ''
+    ? styles.managerPage
+    : `${styles.managerPage} ${props.className}`
   return (
-    <div className={styles.managerPage} data-state={props['data-state']}>
+    <div className={className} data-state={props['data-state']}>
       {props.children}
     </div>
   )

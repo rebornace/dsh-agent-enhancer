@@ -114,6 +114,7 @@ import {
 import { ExtraFoldersTab, ExtraFoldersTabTitle } from './extra-folders/tab.tsx'
 import { installInstructionsSkillsLeftNav } from './instructions-skills/left-nav.ts'
 import { installMcpConnectorsLeftNav } from './mcp-connectors/left-nav.ts'
+import { installWebChatBridgeLeftNav } from './web-chat-bridge/left-nav.ts'
 import { installCss } from './styles.module.css'
 
 type InventoryRemote = ClientRemote & {
@@ -509,6 +510,7 @@ export function apply(ctx: Context): void {
     const browserAgentEnabled = () => resolveSettings(form.getSnapshot().value).browserAgentEnabled
     const instructionsSkillsEnabled = () => resolveSettings(form.getSnapshot().value).instructionsSkillsEnabled
     const mcpConnectorsEnabled = () => resolveSettings(form.getSnapshot().value).mcpConnectorsEnabled
+    const webChatBridgeEnabled = () => resolveSettings(form.getSnapshot().value).webChatBridgeEnabled
     const FileEditRightTab = (props: PropsRuntime<'sidebar.right.pane.tab'>) => createElement(FileEditTab, {
       ...props,
       remote: () => agentEnhancerRemote,
@@ -759,6 +761,18 @@ export function apply(ctx: Context): void {
     mountedCtx.effect(() => {
       const nav = installMcpConnectorsLeftNav(mountedCtx, {
         enabled: mcpConnectorsEnabled,
+        t: tContext,
+        remote: () => agentEnhancerRemote,
+      })
+      const unsubscribe = form.subscribe(() => nav.synchronize())
+      return () => {
+        unsubscribe()
+        nav.dispose()
+      }
+    })
+    mountedCtx.effect(() => {
+      const nav = installWebChatBridgeLeftNav(mountedCtx, {
+        enabled: webChatBridgeEnabled,
         t: tContext,
         remote: () => agentEnhancerRemote,
       })

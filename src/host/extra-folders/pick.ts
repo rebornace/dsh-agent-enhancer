@@ -11,6 +11,23 @@ export interface PickDirectoryResult {
   readonly path: string | null
 }
 
+/**
+ * Decode a Windows Forms picker path emitted as UTF-8 base64.
+ * Plain console text uses the system ANSI code page on Chinese Windows and
+ * mojibakes under Node `utf8` (non-ASCII folder names break), so PowerShell
+ * must not write the path raw.
+ */
+export function decodeWindowsPickerPathBase64(stdout: string): string | null {
+  const encoded = stdout.trim().replace(/\r?\n/g, '')
+  if (encoded === '') return null
+  try {
+    const path = Buffer.from(encoded, 'base64').toString('utf8').trim()
+    return path === '' ? null : path
+  } catch {
+    return null
+  }
+}
+
 async function pickViaElectron(): Promise<string | null | undefined> {
   try {
     // Soft-load Electron; types are not a package dependency of this plugin.
@@ -39,6 +56,7 @@ async function pickViaElectron(): Promise<string | null | undefined> {
 
 async function pickViaWindowsForms(): Promise<string | null | undefined> {
   if (process.platform !== 'win32') return undefined
+  // Base64 UTF-8 avoids console code-page mojibake for non-ASCII folder names.
   const script = [
     'Add-Type -AssemblyName System.Windows.Forms | Out-Null',
     '$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
@@ -46,7 +64,8 @@ async function pickViaWindowsForms(): Promise<string | null | undefined> {
     '$dialog.ShowNewFolderButton = $true',
     '$result = $dialog.ShowDialog()',
     'if ($result -eq [System.Windows.Forms.DialogResult]::OK) {',
-    '  [Console]::Out.Write($dialog.SelectedPath)',
+    '  $bytes = [System.Text.Encoding]::UTF8.GetBytes($dialog.SelectedPath)',
+    '  [Console]::Out.Write([Convert]::ToBase64String($bytes))',
     '}',
   ].join('; ')
   try {
@@ -55,8 +74,7 @@ async function pickViaWindowsForms(): Promise<string | null | undefined> {
       ['-NoProfile', '-STA', '-Command', script],
       { windowsHide: true, encoding: 'utf8', timeout: 120_000 },
     )
-    const path = stdout.trim()
-    return path === '' ? null : path
+    return decodeWindowsPickerPathBase64(stdout)
   } catch {
     return undefined
   }
@@ -173,7 +191,8 @@ async function pickFileViaWindowsForms(options: PickFileOptions): Promise<string
     '$dialog.Multiselect = $false',
     '$result = $dialog.ShowDialog()',
     'if ($result -eq [System.Windows.Forms.DialogResult]::OK) {',
-    '  [Console]::Out.Write($dialog.FileName)',
+    '  $bytes = [System.Text.Encoding]::UTF8.GetBytes($dialog.FileName)',
+    '  [Console]::Out.Write([Convert]::ToBase64String($bytes))',
     '}',
   ].join('; ')
   try {
@@ -182,8 +201,7 @@ async function pickFileViaWindowsForms(options: PickFileOptions): Promise<string
       ['-NoProfile', '-STA', '-Command', script],
       { windowsHide: true, encoding: 'utf8', timeout: 120_000 },
     )
-    const path = stdout.trim()
-    return path === '' ? null : path
+    return decodeWindowsPickerPathBase64(stdout)
   } catch {
     return undefined
   }

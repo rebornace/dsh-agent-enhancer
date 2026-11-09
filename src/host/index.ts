@@ -52,6 +52,33 @@ import {
 import { deleteSessionNow, SessionDeleteError } from './session-delete/delete.ts'
 import type { DeleteSessionRequest, DeleteSessionResult } from './session-delete/delete.ts'
 import {
+  createWebChatWorkspaceNow,
+  importWebChatHistoryWithContext,
+  listWebChatWorkspacesNow,
+  WebChatImportError,
+  webChatImportToRemoteError,
+  type CreateWebChatWorkspaceResult,
+} from './web-chat-bridge/import-session.ts'
+import { analyzeWebChatExport } from './web-chat-bridge/parse-export.ts'
+import {
+  extractWebChatShareId,
+  fetchWebChatShareContent,
+  parseWebChatShareContent,
+  webChatSharePageUrl,
+} from './web-chat-bridge/share-link.ts'
+import type { AnalyzeWebChatExportResult, WebChatTranscript } from './web-chat-bridge/types.ts'
+import type {
+  ImportWebChatHistoryRequest,
+  ImportWebChatHistoryNowResult,
+  WebChatWorkspaceRow,
+} from './web-chat-bridge/import-session.ts'
+import {
+  clearWebChatLoginSnapshot as clearWebChatLoginSnapshotFile,
+  loadWebChatLoginSnapshot as loadWebChatLoginSnapshotFile,
+  saveWebChatLoginSnapshot as saveWebChatLoginSnapshotFile,
+} from './web-chat-bridge/login-snapshot.ts'
+import type { WebChatLoginSnapshot } from './web-chat-bridge/login-snapshot.ts'
+import {
   addExtraFolderNow,
   listExtraFolderEntriesNow,
   listExtraFoldersNow,
@@ -231,6 +258,8 @@ export const Config = z.object({
   /** High-risk; default off. */
   browserAgentEnabled: z.boolean().default(false).volatile(),
   browserAgentBrowser: z.string().default('auto').volatile(),
+  /** Default off; embeds official web chat + import to work. */
+  webChatBridgeEnabled: z.boolean().default(true).volatile(),
   instructionsSkillsEnabled: z.boolean().default(true).volatile(),
   mcpConnectorsEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.
@@ -472,6 +501,149 @@ export class AgentEnhancerService extends TypertRemoteService {
         code: 'SESSION_DELETE_FAILED',
       })
     }
+  }
+
+  /** Workspaces eligible for imported web-chat sessions. */
+  async listWebChatWorkspaces(
+    _request: Record<string, never>,
+    signal: AbortSignal,
+  ): Promise<{ items: readonly WebChatWorkspaceRow[] }> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return { items: listWebChatWorkspacesNow(this.ctx) }
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw webChatImportToRemoteError(error)
+    }
+  }
+
+  /** Pick a folder and register it as a workspace for web-chat import. */
+  async createWebChatWorkspace(
+    _request: Record<string, never>,
+    signal: AbortSignal,
+  ): Promise<CreateWebChatWorkspaceResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await createWebChatWorkspaceNow(this.ctx, signal)
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw webChatImportToRemoteError(error)
+    }
+  }
+
+  /** Create a Desktop session from a captured/exported web transcript (no model call). */
+  async importWebChatHistory(
+    request: ImportWebChatHistoryRequest,
+    signal: AbortSignal,
+  ): Promise<ImportWebChatHistoryNowResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await importWebChatHistoryWithContext(this.ctx, request)
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw webChatImportToRemoteError(error)
+    }
+  }
+
+  /** Analyze an official export into selectable conversations (size limits enforced once). */
+  async parseWebChatExport(
+    request: { readonly filename: string, readonly bytesBase64: string },
+    signal: AbortSignal,
+  ): Promise<AnalyzeWebChatExportResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      const bytes = Buffer.from(request.bytesBase64, 'base64')
+      return analyzeWebChatExport({ filename: request.filename, bytes })
+    } catch (error) {
+      if (signal.aborted) throw error
+      const detail = error instanceof Error ? error.message : String(error)
+      throw webChatImportToRemoteError(
+        error instanceof WebChatImportError
+          ? error
+          : new WebChatImportError('invalid-transcript', detail),
+      )
+    }
+  }
+
+  /**
+   * Resolve a public DeepSeek share link (`chat.deepseek.com/share/…`) into a transcript.
+   * Prefer `payloadJson` from the guest (same-origin) when WAF blocks Host fetch.
+   */
+  async resolveWebChatShareLink(
+    request: { readonly shareUrl: string, readonly payloadJson?: string },
+    signal: AbortSignal,
+  ): Promise<{ transcript: WebChatTranscript }> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      const shareId = extractWebChatShareId(request.shareUrl)
+      if (shareId === null) {
+        throw new WebChatImportError('invalid-transcript', 'unrecognized-share: not a DeepSeek share link')
+      }
+      const shareUrl = webChatSharePageUrl(shareId)
+      let data: unknown
+      if (typeof request.payloadJson === 'string' && request.payloadJson.trim() !== '') {
+        try {
+          data = JSON.parse(request.payloadJson) as unknown
+        } catch {
+          throw new WebChatImportError('invalid-transcript', 'unrecognized-share: invalid payload json')
+        }
+      } else {
+        data = await fetchWebChatShareContent(shareId, signal)
+      }
+      const transcript = parseWebChatShareContent(data, { shareUrl, shareId })
+      return { transcript }
+    } catch (error) {
+      if (signal.aborted) throw error
+      const detail = error instanceof Error ? error.message : String(error)
+      throw webChatImportToRemoteError(
+        error instanceof WebChatImportError
+          ? error
+          : new WebChatImportError('invalid-transcript', detail),
+      )
+    }
+  }
+
+  private webChatPluginDataRoot(): string {
+    return this.installLedgerRoot
+      ?? join(homedir(), '.dsh', 'profiles', 'desktop', 'plugin-data', PACKAGE_NAME)
+  }
+
+  /** User-level web chat guest login snapshot (non-HttpOnly storage only). */
+  async loadWebChatLoginSnapshot(
+    _request: Record<string, never>,
+    signal: AbortSignal,
+  ): Promise<{ snapshot: WebChatLoginSnapshot | null }> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    return { snapshot: loadWebChatLoginSnapshotFile(this.webChatPluginDataRoot()) }
+  }
+
+  async saveWebChatLoginSnapshot(
+    request: {
+      readonly localStorage: Readonly<Record<string, string>>
+      readonly cookie: string
+      readonly savedAt: string
+    },
+    signal: AbortSignal,
+  ): Promise<{ ok: true }> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    saveWebChatLoginSnapshotFile(this.webChatPluginDataRoot(), request)
+    return { ok: true }
+  }
+
+  async clearWebChatLoginSnapshot(
+    _request: Record<string, never>,
+    signal: AbortSignal,
+  ): Promise<{ cleared: boolean }> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    return { cleared: clearWebChatLoginSnapshotFile(this.webChatPluginDataRoot()) }
   }
 
   /** Read a workspace UTF-8 text file for the in-app Monaco editor. */
@@ -1185,6 +1357,7 @@ function readSettings(config: Config): EnhancerSettings {
     runAlertsLevel: resolveRunAlertsLevel(config.runAlertsLevel.get()),
     browserAgentEnabled: config.browserAgentEnabled.get(),
     browserAgentBrowser: resolveBrowserAgentBrowser(config.browserAgentBrowser.get()),
+    webChatBridgeEnabled: config.webChatBridgeEnabled.get(),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
     mcpConnectorsEnabled: config.mcpConnectorsEnabled.get(),
     optimizeProvider: config.optimizeProvider.get(),
