@@ -2,20 +2,24 @@
  * Playwright-core driver for Desktop Browser Agent (sole shipping path).
  */
 
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import type { BrowserContext, Page } from 'playwright-core'
-import { chromium } from 'playwright-core'
+import { chromium, webkit } from 'playwright-core'
 import type {
   BrowserActResult,
   BrowserDriver,
   BrowserDriverStatus,
 } from './driver.ts'
 import {
+  BROWSER_AGENT_PROFILE_SLOTS,
   browserAgentProfileDirFor,
+  browserAgentProfileSlotDir,
   playwrightChannelOrder,
+  playwrightChannelSatisfiesPreference,
   resolveBrowserExecutable,
   stopAgentBrowserProcesses,
   type BrowserPreference,
+  type PlaywrightChannel,
 } from './launch.ts'
 import type {
   ExtractBody,
@@ -51,7 +55,7 @@ export class PlaywrightDriver implements BrowserDriver {
   private context: BrowserContext | null = null
   private page: Page | null = null
   private lastError: string | null = null
-  private channel: 'msedge' | 'chrome' | null = null
+  private channel: PlaywrightChannel | null = null
   private launchedProfileDir: string | null = null
   private lastRefs = new Map<number, PlaywrightRefRecord>()
 
@@ -68,6 +72,17 @@ export class PlaywrightDriver implements BrowserDriver {
 
   private currentProfileDir(): string {
     return typeof this.profileDirOption === 'function' ? this.profileDirOption() : this.profileDirOption
+  }
+
+  /** Resolve the on-disk profile for a preference (+ auto channel isolation). */
+  private profileDirFor(
+    preference: BrowserPreference,
+    channel?: PlaywrightChannel,
+  ): string {
+    if (this.profileRoot !== undefined) {
+      return browserAgentProfileDirFor(this.profileRoot, preference, channel)
+    }
+    return this.currentProfileDir()
   }
 
   /** Latest snapshot refs — used by the click/type path. */
@@ -91,13 +106,16 @@ export class PlaywrightDriver implements BrowserDriver {
 
   async ensureReady(startUrl?: string): Promise<void> {
     const preference = this.currentPreference()
-    const profileDir = this.currentProfileDir()
-    const wantChannel = playwrightChannelOrder(preference, process.platform)[0]!
+    const order = [...playwrightChannelOrder(preference, process.platform)]
+    // Keep a successful auto fallback (e.g. Chrome after WebKit miss). Requiring
+    // only the first channel caused open/close flaps on every Agent tool call.
     const runningOk = this.context !== null
       && this.page !== null
       && !this.page.isClosed()
-      && this.channel === wantChannel
-      && this.launchedProfileDir === profileDir
+      && playwrightChannelSatisfiesPreference(this.channel, preference, process.platform)
+      && this.launchedProfileDir !== null
+      && this.channel !== null
+      && this.launchedProfileDir === this.profileDirFor(preference, this.channel)
 
     if (runningOk) {
       if (typeof startUrl === 'string' && /^https?:\/\//i.test(startUrl)) {
@@ -113,38 +131,23 @@ export class PlaywrightDriver implements BrowserDriver {
     if (this.context !== null) {
       await this.dispose().catch(() => undefined)
     }
-    this.stopPreferenceProfiles(profileDir)
+    this.stopPreferenceProfiles(this.profileDirFor(preference))
 
-    mkdirSync(profileDir, { recursive: true })
-
-    const order = [...playwrightChannelOrder(preference, process.platform)]
     let lastDetail = ''
     for (const channel of order) {
-      const kind = channel === 'msedge' ? 'edge' : 'chrome'
-      // Prefer explicit exe so channel name never silently picks the wrong browser.
-      const resolved = resolveBrowserExecutable(kind)
-      if (preference === 'chrome' || preference === 'edge') {
-        if (resolved === null || resolved.kind !== preference) {
-          lastDetail = `${preference} is not installed or not found on PATH`
-          this.lastError = lastDetail
+      const profileDir = this.profileDirFor(preference, channel)
+      mkdirSync(profileDir, { recursive: true })
+      // Only kill siblings / stale holders of THIS channel profile — never the
+      // other auto-* slot we may fall back to in the same ensureReady pass.
+      stopAgentBrowserProcesses(profileDir)
+      try {
+        const context = channel === 'webkit'
+          ? await this.launchWebkit(profileDir, preference)
+          : await this.launchChromium(profileDir, preference, channel)
+        if (context === null) {
+          lastDetail = this.lastError ?? `${channel} is not available`
           continue
         }
-      } else if (resolved === null) {
-        lastDetail = `${kind} is not installed or not found on PATH`
-        this.lastError = lastDetail
-        continue
-      }
-
-      try {
-        const context = await chromium.launchPersistentContext(profileDir, {
-          executablePath: resolved!.executable,
-          headless: this.headless,
-          // Avoid Edge/Chrome infobar: "unsupported command-line flag: --no-sandbox".
-          chromiumSandbox: true,
-          ignoreDefaultArgs: ['--no-sandbox'],
-          viewport: this.headless ? { width: 1280, height: 800 } : null,
-          args: ['--no-first-run', '--no-default-browser-check', '--disable-default-apps'],
-        })
         this.context = context
         this.channel = channel
         this.launchedProfileDir = profileDir
@@ -165,12 +168,79 @@ export class PlaywrightDriver implements BrowserDriver {
         this.lastError = lastDetail
       }
     }
-    const hint = preference === 'chrome' || preference === 'edge'
+    const hint = preference === 'chrome' || preference === 'edge' || preference === 'safari'
       ? ` Preference is locked to ${preference} (no silent fallback).`
       : ''
     throw new Error(
       `Playwright could not launch a persistent browser (tried ${order.join(', ')}): ${lastDetail}.${hint}`,
     )
+  }
+
+  /**
+   * Safari preference uses Playwright WebKit (Safari engine). Branded Safari.app
+   * cannot be driven by Playwright; require system Safari to be present as a
+   * platform gate, then launch the WebKit automation build.
+   */
+  private async launchWebkit(
+    profileDir: string,
+    preference: BrowserPreference,
+  ): Promise<BrowserContext | null> {
+    if (preference === 'safari') {
+      const safari = resolveBrowserExecutable('safari', {
+        platform: process.platform,
+      })
+      if (safari === null) {
+        this.lastError = 'Safari is not installed'
+        return null
+      }
+    }
+    let webkitExe: string
+    try {
+      webkitExe = webkit.executablePath()
+    } catch (error) {
+      this.lastError = error instanceof Error
+        ? error.message
+        : 'Playwright WebKit is unavailable'
+      return null
+    }
+    if (!existsSync(webkitExe)) {
+      this.lastError =
+        'Playwright WebKit is not installed. Run: npx playwright install webkit'
+      return null
+    }
+    return webkit.launchPersistentContext(profileDir, {
+      headless: this.headless,
+      viewport: this.headless ? { width: 1280, height: 800 } : null,
+    })
+  }
+
+  private async launchChromium(
+    profileDir: string,
+    preference: BrowserPreference,
+    channel: Exclude<PlaywrightChannel, 'webkit'>,
+  ): Promise<BrowserContext | null> {
+    const kind = channel === 'msedge' ? 'edge' : 'chrome'
+    // Prefer explicit exe so channel name never silently picks the wrong browser.
+    const resolved = resolveBrowserExecutable(kind)
+    if (preference === 'chrome' || preference === 'edge') {
+      if (resolved === null || resolved.kind !== preference) {
+        this.lastError = `${preference} is not installed or not found on PATH`
+        return null
+      }
+    } else if (resolved === null) {
+      this.lastError = `${kind} is not installed or not found on PATH`
+      return null
+    }
+
+    return chromium.launchPersistentContext(profileDir, {
+      executablePath: resolved!.executable,
+      headless: this.headless,
+      // Avoid Edge/Chrome infobar: "unsupported command-line flag: --no-sandbox".
+      chromiumSandbox: true,
+      ignoreDefaultArgs: ['--no-sandbox'],
+      viewport: this.headless ? { width: 1280, height: 800 } : null,
+      args: ['--no-first-run', '--no-default-browser-check', '--disable-default-apps'],
+    })
   }
 
   private stopPreferenceProfiles(activeProfileDir: string): void {
@@ -179,8 +249,8 @@ export class PlaywrightDriver implements BrowserDriver {
       stopAgentBrowserProcesses(this.launchedProfileDir)
     }
     if (this.profileRoot !== undefined) {
-      for (const slot of ['auto', 'chrome', 'edge'] as const) {
-        const dir = browserAgentProfileDirFor(this.profileRoot, slot)
+      for (const slot of BROWSER_AGENT_PROFILE_SLOTS) {
+        const dir = browserAgentProfileSlotDir(this.profileRoot, slot)
         if (dir !== activeProfileDir) stopAgentBrowserProcesses(dir)
       }
     }

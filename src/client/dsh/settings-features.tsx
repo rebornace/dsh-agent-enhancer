@@ -1,7 +1,9 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { IconChevronRightOutlineRegular, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
-  BROWSER_AGENT_BROWSERS,
+  browserAgentBrowsersForPlatform,
+  coerceBrowserAgentBrowserForPlatform,
+  detectUiPlatform,
   RUN_ALERTS_LEVELS,
   resolveBrowserAgentBrowser,
   resolveRunAlertsLevel,
@@ -57,6 +59,8 @@ function browserAgentBrowserLabel(
       return t('browserAgentBrowser_chrome')
     case 'edge':
       return t('browserAgentBrowser_edge')
+    case 'safari':
+      return t('browserAgentBrowser_safari')
     default: {
       const _exhaustive: never = browser
       return _exhaustive
@@ -75,6 +79,13 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
     onOpenModel,
     featureExtraDescription,
   } = props
+
+  const uiPlatform = detectUiPlatform()
+  const browserOptions = browserAgentBrowsersForPlatform(uiPlatform)
+  const browserValue = coerceBrowserAgentBrowserForPlatform(
+    settings.browserAgentBrowser,
+    uiPlatform,
+  )
 
   return (
     <div className={styles.settingsPanel} data-settings-panel="features">
@@ -100,12 +111,12 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                           className={styles.settingsSelect}
                           aria-label={t('browserAgentBrowser')}
                           disabled={busy || onBrowserAgentBrowser === undefined}
-                          value={settings.browserAgentBrowser}
+                          value={browserValue}
                           onChange={event => {
                             onBrowserAgentBrowser?.(resolveBrowserAgentBrowser(event.target.value))
                           }}
                         >
-                          {BROWSER_AGENT_BROWSERS.map(browser => (
+                          {browserOptions.map(browser => (
                             <option key={browser} value={browser}>
                               {browserAgentBrowserLabel(browser, t)}
                             </option>

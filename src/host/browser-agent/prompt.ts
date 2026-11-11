@@ -14,7 +14,7 @@ const SECTION_NAME = 'agent-enhancer:browser-agent'
 
 /** Site-agnostic guidance (Playwright MCP / browser-use style). No per-site scrapers. */
 const GUIDANCE = [
-  '## Browser agent (Desktop dedicated Chrome/Edge)',
+  '## Browser agent (Desktop dedicated browser: Safari/Chrome on Mac, Chrome/Edge on Windows)',
   'When the user asks to open a website, browse the web, click pages, fill forms, read on-page content, log into a site, or verify UI in a real browser, you MUST use the browser_* tools — do not only describe steps or ask the user to open a browser manually.',
   'Goal phases: (1) reach the target page once, (2) stay and observe/extract, (3) answer the user. Do not keep navigating without a new user goal.',
   'Preferred loop: browser_navigate (or reuse a tab) → browser_wait if slow → browser_snapshot → click/type/scroll using listed refs → browser_snapshot or browser_extract again.',

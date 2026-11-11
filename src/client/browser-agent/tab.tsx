@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { GuideArtworkBrowser } from '@deepseek-ai/dsh-client-ui-primitives'
-import { BROWSER_AGENT_BROWSERS, resolveBrowserAgentBrowser } from '../../config.ts'
+import {
+  browserAgentBrowsersForPlatform,
+  coerceBrowserAgentBrowserForPlatform,
+  detectUiPlatform,
+  resolveBrowserAgentBrowser,
+} from '../../config.ts'
 import type { BrowserAgentBrowser } from '../../config.ts'
 import type { BrowserAgentSnapshot } from '../../host/rpc.ts'
 import { quoteSelectedText } from '../quote/insert.ts'
@@ -28,17 +33,33 @@ function browserLabel(browser: BrowserAgentBrowser, t: TranslateNS<'agent-enhanc
       return t('browserAgentBrowser_chrome')
     case 'edge':
       return t('browserAgentBrowser_edge')
-    default:
+    case 'safari':
+      return t('browserAgentBrowser_safari')
+    case 'auto':
       return t('browserAgentBrowser_auto')
+    default: {
+      const _exhaustive: never = browser
+      return _exhaustive
+    }
   }
+}
+
+function isLaunchedBrowser(
+  value: string | null | undefined,
+): value is 'chrome' | 'edge' | 'safari' {
+  return value === 'chrome' || value === 'edge' || value === 'safari'
 }
 
 export function BrowserAgentTab(props: BrowserAgentTabProps) {
   const { remote, browserPreference, persistBrowserPreference, t } = props
+  const uiPlatform = detectUiPlatform()
+  const browserOptions = browserAgentBrowsersForPlatform(uiPlatform)
   const [snapshot, setSnapshot] = useState<BrowserAgentSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
   const [hint, setHint] = useState<string | null>(null)
-  const [pick, setPick] = useState<BrowserAgentBrowser>(() => browserPreference())
+  const [pick, setPick] = useState<BrowserAgentBrowser>(() => (
+    coerceBrowserAgentBrowserForPlatform(browserPreference(), uiPlatform)
+  ))
 
   useEffect(() => {
     let cancelled = false
@@ -46,7 +67,7 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
       try {
         const next = await agentEnhancerBrowserAgentSnapshot.invoke(remote())
         // Do NOT setPick(next.browser) here — a 1s poll was resetting the user's
-        // Chrome/Edge choice back to the previous host value before Launch.
+        // browser choice back to the previous host value before Launch.
         if (!cancelled) setSnapshot(next)
       } catch {
         if (!cancelled) setSnapshot(null)
@@ -76,10 +97,10 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
       }
       const launched = result.browser ?? result.snapshot.launchedBrowser
       // Keep picker on what we asked for (and what actually launched).
-      if (launched === 'chrome' || launched === 'edge') setPick(launched)
+      if (isLaunchedBrowser(launched)) setPick(launched)
       else setPick(browser)
       persistBrowserPreference?.(browser)
-      setHint(launched === 'chrome' || launched === 'edge'
+      setHint(isLaunchedBrowser(launched)
         ? `${t('browserAgentLaunchStarted')} (${browserLabel(launched, t)})`
         : t('browserAgentLaunchStarted'))
     } finally {
@@ -144,7 +165,7 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
               persistBrowserPreference?.(next)
             }}
           >
-            {BROWSER_AGENT_BROWSERS.map(browser => (
+            {browserOptions.map(browser => (
               <option key={browser} value={browser}>
                 {browserLabel(browser, t)}
               </option>

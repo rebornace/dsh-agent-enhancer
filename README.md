@@ -27,12 +27,12 @@
 | **上下文占用** | 占用环 → 右侧明细；可一键压缩上下文 | <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/context-meter.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/context-meter.png" alt="上下文占用" width="56" height="56" /></a> <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/context-details.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/context-details.png" alt="上下文明细" width="56" height="56" /></a> |
 | **路由** | 模型列表选 **Auto**；设置映射 Instant / Thinking / Pro | <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/auto-model-picker.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/auto-model-picker.png" alt="Auto 选择" width="56" height="56" /></a> <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/auto-routing-settings.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/auto-routing-settings.png" alt="Auto 路由" width="56" height="56" /></a> |
 | **网页聊天** | 设置打开（**默认开**）→ 左栏打开官方网页版聊天；「转到工作区」可选**当前对话** / **分享链接** → 预览后在所选工作区**新建**会话（可新建工作区）。从当前页导入可能不完整；优先分享链接拿完整单段；不把网页额度接到本地 API | <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/web-chat-left-nav.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/web-chat-left-nav.png" alt="网页聊天入口" width="56" height="56" /></a> <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/web-chat-to-workspace.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/web-chat-to-workspace.png" alt="转到工作区" width="56" height="56" /></a> |
-| **浏览器控制** | 设置打开（默认关）→ 选专用浏览器（自动 / Chrome / Edge）；对话或 Alt+点击可**自动启动**独立窗口；设置或侧栏切换立即生效；变更需批准；登录墙点「我已完成」。不同于官方侧栏网页浏览 | <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/browser-agent-guide.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/browser-agent-guide.png" alt="浏览器控制" width="56" height="56" /></a> |
+| **浏览器控制** | 设置打开（默认关）→ 选专用浏览器：**Mac** 自动 / Chrome / Safari；**Windows** 自动 / Chrome / Edge。对话或 Alt+点击可**自动启动**独立窗口；设置或侧栏切换立即生效；变更需批准；登录墙点「我已完成」。不同于官方侧栏网页浏览 | <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/browser-agent-guide.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/browser-agent-guide.png" alt="浏览器控制" width="56" height="56" /></a> |
 | **设置** | **功能** 十五开关 · **模型与路由** 辅助模型 / Auto · **关于** 更新 | <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/settings.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/settings.png" alt="设置" width="56" height="56" /></a> |
 
-**边界（精简）：** 划词引用不调模型；流式回复与 HTML/PDF/Excel 预览暂不可划词。检查点恢复仅覆盖对话与已跟踪文本文件，不恢复进程 / 终端 / 未跟踪 / 二进制。附加目录不扩大智能体可访问范围。技能与连接器在左侧栏（「插件」下方）；技能可从 GitHub / Zip 安装到 `.agents/skills` 或 `.dsh/skills`，用 `/` 调用；连接器用 `mcp.json` 管理。删除会话不可恢复。上下文占用为估算；用量「约 ¥」非发票。暂停后续只拦住**之后**尚未发生的模型调用。运行通知走系统通知中心，失败则回焦后补提示。网页聊天内嵌 `chat.deepseek.com`（首次需网页登录）；转到工作区支持当前对话或分享链接（新建带标题的工作会话，可新建工作区）；不把网页额度接到本地 API。浏览器控制使用专用 Chrome / Edge（独立配置可保留登录）；对话或 Alt+点击可自动启动；变更需批准；不自动绕过登录墙；关闭开关即卸工具并关掉专用浏览器。
+**边界（精简）：** 划词引用不调模型；流式回复与 HTML/PDF/Excel 预览暂不可划词。检查点恢复仅覆盖对话与已跟踪文本文件，不恢复进程 / 终端 / 未跟踪 / 二进制。附加目录不扩大智能体可访问范围。技能与连接器在左侧栏（「插件」下方）；技能可从 GitHub / Zip 安装到 `.agents/skills` 或 `.dsh/skills`，用 `/` 调用；连接器用 `mcp.json` 管理。删除会话不可恢复。上下文占用为估算；用量「约 ¥」非发票。暂停后续只拦住**之后**尚未发生的模型调用。运行通知走系统通知中心，失败则回焦后补提示。网页聊天内嵌 `chat.deepseek.com`（首次需网页登录）；转到工作区支持当前对话或分享链接（新建带标题的工作会话，可新建工作区）；不把网页额度接到本地 API。浏览器控制使用平台专用窗口（Mac：Safari/WebKit 或 Chrome；Windows：Chrome 或 Edge；独立配置可保留登录）；Mac 上 Safari 选项驱动的是 Playwright WebKit（Safari 引擎），**不是**日常 Safari.app 本体；对话或 Alt+点击可自动启动；变更需批准；不自动绕过登录墙；关闭开关即卸工具并关掉专用浏览器。
 
-功能页开关：`history` · `optimize` · `predict` · `quote` · `rollback` · `softPause` · `runAlerts` · `contextInspect` · `usage` · `sessionDelete` · `fileEdit` · `instructionsSkills` · `mcpConnectors` · `webChatBridge`（均默认开；附加目录随 `fileEdit`；网页聊天：转到工作区——当前对话 / 分享链接，可新建工作区）· `browserAgent`（**默认关**；专用 Chrome / Edge；变更批准仅弹框）。
+功能页开关：`history` · `optimize` · `predict` · `quote` · `rollback` · `softPause` · `runAlerts` · `contextInspect` · `usage` · `sessionDelete` · `fileEdit` · `instructionsSkills` · `mcpConnectors` · `webChatBridge`（均默认开；附加目录随 `fileEdit`；网页聊天：转到工作区——当前对话 / 分享链接，可新建工作区）· `browserAgent`（**默认关**；Mac：`auto`/`chrome`/`safari`；Windows：`auto`/`chrome`/`edge`；变更批准仅弹框）。
 
 ---
 
@@ -70,6 +70,21 @@
 corepack pnpm install --frozen-lockfile
 corepack pnpm check   # typecheck + test + build + 打包校验
 ```
+
+**Mac 本地联调 Desktop：**
+
+```bash
+# 可选：Safari/WebKit 引擎（Auto 优先 / 锁定 Safari 时需要）
+npx playwright install webkit
+
+# 退出 Desktop（含托盘）后 link 本地包
+./scripts/mac-desktop-link.sh
+# 等价：corepack pnpm desktop:link → 重启 DeepSeek Harness
+```
+
+Mac 上若 PATH 没有 `dsh`，可用 App 内 CLI：  
+`/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`  
+（插件内更新探测也会尝试该路径。）
 
 `src/host/` 服务端 · `src/client/` UI · `tests/` · `lib/` 构建产物 · `docs/images/` 截图（`thumbs/` 由 `scripts/make-readme-thumbs.py` 生成）。
 

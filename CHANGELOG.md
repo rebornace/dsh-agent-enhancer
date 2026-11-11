@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Added
+
+- **浏览器 Agent · 平台菜单：** Mac 提供 `auto` / `chrome` / `safari`（不再提供 Edge）；Windows 仍为 `auto` / `chrome` / `edge`。旧配置跨平台自动映射（Mac 上 `edge`→`safari`，Windows 上 `safari`→`edge`）。
+- **浏览器 Agent · Safari：** Mac 锁定 / Auto 优先走 Playwright **WebKit**（Safari 引擎专用窗口；Playwright 无法驱动 Safari.app 本体）。需本机有 Safari，且已安装 `npx playwright install webkit`。
+- **更新探测 · Mac CLI：** `probeDsh` / 自动更新会尝试 App 包内 `…/DeepSeek Harness.app/…/runtime/cli/bin/dsh`、`~/Applications/…`、`DSH_CLI`，不再只依赖 PATH 上的裸 `dsh`。
+- **Mac 开发脚本：** `scripts/mac-desktop-link.sh`（退出 Desktop → `desktop:link`）。
+
+### Changed
+
+- **浏览器 Agent · Auto 顺序：** Mac `webkit`→`chrome`；Windows 仍 `msedge`→`chrome`。Auto 按通道隔离 profile（`profile-auto-webkit` / `profile-auto-chrome` / …），避免 Chromium 与 WebKit 共用 user-data。
+- **浏览器路径：** Mac 候选含 `/Applications` 与 `~/Applications`（Chrome / Canary / Chromium；Safari）。
+
+### Fixed
+
+- **浏览器 Agent · Auto 开/关循环：** Auto 回退到 Chrome 后，每轮 Agent 工具仍强制要求第一通道 WebKit，导致反复拆窗重开。现接受偏好允许的任一已启动通道，并在成功回退后保持粘性。
+- **构建：** `tsconfig.build.json` 排除 `src/**/*.test.ts(x)`，测试文件不再进入声明产物。
+
+### Docs
+
+- README 中英文、AGENTS：浏览器平台差异、Safari/WebKit 边界、Mac 开发联调说明。
+
 ## 0.3.10 - 2026-11-09
 
 ### Added

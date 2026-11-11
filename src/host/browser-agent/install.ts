@@ -5,9 +5,12 @@ import { BrowserApprovalGate } from './approval.ts'
 import type { BrowserDriver, BrowserDriverStatus } from './driver.ts'
 import { BrowserHumanGate } from './human-gate.ts'
 import {
+  BROWSER_AGENT_PROFILE_SLOTS,
   browserAgentProfileDirFor,
-  playwrightChannelOrder,
+  browserAgentProfileSlotDir,
+  playwrightChannelSatisfiesPreference,
   stopAgentBrowserProcesses,
+  type PlaywrightChannel,
 } from './launch.ts'
 import { PlaywrightDriver } from './playwright-driver.ts'
 import { registerBrowserAgentPrompt } from './prompt.ts'
@@ -93,8 +96,8 @@ export function installBrowserAgent(
   )
 
   const stopAllProfileSlots = () => {
-    for (const slot of ['auto', 'chrome', 'edge'] as const) {
-      stopAgentBrowserProcesses(browserAgentProfileDirFor(options.profileRoot, slot))
+    for (const slot of BROWSER_AGENT_PROFILE_SLOTS) {
+      stopAgentBrowserProcesses(browserAgentProfileSlotDir(options.profileRoot, slot))
     }
   }
 
@@ -147,8 +150,12 @@ export function installBrowserAgent(
     const status = activeDriver.status()
     // Cold driver for this preference — ensureReady can launch in place.
     if (!status.ready) return true
-    const want = playwrightChannelOrder(preference, process.platform)[0]!
-    return status.endpoint === `playwright:${want}`
+    // Accept any channel allowed by the preference (auto may keep Chrome after
+    // a WebKit miss — do not tear down every Agent tool tick).
+    const endpoint = status.endpoint ?? ''
+    if (!endpoint.startsWith('playwright:')) return false
+    const channel = endpoint.slice('playwright:'.length) as PlaywrightChannel
+    return playwrightChannelSatisfiesPreference(channel, preference, process.platform)
   }
 
   const createDriver = (_preference: BrowserAgentBrowser) => {

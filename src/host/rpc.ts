@@ -640,10 +640,10 @@ export type BrowserAgentAuditEntryWire = z.infer<typeof browserAgentAuditEntrySc
 
 export const browserAgentSnapshotSchema = z.strictObject({
   enabled: z.boolean(),
-  /** Settings preference (auto / chrome / edge). */
-  browser: z.enum(['auto', 'chrome', 'edge']),
+  /** Settings preference (auto / chrome / edge / safari). */
+  browser: z.enum(['auto', 'chrome', 'edge', 'safari']),
   /** Actually launched channel once ready; null when not running. */
-  launchedBrowser: z.enum(['chrome', 'edge']).nullable(),
+  launchedBrowser: z.enum(['chrome', 'edge', 'safari']).nullable(),
   /** Shipping driver (Playwright only after MV3 retirement). */
   driver: z.literal('playwright'),
   allowedOrigins: z.array(z.string()),
@@ -773,7 +773,7 @@ const browserAgentQuotePageResultCodec = codec(
 )
 
 export const browserAgentLaunchBrowserRequestSchema = z.strictObject({
-  browser: z.enum(['auto', 'chrome', 'edge']).optional(),
+  browser: z.enum(['auto', 'chrome', 'edge', 'safari']).optional(),
 })
 export type BrowserAgentLaunchBrowserRequest = z.infer<typeof browserAgentLaunchBrowserRequestSchema>
 const browserAgentLaunchBrowserRequestCodec = codec(
@@ -783,7 +783,7 @@ const browserAgentLaunchBrowserRequestCodec = codec(
 
 export const browserAgentLaunchBrowserResultSchema = z.strictObject({
   ok: z.boolean(),
-  browser: z.enum(['chrome', 'edge']).optional(),
+  browser: z.enum(['chrome', 'edge', 'safari']).optional(),
   executable: z.string().optional(),
   profileDir: z.string().min(1),
   error: z.string().optional(),
@@ -797,7 +797,7 @@ const browserAgentLaunchBrowserResultCodec = codec(
 
 /** Immediate live preference sync (sidebar select) so Agent tools do not wait on Cordis. */
 export const browserAgentSetBrowserRequestSchema = z.strictObject({
-  browser: z.enum(['auto', 'chrome', 'edge']),
+  browser: z.enum(['auto', 'chrome', 'edge', 'safari']),
 })
 export type BrowserAgentSetBrowserRequest = z.infer<typeof browserAgentSetBrowserRequestSchema>
 const browserAgentSetBrowserRequestCodec = codec(
@@ -807,7 +807,7 @@ const browserAgentSetBrowserRequestCodec = codec(
 
 export const browserAgentSetBrowserResultSchema = z.strictObject({
   ok: z.boolean(),
-  browser: z.enum(['auto', 'chrome', 'edge']),
+  browser: z.enum(['auto', 'chrome', 'edge', 'safari']),
   snapshot: browserAgentSnapshotSchema,
 })
 export type BrowserAgentSetBrowserResult = z.infer<typeof browserAgentSetBrowserResultSchema>

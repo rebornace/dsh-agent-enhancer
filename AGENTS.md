@@ -2,9 +2,34 @@
 
 ## Iteration priority
 
-Post-`0.3.8` current P0 is **L7 browser agent**. **v1 main path is landed** (Playwright dedicated Chrome/Edge, `browser_*`, dialog approval, auto-launch, Settings hard-switch; MV3 bridge retired). Remaining: multi-tab / login-wall polish. Benchmark Cursor / Claude in Chrome. See [`docs/roadmap.md`](docs/roadmap.md) and [`docs/architecture/browser-agent-playwright.md`](docs/architecture/browser-agent-playwright.md). Still deferred: Checkpoint/Rewind deep polish, approval UX parallel product, memory/prefs product. Do not ship a second “viewer-only” sidebar browser.
+Post-`0.3.8` current P0 is **L7 browser agent**. **v1 main path is landed** (Playwright dedicated browser, `browser_*`, dialog approval, auto-launch, Settings hard-switch; MV3 bridge retired). **Mac platform path is landed** (Safari/WebKit menu + Auto sticky fallback; no Edge on Mac). Remaining: multi-tab / login-wall polish; WebKit install UX on fresh Macs. Benchmark Cursor / Claude in Chrome. See [`docs/roadmap.md`](docs/roadmap.md) and [`docs/architecture/browser-agent-playwright.md`](docs/architecture/browser-agent-playwright.md). Still deferred: Checkpoint/Rewind deep polish, approval UX parallel product, memory/prefs product. Do not ship a second “viewer-only” sidebar browser.
 
 **Web chat (`webChatBridge`)** main path is also landed: left-nav embed of `chat.deepseek.com`, Move to workspace via **current conversation** or **share link** (preview → titled new workspace session; optional create workspace). Do **not** reintroduce all-history / account-bulk import. Screenshot assets: `docs/images/web-chat-left-nav.png`, `docs/images/web-chat-to-workspace.png`.
+
+## Browser agent — platform rules
+
+| OS | Settings / sidebar choices | Auto order |
+| --- | --- | --- |
+| **macOS** | `auto` · `chrome` · `safari` (no Edge) | WebKit → Chrome |
+| **Windows** | `auto` · `chrome` · `edge` | Edge → Chrome |
+| **Linux** | `auto` · `chrome` | Chrome |
+
+- Safari option launches Playwright **WebKit** (Safari engine), **not** branded `Safari.app`. Require `/Applications/Safari.app` as a platform gate; require `npx playwright install webkit` for the engine binary.
+- Cross-OS coerce: saved `edge` on Mac → `safari`; saved `safari` on Windows → `edge`.
+- Auto isolates profiles per channel (`profile-auto-webkit`, `profile-auto-chrome`, …). Never share one user-data-dir across Chromium and WebKit.
+- **Sticky Auto:** once Auto successfully falls back (e.g. to Chrome), keep that channel for the running driver. Do **not** tear down every Agent tool tick just because WebKit is listed first — that caused open/close flaps.
+- Mac Chrome/Safari candidates check both `/Applications` and `~/Applications`.
+
+## Mac Desktop link
+
+```bash
+npx playwright install webkit   # if testing Safari / Mac Auto
+./scripts/mac-desktop-link.sh   # quits Harness → pnpm desktop:link
+```
+
+Bundled CLI (when not on PATH):  
+`/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`  
+Host update probing (`probeDsh`) also tries App + `~/Applications` + `DSH_CLI`.
 
 ## UI must imitate official DSH source
 

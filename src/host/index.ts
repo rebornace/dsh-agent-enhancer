@@ -7,11 +7,20 @@ import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types
 import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
 import {
+  coerceBrowserAgentBrowserForPlatform,
   resolveBrowserAgentBrowser,
   resolveRunAlertsLevel,
   resolveSettings,
 } from '../config.ts'
-import type { EnhancerSettings } from '../config.ts'
+import type { BrowserAgentBrowser, EnhancerSettings } from '../config.ts'
+
+/** Resolve + coerce saved browser preference for this host OS (Mac↔Safari, Win↔Edge). */
+function hostBrowserPreference(value: string | undefined): BrowserAgentBrowser {
+  return coerceBrowserAgentBrowserForPlatform(
+    resolveBrowserAgentBrowser(value),
+    process.platform,
+  )
+}
 import { installBrowserAgent } from './browser-agent/install.ts'
 import type { BrowserAgentRuntime } from './browser-agent/install.ts'
 import { defaultBrowserAgentProfileDir } from './browser-agent/launch.ts'
@@ -328,13 +337,13 @@ export class AgentEnhancerService extends TypertRemoteService {
     private readonly browserAgent: BrowserAgentRuntime | null = null,
     private readonly browserAgentSettings: () => {
       readonly enabled: boolean
-      readonly browser: 'auto' | 'chrome' | 'edge'
+      readonly browser: 'auto' | 'chrome' | 'edge' | 'safari'
     } = () => ({
       enabled: false,
       browser: 'auto',
     }),
     /** Apply an explicit launch preference (client form) before ensureReady. */
-    private readonly setBrowserAgentBrowser: (browser: 'auto' | 'chrome' | 'edge') => void = () => undefined,
+    private readonly setBrowserAgentBrowser: (browser: 'auto' | 'chrome' | 'edge' | 'safari') => void = () => undefined,
     private readonly browserAgentProfileDir: string = defaultBrowserAgentProfileDir(
       join(homedir(), '.dsh', 'profiles', 'desktop', 'plugin-data', PACKAGE_NAME),
     ),
@@ -368,7 +377,9 @@ export class AgentEnhancerService extends TypertRemoteService {
       ? 'edge' as const
       : endpoint === 'playwright:chrome'
         ? 'chrome' as const
-        : null
+        : endpoint === 'playwright:webkit'
+          ? 'safari' as const
+          : null
     return {
       enabled: settings.enabled,
       browser: settings.browser,
@@ -1208,7 +1219,7 @@ export class AgentEnhancerService extends TypertRemoteService {
       }
     }
     // Client-selected browser is authoritative for this launch (not cached Cordis config).
-    const preference = request.browser ?? settings.browser
+    const preference = hostBrowserPreference(request.browser ?? settings.browser)
     this.setBrowserAgentBrowser(preference)
     const launched = await this.browserAgent?.launchDedicated(undefined, preference)
     const snapshot = this.browserSnapshotNow()
@@ -1226,8 +1237,9 @@ export class AgentEnhancerService extends TypertRemoteService {
   ): Promise<BrowserAgentSetBrowserResult> {
     this.assertOwner()
     // Immediate live mirror — do not wait for Cordis internal/update (Settings
-    // write alone left Agent tools on the previous Chrome/Edge until Launch).
-    this.setBrowserAgentBrowser(request.browser)
+    // write alone left Agent tools on the previous browser until Launch).
+    const preference = hostBrowserPreference(request.browser)
+    this.setBrowserAgentBrowser(preference)
     const settings = this.browserAgentSettings()
     if (settings.enabled && this.browserAgent?.driverStatus()?.ready === true) {
       // Already headed: hard-switch now so Settings takes effect without the overlay Launch button.
@@ -1235,7 +1247,7 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
     return {
       ok: true,
-      browser: request.browser,
+      browser: preference,
       snapshot: this.browserSnapshotNow(),
     }
   }
@@ -1356,7 +1368,7 @@ function readSettings(config: Config): EnhancerSettings {
     runAlertsEnabled: config.runAlertsEnabled.get(),
     runAlertsLevel: resolveRunAlertsLevel(config.runAlertsLevel.get()),
     browserAgentEnabled: config.browserAgentEnabled.get(),
-    browserAgentBrowser: resolveBrowserAgentBrowser(config.browserAgentBrowser.get()),
+    browserAgentBrowser: hostBrowserPreference(config.browserAgentBrowser.get()),
     webChatBridgeEnabled: config.webChatBridgeEnabled.get(),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
     mcpConnectorsEnabled: config.mcpConnectorsEnabled.get(),
@@ -1495,7 +1507,7 @@ export function apply(ctx: Context, config: Config): void {
     }),
     browser => {
       // Preference only — do not refresh/remount here. launchDedicated hard-resets.
-      browserAgentLive.browser = resolveBrowserAgentBrowser(browser)
+      browserAgentLive.browser = hostBrowserPreference(browser)
     },
     browserAgentProfileDir,
   )
@@ -1511,8 +1523,8 @@ export function apply(ctx: Context, config: Config): void {
       const prevEnabled = browserAgentLive.enabled
       const prevBrowser = browserAgentLive.browser
       browserAgentLive.enabled = cfg.browserAgentEnabled.get()
-      browserAgentLive.browser = resolveBrowserAgentBrowser(cfg.browserAgentBrowser.get())
-      // Remount only when the feature is toggled on/off — not on every Chrome↔Edge
+      browserAgentLive.browser = hostBrowserPreference(cfg.browserAgentBrowser.get())
+      // Remount only when the feature is toggled on/off — not on every browser
       // change (that raced with Launch and left the first browser stuck).
       if (prevEnabled !== browserAgentLive.enabled) {
         browserAgent.refresh()
@@ -1521,7 +1533,7 @@ export function apply(ctx: Context, config: Config): void {
         && prevBrowser !== browserAgentLive.browser
         && browserAgent.driverStatus()?.ready === true
       ) {
-        // Cordis Settings Chrome↔Edge while headed: hard-align without requiring Launch.
+        // Cordis Settings browser switch while headed: hard-align without requiring Launch.
         void browserAgent.alignToPreference().catch(error => {
           const detail = error instanceof Error ? error.message : String(error)
           ctx.logger.warn(`agent-enhancer: browser preference align after settings failed: ${detail}`)

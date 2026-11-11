@@ -3,13 +3,27 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-export type BrowserKind = 'chrome' | 'edge'
+export type BrowserKind = 'chrome' | 'edge' | 'safari'
 export type BrowserPreference = 'auto' | BrowserKind
+/** Playwright launch channel tokens used in driver status endpoints. */
+export type PlaywrightChannel = 'chrome' | 'msedge' | 'webkit'
 
 export interface ResolvedBrowser {
   readonly kind: BrowserKind
   readonly executable: string
 }
+
+/** Profile directory slots that may hold a headed Playwright window. */
+export const BROWSER_AGENT_PROFILE_SLOTS = [
+  'auto',
+  'auto-chrome',
+  'auto-msedge',
+  'auto-webkit',
+  'chrome',
+  'edge',
+  'safari',
+] as const
+export type BrowserAgentProfileSlot = typeof BROWSER_AGENT_PROFILE_SLOTS[number]
 
 /** Read Windows env with both PROCESSOR-preserved and upper-case keys. */
 export function windowsEnv(name: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
@@ -31,13 +45,30 @@ export function windowsEnv(name: string, env: NodeJS.ProcessEnv = process.env): 
   return undefined
 }
 
+function uniquePaths(paths: readonly string[]): string[] {
+  const out: string[] = []
+  for (const path of paths) {
+    if (path.trim() === '' || out.includes(path)) continue
+    out.push(path)
+  }
+  return out
+}
+
+function darwinAppExecutable(appName: string, binaryName: string, home: string): string[] {
+  const relative = join(`${appName}.app`, 'Contents', 'MacOS', binaryName)
+  return [
+    join('/Applications', relative),
+    join(home, 'Applications', relative),
+  ]
+}
+
 /** Candidate chrome.exe / msedge.exe paths for the current platform. */
 export function browserExecutableCandidates(
   kind: BrowserKind,
   platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
 ): readonly string[] {
-  const home = homedir()
+  const home = env.HOME?.trim() || env.USERPROFILE?.trim() || homedir()
 
   if (platform === 'win32') {
     const local = windowsEnv('LocalAppData', env)
@@ -58,6 +89,7 @@ export function browserExecutableCandidates(
         join(home, 'AppData', 'Local', 'Google', 'Chrome', 'Application', 'chrome.exe'),
       ]
     }
+    if (kind === 'safari') return []
     return [
       ...roots.map(root => join(root, 'Microsoft', 'Edge', 'Application', 'msedge.exe')),
       'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
@@ -67,14 +99,33 @@ export function browserExecutableCandidates(
   }
 
   if (platform === 'darwin') {
+    // Homebrew Cask usually links into /Applications; also cover ~/Applications.
+    // Mac agent browsers: Chrome + system Safari (automation via Playwright WebKit).
     if (kind === 'chrome') {
-      return ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']
+      return uniquePaths([
+        ...darwinAppExecutable('Google Chrome', 'Google Chrome', home),
+        ...darwinAppExecutable('Google Chrome Canary', 'Google Chrome Canary', home),
+        ...darwinAppExecutable('Chromium', 'Chromium', home),
+      ])
     }
-    return ['/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge']
+    if (kind === 'safari') {
+      return uniquePaths([
+        ...darwinAppExecutable('Safari', 'Safari', home),
+      ])
+    }
+    // Edge is not offered on Mac menus; keep paths for cross-platform resolve tests.
+    return uniquePaths([
+      ...darwinAppExecutable('Microsoft Edge', 'Microsoft Edge', home),
+      ...darwinAppExecutable('Microsoft Edge Beta', 'Microsoft Edge Beta', home),
+      ...darwinAppExecutable('Microsoft Edge Dev', 'Microsoft Edge Dev', home),
+    ])
   }
 
   if (kind === 'chrome') {
     return ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser']
+  }
+  if (kind === 'safari') {
+    return []
   }
   return ['/usr/bin/microsoft-edge', '/usr/bin/microsoft-edge-stable']
 }
@@ -86,10 +137,16 @@ function lookUpOnPath(
   exists: (path: string) => boolean,
 ): string | null {
   const names = platform === 'win32'
-    ? (kind === 'chrome' ? ['chrome.exe', 'chrome'] : ['msedge.exe', 'msedge'])
+    ? (kind === 'chrome'
+      ? ['chrome.exe', 'chrome']
+      : kind === 'edge'
+        ? ['msedge.exe', 'msedge']
+        : [])
     : (kind === 'chrome'
       ? ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser']
-      : ['microsoft-edge', 'microsoft-edge-stable', 'msedge'])
+      : kind === 'edge'
+        ? ['microsoft-edge', 'microsoft-edge-stable', 'msedge']
+        : [])
   for (const name of names) {
     const hit = where(name)
     if (hit !== null && exists(hit)) return hit
@@ -128,9 +185,13 @@ export function resolveBrowserExecutable(
   const exists = options.exists ?? existsSync
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
-  // Windows still prefers Edge — same channel Playwright uses by default.
+  // Win → Edge, Mac → Safari, else Chrome.
   const order: readonly BrowserKind[] = preference === 'auto'
-    ? (platform === 'win32' ? ['edge', 'chrome'] : ['chrome', 'edge'])
+    ? (platform === 'win32'
+      ? ['edge', 'chrome']
+      : platform === 'darwin'
+        ? ['safari', 'chrome']
+        : ['chrome'])
     : [preference]
 
   for (const kind of order) {
@@ -151,26 +212,80 @@ export function defaultBrowserAgentProfileDir(pluginDataPackageRoot: string): st
   return browserAgentProfileDirFor(pluginDataPackageRoot, 'auto')
 }
 
+/** Absolute profile directory for a known slot name. */
+export function browserAgentProfileSlotDir(
+  pluginDataPackageRoot: string,
+  slot: BrowserAgentProfileSlot,
+): string {
+  return join(pluginDataPackageRoot, 'browser-agent', `profile-${slot}`)
+}
+
 /**
- * Separate persistent profiles per browser preference.
- * Sharing one dir across Edge↔Chrome makes the second launch fail and silently fall back.
+ * Separate persistent profiles per browser preference / auto channel.
+ * Sharing one dir across Chromium↔WebKit (or Edge↔Chrome) makes the second
+ * launch fail or flap open/close — auto must isolate by channel.
  */
 export function browserAgentProfileDirFor(
   pluginDataPackageRoot: string,
   preference: BrowserPreference,
+  channel?: PlaywrightChannel,
 ): string {
-  const slot = preference === 'chrome' || preference === 'edge' ? preference : 'auto'
-  return join(pluginDataPackageRoot, 'browser-agent', `profile-${slot}`)
+  if (preference === 'chrome' || preference === 'edge' || preference === 'safari') {
+    return browserAgentProfileSlotDir(pluginDataPackageRoot, preference)
+  }
+  if (channel === 'chrome' || channel === 'msedge' || channel === 'webkit') {
+    return browserAgentProfileSlotDir(pluginDataPackageRoot, `auto-${channel}`)
+  }
+  return browserAgentProfileSlotDir(pluginDataPackageRoot, 'auto')
 }
 
-/** Channel try-order for Playwright. Explicit chrome/edge never falls back. */
+/**
+ * Channel try-order for Playwright.
+ * Explicit chrome / edge / safari never falls back.
+ * Auto: Windows → Edge then Chrome; Mac → WebKit(Safari) then Chrome.
+ */
 export function playwrightChannelOrder(
   preference: BrowserPreference,
   platform: NodeJS.Platform = process.platform,
-): ReadonlyArray<'msedge' | 'chrome'> {
+): readonly PlaywrightChannel[] {
   if (preference === 'chrome') return ['chrome']
   if (preference === 'edge') return ['msedge']
-  return platform === 'win32' ? ['msedge', 'chrome'] : ['chrome', 'msedge']
+  if (preference === 'safari') return ['webkit']
+  if (platform === 'win32') return ['msedge', 'chrome']
+  if (platform === 'darwin') return ['webkit', 'chrome']
+  return ['chrome']
+}
+
+/**
+ * True when a running Playwright channel still satisfies the settings preference.
+ * Critical for `auto`: a Chrome fallback must not be torn down every tick just
+ * because WebKit is listed first.
+ */
+export function playwrightChannelSatisfiesPreference(
+  channel: PlaywrightChannel | null | undefined,
+  preference: BrowserPreference,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  if (channel === null || channel === undefined) return false
+  return playwrightChannelOrder(preference, platform).includes(channel)
+}
+
+/** Map a Playwright channel token back to the UI/browser kind. */
+export function browserKindFromPlaywrightChannel(
+  channel: PlaywrightChannel,
+): Exclude<BrowserKind, never> {
+  switch (channel) {
+    case 'chrome':
+      return 'chrome'
+    case 'msedge':
+      return 'edge'
+    case 'webkit':
+      return 'safari'
+    default: {
+      const _exhaustive: never = channel
+      return _exhaustive
+    }
+  }
 }
 
 /**

@@ -114,14 +114,14 @@ function maskTypeSummary(text: string): string {
 
 export interface BrowserToolsOptions {
   /**
-   * Live driver, or a getter. Agent tools must use a getter so Chrome↔Edge
+   * Live driver, or a getter. Agent tools must use a getter so browser
    * hard-resets (new PlaywrightDriver instance) are visible mid-conversation.
    */
   readonly driver: BrowserDriver | (() => BrowserDriver)
   /**
    * Optional host hook: hard-align running browser to the current preference
    * before ensureReady. Required so dialog `browser_navigate` honors Settings /
-   * sidebar Chrome↔Edge without requiring the Launch button.
+   * sidebar browser switches without requiring the Launch button.
    */
   readonly alignPreference?: (startUrl?: string) => Promise<void>
   readonly approval: BrowserApprovalGate
@@ -170,7 +170,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
   }
 
   const ensureConnected = async (startUrl?: string) => {
-    // Align first so Agent dialog opens use the latest Chrome/Edge preference.
+    // Align first so Agent dialog opens use the latest browser preference.
     if (options.alignPreference !== undefined) {
       await options.alignPreference(startUrl)
       return
@@ -381,7 +381,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   disposers.push(ctx.tools.register(textTool(
     'browser_status',
-    'Check the Desktop dedicated-browser bridge (Chrome/Edge + extension): connection, bound tab URL/title/tabId. Use this for any real-browser / webpage / on-page task. Auto-launches the dedicated browser when disconnected — do not ask the user to launch manually first.',
+    'Check the Desktop dedicated-browser bridge (Mac: Safari/Chrome; Windows: Chrome/Edge): connection, bound tab URL/title/tabId. Use this for any real-browser / webpage / on-page task. Auto-launches the dedicated browser when disconnected — do not ask the user to launch manually first.',
     {},
     async (_args, exec) => {
       guardEnabled()

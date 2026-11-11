@@ -19,3 +19,15 @@ tests/
 THIRD-PARTY-NOTICES.md
 scripts/skills-ui-prototype.html
 extensions/
+
+# Local toolchain / install caches (Mac sandbox & corepack workarounds — do not publish)
+.bin/
+.corepack/
+.pnpm-store/
+
+# OS / editor noise
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example

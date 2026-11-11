@@ -22,8 +22,11 @@ export function resolveRunAlertsLevel(value: string | undefined): RunAlertsLevel
   }
 }
 
-/** Which desktop browser the dedicated agent window launches. */
-export const BROWSER_AGENT_BROWSERS = ['auto', 'chrome', 'edge'] as const
+/**
+ * Which desktop browser the dedicated agent window launches.
+ * Platform menus filter this list — Mac offers Safari instead of Edge.
+ */
+export const BROWSER_AGENT_BROWSERS = ['auto', 'chrome', 'edge', 'safari'] as const
 export type BrowserAgentBrowser = typeof BROWSER_AGENT_BROWSERS[number]
 
 export function resolveBrowserAgentBrowser(value: string | undefined): BrowserAgentBrowser {
@@ -31,10 +34,54 @@ export function resolveBrowserAgentBrowser(value: string | undefined): BrowserAg
     case 'auto':
     case 'chrome':
     case 'edge':
+    case 'safari':
       return value
     default:
       return 'auto'
   }
+}
+
+/** Browser choices shown in Settings / sidebar for the current OS. */
+export function browserAgentBrowsersForPlatform(
+  platform: NodeJS.Platform | string,
+): readonly BrowserAgentBrowser[] {
+  switch (platform) {
+    case 'darwin':
+      return ['auto', 'chrome', 'safari']
+    case 'win32':
+      return ['auto', 'chrome', 'edge']
+    default:
+      return ['auto', 'chrome']
+  }
+}
+
+/**
+ * Map a saved preference onto the current OS menu.
+ * Edge↔Safari swap across Windows/Mac so old settings still make sense.
+ */
+export function coerceBrowserAgentBrowserForPlatform(
+  value: BrowserAgentBrowser,
+  platform: NodeJS.Platform | string,
+): BrowserAgentBrowser {
+  const allowed = browserAgentBrowsersForPlatform(platform)
+  if (allowed.includes(value)) return value
+  if (value === 'edge' && platform === 'darwin') return 'safari'
+  if (value === 'safari' && platform === 'win32') return 'edge'
+  return 'auto'
+}
+
+/** Client-side OS hint (Desktop webview). Prefer navigator; fall back to process. */
+export function detectUiPlatform(): 'darwin' | 'win32' | 'linux' {
+  if (typeof navigator !== 'undefined') {
+    const plat = navigator.platform || ''
+    const ua = navigator.userAgent || ''
+    if (/Mac|iPhone|iPad|iPod/i.test(plat) || /Mac OS X/i.test(ua)) return 'darwin'
+    if (/Win/i.test(plat) || /Windows/i.test(ua)) return 'win32'
+  }
+  if (typeof process !== 'undefined') {
+    if (process.platform === 'darwin' || process.platform === 'win32') return process.platform
+  }
+  return 'linux'
 }
 
 /** Features with dedicated provider/model settings fields. */
@@ -51,7 +98,7 @@ export interface AuxiliaryModelSettings {
 
 export type EnhancerSettings = Readonly<Record<`${ModuleName}Enabled`, boolean>> & {
   readonly runAlertsLevel: RunAlertsLevel
-  /** Dedicated window: auto (Windows prefers Edge), or force Chrome / Edge. */
+  /** Dedicated window: auto (Win→Edge, Mac→Safari), or force a platform browser. */
   readonly browserAgentBrowser: BrowserAgentBrowser
   readonly optimizeProvider: string
   readonly optimizeModel: string
