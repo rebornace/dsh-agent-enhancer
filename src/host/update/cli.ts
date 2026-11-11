@@ -1,7 +1,7 @@
 import { spawn as nodeSpawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { posix as pathPosix } from 'node:path'
 import { PACKAGE_NAME } from '../../identity.ts'
 import type { InstallKind } from './types.ts'
 
@@ -55,7 +55,8 @@ export function dshFromElectronExecPath(execPath: string): string | null {
   const idx = normalized.lastIndexOf(marker)
   if (idx < 0) return null
   const contentsRoot = normalized.slice(0, idx + '/Contents'.length)
-  return join(contentsRoot, 'Resources', 'runtime', 'cli', 'bin', 'dsh')
+  // Keep POSIX separators: Mac App paths must not pick up win32 `\` in CI/tests.
+  return pathPosix.join(contentsRoot, 'Resources', 'runtime', 'cli', 'bin', 'dsh')
 }
 
 /**
@@ -79,7 +80,10 @@ export function dshExecutableCandidates(options: DshResolveOptions = {}): string
   if (platform === 'darwin') {
     push(dshFromElectronExecPath(execPath))
     push('/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh')
-    push(join(home, 'Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'))
+    push(pathPosix.join(
+      home,
+      'Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh',
+    ))
   }
 
   push('dsh')

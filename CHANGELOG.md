@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.11 - 2026-11-11
+
 ### Added
 
 - **浏览器 Agent · 平台菜单：** Mac 提供 `auto` / `chrome` / `safari`（不再提供 Edge）；Windows 仍为 `auto` / `chrome` / `edge`。旧配置跨平台自动映射（Mac 上 `edge`→`safari`，Windows 上 `safari`→`edge`）。
@@ -18,10 +20,11 @@
 
 - **浏览器 Agent · Auto 开/关循环：** Auto 回退到 Chrome 后，每轮 Agent 工具仍强制要求第一通道 WebKit，导致反复拆窗重开。现接受偏好允许的任一已启动通道，并在成功回退后保持粘性。
 - **构建：** `tsconfig.build.json` 排除 `src/**/*.test.ts(x)`，测试文件不再进入声明产物。
+- **跨平台路径：** Mac App / dsh CLI 候选路径改用 `path.posix.join`，避免在 Windows 上跑 Darwin 单测时被改成 `\`。
 
 ### Docs
 
-- README 中英文、AGENTS：浏览器平台差异、Safari/WebKit 边界、Mac 开发联调说明。
+- README 中英文钉到 `0.3.11`；AGENTS：浏览器平台差异、Safari/WebKit 边界、Mac 开发联调说明。
 
 ## 0.3.10 - 2026-11-09
 

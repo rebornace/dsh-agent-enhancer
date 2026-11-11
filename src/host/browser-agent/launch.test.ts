@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   browserAgentProfileDirFor,
@@ -89,14 +90,15 @@ describe('playwrightChannelOrder', () => {
   })
 
   it('isolates auto channel profiles so WebKit and Chrome do not share user-data', () => {
+    // Profile dirs follow the host path style (plugin-data is local FS).
     expect(browserAgentProfileDirFor('/data', 'auto', 'webkit')).toBe(
-      '/data/browser-agent/profile-auto-webkit',
+      join('/data', 'browser-agent', 'profile-auto-webkit'),
     )
     expect(browserAgentProfileDirFor('/data', 'auto', 'chrome')).toBe(
-      '/data/browser-agent/profile-auto-chrome',
+      join('/data', 'browser-agent', 'profile-auto-chrome'),
     )
     expect(browserAgentProfileDirFor('/data', 'safari')).toBe(
-      '/data/browser-agent/profile-safari',
+      join('/data', 'browser-agent', 'profile-safari'),
     )
   })
 })

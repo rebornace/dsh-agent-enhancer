@@ -43,7 +43,7 @@
 | 方式 | 步骤 |
 | --- | --- |
 | **应用内（推荐）** | **设置 → 插件** 搜索 `dsh-agent-enhancer` / **智能体增强** → 安装 → 重启 |
-| **CLI** | `dsh plugin --profile desktop add dsh-agent-enhancer@0.3.10` |
+| **CLI** | `dsh plugin --profile desktop add dsh-agent-enhancer@0.3.11` |
 | **开发** | `corepack pnpm install --frozen-lockfile` → `corepack pnpm desktop:link` → 重启；切回线上：`corepack pnpm desktop:npm` |
 
 可选市场：[dsh-market](https://github.com/dsh-market/dsh-market)（应用内搜 `dshmarket`，勿用 `web` profile）。曾装 `dsh-composer-enhancer` 请先卸再装本包。

@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, posix as pathPosix } from 'node:path'
 
 export type BrowserKind = 'chrome' | 'edge' | 'safari'
 export type BrowserPreference = 'auto' | BrowserKind
@@ -54,11 +54,12 @@ function uniquePaths(paths: readonly string[]): string[] {
   return out
 }
 
+/** Darwin app paths always use `/`, even when unit-tested on Windows. */
 function darwinAppExecutable(appName: string, binaryName: string, home: string): string[] {
-  const relative = join(`${appName}.app`, 'Contents', 'MacOS', binaryName)
+  const relative = pathPosix.join(`${appName}.app`, 'Contents', 'MacOS', binaryName)
   return [
-    join('/Applications', relative),
-    join(home, 'Applications', relative),
+    pathPosix.join('/Applications', relative),
+    pathPosix.join(home, 'Applications', relative),
   ]
 }
 
