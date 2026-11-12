@@ -2574,6 +2574,98 @@
   flex-shrink: 0;
 }
 
+/* Peer: extraFoldersRow / instructionsSkillsRow — tab picker rows */
+.browserAgentTabListSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.browserAgentTabList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.browserAgentTabItem {
+  margin: 0;
+  padding: 0;
+}
+
+.browserAgentTabRow {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.browserAgentTabRow:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.browserAgentTabRowSelected {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.browserAgentTabRow:disabled {
+  cursor: default;
+}
+
+.browserAgentTabId {
+  flex-shrink: 0;
+  min-width: 1.25em;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.browserAgentTabMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.browserAgentTabTitleText {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browserAgentTabUrl {
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browserAgentTabBadge {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+}
+
 .settingsTextarea {
   width: 100%;
   resize: vertical;

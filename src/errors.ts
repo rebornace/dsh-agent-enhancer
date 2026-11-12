@@ -1,5 +1,5 @@
 export const AUXILIARY_ERROR_CODES = [
-  'MODEL_UNAVAILABLE', 'MODEL_FAILED', 'INVALID_OUTPUT', 'SESSION_CHANGED', 'ROLLBACK_FAILED',
+  'MODEL_UNAVAILABLE', 'AUTO_ROUTE_UNCONFIGURED', 'MODEL_FAILED', 'INVALID_OUTPUT', 'SESSION_CHANGED', 'ROLLBACK_FAILED',
   'COMPACT_UNAVAILABLE', 'COMPACT_BUSY', 'COMPACT_FAILED', 'COMPACT_SUMMARY', 'COMPACT_CHANGED',
   'SESSION_BUSY', 'SESSION_DELETE_FAILED',
   'FILE_NOT_FOUND', 'FILE_NOT_TEXT', 'FILE_TOO_LARGE', 'FILE_DENIED', 'FILE_EDIT_FAILED',
@@ -7,6 +7,8 @@ export const AUXILIARY_ERROR_CODES = [
 export type AuxiliaryErrorCode = typeof AUXILIARY_ERROR_CODES[number]
 const MESSAGES: Record<AuxiliaryErrorCode, string> = {
   MODEL_UNAVAILABLE: 'No model is available for Agent Enhance',
+  AUTO_ROUTE_UNCONFIGURED:
+    'Auto routing is not configured. Open Settings → Built-in plugins → Agent Enhancer → Models & routing and map Instant / Thinking / Pro.',
   MODEL_FAILED: 'Auxiliary model request failed',
   INVALID_OUTPUT: 'Auxiliary model returned invalid output',
   SESSION_CHANGED: 'The session changed during the auxiliary request',

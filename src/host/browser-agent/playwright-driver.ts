@@ -204,8 +204,9 @@ export class PlaywrightDriver implements BrowserDriver {
       return null
     }
     if (!existsSync(webkitExe)) {
+      // Stable token for client locale mapping (Mac Safari / Auto WebKit).
       this.lastError =
-        'Playwright WebKit is not installed. Run: npx playwright install webkit'
+        'WEBKIT_MISSING: Playwright WebKit is not installed. Run: npx playwright install webkit'
       return null
     }
     return webkit.launchPersistentContext(profileDir, {
@@ -270,20 +271,32 @@ export class PlaywrightDriver implements BrowserDriver {
       connected: true,
       url: page.url(),
       title: await page.title().catch(() => ''),
-      tabId: 1,
+      tabId: tabIdOf(page.context(), page),
       bound: true,
     }
   }
 
-  async navigate(url: string): Promise<{ readonly url: string; readonly title: string; readonly tabId?: number }> {
-    const page = await this.requirePage()
+  async navigate(
+    url: string,
+    options: { readonly newTab?: boolean } = {},
+  ): Promise<{ readonly url: string; readonly title: string; readonly tabId?: number }> {
+    await this.ensureReady()
+    const context = this.context
+    if (context === null) throw new Error('Playwright context is not available')
+
+    let page = this.page
+    if (options.newTab === true || page === null || page.isClosed()) {
+      page = await context.newPage()
+      this.page = page
+    }
+
     await page.goto(url, { waitUntil: 'domcontentloaded' })
     await settlePage(page)
     this.lastRefs.clear()
     return {
       url: page.url(),
       title: await page.title().catch(() => ''),
-      tabId: 1,
+      tabId: tabIdOf(page.context(), page),
     }
   }
 
@@ -291,7 +304,7 @@ export class PlaywrightDriver implements BrowserDriver {
     const page = await this.requirePage()
     const { body, refs } = await capturePlaywrightSnapshot(page)
     this.lastRefs = new Map(refs)
-    return body
+    return { ...body, tabId: tabIdOf(page.context(), page) }
   }
 
   async extract(input: { readonly focus?: string; readonly maxChars?: number } = {}): Promise<ExtractBody> {
@@ -305,7 +318,7 @@ export class PlaywrightDriver implements BrowserDriver {
       text: clipped.slice(0, maxChars),
       truncated: clipped.length > maxChars,
       ...(input.focus === undefined || input.focus.trim() === '' ? {} : { focus: input.focus.trim() }),
-      tabId: 1,
+      tabId: tabIdOf(page.context(), page),
     }
   }
 
@@ -341,7 +354,7 @@ export class PlaywrightDriver implements BrowserDriver {
         title: await page.title().catch(() => ''),
         changed: pathsDiffer(beforeUrl, after),
         href,
-        tabId: 1,
+        tabId: tabIdOf(page.context(), page),
         warning: "Opened this ref's href after snapshot bound a nearby document link.",
       }
     }
@@ -402,7 +415,7 @@ export class PlaywrightDriver implements BrowserDriver {
       url: afterUrl,
       title: await page.title().catch(() => ''),
       changed,
-      tabId: 1,
+      tabId: tabIdOf(page.context(), page),
       ...(href !== '' ? { href } : {}),
       ...(pageLinks.length > 0 ? { pageLinks: pageLinks.slice(0, 8) } : {}),
       ...(followedHref
@@ -435,7 +448,7 @@ export class PlaywrightDriver implements BrowserDriver {
         title: await page.title().catch(() => ''),
         changed: pathsDiffer(beforeUrl, after),
         href,
-        tabId: 1,
+        tabId: tabIdOf(page.context(), page),
         warning: "Ref stamp missing; opened this ref's href directly.",
       }
     }
@@ -450,7 +463,7 @@ export class PlaywrightDriver implements BrowserDriver {
       url: afterUrl,
       title: await page.title().catch(() => ''),
       changed,
-      tabId: 1,
+      tabId: tabIdOf(page.context(), page),
       ...(href !== '' ? { href } : {}),
       ...(!changed
         ? {
@@ -483,7 +496,7 @@ export class PlaywrightDriver implements BrowserDriver {
       url: page.url(),
       title: await page.title().catch(() => ''),
       changed: false,
-      tabId: 1,
+      tabId: tabIdOf(page.context(), page),
     }
   }
 
@@ -491,7 +504,12 @@ export class PlaywrightDriver implements BrowserDriver {
     const page = await this.requirePage()
     await page.mouse.wheel(0, dy)
     await sleep(80)
-    return { url: page.url(), title: await page.title().catch(() => ''), changed: false, tabId: 1 }
+    return {
+      url: page.url(),
+      title: await page.title().catch(() => ''),
+      changed: false,
+      tabId: tabIdOf(page.context(), page),
+    }
   }
 
   async wait(input: { readonly timeoutMs?: number; readonly text?: string } = {}): Promise<{
@@ -517,25 +535,34 @@ export class PlaywrightDriver implements BrowserDriver {
       url: page.url(),
       title: await page.title().catch(() => ''),
       matched,
-      tabId: 1,
+      tabId: tabIdOf(page.context(), page),
     }
   }
 
   async screenshot(): Promise<{ readonly mime: string; readonly base64: string; readonly tabId?: number }> {
     const page = await this.requirePage()
     const buf = await page.screenshot({ type: 'png', fullPage: false })
-    return { mime: 'image/png', base64: buf.toString('base64'), tabId: 1 }
+    return {
+      mime: 'image/png',
+      base64: buf.toString('base64'),
+      tabId: tabIdOf(page.context(), page),
+    }
   }
 
   async listTabs(): Promise<TabListBody> {
-    await this.ensureReady()
+    // Do not ensureReady here — sidebar polls listTabs and must not auto-launch.
+    // Agent tool path calls ensureConnected / ensureReady before listTabs.
     const pages = this.context?.pages() ?? []
+    if (pages.length === 0) {
+      return { tabs: [], boundTabId: null }
+    }
     return {
       tabs: await Promise.all(pages.map(async (p, index) => ({
         tabId: index + 1,
         title: await p.title().catch(() => ''),
         url: p.url(),
         active: p === this.page,
+        // Session bind is layered in install.listTabs; driver marks the live page.
         bound: p === this.page,
       }))),
       boundTabId: this.page ? (pages.indexOf(this.page) + 1) : null,

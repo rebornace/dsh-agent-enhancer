@@ -1,5 +1,5 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { BrowserAgentSnapshot } from '../../host/rpc.ts'
 import {
   agentEnhancerBrowserAgentAcknowledgeHuman,
@@ -31,6 +31,9 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
   const [snapshot, setSnapshot] = useState<BrowserAgentSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
+  const humanContinueRef = useRef<HTMLButtonElement>(null)
+  const titleId = useId()
+  const bodyId = useId()
 
   useEffect(() => {
     let cancelled = false
@@ -59,9 +62,9 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
     setDismissedKey(key)
   }
 
-  const header = (title: string) => (
+  const header = (title: string, headingId?: string) => (
     <div className={styles.browserAgentHeader}>
-      <div className={styles.browserAgentTitle}>{title}</div>
+      <div className={styles.browserAgentTitle} id={headingId}>{title}</div>
       <button
         type="button"
         className={styles.browserAgentClose}
@@ -88,7 +91,7 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
       }
     }
     return (
-      <div className={styles.browserAgentBanner} role="status">
+      <div className={styles.browserAgentBanner} role="status" aria-live="polite">
         {header(props.t('browserAgentTabConflictTitle'))}
         <p className={styles.browserAgentBody}>
           {props.t('browserAgentTabConflictBody')
@@ -122,7 +125,7 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
       }
     }
     return (
-      <div className={styles.browserAgentBanner} role="status">
+      <div className={styles.browserAgentBanner} role="status" aria-live="polite">
         {header(props.t('browserAgentApproveTitle'))}
         <p className={styles.browserAgentBody}>{pending.summary}</p>
         {pending.url !== undefined && pending.url.trim() !== '' ? (
@@ -156,18 +159,76 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
       }
     }
     return (
-      <div className={styles.browserAgentBanner} role="status">
-        {header(props.t('browserAgentNeedsHumanTitle'))}
-        <p className={styles.browserAgentBody}>{props.t('browserAgentNeedsHumanBody')}</p>
-        <p className={styles.browserAgentMeta}>{snapshot.needsHuman.detail}</p>
-        <div className={styles.browserAgentActions}>
-          <button type="button" className={styles.browserAgentButton} disabled={busy} onClick={() => { void acknowledge() }}>
-            {props.t('browserAgentNeedsHumanContinue')}
-          </button>
-        </div>
-      </div>
+      <NeedsHumanBanner
+        titleId={titleId}
+        bodyId={bodyId}
+        title={props.t('browserAgentNeedsHumanTitle')}
+        body={props.t('browserAgentNeedsHumanBody')}
+        detail={snapshot.needsHuman.detail}
+        continueLabel={props.t('browserAgentNeedsHumanContinue')}
+        closeLabel={props.t('browserAgentClose')}
+        busy={busy}
+        continueRef={humanContinueRef}
+        onDismiss={dismiss}
+        onContinue={() => { void acknowledge() }}
+      />
     )
   }
 
   return null
+}
+
+function NeedsHumanBanner(props: {
+  readonly titleId: string
+  readonly bodyId: string
+  readonly title: string
+  readonly body: string
+  readonly detail: string
+  readonly continueLabel: string
+  readonly closeLabel: string
+  readonly busy: boolean
+  readonly continueRef: { readonly current: HTMLButtonElement | null }
+  readonly onDismiss: () => void
+  readonly onContinue: () => void
+}) {
+  useEffect(() => {
+    props.continueRef.current?.focus()
+  }, [props.continueRef, props.detail])
+
+  return (
+    <div
+      className={styles.browserAgentBanner}
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby={props.titleId}
+      aria-describedby={props.bodyId}
+      aria-live="assertive"
+    >
+      <div className={styles.browserAgentHeader}>
+        <div className={styles.browserAgentTitle} id={props.titleId}>{props.title}</div>
+        <button
+          type="button"
+          className={styles.browserAgentClose}
+          aria-label={props.closeLabel}
+          title={props.closeLabel}
+          onClick={props.onDismiss}
+        >
+          ×
+        </button>
+      </div>
+      <p className={styles.browserAgentBody} id={props.bodyId}>{props.body}</p>
+      <p className={styles.browserAgentMeta}>{props.detail}</p>
+      <div className={styles.browserAgentActions}>
+        <button
+          ref={props.continueRef}
+          type="button"
+          className={styles.browserAgentButton}
+          disabled={props.busy}
+          onClick={props.onContinue}
+        >
+          {props.continueLabel}
+        </button>
+      </div>
+    </div>
+  )
 }

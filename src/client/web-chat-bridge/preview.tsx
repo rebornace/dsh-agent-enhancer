@@ -56,10 +56,18 @@ function remoteErrorMessage(error: unknown, t: TranslateNS<'agent-enhancer'>): s
     switch (error.webChatCode) {
       case 'no-workspace':
         return t('webChatImportNoWorkspace')
+      case 'missing-cwd':
+        return error.message.trim() === ''
+          ? t('webChatImportMissingCwd')
+          : t('webChatImportMissingCwdDetail').replace('{detail}', error.message)
       case 'invalid-transcript':
         return t('webChatImportInvalid')
-      default:
+      case 'import-failed':
         return error.message || t('webChatImportFailed')
+      default: {
+        const _exhaustive: never = error.webChatCode
+        return _exhaustive
+      }
     }
   }
   if (error instanceof Error && error.message.trim() !== '') return error.message

@@ -13,6 +13,7 @@ import {
   type PlaywrightChannel,
 } from './launch.ts'
 import { PlaywrightDriver } from './playwright-driver.ts'
+import type { TabListBody } from './protocol.ts'
 import { registerBrowserAgentPrompt } from './prompt.ts'
 import { BrowserSessionState } from './session-state.ts'
 import { registerBrowserTools } from './tools.ts'
@@ -37,6 +38,22 @@ export interface BrowserAgentRuntime {
    */
   alignToPreference(startUrl?: string): Promise<{ readonly ok: boolean; readonly error?: string }>
   refresh(): void
+  /** Open tabs in the dedicated browser (no auto-launch). */
+  listTabs(): Promise<TabListBody>
+  /**
+   * Focus a tab for Agent ops; optionally bind it to a chat session.
+   * Used by the right-sidebar multi-tab picker.
+   */
+  selectTab(input: {
+    readonly tabId: number
+    readonly sessionId?: string
+  }): Promise<{
+    readonly ok: boolean
+    readonly tabId?: number
+    readonly url?: string
+    readonly title?: string
+    readonly error?: string
+  }>
   resolveTabConflict(decision: 'follow' | 'stay'): Promise<{
     readonly ok: boolean
     readonly tabId?: number
@@ -111,7 +128,14 @@ export function installBrowserAgent(
         ctx.logger.warn(`agent-enhancer: browser driver remount failed: ${detail}`)
       })
       .finally(() => {
-        if (epoch === switchEpoch) switchPending = false
+        if (epoch !== switchEpoch) return
+        switchPending = false
+        // Live reload / rapid toggle: async teardown can finish after a later
+        // refresh(enabled) early-returned on switchPending. Remount if still on.
+        if (options.enabled() && unregisterTools === null) {
+          active = true
+          mount()
+        }
       })
   }
 
@@ -187,7 +211,9 @@ export function installBrowserAgent(
         approval,
         human,
         sessions,
-        enabled: () => active && options.enabled(),
+        // Gate on settings only — `active` flips false during driver align and
+        // must not make browser_* look "disabled" mid-turn.
+        enabled: () => options.enabled(),
         onMutation: options.onBrowserMutation,
       })
     }
@@ -256,7 +282,9 @@ export function installBrowserAgent(
     const want = options.enabled()
 
     if (!want) {
-      if (!active && playwrightDriver === null && !switchPending) return
+      if (!active && playwrightDriver === null && unregisterTools === null && !switchPending) {
+        return
+      }
       active = false
       approval.clearAll()
       human.clearAll()
@@ -264,11 +292,20 @@ export function installBrowserAgent(
       return
     }
 
-    // Preference changes are applied on Launch / Agent align, not here.
-    if (active || playwrightDriver !== null || switchPending) return
-
+    // Enabled: always heal tool registration. Preference / headed browser
+    // changes stay on Launch + alignToPreference — not here.
+    // Do not early-return on switchPending alone (that left Agent with zero
+    // browser_* tools after live pack reload / disable→enable races).
+    if (switchPending) {
+      active = true
+      return
+    }
+    if (playwrightDriver === null) {
+      mount()
+    } else {
+      ensureToolsRegistered()
+    }
     active = true
-    mount()
   }
 
   refresh()
@@ -293,6 +330,59 @@ export function installBrowserAgent(
       return alignToPreference(startUrl)
     },
     refresh,
+    async listTabs() {
+      if (!options.enabled() || activeDriver === null || activeDriver.status().ready !== true) {
+        return { tabs: [], boundTabId: null }
+      }
+      try {
+        const body = await activeDriver.listTabs()
+        return {
+          tabs: body.tabs.map(tab => ({
+            ...tab,
+            bound: sessions.sessionOf(tab.tabId) !== undefined,
+          })),
+          boundTabId: body.boundTabId,
+        }
+      } catch {
+        return { tabs: [], boundTabId: null }
+      }
+    },
+    async selectTab(input) {
+      if (!options.enabled()) return { ok: false, error: 'Browser agent disabled' }
+      await switchGate.catch(() => undefined)
+      try {
+        const aligned = await alignToPreference()
+        if (!aligned.ok) return { ok: false, error: aligned.error }
+        const followed = await requireDriver().followTab(input.tabId, true)
+        const sessionId = typeof input.sessionId === 'string' && input.sessionId.trim() !== ''
+          ? input.sessionId.trim()
+          : undefined
+        if (sessionId !== undefined) {
+          sessions.bind(sessionId, followed.tabId)
+          sessions.rememberHttpUrl(sessionId, followed.url)
+        }
+        sessions.record({
+          sessionId: sessionId ?? 'sidebar',
+          tool: 'browser_select_tab',
+          summary: `Select tab ${followed.tabId}`,
+          url: followed.url,
+          outcome: 'ok',
+        })
+        options.onBrowserMutation?.({
+          sessionId: sessionId ?? 'sidebar',
+          tool: 'browser_select_tab',
+          url: followed.url,
+        })
+        return {
+          ok: true,
+          tabId: followed.tabId,
+          url: followed.url,
+          title: followed.title,
+        }
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    },
     async resolveTabConflict(decision) {
       const conflict = sessions.currentConflict()
       if (conflict === null || activeDriver === null) return { ok: false }

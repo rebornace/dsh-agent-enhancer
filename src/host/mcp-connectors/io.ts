@@ -18,6 +18,10 @@ import type {
   ListMcpConnectorToolsResult,
   McpConnectorEntry,
   McpConnectorsSnapshot,
+  ProbeMcpConnectorRequest,
+  ProbeMcpConnectorResult,
+  RestartMcpConnectorRequest,
+  RestartMcpConnectorResult,
   SetMcpConnectorEnabledRequest,
   SetMcpConnectorEnabledResult,
   UninstallMcpConnectorRequest,
@@ -36,6 +40,7 @@ export interface McpConnectorsHost {
 function snapshotOf(host: McpConnectorsHost): McpConnectorsSnapshot {
   return {
     connectors: host.store.load().connectors,
+    statuses: host.runtime.statusRows(),
     bridgeAvailable: host.runtime.bridgeAvailable,
     bridgeError: host.runtime.lastBridgeError,
   }
@@ -307,4 +312,29 @@ export function listMcpConnectorToolsNow(
       description: typeof def.description === 'string' ? def.description : '',
     }))
   return { serverName, tools }
+}
+
+export async function restartMcpConnectorNow(
+  host: McpConnectorsHost,
+  request: RestartMcpConnectorRequest,
+): Promise<RestartMcpConnectorResult> {
+  const restarted = await host.runtime.restart(request.id)
+  return {
+    id: request.id,
+    ok: restarted.ok,
+    error: restarted.error,
+    snapshot: snapshotOf(host),
+  }
+}
+
+export async function probeMcpConnectorNow(
+  host: McpConnectorsHost,
+  request: ProbeMcpConnectorRequest,
+  signal?: AbortSignal,
+): Promise<ProbeMcpConnectorResult> {
+  const probed = await host.runtime.probe(request.id, signal)
+  return {
+    ...probed,
+    snapshot: snapshotOf(host),
+  }
 }

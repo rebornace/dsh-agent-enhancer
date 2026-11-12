@@ -43,7 +43,10 @@ export interface BrowserDriver {
   ensureReady(startUrl?: string): Promise<void>
 
   pageStatus(): Promise<StatusBody>
-  navigate(url: string): Promise<{ readonly url: string; readonly title: string; readonly tabId?: number }>
+  navigate(
+    url: string,
+    options?: { readonly newTab?: boolean },
+  ): Promise<{ readonly url: string; readonly title: string; readonly tabId?: number }>
   snapshot(): Promise<SnapshotBody>
   extract(input?: { readonly focus?: string; readonly maxChars?: number }): Promise<ExtractBody>
   click(ref: number): Promise<BrowserActResult>

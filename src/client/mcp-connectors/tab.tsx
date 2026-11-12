@@ -2,7 +2,7 @@
  * MCP connectors — peer PluginManagerPage IA (list + Switch + Add sheet + detail).
  * Peer: `@deepseek-ai/dsh-client-ui-plugin-manager`.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   Button,
@@ -10,9 +10,12 @@ import {
   IconLinkOutlineRegular,
   IconRefreshOutlineRegular,
   Switch,
+  Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   McpConnectorEntry,
+  McpConnectorRuntimeStatus,
+  McpConnectorStatusState,
   McpConnectorToolInfo,
   McpConnectorsSnapshot,
   McpTransport,
@@ -30,6 +33,8 @@ import {
   agentEnhancerImportMcpJson,
   agentEnhancerListMcpConnectorTools,
   agentEnhancerListMcpConnectors,
+  agentEnhancerProbeMcpConnector,
+  agentEnhancerRestartMcpConnector,
   agentEnhancerSetMcpConnectorEnabled,
   agentEnhancerUninstallMcpConnector,
 } from './remote.ts'
@@ -80,6 +85,75 @@ function entrySubtitle(entry: McpConnectorEntry, t: TranslateNS<'agent-enhancer'
   return `${kind} · ${entry.transport.url}`
 }
 
+function statusLabel(
+  state: McpConnectorStatusState,
+  t: TranslateNS<'agent-enhancer'>,
+): string {
+  switch (state) {
+    case 'disabled':
+      return t('mcpConnectorsStatus_disabled')
+    case 'unmounted':
+      return t('mcpConnectorsStatus_unmounted')
+    case 'connecting':
+      return t('mcpConnectorsStatus_connecting')
+    case 'connected':
+      return t('mcpConnectorsStatus_connected')
+    case 'reconnecting':
+      return t('mcpConnectorsStatus_reconnecting')
+    case 'waiting-credentials':
+      return t('mcpConnectorsStatus_waiting-credentials')
+    case 'failed':
+      return t('mcpConnectorsStatus_failed')
+    case 'closed':
+      return t('mcpConnectorsStatus_closed')
+    default: {
+      const _exhaustive: never = state
+      return _exhaustive
+    }
+  }
+}
+
+function statusOf(
+  snapshot: McpConnectorsSnapshot | null,
+  id: string,
+): McpConnectorRuntimeStatus | null {
+  return snapshot?.statuses.find(row => row.id === id)?.status ?? null
+}
+
+function formatStatusLine(
+  status: McpConnectorRuntimeStatus | null,
+  t: TranslateNS<'agent-enhancer'>,
+): string {
+  if (status === null) return t('mcpConnectorsStatus_unmounted')
+  const base = statusLabel(status.state, t)
+  const bits = [base]
+  if (typeof status.toolCount === 'number') bits.push(`${status.toolCount} tools`)
+  if (status.detail !== null && status.detail.trim() !== '') bits.push(status.detail.trim())
+  return bits.join(' · ')
+}
+
+function probeToastCopy(
+  result: { readonly ok: boolean; readonly message: string },
+  t: TranslateNS<'agent-enhancer'>,
+): { readonly text: string; readonly tone?: 'success' } {
+  if (result.ok) {
+    return {
+      text: `${t('mcpConnectorsProbeOk')} · ${result.message}`,
+      tone: 'success',
+    }
+  }
+  const detail = result.message === 'url-expired'
+    ? t('mcpConnectorsProbeUrlExpired')
+    : result.message
+  return { text: `${t('mcpConnectorsProbeFailed')} · ${detail}` }
+}
+
+interface ManagerToast {
+  readonly key: number
+  readonly text: string
+  readonly tone?: 'success'
+}
+
 export function McpConnectorsMainPanel(props: McpConnectorsMainPanelProps) {
   return <McpConnectorsPanel {...props} />
 }
@@ -89,7 +163,8 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [note, setNote] = useState<string | null>(null)
+  const [toast, setToast] = useState<ManagerToast | null>(null)
+  const toastSeq = useRef(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -97,6 +172,11 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
   const [toolsLoading, setToolsLoading] = useState(false)
   const [jsonText, setJsonText] = useState(DEFAULT_MCP_JSON)
   const [force, setForce] = useState(true)
+
+  const showToast = useCallback((text: string, tone?: 'success') => {
+    toastSeq.current += 1
+    setToast({ key: toastSeq.current, text, ...(tone === undefined ? {} : { tone }) })
+  }, [])
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
@@ -150,7 +230,6 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
   const onToggle = async (entry: McpConnectorEntry, enabled: boolean) => {
     setBusy(true)
     setError(null)
-    setNote(null)
     try {
       const result = await agentEnhancerSetMcpConnectorEnabled.invoke(
         props.remote(),
@@ -158,7 +237,7 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
       )
       applySnapshot(result.snapshot)
     } catch (err) {
-      setError(mcpConnectorsErrorMessage(err, props.t))
+      showToast(mcpConnectorsErrorMessage(err, props.t))
     } finally {
       setBusy(false)
     }
@@ -167,7 +246,6 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
   const onUninstall = async (entry: McpConnectorEntry) => {
     setBusy(true)
     setError(null)
-    setNote(null)
     try {
       const result = await agentEnhancerUninstallMcpConnector.invoke(
         props.remote(),
@@ -176,9 +254,12 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
       applySnapshot(result.snapshot)
       setConfirmId(null)
       if (selectedId === entry.id) setSelectedId(null)
-      setNote(props.t('mcpConnectorsUninstalledNote').replace('{name}', entry.serverName))
+      showToast(
+        props.t('mcpConnectorsUninstalledNote').replace('{name}', entry.serverName),
+        'success',
+      )
     } catch (err) {
-      setError(mcpConnectorsErrorMessage(err, props.t))
+      showToast(mcpConnectorsErrorMessage(err, props.t))
     } finally {
       setBusy(false)
     }
@@ -187,7 +268,6 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
   const onImportJson = async () => {
     setBusy(true)
     setError(null)
-    setNote(null)
     try {
       const result = await agentEnhancerImportMcpJson.invoke(props.remote(), {
         jsonText,
@@ -198,9 +278,12 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
       if (result.imported.length > 0) {
         setSelectedId(result.imported[0]!.id)
       }
-      setNote(props.t('mcpConnectorsImportedNote').replace('{count}', String(result.imported.length)))
+      showToast(
+        props.t('mcpConnectorsImportedNote').replace('{count}', String(result.imported.length)),
+        'success',
+      )
     } catch (err) {
-      setError(mcpConnectorsErrorMessage(err, props.t))
+      showToast(mcpConnectorsErrorMessage(err, props.t))
     } finally {
       setBusy(false)
     }
@@ -208,12 +291,63 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
 
   const connectors = snapshot?.connectors ?? []
   const canSubmitImport = jsonText.trim() !== ''
+  const selectedStatus = selected === null ? null : statusOf(snapshot, selected.id)
+
+  const onRestart = async (entry: McpConnectorEntry) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const remote = props.remote()
+      const result = await agentEnhancerRestartMcpConnector.invoke(remote, { id: entry.id })
+      setSnapshot(result.snapshot)
+      if (result.ok) {
+        showToast(props.t('mcpConnectorsRestartOk'), 'success')
+      } else {
+        showToast(
+          `${props.t('mcpConnectorsRestartFailed')}${result.error ? ` · ${result.error}` : ''}`,
+        )
+      }
+    } catch (err) {
+      showToast(mcpConnectorsErrorMessage(err, props.t))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onProbe = async (entry: McpConnectorEntry) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const remote = props.remote()
+      const result = await agentEnhancerProbeMcpConnector.invoke(remote, { id: entry.id })
+      setSnapshot(result.snapshot)
+      const copy = probeToastCopy(result, props.t)
+      showToast(copy.text, copy.tone)
+    } catch (err) {
+      showToast(mcpConnectorsErrorMessage(err, props.t))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const toastNode = toast === null
+    ? null
+    : (
+      <Toast
+        key={toast.key}
+        text={toast.text}
+        tone={toast.tone}
+        holdMs={toast.tone === 'success' ? 2800 : 5200}
+        onDone={() => {
+          setToast(current => (current?.key === toast.key ? null : current))
+        }}
+      />
+    )
 
   if (selected !== null) {
     return (
       <ManagerPage data-state={loading ? 'loading' : 'ready'}>
-        {error !== null ? <div className={styles.managerFailure} role="alert">{error}</div> : null}
-        {note !== null ? <p className={styles.managerBanner}>{note}</p> : null}
+        {toastNode}
         <ManagerDetail
           crumbLabel={props.t('mcpConnectorsTitle')}
           onBack={() => {
@@ -234,6 +368,22 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
                   void onToggle(selected, next)
                 }}
               />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || !selected.enabled}
+                onClick={() => { void onRestart(selected) }}
+              >
+                {busy ? props.t('mcpConnectorsRestarting') : props.t('mcpConnectorsRestart')}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => { void onProbe(selected) }}
+              >
+                {busy ? props.t('mcpConnectorsProbing') : props.t('mcpConnectorsProbe')}
+              </Button>
               {confirmId === selected.id ? (
                 <div className={styles.managerConfirm}>
                   <Button
@@ -270,6 +420,10 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
           )}
         >
           <div className={styles.managerDetailSection}>
+            <h3 className={styles.managerSectionTitle}>{props.t('mcpConnectorsStatus')}</h3>
+            <p className={styles.managerStatus}>{formatStatusLine(selectedStatus, props.t)}</p>
+          </div>
+          <div className={styles.managerDetailSection}>
             <h3 className={styles.managerSectionTitle}>{props.t('mcpConnectorsToolsTitle')}</h3>
             {toolsLoading ? (
               <p className={styles.managerStatus}>{props.t('mcpConnectorsToolsLoading')}</p>
@@ -301,6 +455,7 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
 
   return (
     <ManagerPage data-state={loading ? 'loading' : 'ready'}>
+      {toastNode}
       <ManagerPageHead
         title={props.t('mcpConnectorsTitle')}
         intro={props.t('mcpConnectorsIntro')}
@@ -332,8 +487,6 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
         )}
       />
 
-      {error !== null ? <div className={styles.managerFailure} role="alert">{error}</div> : null}
-      {note !== null ? <p className={styles.managerBanner}>{note}</p> : null}
       {snapshot !== null && !snapshot.bridgeAvailable ? (
         <p className={styles.managerBanner} role="status">
           {props.t('mcpConnectorsBridgeMissing')}
@@ -343,6 +496,10 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
 
       {loading && snapshot === null ? (
         <p className={styles.managerStatus}>{props.t('mcpConnectorsLoading')}</p>
+      ) : error !== null && connectors.length === 0 ? (
+        <div className={styles.managerEmptyBlock}>
+          <p className={styles.managerFailure} role="alert">{error}</p>
+        </div>
       ) : connectors.length === 0 ? (
         <div className={styles.managerEmptyBlock}>
           <p className={styles.managerEmpty}>{props.t('mcpConnectorsEmpty')}</p>
@@ -374,6 +531,9 @@ function McpConnectorsPanel(props: McpConnectorsPanelProps) {
                     <span className={styles.managerCardTitle}>{entry.serverName}</span>
                   </button>
                   <span className={styles.managerCardDesc}>{entrySubtitle(entry, props.t)}</span>
+                  <span className={styles.managerCardDesc}>
+                    {formatStatusLine(statusOf(snapshot, entry.id), props.t)}
+                  </span>
                 </div>
                 <div className={styles.managerCardEnd}>
                   <Switch

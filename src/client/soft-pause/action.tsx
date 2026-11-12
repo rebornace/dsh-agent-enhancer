@@ -32,14 +32,16 @@ export function SoftPauseAction(props: SoftPauseActionProps) {
 
   const engaged = snapshot.engaged
   const label = engaged ? props.t('softPauseResume') : props.t('softPausePause')
+  // Short aria-label; tooltip carries the Settings description so users see Stop ≠ soft pause.
+  const tooltip = props.t('softPauseDescription')
   const busy = snapshot.busy
 
-  return <Tooltip label={label} side="bottom">
+  // Product Tooltip only — native `title` showed a second (browser) tip on hover.
+  return <Tooltip label={tooltip} side="bottom">
     <button
       type="button"
       className={styles.userMessageAction}
       aria-label={label}
-      title={label}
       disabled={busy}
       data-action={engaged ? 'soft-pause-resume' : 'soft-pause-pause'}
       data-engaged={engaged || undefined}

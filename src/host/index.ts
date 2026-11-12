@@ -133,6 +133,8 @@ import {
   installMcpFromNpxNow,
   listMcpConnectorToolsNow,
   listMcpConnectorsNow,
+  probeMcpConnectorNow,
+  restartMcpConnectorNow,
   setMcpConnectorEnabledNow,
   uninstallMcpConnectorNow,
   upsertMcpConnectorNow,
@@ -151,6 +153,10 @@ import type {
   ListMcpConnectorToolsRequest,
   ListMcpConnectorToolsResult,
   McpConnectorsSnapshot,
+  ProbeMcpConnectorRequest,
+  ProbeMcpConnectorResult,
+  RestartMcpConnectorRequest,
+  RestartMcpConnectorResult,
   SetMcpConnectorEnabledRequest,
   SetMcpConnectorEnabledResult,
   UninstallMcpConnectorRequest,
@@ -227,6 +233,8 @@ import type {
   BrowserAgentLaunchBrowserRequest,
   BrowserAgentSetBrowserRequest,
   BrowserAgentSetBrowserResult,
+  BrowserAgentSelectTabRequest,
+  BrowserAgentSelectTabResult,
   BrowserAgentLaunchBrowserResult,
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
@@ -351,7 +359,7 @@ export class AgentEnhancerService extends TypertRemoteService {
     super(ctx, 'agentEnhancer')
   }
 
-  private browserSnapshotNow(): BrowserAgentSnapshot {
+  private async browserSnapshotNow(): Promise<BrowserAgentSnapshot> {
     const settings = this.browserAgentSettings()
     const driverStatus = this.browserAgent?.driverStatus()
     const pending = this.browserAgent?.approval.current() ?? null
@@ -363,7 +371,7 @@ export class AgentEnhancerService extends TypertRemoteService {
         detail: waiting.prompt.trim() !== '' ? waiting.prompt : waiting.detail,
       }
       : (this.browserAgent?.sessions.anyNeedsHuman() ?? null)
-    const boundTabId = pending !== null
+    const overlayBound = pending !== null
       ? (this.browserAgent?.sessions.tabOf(pending.sessionId) ?? null)
       : (conflict !== null
         ? conflict.boundTabId
@@ -371,6 +379,11 @@ export class AgentEnhancerService extends TypertRemoteService {
           ? (this.browserAgent?.sessions.tabOf(needsHuman.sessionId) ?? null)
           : null))
     const connected = driverStatus?.ready === true
+    const listed = connected
+      ? await this.browserAgent?.listTabs()
+      : undefined
+    const tabs = listed?.tabs ?? []
+    const boundTabId = overlayBound ?? listed?.boundTabId ?? null
     const endpoint = driverStatus?.endpoint ?? 'playwright:unlaunched'
     // Exact channel tokens only — do not match `playwright:unlaunched:chrome`.
     const launched = endpoint === 'playwright:msedge'
@@ -405,6 +418,7 @@ export class AgentEnhancerService extends TypertRemoteService {
       tabConflict: conflict,
       needsHuman,
       boundTabId,
+      tabs: [...tabs],
       audit: [...(this.browserAgent?.sessions.recentAudit(12) ?? [])],
       profileDir: this.browserAgent?.activeProfileDir() ?? this.browserAgentProfileDir,
     }
@@ -445,7 +459,10 @@ export class AgentEnhancerService extends TypertRemoteService {
     } catch (error) {
       if (signal.aborted) throw error
       const code = error instanceof AuxiliaryError ? error.code : 'MODEL_FAILED'
-      throw new RemoteError('agent-enhancer/failed', 'Agent Enhance request failed', { code })
+      const detail = error instanceof AuxiliaryError
+        ? error.message
+        : 'Agent Enhance request failed'
+      throw new RemoteError('agent-enhancer/failed', detail || 'Agent Enhance request failed', { code })
     }
   }
 
@@ -1108,6 +1125,34 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
   }
 
+  async restartMcpConnector(
+    request: RestartMcpConnectorRequest,
+    signal: AbortSignal,
+  ): Promise<RestartMcpConnectorResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await restartMcpConnectorNow(this.requireMcpHost(), request)
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
+  async probeMcpConnector(
+    request: ProbeMcpConnectorRequest,
+    signal: AbortSignal,
+  ): Promise<ProbeMcpConnectorResult> {
+    this.assertOwner()
+    signal.throwIfAborted()
+    try {
+      return await probeMcpConnectorNow(this.requireMcpHost(), request, signal)
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw instructionsSkillsRemoteError(error)
+    }
+  }
+
   async listMcpConnectorTools(
     request: ListMcpConnectorToolsRequest,
     signal: AbortSignal,
@@ -1152,13 +1197,13 @@ export class AgentEnhancerService extends TypertRemoteService {
 
   async browserAgentSnapshot(): Promise<BrowserAgentSnapshot> {
     this.assertOwner()
-    return this.browserSnapshotNow()
+    return await this.browserSnapshotNow()
   }
 
   async browserAgentResolve(request: BrowserAgentResolveRequest): Promise<BrowserAgentResolveResult> {
     this.assertOwner()
     const ok = this.browserAgent?.approval.resolve(request.id, request.decision) ?? false
-    return { ok, snapshot: this.browserSnapshotNow() }
+    return { ok, snapshot: await this.browserSnapshotNow() }
   }
 
   async browserAgentResolveTabConflict(
@@ -1166,7 +1211,7 @@ export class AgentEnhancerService extends TypertRemoteService {
   ): Promise<BrowserAgentResolveTabConflictResult> {
     this.assertOwner()
     const result = await this.browserAgent?.resolveTabConflict(request.decision)
-    return { ok: result?.ok === true, snapshot: this.browserSnapshotNow() }
+    return { ok: result?.ok === true, snapshot: await this.browserSnapshotNow() }
   }
 
   async browserAgentAcknowledgeHuman(
@@ -1174,7 +1219,7 @@ export class AgentEnhancerService extends TypertRemoteService {
   ): Promise<BrowserAgentAcknowledgeHumanResult> {
     this.assertOwner()
     const ok = this.browserAgent?.acknowledgeHuman(request.sessionId) === true
-    return { ok, snapshot: this.browserSnapshotNow() }
+    return { ok, snapshot: await this.browserSnapshotNow() }
   }
 
   async browserAgentOpenUrl(request: BrowserAgentOpenUrlRequest): Promise<BrowserAgentOpenUrlResult> {
@@ -1188,7 +1233,7 @@ export class AgentEnhancerService extends TypertRemoteService {
       ...(result?.url === undefined ? {} : { url: result.url }),
       ...(result?.title === undefined ? {} : { title: result.title }),
       ...(result?.error === undefined ? {} : { error: result.error }),
-      snapshot: this.browserSnapshotNow(),
+      snapshot: await this.browserSnapshotNow(),
     }
   }
 
@@ -1201,7 +1246,7 @@ export class AgentEnhancerService extends TypertRemoteService {
       ...(result?.url === undefined ? {} : { url: result.url }),
       ...(result?.title === undefined ? {} : { title: result.title }),
       ...(result?.error === undefined ? {} : { error: result.error }),
-      snapshot: this.browserSnapshotNow(),
+      snapshot: await this.browserSnapshotNow(),
     }
   }
 
@@ -1215,14 +1260,14 @@ export class AgentEnhancerService extends TypertRemoteService {
         ok: false,
         profileDir: this.browserAgentProfileDir,
         error: 'Browser agent is disabled in settings.',
-        snapshot: this.browserSnapshotNow(),
+        snapshot: await this.browserSnapshotNow(),
       }
     }
     // Client-selected browser is authoritative for this launch (not cached Cordis config).
     const preference = hostBrowserPreference(request.browser ?? settings.browser)
     this.setBrowserAgentBrowser(preference)
     const launched = await this.browserAgent?.launchDedicated(undefined, preference)
-    const snapshot = this.browserSnapshotNow()
+    const snapshot = await this.browserSnapshotNow()
     return {
       ok: launched?.ok === true,
       profileDir: this.browserAgent?.activeProfileDir() ?? this.browserAgentProfileDir,
@@ -1248,7 +1293,25 @@ export class AgentEnhancerService extends TypertRemoteService {
     return {
       ok: true,
       browser: preference,
-      snapshot: this.browserSnapshotNow(),
+      snapshot: await this.browserSnapshotNow(),
+    }
+  }
+
+  async browserAgentSelectTab(
+    request: BrowserAgentSelectTabRequest,
+  ): Promise<BrowserAgentSelectTabResult> {
+    this.assertOwner()
+    const result = await this.browserAgent?.selectTab({
+      tabId: request.tabId,
+      ...(request.sessionId === undefined ? {} : { sessionId: request.sessionId }),
+    })
+    return {
+      ok: result?.ok === true,
+      ...(result?.tabId === undefined ? {} : { tabId: result.tabId }),
+      ...(result?.url === undefined ? {} : { url: result.url }),
+      ...(result?.title === undefined ? {} : { title: result.title }),
+      ...(result?.error === undefined ? {} : { error: result.error }),
+      snapshot: await this.browserSnapshotNow(),
     }
   }
 
@@ -1520,15 +1583,13 @@ export function apply(ctx: Context, config: Config): void {
         const detail = error instanceof Error ? error.message : String(error)
         ctx.logger.warn(`agent-enhancer: MCP connector sync after settings update failed: ${detail}`)
       })
-      const prevEnabled = browserAgentLive.enabled
       const prevBrowser = browserAgentLive.browser
       browserAgentLive.enabled = cfg.browserAgentEnabled.get()
       browserAgentLive.browser = hostBrowserPreference(cfg.browserAgentBrowser.get())
-      // Remount only when the feature is toggled on/off — not on every browser
-      // change (that raced with Launch and left the first browser stuck).
-      if (prevEnabled !== browserAgentLive.enabled) {
-        browserAgent.refresh()
-      } else if (
+      // Always refresh: heals missing browser_* tools after live pack reload /
+      // async teardown races. Idempotent when already mounted.
+      browserAgent.refresh()
+      if (
         browserAgentLive.enabled
         && prevBrowser !== browserAgentLive.browser
         && browserAgent.driverStatus()?.ready === true

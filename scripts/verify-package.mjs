@@ -8,12 +8,22 @@ const pnpmCli = process.env.npm_execpath
 if (pnpmCli === undefined) throw new Error('verify-package must be run by pnpm')
 const manifest = JSON.parse(await readFile('package.json', 'utf8'))
 
+/**
+ * `npm_execpath` is a JS CLI on Unix, but often `pnpm.exe` on Windows.
+ * Never `node pnpm.exe` — Node treats `.exe` as an unknown ESM extension.
+ */
+async function runPnpm(args) {
+  if (/\.exe$/i.test(pnpmCli)) {
+    return execFileAsync(pnpmCli, args)
+  }
+  return execFileAsync(process.execPath, [pnpmCli, ...args])
+}
+
 await rm('dist', { recursive: true, force: true })
 await mkdir('dist', { recursive: true })
 let tarball
 try {
-  const { stdout: packOutput } = await execFileAsync(process.execPath, [
-    pnpmCli,
+  const { stdout: packOutput } = await runPnpm([
     'pack',
     '--pack-destination',
     'dist',
@@ -22,8 +32,7 @@ try {
   const packed = JSON.parse(packOutput)
   tarball = relative(process.cwd(), resolve(packed.filename))
 } catch {
-  const { stdout: packOutput } = await execFileAsync(process.execPath, [
-    pnpmCli,
+  const { stdout: packOutput } = await runPnpm([
     'pack',
     '--pack-destination',
     'dist',
@@ -69,7 +78,7 @@ if (packedManifest.dsh?.bundle?.patch !== './cordis.patch.yml' ||
     packedManifest.dsh?.client?.platform !== 'web') {
   throw new Error('Packed manifest has invalid DSH metadata')
 }
-if (packedManifest.engines?.dsh !== '>=0.2.2-rc.1 <0.3.0-0') {
+if (packedManifest.engines?.dsh !== '>=0.2.2-rc.2 <0.3.0-0') {
   throw new Error('Packed manifest has an invalid DSH compatibility range')
 }
 

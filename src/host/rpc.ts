@@ -638,6 +638,17 @@ export const browserAgentAuditEntrySchema = z.strictObject({
 })
 export type BrowserAgentAuditEntryWire = z.infer<typeof browserAgentAuditEntrySchema>
 
+export const browserAgentTabEntrySchema = z.strictObject({
+  tabId: z.number().int().positive(),
+  title: z.string(),
+  url: z.string(),
+  /** True when this is the driver's currently focused page. */
+  active: z.boolean(),
+  /** True when any chat session is bound to this tab. */
+  bound: z.boolean(),
+})
+export type BrowserAgentTabEntryWire = z.infer<typeof browserAgentTabEntrySchema>
+
 export const browserAgentSnapshotSchema = z.strictObject({
   enabled: z.boolean(),
   /** Settings preference (auto / chrome / edge / safari). */
@@ -658,6 +669,8 @@ export const browserAgentSnapshotSchema = z.strictObject({
   tabConflict: browserAgentTabConflictSchema.nullable(),
   needsHuman: browserAgentNeedsHumanSchema.nullable(),
   boundTabId: z.number().int().nullable(),
+  /** Open tabs in the dedicated browser (empty when not launched). */
+  tabs: z.array(browserAgentTabEntrySchema),
   audit: z.array(browserAgentAuditEntrySchema),
   /** Dedicated Chromium profile used by one-click launch (user-level). */
   profileDir: z.string().min(1),
@@ -814,6 +827,30 @@ export type BrowserAgentSetBrowserResult = z.infer<typeof browserAgentSetBrowser
 const browserAgentSetBrowserResultCodec = codec(
   'dsh-agent-enhancer#BrowserAgentSetBrowserResult',
   browserAgentSetBrowserResultSchema,
+)
+
+export const browserAgentSelectTabRequestSchema = z.strictObject({
+  tabId: z.number().int().positive(),
+  sessionId: z.string().min(1).optional(),
+})
+export type BrowserAgentSelectTabRequest = z.infer<typeof browserAgentSelectTabRequestSchema>
+const browserAgentSelectTabRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentSelectTabRequest',
+  browserAgentSelectTabRequestSchema,
+)
+
+export const browserAgentSelectTabResultSchema = z.strictObject({
+  ok: z.boolean(),
+  tabId: z.number().int().positive().optional(),
+  url: z.string().optional(),
+  title: z.string().optional(),
+  error: z.string().optional(),
+  snapshot: browserAgentSnapshotSchema,
+})
+export type BrowserAgentSelectTabResult = z.infer<typeof browserAgentSelectTabResultSchema>
+const browserAgentSelectTabResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentSelectTabResult',
+  browserAgentSelectTabResultSchema,
 )
 
 const instructionScopeSchema = z.enum(['global', 'shared', 'project'])
@@ -1058,8 +1095,28 @@ const mcpConnectorEntrySchema = z.strictObject({
   createdAt: z.number(),
   updatedAt: z.number(),
 })
+const mcpConnectorStatusStateSchema = z.enum([
+  'disabled',
+  'unmounted',
+  'connecting',
+  'connected',
+  'reconnecting',
+  'waiting-credentials',
+  'failed',
+  'closed',
+])
+const mcpConnectorRuntimeStatusSchema = z.strictObject({
+  state: mcpConnectorStatusStateSchema,
+  detail: z.string().nullable(),
+  toolCount: z.number().int().nullable(),
+})
+const mcpConnectorStatusRowSchema = z.strictObject({
+  id: z.string().min(1),
+  status: mcpConnectorRuntimeStatusSchema,
+})
 export const mcpConnectorsSnapshotSchema = z.strictObject({
   connectors: z.array(mcpConnectorEntrySchema),
+  statuses: z.array(mcpConnectorStatusRowSchema),
   bridgeAvailable: z.boolean(),
   bridgeError: z.string().nullable(),
 })
@@ -1152,6 +1209,31 @@ export const listMcpConnectorToolsResultSchema = z.strictObject({
   })),
 })
 export type ListMcpConnectorToolsResultWire = z.infer<typeof listMcpConnectorToolsResultSchema>
+export const restartMcpConnectorRequestSchema = z.strictObject({
+  id: z.string().min(1),
+})
+export type RestartMcpConnectorRequestWire = z.infer<typeof restartMcpConnectorRequestSchema>
+export const restartMcpConnectorResultSchema = z.strictObject({
+  id: z.string().min(1),
+  ok: z.boolean(),
+  error: z.string().nullable(),
+  snapshot: mcpConnectorsSnapshotSchema,
+})
+export type RestartMcpConnectorResultWire = z.infer<typeof restartMcpConnectorResultSchema>
+export const probeMcpConnectorRequestSchema = z.strictObject({
+  id: z.string().min(1),
+})
+export type ProbeMcpConnectorRequestWire = z.infer<typeof probeMcpConnectorRequestSchema>
+export const probeMcpConnectorResultSchema = z.strictObject({
+  id: z.string().min(1),
+  ok: z.boolean(),
+  message: z.string(),
+  toolNames: z.array(z.string()),
+  truncated: z.boolean(),
+  durationMs: z.number(),
+  snapshot: mcpConnectorsSnapshotSchema,
+})
+export type ProbeMcpConnectorResultWire = z.infer<typeof probeMcpConnectorResultSchema>
 
 const listMcpConnectorsRequestCodec = codec(
   'dsh-agent-enhancer#ListMcpConnectorsRequest',
@@ -1216,6 +1298,22 @@ const listMcpConnectorToolsRequestCodec = codec(
 const listMcpConnectorToolsResultCodec = codec(
   'dsh-agent-enhancer#ListMcpConnectorToolsResult',
   listMcpConnectorToolsResultSchema,
+)
+const restartMcpConnectorRequestCodec = codec(
+  'dsh-agent-enhancer#RestartMcpConnectorRequest',
+  restartMcpConnectorRequestSchema,
+)
+const restartMcpConnectorResultCodec = codec(
+  'dsh-agent-enhancer#RestartMcpConnectorResult',
+  restartMcpConnectorResultSchema,
+)
+const probeMcpConnectorRequestCodec = codec(
+  'dsh-agent-enhancer#ProbeMcpConnectorRequest',
+  probeMcpConnectorRequestSchema,
+)
+const probeMcpConnectorResultCodec = codec(
+  'dsh-agent-enhancer#ProbeMcpConnectorResult',
+  probeMcpConnectorResultSchema,
 )
 
 export const remoteInfo = createTypertRemoteInfo({
@@ -1537,6 +1635,18 @@ export const remoteInfo = createTypertRemoteInfo({
       }],
       result: browserAgentSetBrowserResultCodec,
     },
+    'agentEnhancer/browserAgentSelectTab': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentSelectTab',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentSelectTabRequestCodec,
+        strictCodec: browserAgentSelectTabRequestCodec,
+      }],
+      result: browserAgentSelectTabResultCodec,
+    },
     'agentEnhancer/listInstructionsSkills': {
       service: 'agentEnhancer',
       implementation: 'listInstructionsSkills',
@@ -1757,6 +1867,32 @@ export const remoteInfo = createTypertRemoteInfo({
       }],
       cancellation: { parameter: 'signal' },
       result: listMcpConnectorToolsResultCodec,
+    },
+    'agentEnhancer/restartMcpConnector': {
+      service: 'agentEnhancer',
+      implementation: 'restartMcpConnector',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: restartMcpConnectorRequestCodec,
+        strictCodec: restartMcpConnectorRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: restartMcpConnectorResultCodec,
+    },
+    'agentEnhancer/probeMcpConnector': {
+      service: 'agentEnhancer',
+      implementation: 'probeMcpConnector',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: probeMcpConnectorRequestCodec,
+        strictCodec: probeMcpConnectorRequestCodec,
+      }],
+      cancellation: { parameter: 'signal' },
+      result: probeMcpConnectorResultCodec,
     },
     'agentEnhancer/listWebChatWorkspaces': {
       service: 'agentEnhancer',

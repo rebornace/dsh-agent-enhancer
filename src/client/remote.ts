@@ -32,6 +32,8 @@ import type {
   BrowserAgentLaunchBrowserResult,
   BrowserAgentSetBrowserRequest,
   BrowserAgentSetBrowserResult,
+  BrowserAgentSelectTabRequest,
+  BrowserAgentSelectTabResult,
   BrowserAgentSnapshot,
   RpcPayload,
   ShowOsNotificationRequest,
@@ -428,6 +430,20 @@ export const clientRemoteInfo = {
     }],
     result: codec('dsh-agent-enhancer#BrowserAgentSetBrowserResult'),
   }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentSelectTab',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentSelectTab',
+    implementation: 'browserAgentSelectTab',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentSelectTabRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentSelectTabResult'),
+  }, {
     id: 'dsh-agent-enhancer#agentEnhancer/listInstructionsSkills',
     service: 'agentEnhancer',
     namespace: 'agentEnhancer',
@@ -682,6 +698,36 @@ export const clientRemoteInfo = {
     }],
     cancellation: { parameter: 'signal' },
     result: codec('dsh-agent-enhancer#ListMcpConnectorToolsResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/restartMcpConnector',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'restartMcpConnector',
+    implementation: 'restartMcpConnector',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#RestartMcpConnectorRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#RestartMcpConnectorResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/probeMcpConnector',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'probeMcpConnector',
+    implementation: 'probeMcpConnector',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#ProbeMcpConnectorRequest'),
+    }],
+    cancellation: { parameter: 'signal' },
+    result: codec('dsh-agent-enhancer#ProbeMcpConnectorResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/listWebChatWorkspaces',
     service: 'agentEnhancer',
@@ -1073,6 +1119,7 @@ function emptyBrowserAgentSnapshot(): BrowserAgentSnapshot {
     tabConflict: null,
     needsHuman: null,
     boundTabId: null,
+    tabs: [],
     audit: [],
     profileDir: 'browser-agent/profile-auto',
   }
@@ -1311,6 +1358,49 @@ export const agentEnhancerBrowserAgentSetBrowser = {
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
       return empty(request.browser)
+    }
+  },
+}
+
+type BrowserAgentSelectTabCall = (
+  request: BrowserAgentSelectTabRequest,
+) => Promise<RemoteResult<BrowserAgentSelectTabResult>>
+
+export const agentEnhancerBrowserAgentSelectTab = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentSelectTabRequest,
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentSelectTabResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty = (error: string): BrowserAgentSelectTabResult => ({
+      ok: false,
+      error,
+      snapshot: emptyBrowserAgentSnapshot(),
+    })
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return empty('Host remote unavailable')
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') {
+      return empty('agentEnhancer remote missing — reload the plugin')
+    }
+    const call = Reflect.get(namespace, 'browserAgentSelectTab') as BrowserAgentSelectTabCall | undefined
+    if (typeof call !== 'function') {
+      return empty('browserAgentSelectTab missing — reload Desktop / reinstall the plugin')
+    }
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) {
+        const message = typeof (result as { error?: { message?: string } }).error?.message === 'string'
+          ? (result as { error: { message: string } }).error.message
+          : 'Select tab RPC failed'
+        return empty(message)
+      }
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty(error instanceof Error ? error.message : String(error))
     }
   },
 }

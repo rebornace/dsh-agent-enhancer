@@ -12,6 +12,7 @@ export interface AgentControlsProps {
 
 const OPTIMIZATION_ERROR_LOCALES = {
   MODEL_UNAVAILABLE: 'optimizeModelUnavailable',
+  AUTO_ROUTE_UNCONFIGURED: 'autoRouteUnconfigured',
   MODEL_FAILED: 'optimizeRequestFailed',
   INVALID_OUTPUT: 'optimizeInvalidOutput',
   ROLLBACK_FAILED: 'optimizeRollbackFailed',

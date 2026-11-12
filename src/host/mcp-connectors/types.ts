@@ -38,8 +38,31 @@ export interface McpConnectorsDocument {
   readonly connectors: readonly McpConnectorEntry[]
 }
 
+/** UI-facing runtime status (from official mcp-client connectionStatusOf / probe). */
+export type McpConnectorStatusState =
+  | 'disabled'
+  | 'unmounted'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'waiting-credentials'
+  | 'failed'
+  | 'closed'
+
+export interface McpConnectorRuntimeStatus {
+  readonly state: McpConnectorStatusState
+  readonly detail: string | null
+  readonly toolCount: number | null
+}
+
+export interface McpConnectorStatusRow {
+  readonly id: string
+  readonly status: McpConnectorRuntimeStatus
+}
+
 export interface McpConnectorsSnapshot {
   readonly connectors: readonly McpConnectorEntry[]
+  readonly statuses: readonly McpConnectorStatusRow[]
   readonly bridgeAvailable: boolean
   readonly bridgeError: string | null
 }
@@ -134,4 +157,29 @@ export interface McpConnectorToolInfo {
 export interface ListMcpConnectorToolsResult {
   readonly serverName: string
   readonly tools: readonly McpConnectorToolInfo[]
+}
+
+export interface RestartMcpConnectorRequest {
+  readonly id: string
+}
+
+export interface RestartMcpConnectorResult {
+  readonly id: string
+  readonly ok: boolean
+  readonly error: string | null
+  readonly snapshot: McpConnectorsSnapshot
+}
+
+export interface ProbeMcpConnectorRequest {
+  readonly id: string
+}
+
+export interface ProbeMcpConnectorResult {
+  readonly id: string
+  readonly ok: boolean
+  readonly message: string
+  readonly toolNames: readonly string[]
+  readonly truncated: boolean
+  readonly durationMs: number
+  readonly snapshot: McpConnectorsSnapshot
 }

@@ -37,7 +37,12 @@ function agentFace(remote: WebChatBridgeRemoteSource): object {
 function webChatCodeOf(details: unknown): WebChatImportErrorCode | undefined {
   if (details === null || typeof details !== 'object') return undefined
   const raw = Reflect.get(details, 'webChatCode')
-  if (raw === 'no-workspace' || raw === 'invalid-transcript' || raw === 'import-failed') {
+  if (
+    raw === 'no-workspace'
+    || raw === 'missing-cwd'
+    || raw === 'invalid-transcript'
+    || raw === 'import-failed'
+  ) {
     return raw
   }
   return undefined
@@ -50,7 +55,7 @@ function sessionIdOf(details: unknown): SessionId | undefined {
 }
 
 function parseWebChatCodePrefix(message: string): WebChatImportErrorCode | undefined {
-  const match = message.match(/^(no-workspace|invalid-transcript|import-failed):/)
+  const match = message.match(/^(no-workspace|missing-cwd|invalid-transcript|import-failed):/)
   return match?.[1] as WebChatImportErrorCode | undefined
 }
 
@@ -60,7 +65,10 @@ function throwRemoteFailure(result: Extract<RemoteResult<unknown>, { readonly ok
   const fromPrefix = parseWebChatCodePrefix(message)
   const code = fromDetails ?? fromPrefix ?? 'import-failed'
   const sessionId = sessionIdOf(result.error.details)
-  const stripped = message.replace(/^(no-workspace|invalid-transcript|import-failed):\s*/i, '')
+  const stripped = message.replace(
+    /^(no-workspace|missing-cwd|invalid-transcript|import-failed):\s*/i,
+    '',
+  )
   throw new WebChatBridgeRemoteError(code, stripped || message, sessionId)
 }
 

@@ -92,12 +92,7 @@ import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import {
-  quoteInteraction,
-  QUOTE_INTERACTION_ID,
-} from './quote/interaction.ts'
 import { QuoteExternalHosts } from './quote/external-hosts.tsx'
-import { QuoteSurface } from './quote/surface.tsx'
 import { SessionDeleteMenuItem } from './session-delete/menu.tsx'
 import { SessionDeleteOverlay } from './session-delete/overlay.tsx'
 import { RunAlertsHost } from './run-alerts/host.tsx'
@@ -421,8 +416,8 @@ export function apply(ctx: Context): void {
 
     const tContext = mountedCtx.locale.bind('agent-enhancer')
     const quoteEnabled = () => resolveSettings(form.getSnapshot().value).quoteEnabled
-    // Transcript + preview/terminal quote. Nested uiConversation inject waits
-    // without blocking this fiber; toggle tears the registrations down.
+    // Preview / editor / terminal quote only — chat uses official Desktop quote (0.2.2+).
+    // Toggle tears the overlay host down; Monaco still reads quoteEnabled via file-edit.
     mountedCtx.effect(() => {
       const disposers: Array<() => void> = []
       const clear = () => {
@@ -434,15 +429,6 @@ export function apply(ctx: Context): void {
           return
         }
         if (disposers.length > 0) return
-        const fiber = mountedCtx.inject(['uiConversation'], (scope: Context) => {
-          scope.effect(() => scope.uiConversation.interactions.register(quoteInteraction))
-          scope.slots.inject('conversation.chat.text-interaction', () => scope.slots.register({
-            name: 'conversation.chat.text-interaction',
-            key: QUOTE_INTERACTION_ID,
-            locale: 'agent-enhancer',
-          }, QuoteSurface))
-        })
-        disposers.push(() => { void fiber.dispose() })
         disposers.push(mountedCtx.slots.inject('shell.overlay', () => mountedCtx.slots.register({
           name: 'shell.overlay',
           id: 'agent-enhancer-quote-hosts',

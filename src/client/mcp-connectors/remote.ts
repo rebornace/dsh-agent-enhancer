@@ -11,6 +11,10 @@ import type {
   ListMcpConnectorToolsRequest,
   ListMcpConnectorToolsResult,
   McpConnectorsSnapshot,
+  ProbeMcpConnectorRequest,
+  ProbeMcpConnectorResult,
+  RestartMcpConnectorRequest,
+  RestartMcpConnectorResult,
   SetMcpConnectorEnabledRequest,
   SetMcpConnectorEnabledResult,
   UninstallMcpConnectorRequest,
@@ -145,5 +149,25 @@ export const agentEnhancerListMcpConnectorTools = {
     signal?: AbortSignal,
   ): Promise<ListMcpConnectorToolsResult> {
     return callFace(remote, 'listMcpConnectorTools', request, signal)
+  },
+}
+
+export const agentEnhancerRestartMcpConnector = {
+  async invoke(
+    remote: unknown,
+    request: RestartMcpConnectorRequest,
+    signal?: AbortSignal,
+  ): Promise<RestartMcpConnectorResult> {
+    return callFace(remote, 'restartMcpConnector', request, signal)
+  },
+}
+
+export const agentEnhancerProbeMcpConnector = {
+  async invoke(
+    remote: unknown,
+    request: ProbeMcpConnectorRequest,
+    signal?: AbortSignal,
+  ): Promise<ProbeMcpConnectorResult> {
+    return callFace(remote, 'probeMcpConnector', request, signal)
   },
 }

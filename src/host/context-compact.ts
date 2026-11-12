@@ -16,6 +16,7 @@ import type { EnhancerSettings } from '../config.ts'
 import { AuxiliaryError } from '../errors.ts'
 import type { AuxiliaryErrorCode } from '../errors.ts'
 import { createClassifier } from './auto-route/classifier.ts'
+import { AutoRouteUnconfiguredError } from './auto-route/errors.ts'
 import {
   getSessionResolvedRouteForSession,
   setSessionResolvedRouteForSession,
@@ -127,17 +128,28 @@ async function resolveAutoRouteForCompact(
     ? createClassifier(ctx.llm, map.classifier)
     : undefined
   const hint = sessionTurnHint(session)
-  const mapped = await resolveAutoRoute({
-    text: hint?.text ?? '',
-    feature,
-    toolHeavy: hint?.toolHeavy,
-    map,
-    classifierEnabled: settings.autoClassifierEnabled,
-    classify,
-    isAvailable: modelExists,
-    fallback: fallbackFromSession(ctx, session, override),
-    signal,
-  })
+  let mapped: Awaited<ReturnType<typeof resolveAutoRoute>>
+  try {
+    mapped = await resolveAutoRoute({
+      text: hint?.text ?? '',
+      feature,
+      toolHeavy: hint?.toolHeavy,
+      map,
+      classifierEnabled: settings.autoClassifierEnabled,
+      classify,
+      isAvailable: modelExists,
+      fallback: fallbackFromSession(ctx, session, override),
+      signal,
+    })
+  } catch (error) {
+    if (error instanceof AutoRouteUnconfiguredError) {
+      throw new AuxiliaryError('AUTO_ROUTE_UNCONFIGURED', error.message)
+    }
+    throw error
+  }
+  if (!modelExists(mapped.provider, mapped.model) || isAutoModel(mapped)) {
+    throw new AuxiliaryError('AUTO_ROUTE_UNCONFIGURED')
+  }
   if (feature === 'session') {
     setSessionResolvedRouteForSession(session, {
       provider: mapped.provider,

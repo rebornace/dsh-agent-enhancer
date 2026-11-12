@@ -216,6 +216,9 @@ export function ContextInspectRightTab(props: ContextInspectRightTabProps) {
           case 'MODEL_UNAVAILABLE':
             setCompactNote(props.t('contextInspectCompactModel'))
             break
+          case 'AUTO_ROUTE_UNCONFIGURED':
+            setCompactNote(props.t('contextInspectCompactAutoUnconfigured'))
+            break
           case 'COMPACT_FAILED':
           case 'SESSION_CHANGED':
           case 'MODEL_FAILED':

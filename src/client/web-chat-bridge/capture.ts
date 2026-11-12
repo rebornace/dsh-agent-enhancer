@@ -6,6 +6,7 @@ import {
   type WebChatCaptureSelectorProfile,
   type WebChatCaptureSelectors,
 } from './capture-selectors.ts'
+import { domToMarkdown, preserveVisibleText } from './dom-to-markdown.ts'
 
 export interface CaptureFromDocumentOptions {
   readonly url: string
@@ -28,12 +29,27 @@ function normalizeRole(raw: string | null): WebChatRole | null {
   return null
 }
 
-function elementText(el: Element): string {
+/** Titles / short labels: single-line is fine. */
+function elementLabel(el: Element): string {
   const withInner = el as HTMLElement
   const raw = typeof withInner.innerText === 'string' && withInner.innerText.length > 0
     ? withInner.innerText
     : el.textContent ?? ''
-  return raw.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim()
+  return preserveVisibleText(raw).replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Message bodies: prefer HTML→Markdown so imported chat keeps fences / lists.
+ * Fall back to newline-preserving visible text when the subtree is plain.
+ */
+function elementMessageText(el: Element): string {
+  const fromDom = domToMarkdown(el)
+  if (fromDom !== '') return fromDom
+  const withInner = el as HTMLElement
+  const raw = typeof withInner.innerText === 'string' && withInner.innerText.length > 0
+    ? withInner.innerText
+    : el.textContent ?? ''
+  return preserveVisibleText(raw)
 }
 
 function readTitle(
@@ -43,7 +59,7 @@ function readTitle(
   for (const profile of profiles) {
     if (!profile.title) continue
     const node = doc.querySelector(profile.title)
-    const text = node ? elementText(node) : ''
+    const text = node ? elementLabel(node) : ''
     if (text) return text
   }
   const docTitle = doc.title?.trim()
@@ -51,7 +67,8 @@ function readTitle(
   return 'Web chat'
 }
 
-function chatSessionIdFromUrl(url: string): string | undefined {
+/** `/a/chat/s/{id}` (and `/s/{id}`) session id used by history_messages. */
+export function chatSessionIdFromUrl(url: string): string | undefined {
   const match = url.match(CHAT_SESSION_ID)
   return match?.[1]
 }
@@ -100,12 +117,12 @@ function textFromProfile(el: Element, role: WebChatRole, profile: WebChatCapture
   const selector = specific ?? profile.textSelector
   if (selector) {
     const nodes = el.querySelectorAll(selector)
-    if (nodes.length === 1) return elementText(nodes[0]!)
+    if (nodes.length === 1) return elementMessageText(nodes[0]!)
     if (nodes.length > 1) {
-      return Array.from(nodes, node => elementText(node)).filter(Boolean).join('\n')
+      return Array.from(nodes, node => elementMessageText(node)).filter(Boolean).join('\n\n')
     }
   }
-  return elementText(el)
+  return elementMessageText(el)
 }
 
 function collectTurnsFromProfile(

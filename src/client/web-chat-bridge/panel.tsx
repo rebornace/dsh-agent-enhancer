@@ -2,11 +2,14 @@ import { useCallback, useState } from 'react'
 import type { PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { Button, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { extractWebChatShareId } from '../../host/web-chat-bridge/share-link.ts'
+import {
+  extractWebChatShareId,
+  parseWebChatHistoryMessages,
+} from '../../host/web-chat-bridge/share-link.ts'
 import type { WebChatTranscript } from '../../host/web-chat-bridge/types.ts'
 import { ManagerAddSheet, ManagerPage, ManagerPageHead } from '../manager-shell.tsx'
 import styles from '../styles.module.css'
-import { captureFromDocument } from './capture.ts'
+import { captureFromDocument, chatSessionIdFromUrl } from './capture.ts'
 import { readWebChatGuestBrowseContext } from './guest-capture.ts'
 import { WebChatBridgeGuestBody, useWebChatBridgeGuest } from './guest.tsx'
 import type { WEB_CHAT_PANEL_ID } from './kind.ts'
@@ -16,7 +19,10 @@ import {
   WebChatBridgeRemoteError,
   type WebChatBridgeRemoteSource,
 } from './remote.ts'
-import { fetchWebChatSharePayloadFromGuest } from './share-fetch.ts'
+import {
+  fetchWebChatHistoryPayloadFromGuest,
+  fetchWebChatSharePayloadFromGuest,
+} from './share-fetch.ts'
 
 export interface WebChatBridgePanelProps {
   readonly remote: WebChatBridgeRemoteSource
@@ -83,6 +89,25 @@ function WebChatBridgePanel(props: WebChatBridgePanelProps) {
     if (context === null || context.document === null) {
       showError(props.t('webChatCaptureStructure'))
       return null
+    }
+    // Prefer history_messages (same markdown fragments as share links) when the
+    // open URL carries /s/{chatSessionId}. Fall back to improved DOM→Markdown.
+    const sessionId = chatSessionIdFromUrl(context.url)
+    if (sessionId !== undefined) {
+      const payloadJson = await fetchWebChatHistoryPayloadFromGuest(
+        guest.guestRef.current,
+        sessionId,
+      )
+      if (payloadJson !== null) {
+        try {
+          return parseWebChatHistoryMessages(JSON.parse(payloadJson) as unknown, {
+            chatSessionId: sessionId,
+            url: context.url,
+          })
+        } catch {
+          // fall through to rendered capture
+        }
+      }
     }
     return captureFromDocument(context.document, {
       url: context.url,

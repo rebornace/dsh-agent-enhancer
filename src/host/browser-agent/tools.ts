@@ -519,41 +519,57 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   disposers.push(ctx.tools.register(textTool(
     'browser_navigate',
-    'Open or navigate the dedicated Desktop browser to an http(s) URL. Prefer this over telling the user to open a browser themselves. Auto-launches when disconnected. Requires approval unless the origin is already allowed. After navigation call browser_snapshot (it will pause for login/captcha if needed).',
+    'Open or navigate the dedicated Desktop browser to an http(s) URL. Prefer this over telling the user to open a browser themselves. Auto-launches when disconnected. Requires approval unless the origin is already allowed. After navigation call browser_snapshot (it will pause for login/captcha if needed). Use newTab=true when the user wants to keep the previous page open, compare sites, or explicitly asks for a new tab — otherwise the current tab is replaced.',
     {
       url: {
         type: 'string',
         required: true,
-        description: 'Absolute http(s) URL to open in the bound tab.',
+        description: 'Absolute http(s) URL to open.',
+      },
+      newTab: {
+        type: 'boolean',
+        description: 'When true, open in a new tab and keep the previous tab. Default false (navigate current tab).',
       },
     },
     async (args, exec) => {
       guardEnabled()
       const sessionId = sessionIdOf(exec)
       const url = String(args.url ?? '').trim()
+      const newTab = args.newTab === true
       if (url === '') throw new Error('url is required')
       await ensureConnected(url)
       await ensureSessionTab(sessionId)
-      await requireMutation(exec, 'browser_navigate', `Navigate to ${url}`, url)
+      await requireMutation(
+        exec,
+        'browser_navigate',
+        `${newTab ? 'Open new tab' : 'Navigate'} to ${url}`,
+        url,
+      )
       try {
-        const result = await runBridge(() => driverOf(options).navigate(url))
+        const result = await runBridge(() => driverOf(options).navigate(url, { newTab }))
         await rememberTab(sessionId, (result as { tabId?: number }).tabId)
         options.sessions.rememberHttpUrl(sessionId, result.url)
         options.sessions.record({
           sessionId,
           tool: 'browser_navigate',
-          summary: `Navigate to ${url}`,
+          summary: `${newTab ? 'Open new tab' : 'Navigate'} to ${url}`,
           url: result.url,
           outcome: 'ok',
         })
         options.onMutation?.({ sessionId, tool: 'browser_navigate', url: result.url })
-        return `navigated\nurl: ${result.url}\ntitle: ${result.title}\nAction: call browser_snapshot next. For long page content use browser_extract after scroll if needed.`
+        return [
+          newTab ? 'opened_new_tab' : 'navigated',
+          `url: ${result.url}`,
+          `title: ${result.title}`,
+          result.tabId !== undefined ? `tabId: ${result.tabId}` : null,
+          'Action: call browser_snapshot next. For long page content use browser_extract after scroll if needed. Use browser_list_tabs / browser_follow_tab (or the sidebar tab list) to switch among tabs.',
+        ].filter(line => line !== null).join('\n')
       } catch (error) {
         noteHuman(sessionId, {}, error)
         options.sessions.record({
           sessionId,
           tool: 'browser_navigate',
-          summary: `Navigate to ${url}`,
+          summary: `${newTab ? 'Open new tab' : 'Navigate'} to ${url}`,
           url,
           outcome: 'error',
         })

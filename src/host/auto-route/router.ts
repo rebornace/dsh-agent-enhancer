@@ -1,11 +1,18 @@
+import { AutoRouteUnconfiguredError } from './errors.ts'
 import { pickTierHeuristic } from './heuristic.ts'
 import type { AutoRouteMap, AutoTier, AutoTierRoute, HeuristicInput } from './types.ts'
 
 const TIER_ORDER: readonly AutoTier[] = ['pro', 'thinking', 'instant']
 
+/**
+ * Preferred tier first, then weaker tiers, then stronger ones.
+ * So Instant→flash missing can still land on Thinking/Pro when those are mapped.
+ */
 function tiersFrom(start: AutoTier): readonly AutoTier[] {
   const idx = TIER_ORDER.indexOf(start)
-  return TIER_ORDER.slice(idx)
+  const weaker = TIER_ORDER.slice(idx + 1)
+  const stronger = TIER_ORDER.slice(0, idx).reverse()
+  return [start, ...weaker, ...stronger]
 }
 
 function routeForTier(
@@ -65,6 +72,15 @@ export async function resolveAutoRoute(options: {
     }
   }
 
-  const fallback = options.fallback ?? options.map.thinking
-  return { ...fallback, tier: 'thinking' }
+  const fallback = options.fallback
+  if (
+    fallback !== undefined
+    && options.isAvailable(fallback.provider, fallback.model)
+  ) {
+    return { ...fallback, tier: 'thinking' }
+  }
+
+  // Do not return an empty Instant/Thinking/Pro row — callers used to pass that
+  // into prepareCall and surface an opaque model failure.
+  throw new AutoRouteUnconfiguredError()
 }

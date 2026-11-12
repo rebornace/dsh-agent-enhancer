@@ -31,7 +31,7 @@
  * surface (same workaround as deepseek-harness #10619).
  */
 import { randomUUID } from 'node:crypto'
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -45,6 +45,7 @@ import {
   SessionSeq,
   type Session,
   type SessionEvent,
+  type SessionEventInput,
 } from '@deepseek-ai/dsh-session'
 import type { AuxiliaryErrorCode } from '../../errors.ts'
 import { pickDirectoryNow } from '../extra-folders/pick.ts'
@@ -56,7 +57,11 @@ import type { WebChatTranscript } from './types.ts'
  * `agent-enhancer/failed` RemoteError details; when absent, parse the message
  * prefix `^(no-workspace|invalid-transcript|import-failed):`.
  */
-export type WebChatImportErrorCode = 'no-workspace' | 'invalid-transcript' | 'import-failed'
+export type WebChatImportErrorCode =
+  | 'no-workspace'
+  | 'missing-cwd'
+  | 'invalid-transcript'
+  | 'import-failed'
 
 export class WebChatImportError extends Error {
   constructor(
@@ -252,18 +257,21 @@ function appendAssistantMessage(
   step: number,
   text: string,
 ): void {
-  session.append('step/start', { turn, step })
   const message = createAssistantMessage({
     content: [{ type: 'text', text }],
     source: { provider: 'web-chat-bridge', model: 'imported-history' },
   })
-  session.append('assistant/message', {
-    turn,
-    step,
-    message,
-    stream: [],
-  }, { surfaceOp: 'append' })
-  session.append('step/end', { turn, step })
+  // Desktop 0.2.2-rc.2+: batch append commits the step as one publication unit.
+  session.append([
+    ['step/start', { turn, step }],
+    ['assistant/message', {
+      turn,
+      step,
+      message,
+      stream: [],
+    }, { surfaceOp: 'append' }],
+    ['step/end', { turn, step }],
+  ])
 }
 
 /** Inert protected head so later system-prompt projection can replace it. */
@@ -272,13 +280,15 @@ function appendProtectedSystemHead(
   turn: number,
   step: number,
 ): void {
-  session.append('step/start', { turn, step })
-  session.append('system/message', {
-    turn,
-    step,
-    message: createSystemMessage(''),
-  }, { surfaceOp: 'append' })
-  session.append('step/end', { turn, step })
+  session.append([
+    ['step/start', { turn, step }],
+    ['system/message', {
+      turn,
+      step,
+      message: createSystemMessage(''),
+    }, { surfaceOp: 'append' }],
+    ['step/end', { turn, step }],
+  ])
 }
 
 /** Append imported turns with explicit turn/step boundaries for consecutive roles. */
@@ -353,17 +363,37 @@ export function appendTranscript(session: Session, transcript: WebChatTranscript
  */
 export function buildWebChatImportSeed(transcript: WebChatTranscript): SessionEvent[] {
   const events: SessionEvent[] = []
+  const recordOne = (
+    type: string,
+    data: unknown,
+    intent?: { surfaceOp?: 'append' },
+  ): SessionEvent => {
+    const event = {
+      type,
+      seq: SessionSeq(events.length),
+      time: Date.now(),
+      data,
+      ...(intent?.surfaceOp === undefined ? {} : { surfaceOp: intent.surfaceOp }),
+    } as SessionEvent
+    events.push(event)
+    return event
+  }
+  // Mirror Session.append overloads (single event + batch tuples) for seed building.
   const recorder = {
-    append(type: string, data: unknown, intent?: { surfaceOp?: 'append' }): SessionEvent {
-      const event = {
-        type,
-        seq: SessionSeq(events.length),
-        time: Date.now(),
-        data,
-        ...(intent?.surfaceOp === undefined ? {} : { surfaceOp: intent.surfaceOp }),
-      } as SessionEvent
-      events.push(event)
-      return event
+    append(
+      typeOrInputs: string | readonly SessionEventInput[],
+      data?: unknown,
+      intent?: { surfaceOp?: 'append' },
+    ): SessionEvent | readonly SessionEvent[] {
+      if (typeof typeOrInputs !== 'string') {
+        return typeOrInputs.map(input => {
+          const type = input[0]
+          const payload = input[1]
+          const surface = input[2] as { surfaceOp?: 'append' } | undefined
+          return recordOne(type, payload, surface)
+        })
+      }
+      return recordOne(typeOrInputs, data, intent)
     },
   }
   appendTranscript(recorder as unknown as Session, transcript)
@@ -450,11 +480,44 @@ async function openAgentWorkSession(
   return { session, dispose: onceDispose(() => handle.dispose()) }
 }
 
+/**
+ * Desktop `attachSession` requires `realpath(session.cwd) === workspace.path`.
+ * Workspace registry rows can outlive a deleted folder (`missing-dir`); chat
+ * history still lives in the session log, not as files under cwd. Mirror
+ * official `createSession` and recreate an empty project root when missing.
+ */
+export function ensureResolvableWorkspaceCwd(cwd: string): string {
+  const absolute = resolve(cwd)
+  try {
+    if (!existsSync(absolute)) {
+      mkdirSync(absolute, { recursive: true })
+    }
+    if (!statSync(absolute).isDirectory()) {
+      throw new WebChatImportError(
+        'missing-cwd',
+        `Workspace path exists but is not a directory: ${absolute}`,
+      )
+    }
+  } catch (error) {
+    if (error instanceof WebChatImportError) throw error
+    throw new WebChatImportError(
+      'missing-cwd',
+      `Workspace folder could not be created or read: ${absolute}`,
+    )
+  }
+  return absolute
+}
+
+/** @deprecated Prefer {@link ensureResolvableWorkspaceCwd} (auto-mkdir). */
+export function assertResolvableWorkspaceCwd(cwd: string): void {
+  ensureResolvableWorkspaceCwd(cwd)
+}
+
 export async function importWebChatHistoryNow(
   input: ImportWebChatHistoryNowInput,
 ): Promise<ImportWebChatHistoryNowResult> {
   assertTranscript(input.transcript)
-  const cwd = resolve(input.cwd)
+  const cwd = ensureResolvableWorkspaceCwd(input.cwd)
   const opened = await openAgentWorkSession(input, cwd)
   try {
     const flushed = await input.sessions.flush(opened.session)

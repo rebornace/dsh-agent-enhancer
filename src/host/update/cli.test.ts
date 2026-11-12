@@ -104,13 +104,13 @@ describe('runPluginAdd', () => {
       }
       return fakeChild({ code: 0, stdout: 'ok\n' })
     })
-    const result = await runPluginAdd('0.3.11', spawn, {
+    const result = await runPluginAdd('0.3.12', spawn, {
       candidates: ['dsh', '/tmp/bundled/dsh'],
       exists: (path) => path === '/tmp/bundled/dsh',
     })
     expect(result.ok).toBe(true)
     expect(spawn.mock.calls[1]?.[1]).toEqual([
-      'plugin', '--profile', 'desktop', 'add', 'dsh-agent-enhancer@0.3.11',
+      'plugin', '--profile', 'desktop', 'add', 'dsh-agent-enhancer@0.3.12',
     ])
   })
 })

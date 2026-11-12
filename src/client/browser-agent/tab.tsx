@@ -15,6 +15,7 @@ import styles from '../styles.module.css'
 import {
   agentEnhancerBrowserAgentLaunchBrowser,
   agentEnhancerBrowserAgentQuotePage,
+  agentEnhancerBrowserAgentSelectTab,
   agentEnhancerBrowserAgentSetBrowser,
   agentEnhancerBrowserAgentSnapshot,
 } from '../remote.ts'
@@ -90,6 +91,10 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
       setSnapshot(result.snapshot)
       if (!result.ok) {
         const detail = result.error?.trim() ?? ''
+        if (/WEBKIT_MISSING|npx playwright install webkit/i.test(detail)) {
+          setHint(t('browserAgentWebkitMissing'))
+          return
+        }
         setHint(detail === ''
           ? t('browserAgentLaunchFailed')
           : `${t('browserAgentLaunchFailed')} (${detail})`)
@@ -130,8 +135,29 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
     }
   }
 
+  const selectTab = async (tabId: number) => {
+    setBusy(true)
+    setHint(null)
+    try {
+      const sessionId = lastQuoteSessionId()
+      const result = await agentEnhancerBrowserAgentSelectTab.invoke(remote(), {
+        tabId,
+        ...(sessionId === undefined ? {} : { sessionId }),
+      })
+      setSnapshot(result.snapshot)
+      if (!result.ok) {
+        setHint(result.error ?? t('browserAgentSelectTabFailed'))
+        return
+      }
+      setHint(t('browserAgentSelectTabOk').replace('{tabId}', String(result.tabId ?? tabId)))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const connected = snapshot?.bridge.extensionConnected === true
   const boundTabId = snapshot?.boundTabId ?? null
+  const tabs = snapshot?.tabs ?? []
   const launched = snapshot?.launchedBrowser
   const statusLabel = snapshot === null
     ? t('browserAgentSidebarLoading')
@@ -197,6 +223,44 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
             </button>
           ) : null}
         </div>
+        {connected ? (
+          <div className={styles.browserAgentTabListSection}>
+            <p className={styles.browserAgentPaneStatus}>{t('browserAgentTabsTitle')}</p>
+            <p className={styles.browserAgentPaneNote}>{t('browserAgentTabsHint')}</p>
+            {tabs.length === 0 ? (
+              <p className={styles.browserAgentPaneNote}>{t('browserAgentTabsEmpty')}</p>
+            ) : (
+              <ul className={styles.browserAgentTabList} aria-label={t('browserAgentTabsTitle')}>
+                {tabs.map(tab => {
+                  const selected = tab.active || tab.tabId === boundTabId
+                  const title = tab.title.trim() === '' ? t('browserAgentTabUntitled') : tab.title.trim()
+                  return (
+                    <li key={tab.tabId} className={styles.browserAgentTabItem}>
+                      <button
+                        type="button"
+                        className={selected
+                          ? `${styles.browserAgentTabRow} ${styles.browserAgentTabRowSelected}`
+                          : styles.browserAgentTabRow}
+                        disabled={busy || selected}
+                        aria-current={selected ? 'true' : undefined}
+                        onClick={() => { void selectTab(tab.tabId) }}
+                      >
+                        <span className={styles.browserAgentTabId}>{tab.tabId}</span>
+                        <span className={styles.browserAgentTabMeta}>
+                          <span className={styles.browserAgentTabTitleText}>{title}</span>
+                          <span className={styles.browserAgentTabUrl}>{tab.url}</span>
+                        </span>
+                        {tab.bound ? (
+                          <span className={styles.browserAgentTabBadge}>{t('browserAgentTabBoundBadge')}</span>
+                        ) : null}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        ) : null}
         {hint !== null ? (
           <p className={styles.browserAgentPaneNote}>{hint}</p>
         ) : null}

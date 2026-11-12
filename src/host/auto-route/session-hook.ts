@@ -5,6 +5,10 @@ import { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
 import { autoRouteMapOf, isAutoModel } from '../../config.ts'
 import type { EnhancerSettings } from '../../config.ts'
 import { createClassifier } from './classifier.ts'
+import {
+  AUTO_ROUTE_UNCONFIGURED_LLM_MESSAGE,
+  AutoRouteUnconfiguredError,
+} from './errors.ts'
 import { resolveAutoRoute } from './router.ts'
 import {
   clearSessionResolvedRoute,
@@ -99,9 +103,11 @@ class AutoCatalogAdapter extends LlmAdapter {
   }
 
   override stream(_options: GenerateOptions): AsyncIterable<StreamChunk> {
+    // BuiltinLlmFailureCode no longer has a custom sentinel; UNSUPPORTED_OPTION
+    // matches “this seat is not a provider stream” (0.2.2-rc.2+).
     throw new LlmError(
       'Auto is a routing sentinel and is not sent to a provider',
-      'AUTO_SENTINEL',
+      'UNSUPPORTED_OPTION',
     )
   }
 }
@@ -303,17 +309,32 @@ export function installAutoSessionRoute(
       const classify = settings.autoClassifierEnabled
         ? createClassifier({ prepareCall: innerPrepare }, map.classifier)
         : undefined
-      const mapped = await resolveAutoRoute({
-        text: note?.text ?? '',
-        feature,
-        toolHeavy: note?.toolHeavy ?? false,
-        map,
-        classifierEnabled: settings.autoClassifierEnabled,
-        classify,
-        isAvailable: (provider, model) => provider !== '' && model !== '' && !isAutoModel({ provider, model }),
-        signal,
-        fallback: fallbackRoute(ctx, asAgent(agent)),
-      })
+      let mapped: Awaited<ReturnType<typeof resolveAutoRoute>>
+      try {
+        mapped = await resolveAutoRoute({
+          text: note?.text ?? '',
+          feature,
+          toolHeavy: note?.toolHeavy ?? false,
+          map,
+          classifierEnabled: settings.autoClassifierEnabled,
+          classify,
+          isAvailable: (provider, model) => provider !== '' && model !== '' && !isAutoModel({ provider, model }),
+          signal,
+          fallback: fallbackRoute(ctx, asAgent(agent)),
+        })
+      } catch (error) {
+        if (error instanceof AutoRouteUnconfiguredError) {
+          throw new LlmError(AUTO_ROUTE_UNCONFIGURED_LLM_MESSAGE, 'INVALID_CONFIG')
+        }
+        throw error
+      }
+      if (
+        mapped.provider === ''
+        || mapped.model === ''
+        || isAutoModel({ provider: mapped.provider, model: mapped.model })
+      ) {
+        throw new LlmError(AUTO_ROUTE_UNCONFIGURED_LLM_MESSAGE, 'INVALID_CONFIG')
+      }
       if (agent !== undefined && feature === 'session') setSessionResolvedRoute(agent, mapped)
       return mapped
     }
@@ -342,7 +363,7 @@ export function installAutoSessionRoute(
 
     // Compaction-basic (and other helpers) call llm.stream() with the frozen
     // Auto seat from requestHeader — that path never hits prepareCall, so the
-    // sentinel would throw AUTO_SENTINEL. Remap the same way before dispatch.
+    // sentinel would throw UNSUPPORTED_OPTION. Remap the same way before dispatch.
     let wrappedStream: typeof llm.stream | undefined
     if (innerStream !== undefined) {
       wrappedStream = (options) => {

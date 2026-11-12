@@ -1,21 +1,15 @@
 import {
   extractWebChatShareId,
+  webChatHistoryMessagesApiUrl,
   webChatShareContentApiUrl,
 } from '../../host/web-chat-bridge/share-link.ts'
 import type { GuestWebView } from './guest.tsx'
 
-/**
- * Same-origin fetch inside the guest (avoids Host-side WAF when possible).
- * Returns JSON text for Host `resolveWebChatShareLink({ payloadJson })`.
- */
-export async function fetchWebChatSharePayloadFromGuest(
+async function fetchJsonPayloadFromGuest(
   guest: GuestWebView | null,
-  shareUrlOrId: string,
+  apiUrl: string,
 ): Promise<string | null> {
   if (guest === null) return null
-  const shareId = extractWebChatShareId(shareUrlOrId)
-  if (shareId === null) return null
-  const apiUrl = webChatShareContentApiUrl(shareId)
   const script = `
 (async function () {
   var origin = 'https://chat.deepseek.com';
@@ -43,4 +37,29 @@ export async function fetchWebChatSharePayloadFromGuest(
   } catch {
     return null
   }
+}
+
+/**
+ * Same-origin fetch inside the guest (avoids Host-side WAF when possible).
+ * Returns JSON text for Host `resolveWebChatShareLink({ payloadJson })`.
+ */
+export async function fetchWebChatSharePayloadFromGuest(
+  guest: GuestWebView | null,
+  shareUrlOrId: string,
+): Promise<string | null> {
+  const shareId = extractWebChatShareId(shareUrlOrId)
+  if (shareId === null) return null
+  return fetchJsonPayloadFromGuest(guest, webChatShareContentApiUrl(shareId))
+}
+
+/**
+ * Logged-in history for the open `/s/{id}` session — same fragment markdown as share links.
+ */
+export async function fetchWebChatHistoryPayloadFromGuest(
+  guest: GuestWebView | null,
+  chatSessionId: string,
+): Promise<string | null> {
+  const id = chatSessionId.trim()
+  if (id === '') return null
+  return fetchJsonPayloadFromGuest(guest, webChatHistoryMessagesApiUrl(id))
 }

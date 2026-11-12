@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+## 0.3.12 - 2026-11-12
+
+### Added
+
+- **浏览器 Agent · 多标签：** `browser_navigate({ newTab: true })`；右侧栏标签列表切换（`browserAgentSelectTab`）。
+- **连接器（MCP）：** 列表/详情显示运行状态；详情「重启连接」「探测」（官方 `connectionStatusOf` / `probeServer`）；已连通时探测读现活实例，避免 ModelScope 等过期 URL 二次握手误报。
+
+### Fixed
+
+- **浏览器 Agent：** 工具结果 `tabId` 跟随当前页（不再写死 `1`）；缺 Playwright WebKit 时侧栏提示可复制的 `npx playwright install webkit`；登录墙面板改为 `alertdialog` 并聚焦「我已完成」。
+- **划词引用：** 不再挂对话正文双入口（让位官方聊天引用）；开关仅控制预览 / 编辑器 / 终端。
+- **暂停后续：** 去掉原生 `title`，只保留产品 Tooltip，避免悬停双提示；文案与官方 Stop 区分。
+- **Auto 未配置：** 即时 / 思考 / 专业均未设置或不可用时，不再落到空模型再报模糊失败；会话 `prepareCall`、优化 / 建议下一条、上下文压缩（含跟随会话 + Auto）统一抛出 `AUTO_ROUTE_UNCONFIGURED`，并提示到 **设置 → 智能体增强 → 模型与路由** 配置档位。
+- **Auto 档位回退：** 首选档模型不可用时，继续尝试其它已映射档（如 Instant→flash 挂了仍可用 Thinking），而不是直接报未配置。
+- **网页聊天 → 工作区：** 导入前若工作区目录缺失则自动 `mkdir`（与官方建会话一致）；仅当路径不可建/不是目录时才报 `missing-cwd`。聊天写入会话日志，不往工作区文件夹落文件，空目录属正常。
+- **网页聊天 · 当前对话样式：** 「当前对话」优先走登录态 `history_messages`（与分享链接同套 fragments Markdown）；失败时 DOM 抓取改为 HTML→Markdown，不再把整段回答压成一行纯文本。
+- **连接器反馈：** 探测/重启等结果改用浮动 Toast，不再顶开整页布局。
+- **发布校验（Windows）：** `scripts/verify-package.mjs` 在 `npm_execpath` 为 `pnpm.exe` 时直接执行，不再 `node pnpm.exe`（Node 会报未知扩展名）。
+
+### Changed
+
+- **DSH Desktop `0.2.2-rc.2`：** peer/dev `@deepseek-ai/dsh-*` 升至 `0.2.2-rc.2`；`engines.dsh` 改为 `>=0.2.2-rc.2 <0.3.0-0`。
+- **网页聊天导入：** 受保护 system head / assistant 步改为 `session.append([...])` 批量追加；seed 录制器同步支持单事件与批量 overload。
+- **划词引用浮层：** `placeQuoteChip` 按官方 Menu 口径，在 WebKit 下把视觉原点 client 坐标换算到 layout 原点，避免缩放/平移后 `position: fixed` 错位。
+- **Auto 哨兵：** `LlmError` 代码改为内置 `UNSUPPORTED_OPTION`（官方已移除自定义 `AUTO_SENTINEL`）。
+- **测试夹具：** `SessionSnapshot` 补齐 `historyWasPartial` / `historyLoadStatus`（聊天上滑自动加载历史相关字段）。
+- **浏览器 Agent：** 不做官方侧栏 URL 镜像 / 窗口置顶按钮（沙箱与登录态不共用，实用价值低）。
+
+### Docs
+
+- README 中英文钉到 `0.3.12`。
+
 ## 0.3.11 - 2026-11-11
 
 ### Added

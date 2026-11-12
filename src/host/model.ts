@@ -18,6 +18,7 @@ import {
 } from '../config.ts'
 import type { AuxiliaryFeature, AuxiliaryModelSettings, EnhancerSettings } from '../config.ts'
 import { createClassifier } from './auto-route/classifier.ts'
+import { AutoRouteUnconfiguredError } from './auto-route/errors.ts'
 import {
   getSessionResolvedRouteForSession,
   setSessionResolvedRouteForSession,
@@ -207,16 +208,27 @@ export class AuxiliaryModels {
     const classify = settings.autoClassifierEnabled
       ? createClassifier(this.ctx.llm, map.classifier)
       : undefined
-    const mapped = await resolveAutoRoute({
-      text,
-      feature,
-      toolHeavy,
-      map,
-      classifierEnabled: settings.autoClassifierEnabled,
-      classify,
-      isAvailable: (provider, model) => this.modelExists(provider, model),
-      fallback: this.fallbackFromSession(session, override),
-    })
+    let mapped: Awaited<ReturnType<typeof resolveAutoRoute>>
+    try {
+      mapped = await resolveAutoRoute({
+        text,
+        feature,
+        toolHeavy,
+        map,
+        classifierEnabled: settings.autoClassifierEnabled,
+        classify,
+        isAvailable: (provider, model) => this.modelExists(provider, model),
+        fallback: this.fallbackFromSession(session, override),
+      })
+    } catch (error) {
+      if (error instanceof AutoRouteUnconfiguredError) {
+        throw new AuxiliaryError('AUTO_ROUTE_UNCONFIGURED', error.message)
+      }
+      throw error
+    }
+    if (!this.modelExists(mapped.provider, mapped.model) || isAutoModel(mapped)) {
+      throw new AuxiliaryError('AUTO_ROUTE_UNCONFIGURED')
+    }
     // Only warm the session-turn cache for follow+Auto rematches — not for
     // a feature that selected Auto on its own (that tier is feature-local).
     if (feature === 'session') {
@@ -356,6 +368,9 @@ export class AuxiliaryModels {
     } catch (error) {
       if (controller.signal.aborted) throw controller.signal.reason
       if (error instanceof AuxiliaryError) throw error
+      if (error instanceof AutoRouteUnconfiguredError) {
+        throw new AuxiliaryError('AUTO_ROUTE_UNCONFIGURED', error.message)
+      }
       throw new AuxiliaryError('MODEL_FAILED')
     } finally {
       signal.removeEventListener('abort', abort)

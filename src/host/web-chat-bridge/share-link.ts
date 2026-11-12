@@ -175,6 +175,7 @@ export function parseWebChatHistoryMessages(
   options: {
     readonly chatSessionId: string
     readonly title?: string
+    readonly url?: string
   },
 ): WebChatTranscript {
   const record = bizRecord(data)
@@ -204,6 +205,7 @@ export function parseWebChatHistoryMessages(
     source: {
       kind: 'account-history',
       chatSessionId: options.chatSessionId,
+      ...(options.url === undefined || options.url.trim() === '' ? {} : { url: options.url }),
       capturedAt: new Date().toISOString(),
     },
   }

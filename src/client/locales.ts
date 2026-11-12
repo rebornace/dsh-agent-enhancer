@@ -4,7 +4,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     'agent-enhancer': 'historyTitle' | 'historySearch' | 'historyResults' | 'historyClose' |
       'optimize' | 'optimizePending' | 'optimizeUndo' | 'optimizeError' | 'optimizeChips' | 'optimizeChipSelection' |
-      'optimizeModelUnavailable' | 'optimizeRequestFailed' | 'optimizeInvalidOutput' | 'optimizeRollbackFailed' | 'optimizeSessionChanged' |
+      'optimizeModelUnavailable' | 'autoRouteUnconfigured' | 'optimizeRequestFailed' | 'optimizeInvalidOutput' | 'optimizeRollbackFailed' | 'optimizeSessionChanged' |
       'settingsTitle' | 'settingsSubtitle' | 'history' | 'historyDescription' | 'optimizeDescription' |
       'predict' | 'predictDescription' | 'quote' | 'quoteDescription' |
       'usage' | 'usageDescription' |
@@ -67,6 +67,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'webChatRoleUser' | 'webChatRoleAssistant' |
       'webChatImportSuccess' |
       'webChatImportFailed' | 'webChatImportNoWorkspace' |
+      'webChatImportMissingCwd' | 'webChatImportMissingCwdDetail' |
       'webChatImportInvalid' |
       'webChatCaptureFailed' | 'webChatCaptureGenerating' | 'webChatCaptureUnsentDraft' |
       'webChatCaptureEmpty' | 'webChatCaptureStructure' | 'webChatCaptureGuestNotReady' |
@@ -79,7 +80,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentConnectHint' | 'browserAgentApproveTitle' |
       'browserAgentAllowOnce' | 'browserAgentAllowOrigin' | 'browserAgentDeny' |
       'browserAgentLaunch' | 'browserAgentLaunchHint' | 'browserAgentLaunchStarted' |
-      'browserAgentLaunchFailed' |
+      'browserAgentLaunchFailed' | 'browserAgentWebkitMissing' |
       'browserAgentClose' |
       'browserAgentTabConflictTitle' | 'browserAgentTabConflictBody' |
       'browserAgentTabFollow' | 'browserAgentTabStay' |
@@ -89,6 +90,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentQuotePage' |
       'browserAgentQuoteOk' | 'browserAgentQuoteFailed' | 'browserAgentQuoteNoSession' |
       'browserAgentOpenLinkHint' |
+      'browserAgentTabsTitle' | 'browserAgentTabsHint' | 'browserAgentTabsEmpty' |
+      'browserAgentTabUntitled' | 'browserAgentTabBoundBadge' |
+      'browserAgentSelectTabOk' | 'browserAgentSelectTabFailed' |
       'browserAgentGuideDescription' | 'browserAgentSidebarHint' |
       'browserAgentSidebarLoading' | 'browserAgentSidebarConnected' |
       'browserAgentSidebarDisconnected' | 'browserAgentSidebarChatHint' |
@@ -195,6 +199,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'mcpConnectorsBridgeMissing' | 'mcpConnectorsToolsTitle' | 'mcpConnectorsToolsEmpty' |
       'mcpConnectorsToolsDisabled' | 'mcpConnectorsToolsPick' |
       'mcpConnectorsToolsLoading' | 'mcpConnectorsForceOverwrite' | 'mcpConnectorsHostStale' |
+      'mcpConnectorsStatus' | 'mcpConnectorsStatus_disabled' | 'mcpConnectorsStatus_unmounted' |
+      'mcpConnectorsStatus_connecting' | 'mcpConnectorsStatus_connected' |
+      'mcpConnectorsStatus_reconnecting' | 'mcpConnectorsStatus_waiting-credentials' |
+      'mcpConnectorsStatus_failed' | 'mcpConnectorsStatus_closed' |
+      'mcpConnectorsRestart' | 'mcpConnectorsRestarting' | 'mcpConnectorsRestartOk' |
+      'mcpConnectorsRestartFailed' |
+      'mcpConnectorsProbe' | 'mcpConnectorsProbing' | 'mcpConnectorsProbeOk' |
+      'mcpConnectorsProbeFailed' | 'mcpConnectorsProbeUrlExpired' |
       'instructionsSkillsMdCopy' | 'instructionsSkillsMdCopied' | 'instructionsSkillsMdFootnotes' |
       'instructionsSkillsMdCode' | 'instructionsSkillsMdWrap' | 'instructionsSkillsMdUnwrap' |
       'fileEdit' | 'fileEditDescription' | 'fileEditTitle' | 'fileEditActionHint' |
@@ -228,7 +240,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'contextInspectCompact' | 'contextInspectCompactHint' | 'contextInspectCompacting' |
       'contextInspectCompactDone' | 'contextInspectCompactNoop' |
       'contextInspectCompactUnavailable' | 'contextInspectCompactBusy' | 'contextInspectCompactFailed' |
-      'contextInspectCompactModel' | 'contextInspectCompactSummary' | 'contextInspectCompactChanged' |
+      'contextInspectCompactModel' | 'contextInspectCompactAutoUnconfigured' | 'contextInspectCompactSummary' | 'contextInspectCompactChanged' |
       'quoteSelection'
   }
 }
@@ -243,7 +255,8 @@ export const agentLocales = {
     optimizePending: '正在优化提示词',
     optimizeUndo: '撤销优化',
     optimizeError: '优化失败，请重试',
-    optimizeModelUnavailable: '当前模型不可用，请检查模型选择',
+    optimizeModelUnavailable: '当前模型不可用。若会话在用 Auto，请到设置配置 Auto 档位；或为优化指定具体模型。',
+    autoRouteUnconfigured: '尚未配置 Auto 档位模型。请打开 设置 → 内置插件 → 智能体增强 → 模型与路由，为即时 / 思考 / 专业指定具体模型。',
     optimizeRequestFailed: '优化请求失败，请重试',
     optimizeInvalidOutput: '模型返回内容无法安全应用，请重试',
     optimizeRollbackFailed: '草稿恢复失败，请检查草稿并手动恢复',
@@ -252,7 +265,7 @@ export const agentLocales = {
     optimizeChipSelection: '选区包含引用，请优化整稿或调整选区',
     quoteSelection: '引用文本',
     quote: '划词引用',
-    quoteDescription: '在对话、文件预览、编辑器或终端划词后写入输入框引用块（不调用模型）',
+    quoteDescription: '文件预览、编辑器或终端划词后写入输入框引用块（不调用模型）。对话正文请用官方划词引用，避免双入口。',
     settingsTitle: '智能体增强',
     settingsSubtitle: '补齐常用智能体能力，可按需开关',
     settingsTabFeatures: '功能',
@@ -441,6 +454,8 @@ export const agentLocales = {
     webChatImportSuccess: '已在工作区打开新会话。',
     webChatImportFailed: '转到工作区失败，请重试。',
     webChatImportNoWorkspace: '没有可用的工作区。',
+    webChatImportMissingCwd: '无法准备工作区目录（权限不足或路径不是文件夹）。请换一个工作区，或检查该路径是否可写。',
+    webChatImportMissingCwdDetail: '无法准备工作区目录：{detail}',
     webChatImportInvalid: '对话内容无效或无法识别。',
     webChatCaptureFailed: '未能读取当前对话，请确认页面上已打开一段对话。',
     webChatCaptureGenerating: '网页仍在生成回复，请等待完成后再试。',
@@ -466,6 +481,7 @@ export const agentLocales = {
     browserAgentLaunchHint: '打开独立浏览器窗口（单独配置目录，可保留登录）。设置或侧栏切换浏览器后立即生效。不影响你平时的浏览器。',
     browserAgentLaunchStarted: '已启动专用浏览器…',
     browserAgentLaunchFailed: '无法启动浏览器。请确认本机已安装对应浏览器（Mac：Safari 或 Chrome；Windows：Chrome 或 Edge）。',
+    browserAgentWebkitMissing: '尚未安装 Playwright WebKit（Safari 引擎）。在终端运行：npx playwright install webkit，完成后重试启动或 Auto。',
     browserAgentGuideDescription: '启动专用浏览器、查看连接状态；也可在对话中操作网页，或 Alt+点击链接。',
     browserAgentSidebarHint: '先选择浏览器；对话中需要时会自动启动（也可点下方手动启动）。',
     browserAgentSidebarLoading: '正在读取连接状态…',
@@ -492,6 +508,13 @@ export const agentLocales = {
     browserAgentQuoteFailed: '无法插入引用',
     browserAgentQuoteNoSession: '没有活动会话，无法引用',
     browserAgentOpenLinkHint: 'Alt+点击对话中的链接，可在专用浏览器绑定标签中打开',
+    browserAgentTabsTitle: '标签页',
+    browserAgentTabsHint: '点击切换智能体当前操作的标签；有活动会话时会同步绑定。',
+    browserAgentTabsEmpty: '暂无打开的标签。启动后导航一次即可出现。',
+    browserAgentTabUntitled: '无标题',
+    browserAgentTabBoundBadge: '已绑定',
+    browserAgentSelectTabOk: '已切换到标签 {tabId}',
+    browserAgentSelectTabFailed: '无法切换标签',
     instructionsSkills: '技能',
     instructionsSkillsDescription: '从 GitHub 或 Zip 安装技能；在左侧栏管理；安装后在输入框用 / 调用',
     instructionsSkillsLeftNavUnsupported: '当前版本没有左侧技能入口，请升级 DeepSeek Harness 或确认功能已开启',
@@ -633,6 +656,24 @@ export const agentLocales = {
     mcpConnectorsLoading: '正在加载…',
     mcpConnectorsFailed: '加载失败',
     mcpConnectorsBridgeMissing: 'MCP 客户端不可用，暂时无法加载工具',
+    mcpConnectorsStatus: '运行状态',
+    mcpConnectorsStatus_disabled: '已禁用',
+    mcpConnectorsStatus_unmounted: '未挂载',
+    mcpConnectorsStatus_connecting: '连接中',
+    mcpConnectorsStatus_connected: '已连接',
+    mcpConnectorsStatus_reconnecting: '重连中',
+    'mcpConnectorsStatus_waiting-credentials': '等待凭据',
+    mcpConnectorsStatus_failed: '失败',
+    mcpConnectorsStatus_closed: '已关闭',
+    mcpConnectorsRestart: '重启连接',
+    mcpConnectorsRestarting: '重启中…',
+    mcpConnectorsRestartOk: '已重启连接',
+    mcpConnectorsRestartFailed: '重启失败',
+    mcpConnectorsProbe: '探测',
+    mcpConnectorsProbing: '探测中…',
+    mcpConnectorsProbeOk: '探测成功',
+    mcpConnectorsProbeFailed: '探测失败',
+    mcpConnectorsProbeUrlExpired: '远程 URL 已过期，请到服务商控制台重新复制 mcp.json 并覆盖导入',
     mcpConnectorsToolsTitle: '工具',
     mcpConnectorsToolsEmpty: '暂无工具',
     mcpConnectorsToolsDisabled: '已禁用',
@@ -742,6 +783,7 @@ export const agentLocales = {
     contextInspectCompactBusy: '智能体忙碌中，请结束后再压缩。',
     contextInspectCompactFailed: '压缩未完成，会话可能未变化，请稍后重试。',
     contextInspectCompactModel: '压缩模型不可用。请在设置里为压缩指定具体模型，或先用非 Auto 模型发一轮对话。',
+    contextInspectCompactAutoUnconfigured: '尚未配置 Auto 档位模型，压缩无法跟随会话 / Auto。请到 设置 → 智能体增强 → 模型与路由 配置即时 / 思考 / 专业。',
     contextInspectCompactSummary: '未能生成可用摘要，会话未变化；可换模型后重试。',
     contextInspectCompactChanged: '压缩过程中历史已变化，会话未写入；请稍后重试。',
     rollback: '检查点恢复',
@@ -857,7 +899,8 @@ export const agentLocales = {
     optimizePending: 'Optimizing prompt',
     optimizeUndo: 'Undo optimization',
     optimizeError: 'Optimization failed. Try again.',
-    optimizeModelUnavailable: 'Model unavailable. Check the model selection.',
+    optimizeModelUnavailable: 'Model unavailable. If this session uses Auto, map Auto tiers in settings — or pick a concrete model for Optimize.',
+    autoRouteUnconfigured: 'Auto routing is not configured. Open Settings → Built-in plugins → Agent Enhancer → Models & routing and map Instant / Thinking / Pro to real models.',
     optimizeRequestFailed: 'Optimization failed. Try again.',
     optimizeInvalidOutput: 'The model response cannot be applied safely. Try again.',
     optimizeRollbackFailed: 'Draft recovery failed. Check the draft and restore it manually.',
@@ -866,7 +909,7 @@ export const agentLocales = {
     optimizeChipSelection: 'Selection includes references. Optimize the full draft or adjust the selection.',
     quoteSelection: 'Quote text',
     quote: 'Quote selection',
-    quoteDescription: 'Select text in chat, file preview, editor, or terminal to insert a quote (no model call)',
+    quoteDescription: 'Select text in file preview, editor, or terminal to insert a quote (no model call). Use official chat quote for conversation text to avoid duplicate chips.',
     settingsTitle: 'Agent Enhancer',
     settingsSubtitle: 'Everyday agent features — turn each one on or off',
     settingsTabFeatures: 'Features',
@@ -1052,6 +1095,8 @@ export const agentLocales = {
     webChatImportSuccess: 'Opened as a new workspace session.',
     webChatImportFailed: 'Could not move to workspace. Try again.',
     webChatImportNoWorkspace: 'No workspace is available.',
+    webChatImportMissingCwd: 'Could not prepare the workspace folder (permission denied, or the path is not a directory). Pick another workspace, or check that the path is writable.',
+    webChatImportMissingCwdDetail: 'Could not prepare the workspace folder: {detail}',
     webChatImportInvalid: 'The conversation is invalid or unrecognized.',
     webChatCaptureFailed: 'Could not read this conversation. Open a chat on the page first.',
     webChatCaptureGenerating: 'A reply is still generating. Wait until it finishes.',
@@ -1080,6 +1125,7 @@ export const agentLocales = {
     browserAgentLaunchHint: 'Opens a separate browser window (its own profile, can keep login). Browser choice from Settings or the sidebar applies immediately. Your everyday browser is untouched.',
     browserAgentLaunchStarted: 'Dedicated browser started…',
     browserAgentLaunchFailed: 'Could not launch a browser. Install the matching browser (Mac: Safari or Chrome; Windows: Chrome or Edge), then try again.',
+    browserAgentWebkitMissing: 'Playwright WebKit (Safari engine) is not installed. Run: npx playwright install webkit — then launch again or retry Auto.',
     browserAgentGuideDescription: 'Launch the dedicated browser and check status. Chat can also drive pages, or Alt+click links.',
     browserAgentSidebarHint: 'Pick a browser; chat auto-launches when needed (or use Launch below).',
     browserAgentSidebarLoading: 'Reading connection status…',
@@ -1106,6 +1152,13 @@ export const agentLocales = {
     browserAgentQuoteFailed: 'Could not insert quote',
     browserAgentQuoteNoSession: 'No active session to quote into',
     browserAgentOpenLinkHint: 'Alt+click a chat link to open it in the dedicated browser bound tab',
+    browserAgentTabsTitle: 'Tabs',
+    browserAgentTabsHint: 'Click to switch the tab the agent operates on; binds to the active chat session when one exists.',
+    browserAgentTabsEmpty: 'No open tabs yet. Launch and navigate once to populate this list.',
+    browserAgentTabUntitled: 'Untitled',
+    browserAgentTabBoundBadge: 'Bound',
+    browserAgentSelectTabOk: 'Switched to tab {tabId}',
+    browserAgentSelectTabFailed: 'Could not switch tab',
     instructionsSkills: 'Skills',
     instructionsSkillsDescription: 'Install skills from GitHub or Zip; manage them in the left sidebar; invoke with / in the composer',
     instructionsSkillsLeftNavUnsupported: 'This build has no left Skills entry. Upgrade DeepSeek Harness or confirm the feature is on',
@@ -1247,6 +1300,24 @@ export const agentLocales = {
     mcpConnectorsLoading: 'Loading…',
     mcpConnectorsFailed: 'Failed to load',
     mcpConnectorsBridgeMissing: 'MCP client unavailable; tools cannot load right now',
+    mcpConnectorsStatus: 'Runtime status',
+    mcpConnectorsStatus_disabled: 'Disabled',
+    mcpConnectorsStatus_unmounted: 'Not mounted',
+    mcpConnectorsStatus_connecting: 'Connecting',
+    mcpConnectorsStatus_connected: 'Connected',
+    mcpConnectorsStatus_reconnecting: 'Reconnecting',
+    'mcpConnectorsStatus_waiting-credentials': 'Waiting for credentials',
+    mcpConnectorsStatus_failed: 'Failed',
+    mcpConnectorsStatus_closed: 'Closed',
+    mcpConnectorsRestart: 'Restart',
+    mcpConnectorsRestarting: 'Restarting…',
+    mcpConnectorsRestartOk: 'Connection restarted',
+    mcpConnectorsRestartFailed: 'Restart failed',
+    mcpConnectorsProbe: 'Probe',
+    mcpConnectorsProbing: 'Probing…',
+    mcpConnectorsProbeOk: 'Probe succeeded',
+    mcpConnectorsProbeFailed: 'Probe failed',
+    mcpConnectorsProbeUrlExpired: 'Remote URL expired — copy a fresh mcp.json from the provider and re-import (overwrite)',
     mcpConnectorsToolsTitle: 'Tools',
     mcpConnectorsToolsEmpty: 'No tools',
     mcpConnectorsToolsDisabled: 'Disabled',
@@ -1356,6 +1427,7 @@ export const agentLocales = {
     contextInspectCompactBusy: 'The agent is busy. Try again when it is idle.',
     contextInspectCompactFailed: 'Compaction did not finish. The conversation may be unchanged; try again.',
     contextInspectCompactModel: 'No usable compact model. Pick a concrete model for compact in settings, or send one turn with a non-Auto model first.',
+    contextInspectCompactAutoUnconfigured: 'Auto tiers are not configured, so compact cannot follow the session / Auto. Open Settings → Agent Enhancer → Models & routing and map Instant / Thinking / Pro.',
     contextInspectCompactSummary: 'Could not produce a useful summary; the conversation is unchanged. Try another model.',
     contextInspectCompactChanged: 'History changed during compaction; nothing was written. Try again.',
     rollback: 'Checkpoint restore',
