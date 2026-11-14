@@ -11,7 +11,6 @@ import type {
   ModuleName,
   RunAlertsLevel,
 } from '../../config.ts'
-import type { ApplyUpdateResult, UpdateCheckResult } from '../../host/update/types.ts'
 import { AUTO_MODEL, AUTO_PROVIDER } from '../../host/auto-route/sentinel.ts'
 import styles from '../styles.module.css'
 import { decodeModelSelection } from './model-catalog.ts'
@@ -44,8 +43,6 @@ export interface PluginSettingsProps {
   /** Fence-free Host write; preferred over form.mutate/set for Desktop 0.2.2. */
   readonly persist?: (ops: readonly SettingsPersistOp[]) => Promise<void>
   readonly loadCatalog?: () => Promise<ModelCatalog>
-  readonly checkUpdate?: () => Promise<UpdateCheckResult>
-  readonly applyUpdate?: () => Promise<ApplyUpdateResult>
   /** Host remote — sync browser preference live so Agent tools honor Settings without Launch. */
   readonly getRemote?: () => unknown
 }
@@ -88,7 +85,7 @@ function tabLabel(
   }
 }
 
-function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyUpdate, getRemote }: PluginSettingsProps) {
+function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: PluginSettingsProps) {
   const formState = useSyncExternalStore(
     listener => form.subscribe(listener),
     () => form.getSnapshot(),
@@ -388,11 +385,7 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, checkUpdate, applyU
       break
     case 'about':
       panel = (
-        <SettingsAboutPanel
-          t={t}
-          checkUpdate={checkUpdate}
-          applyUpdate={applyUpdate}
-        />
+        <SettingsAboutPanel t={t} />
       )
       break
     default: {

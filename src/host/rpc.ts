@@ -6,7 +6,6 @@ import type { AuxiliaryErrorCode } from '../errors.ts'
 import type { WebChatImportErrorCode } from './web-chat-bridge/import-session.ts'
 import type { CheckpointRollbackErrorCode } from './checkpoint/service.ts'
 import { SKILL_INSTALL_STAGES } from './instructions-skills/install-progress.ts'
-import { APPLY_UPDATE_CODES } from './update/types.ts'
 import { USAGE_RANGES, USAGE_SOURCES } from './usage/types.ts'
 
 const sessionIdSchema = z.string().min(1).transform(value => value as SessionId)
@@ -500,22 +499,6 @@ const listExtraFolderEntriesResultCodec = codec(
   'dsh-agent-enhancer#ListExtraFolderEntriesResult',
   listExtraFolderEntriesResultSchema,
 )
-
-export const updateCheckResultSchema = z.strictObject({
-  current: z.string(),
-  latest: z.string().nullable(),
-  updateAvailable: z.boolean(),
-  installKind: z.enum(['npm', 'link', 'unknown']),
-  canAutoApply: z.boolean(),
-  command: z.string(),
-})
-export const applyUpdateResultSchema = z.strictObject({
-  ok: z.boolean(),
-  message: z.enum(APPLY_UPDATE_CODES),
-  command: z.string().optional(),
-})
-const updateCheckResultCodec = codec('dsh-agent-enhancer#UpdateCheckResult', updateCheckResultSchema)
-const applyUpdateResultCodec = codec('dsh-agent-enhancer#ApplyUpdateResult', applyUpdateResultSchema)
 
 const usageTokenFields = {
   inputTokens: z.number().int().nonnegative(),
@@ -1517,20 +1500,6 @@ export const remoteInfo = createTypertRemoteInfo({
       }],
       cancellation: { parameter: 'signal' },
       result: listExtraFolderEntriesResultCodec,
-    },
-    'agentEnhancer/checkUpdate': {
-      service: 'agentEnhancer',
-      implementation: 'checkUpdate',
-      invocation: { kind: 'direct' },
-      parameters: [],
-      result: updateCheckResultCodec,
-    },
-    'agentEnhancer/applyUpdate': {
-      service: 'agentEnhancer',
-      implementation: 'applyUpdate',
-      invocation: { kind: 'direct' },
-      parameters: [],
-      result: applyUpdateResultCodec,
     },
     'agentEnhancer/usageSummary': {
       service: 'agentEnhancer',

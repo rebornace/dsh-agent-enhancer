@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Removed
+
+- **插件自更新：** 去掉「关于」页检查/应用更新（`checkUpdate` / `applyUpdate`、`src/host/update`）。改用官方 Desktop 插件更新。
+
 ### Fixed
 
 - **网页聊天 · 他人分享导入：** 公开分享常用 `message_id` / `parent_id`（未必有裸 `id`）；补齐解析，并对孤儿 parent / 重复 id 回退线性导入，避免「解析预览正常、转到工作区报对话无效」。

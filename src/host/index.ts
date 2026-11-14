@@ -242,12 +242,6 @@ import type {
 } from './rpc.ts'
 import { showOsNotificationNow } from './run-alerts/notify.ts'
 import type { AuxiliaryResult } from './types.ts'
-import {
-  applyPluginUpdateForHost,
-  checkPluginUpdateForHost,
-} from './update/check.ts'
-import type { ApplyUpdateResult, UpdateCheckResult } from './update/types.ts'
-
 export const name = PLUGIN_ID
 export const inject = [
   'llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel',
@@ -838,11 +832,6 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
   }
 
-  /** Read-only version probe — same gate policy as `listCatalog` (settings-safe). */
-  async checkUpdate(): Promise<UpdateCheckResult> {
-    return checkPluginUpdateForHost()
-  }
-
   async usageSummary(range: UsageRange): Promise<UsageSummary> {
     this.assertOwner()
     return this.usage.summarize(range)
@@ -1315,16 +1304,6 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
   }
 
-  async applyUpdate(): Promise<ApplyUpdateResult> {
-    this.assertOwner()
-    return applyPluginUpdateForHost({
-      linkBlocked: 'link',
-      success: 'restart',
-      failed: 'failed',
-      noUpdate: 'none',
-      manualOnly: 'manual',
-    })
-  }
 }
 
 function resolveCheckpointRoot(dshHome: string): string {

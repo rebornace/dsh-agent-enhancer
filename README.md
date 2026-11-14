@@ -28,7 +28,7 @@
 | **路由** | 模型列表选 **Auto**；设置映射 Instant / Thinking / Pro | <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/auto-model-picker.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/auto-model-picker.png" alt="Auto 选择" width="56" height="56" /></a> <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/auto-routing-settings.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/auto-routing-settings.png" alt="Auto 路由" width="56" height="56" /></a> |
 | **网页聊天** | 设置打开（**默认开**）→ 左栏打开官方网页版聊天；「转到工作区」= **导入当前对话**（`history_messages` + Bearer）或 **导入分享链接**（任意账号公开分享）→ 预览（仅 Q&A）→ 新建工作会话；接口带思考 / 联网片段时写入保真。**全量** `deepseek_data-*.zip` 请用官方实验插件「DeepSeek 会话导入」。不把网页额度接到本地 API | <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/web-chat-left-nav.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/web-chat-left-nav.png" alt="网页聊天入口" width="56" height="56" /></a> <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/web-chat-to-workspace.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/web-chat-to-workspace.png" alt="转到工作区" width="56" height="56" /></a> |
 | **浏览器控制** | 设置打开（默认关）→ 选专用浏览器：**Mac** 自动 / Chrome / Safari；**Windows** 自动 / Chrome / Edge。对话或 Alt+点击可**自动启动**独立窗口；设置或侧栏切换立即生效；侧栏可切换多标签；变更需批准；登录墙点「我已完成」。不同于官方侧栏网页浏览 | <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/browser-agent-guide.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/browser-agent-guide.png" alt="浏览器控制" width="56" height="56" /></a> |
-| **设置** | **功能** 十五开关 · **模型与路由** 辅助模型 / Auto · **关于** 更新 | <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/settings.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/settings.png" alt="设置" width="56" height="56" /></a> |
+| **设置** | **功能** 十五开关 · **模型与路由** 辅助模型 / Auto · **关于** 说明 | <a href="https://github.com/rebornace/dsh-agent-enhancer/blob/main/docs/images/settings.png"><img src="https://raw.githubusercontent.com/rebornace/dsh-agent-enhancer/main/docs/images/thumbs/settings.png" alt="设置" width="56" height="56" /></a> |
 
 **边界（精简）：** 划词引用不调模型；对话正文交给官方引用，本插件覆盖预览 / 编辑器 / 终端；流式回复与 HTML/PDF/Excel 预览暂不可划词。检查点恢复仅覆盖对话与已跟踪文本文件，不恢复进程 / 终端 / 未跟踪 / 二进制。附加目录不扩大智能体可访问范围。技能与连接器在左侧栏（「插件」下方）；技能可从 GitHub / Zip 安装到 `.agents/skills` 或 `.dsh/skills`，用 `/` 调用；连接器用 `mcp.json` 管理。删除会话不可恢复。上下文占用为估算；用量「约 ¥」非发票。暂停后续只拦住**之后**尚未发生的模型调用。运行通知走系统通知中心，失败则回焦后补提示。网页聊天内嵌 `chat.deepseek.com`（首次需网页登录）；转到工作区为「导入当前对话 / 导入分享链接」（预览仅 Q&A；接口有思考片段才写入）；全量 ZIP 请用官方「DeepSeek 会话导入」；不把网页额度接到本地 API。浏览器控制使用平台专用窗口（Mac：Safari/WebKit 或 Chrome；Windows：Chrome 或 Edge；独立配置可保留登录）；Mac 上 Safari 选项驱动的是 Playwright WebKit（Safari 引擎），**不是**日常 Safari.app 本体；对话或 Alt+点击可自动启动；变更需批准；不自动绕过登录墙；关闭开关即卸工具并关掉专用浏览器。
 
@@ -83,10 +83,11 @@ npx playwright install webkit
 ```
 
 Mac 上若 PATH 没有 `dsh`，可用 App 内 CLI：  
-`/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`  
-（插件内更新探测也会尝试该路径。）
+`/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`
 
 `src/host/` 服务端 · `src/client/` UI · `tests/` · `lib/` 构建产物 · `docs/images/` 截图（`thumbs/` 由 `scripts/make-readme-thumbs.py` 生成）。
+
+插件版本更新请用官方 Desktop 插件更新；本插件不再提供「关于」页自检更新。
 
 **后续迭代：** 见 [docs/roadmap.md](./docs/roadmap.md)（当前 P0：浏览器 Agent — 真实登录态、逐步授权；对标 Cursor / Claude；Rewind / 批准 / 记忆暂不做）。
 

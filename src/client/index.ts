@@ -43,9 +43,7 @@ import { USAGE_TAB_ID, USAGE_TAB_KIND } from './dsh/usage-kind.ts'
 import type { ContextInspectCategory } from '../host/context-inspect.ts'
 import { agentLocales } from './locales.ts'
 import {
-  agentEnhancerApplyUpdate,
   agentEnhancerCall,
-  agentEnhancerCheckUpdate,
   agentEnhancerUsageSummary,
   agentEnhancerProviderBalances,
   agentEnhancerCompactContext,
@@ -184,8 +182,6 @@ export function apply(ctx: Context): void {
   const loadCatalog = () => Promise.resolve().then(
     () => loadDesktopModelCatalog(catalogLoaders),
   )
-  const checkUpdate = () => withAgentRemote(remote => agentEnhancerCheckUpdate.invoke(remote))
-  const applyUpdate = () => withAgentRemote(remote => agentEnhancerApplyUpdate.invoke(remote))
   const loadUsage = (range: UsageRange) => withAgentRemote(
     remote => agentEnhancerUsageSummary.invoke(remote, range),
   )
@@ -219,8 +215,6 @@ export function apply(ctx: Context): void {
       t: props.t,
       persist,
       loadCatalog,
-      checkUpdate,
-      applyUpdate,
       getRemote: () => agentEnhancerRemote,
     })
   )

@@ -29,7 +29,9 @@ npx playwright install webkit   # if testing Safari / Mac Auto
 
 Bundled CLI (when not on PATH):  
 `/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh`  
-Host update probing (`probeDsh`) also tries App + `~/Applications` + `DSH_CLI`.
+Also try `~/Applications` and `DSH_CLI` when scripting Desktop link.
+
+Do **not** reintroduce in-plugin self-update (About → check/apply via `dsh plugin add`); use official Desktop plugin updates.
 
 ## UI must imitate official DSH source
 
