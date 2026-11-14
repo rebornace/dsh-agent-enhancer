@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.13 - 2026-11-14
+
 ### Removed
 
 - **插件自更新：** 去掉「关于」页检查/应用更新（`checkUpdate` / `applyUpdate`、`src/host/update`）。改用官方 Desktop 插件更新。
@@ -17,6 +19,10 @@
 
 - **网页聊天 · 单段保真：** 分享链接 / `history_messages` 的 fragments（思考、联网搜索、打开网页、阅读链接）按官方 `dsh-deepseek-chat-import` 映射写入 Session 种子；预览仍只显示提问/回答正文。公开 `share/content` **可以**含 `THINK`，但以该次 payload 为准；全量 `deepseek_data-*.zip` 继续让位官方实验插件。架构说明见 `docs/architecture/web-chat-bridge.md`。
 - **网页聊天 · 文案：** 选择器与「导入当前对话」对齐为「导入分享链接」+「导入」；明确支持任意账号公开分享。
+
+### Docs
+
+- README 中英文钉到 `0.3.13`。
 
 ## 0.3.12 - 2026-11-12
 
