@@ -9,7 +9,7 @@ import {
 import type { WebChatTranscript } from '../../host/web-chat-bridge/types.ts'
 import { ManagerAddSheet, ManagerPage, ManagerPageHead } from '../manager-shell.tsx'
 import styles from '../styles.module.css'
-import { captureFromDocument, chatSessionIdFromUrl } from './capture.ts'
+import { chatSessionIdFromUrl } from './capture.ts'
 import { readWebChatGuestBrowseContext } from './guest-capture.ts'
 import { WebChatBridgeGuestBody, useWebChatBridgeGuest } from './guest.tsx'
 import type { WEB_CHAT_PANEL_ID } from './kind.ts'
@@ -86,34 +86,34 @@ function WebChatBridgePanel(props: WebChatBridgePanelProps) {
       return null
     }
     const context = await readWebChatGuestBrowseContext(guest.guestRef.current)
-    if (context === null || context.document === null) {
+    if (context === null) {
       showError(props.t('webChatCaptureStructure'))
       return null
     }
-    // Prefer history_messages (same markdown fragments as share links) when the
-    // open URL carries /s/{chatSessionId}. Fall back to improved DOM→Markdown.
+    // Official logged-in history API (same fragment tree as share links).
+    // Requires Bearer from guest localStorage — cookies alone are not enough.
     const sessionId = chatSessionIdFromUrl(context.url)
-    if (sessionId !== undefined) {
-      const payloadJson = await fetchWebChatHistoryPayloadFromGuest(
-        guest.guestRef.current,
-        sessionId,
-      )
-      if (payloadJson !== null) {
-        try {
-          return parseWebChatHistoryMessages(JSON.parse(payloadJson) as unknown, {
-            chatSessionId: sessionId,
-            url: context.url,
-          })
-        } catch {
-          // fall through to rendered capture
-        }
-      }
+    if (sessionId === undefined) {
+      showError(props.t('webChatCaptureNoSession'))
+      return null
     }
-    return captureFromDocument(context.document, {
-      url: context.url,
-      isGenerating: () => context.isGenerating,
-      hasUnsentDraft: () => context.hasUnsentDraft,
-    })
+    const history = await fetchWebChatHistoryPayloadFromGuest(
+      guest.guestRef.current,
+      sessionId,
+    )
+    if (!history.ok) {
+      showError(props.t('webChatCaptureHistoryFailed'))
+      return null
+    }
+    try {
+      return parseWebChatHistoryMessages(JSON.parse(history.json) as unknown, {
+        chatSessionId: sessionId,
+        url: context.url,
+      })
+    } catch (caught) {
+      showError(captureErrorMessage(caught, props.t))
+      return null
+    }
   }, [captureEnabled, guest.guestRef, props, showError])
 
   const openPreview = useCallback((transcript: WebChatTranscript) => {

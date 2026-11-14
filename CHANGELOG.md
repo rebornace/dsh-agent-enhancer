@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Fixed
+
+- **网页聊天 · 他人分享导入：** 公开分享常用 `message_id` / `parent_id`（未必有裸 `id`）；补齐解析，并对孤儿 parent / 重复 id 回退线性导入，避免「解析预览正常、转到工作区报对话无效」。
+- **网页聊天 · wire：** `ImportWebChatHistory` / `ResolveWebChatShareLink` 的 transcript schema 补上 `messages` / `currentMessageId`，修复富 fragments 触发的 boundary validation 失败。
+- **网页聊天 · 当前对话：** guest 拉取 `history_messages` 时带上 `localStorage.userToken` Bearer（仅 cookie 不够）；失败时不再静默回退 DOM 抓取（否则无思考过程），并引导改用分享链接。
+- **网页聊天 · 客户端解析：** `share-link` 校验改用 `TextEncoder` 计字节，修复浏览器侧 `Buffer is not defined`（导入当前对话在 client 解析 history）。
+
+### Changed
+
+- **网页聊天 · 单段保真：** 分享链接 / `history_messages` 的 fragments（思考、联网搜索、打开网页、阅读链接）按官方 `dsh-deepseek-chat-import` 映射写入 Session 种子；预览仍只显示提问/回答正文。公开 `share/content` **可以**含 `THINK`，但以该次 payload 为准；全量 `deepseek_data-*.zip` 继续让位官方实验插件。架构说明见 `docs/architecture/web-chat-bridge.md`。
+- **网页聊天 · 文案：** 选择器与「导入当前对话」对齐为「导入分享链接」+「导入」；明确支持任意账号公开分享。
+
 ## 0.3.12 - 2026-11-12
 
 ### Added

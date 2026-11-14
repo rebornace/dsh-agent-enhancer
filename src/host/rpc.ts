@@ -188,10 +188,58 @@ const webChatTurnSchema = z.strictObject({
   role: z.enum(['user', 'assistant']),
   text: z.string(),
 })
+const webChatSearchResultSchema = z.strictObject({
+  url: z.string(),
+  title: z.string().nullable().optional(),
+  snippet: z.string().nullable().optional(),
+  published_at: z.string().nullable().optional(),
+})
+const webChatFragmentSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('REQUEST'), content: z.string() }),
+  z.strictObject({ type: z.literal('RESPONSE'), content: z.string() }),
+  z.strictObject({
+    type: z.literal('THINK'),
+    content: z.string(),
+    elapsed_secs: z.number().nonnegative().nullable().optional(),
+  }),
+  z.strictObject({ type: z.literal('TEMPLATE_RESPONSE'), content: z.string() }),
+  z.strictObject({
+    type: z.literal('TOOL_SEARCH'),
+    queries: z.array(z.string()),
+    results: z.array(webChatSearchResultSchema),
+    status: z.string().optional(),
+    stage_id: z.number().int().nullable().optional(),
+  }),
+  z.strictObject({
+    type: z.literal('TOOL_OPEN'),
+    status: z.string(),
+    url: z.string().nullable(),
+    title: z.string().nullable().optional(),
+    stage_id: z.number().int().nullable().optional(),
+  }),
+  z.strictObject({
+    type: z.literal('READ_LINK'),
+    results: z.array(z.strictObject({
+      url: z.string().nullable().optional(),
+      title: z.string().nullable().optional(),
+    })),
+  }),
+])
+const webChatRichMessageSchema = z.strictObject({
+  id: z.number().int(),
+  parent_id: z.number().int().nullable(),
+  role: z.enum(['USER', 'ASSISTANT']),
+  status: z.string(),
+  inserted_at: z.string().optional(),
+  fragments: z.array(webChatFragmentSchema),
+})
 export const webChatTranscriptSchema = z.strictObject({
   title: z.string(),
   partial: z.boolean(),
   turns: z.array(webChatTurnSchema).min(1),
+  /** Share / history_messages tree for Session seed fidelity (optional for DOM capture). */
+  messages: z.array(webChatRichMessageSchema).optional(),
+  currentMessageId: z.number().int().nullable().optional(),
   source: z.strictObject({
     kind: z.enum(['rendered-capture', 'official-export', 'share-link', 'account-history']),
     url: z.string().optional(),

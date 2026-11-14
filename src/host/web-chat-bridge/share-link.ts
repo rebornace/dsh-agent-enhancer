@@ -1,5 +1,10 @@
+import {
+  parseWebChatRichMessage,
+  richMessagesToPreviewTurns,
+  type WebChatRichMessage,
+} from './fragments.ts'
 import { WEB_CHAT_MAX_MESSAGES, WEB_CHAT_MAX_TEXT_BYTES } from './limits.ts'
-import type { WebChatRole, WebChatTranscript, WebChatTurn } from './types.ts'
+import type { WebChatTranscript, WebChatTurn } from './types.ts'
 
 const SHARE_URL_RE = /(?:https?:\/\/chat\.deepseek\.com)?\/share\/([A-Za-z0-9_-]+)/i
 const SHARE_ID_RE = /^[A-Za-z0-9_-]{6,}$/
@@ -29,62 +34,9 @@ export function webChatHistoryMessagesApiUrl(chatSessionId: string): string {
   return `https://chat.deepseek.com/api/v0/chat/history_messages?chat_session_id=${encodeURIComponent(chatSessionId)}`
 }
 
-function normalizeRole(raw: unknown): WebChatRole | null {
-  if (typeof raw !== 'string') return null
-  const key = raw.trim().toLowerCase()
-  if (key === 'user' || key === 'human') return 'user'
-  if (key === 'assistant' || key === 'ai' || key === 'model') return 'assistant'
-  return null
-}
-
-function messageText(raw: unknown): string {
-  if (typeof raw === 'string') return raw.trim()
-  if (Array.isArray(raw)) {
-    return raw
-      .map(part => {
-        if (typeof part === 'string') return part
-        if (part && typeof part === 'object' && 'text' in part) {
-          const text = Reflect.get(part, 'text')
-          return typeof text === 'string' ? text : ''
-        }
-        return ''
-      })
-      .filter(Boolean)
-      .join('\n')
-      .trim()
-  }
-  return ''
-}
-
-/** DeepSeek share / history payloads store body text in `fragments`, not top-level `content`. */
-function fragmentsText(fragments: unknown, preferTypes: readonly string[]): string {
-  if (!Array.isArray(fragments)) return ''
-  const preferred = new Set(preferTypes.map(type => type.toUpperCase()))
-  const preferredParts: string[] = []
-  const fallbackParts: string[] = []
-  for (const frag of fragments) {
-    if (frag === null || typeof frag !== 'object') continue
-    const type = String(Reflect.get(frag, 'type') ?? '').toUpperCase()
-    const content = Reflect.get(frag, 'content')
-    if (typeof content !== 'string' || content.trim() === '') continue
-    const text = content.trim()
-    // Skip non-answer tooling / tips when we have preferred body types.
-    if (type === 'THINK' || type === 'TIP' || type.startsWith('TOOL_')) {
-      if (preferred.size === 0) fallbackParts.push(text)
-      continue
-    }
-    if (preferred.size === 0 || preferred.has(type)) preferredParts.push(text)
-    else fallbackParts.push(text)
-  }
-  if (preferredParts.length > 0) return preferredParts.join('\n\n')
-  return fallbackParts.join('\n\n')
-}
-
-function rowText(item: Record<string, unknown>, role: WebChatRole): string {
-  const direct = messageText(item.content ?? item.text ?? item.message)
-  if (direct) return direct
-  if (role === 'user') return fragmentsText(item.fragments, ['REQUEST'])
-  return fragmentsText(item.fragments, ['RESPONSE'])
+/** UTF-8 byte length — works in both Host (Node) and client (browser). */
+function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).length
 }
 
 function assertTurns(turns: readonly WebChatTurn[]): void {
@@ -96,9 +48,26 @@ function assertTurns(turns: readonly WebChatTurn[]): void {
   }
   let bytes = 0
   for (const turn of turns) {
-    bytes += Buffer.byteLength(turn.text, 'utf8')
+    bytes += utf8ByteLength(turn.text)
     if (bytes > WEB_CHAT_MAX_TEXT_BYTES) {
       throw new Error(`Share content exceeds ${WEB_CHAT_MAX_TEXT_BYTES} byte limit`)
+    }
+  }
+}
+
+function assertRichBudget(messages: readonly WebChatRichMessage[]): void {
+  if (messages.length > WEB_CHAT_MAX_MESSAGES) {
+    throw new Error(`Exceeds message limit (${WEB_CHAT_MAX_MESSAGES})`)
+  }
+  let bytes = 0
+  for (const message of messages) {
+    for (const frag of message.fragments) {
+      if ('content' in frag && typeof frag.content === 'string') {
+        bytes += utf8ByteLength(frag.content)
+      }
+      if (bytes > WEB_CHAT_MAX_TEXT_BYTES) {
+        throw new Error(`Share content exceeds ${WEB_CHAT_MAX_TEXT_BYTES} byte limit`)
+      }
     }
   }
 }
@@ -122,26 +91,61 @@ function bizRecord(data: unknown): Record<string, unknown> | null {
   return root
 }
 
-function turnsFromBizRecord(record: Record<string, unknown>): WebChatTurn[] {
+function messagesFromBizRecord(record: Record<string, unknown>): WebChatRichMessage[] {
   const rowsRaw = record.messages ?? record.chat_messages
   const rows = Array.isArray(rowsRaw) ? rowsRaw : []
-  const turns: WebChatTurn[] = []
-  for (const row of rows) {
-    if (row === null || typeof row !== 'object') continue
-    const item = row as Record<string, unknown>
-    const role = normalizeRole(item.role ?? item.author ?? item.speaker)
-    if (!role) continue
-    const text = rowText(item, role)
-    if (!text) continue
-    turns.push({ role, text })
+  const messages: WebChatRichMessage[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const parsed = parseWebChatRichMessage(rows[i], i + 1)
+    if (parsed !== null) messages.push(parsed)
   }
-  return turns
+  return messages
+}
+
+function coerceMessageId(raw: unknown): number | null | undefined {
+  if (raw === null) return null
+  if (typeof raw === 'number' && Number.isFinite(raw)) return Math.trunc(raw)
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed)) return Math.trunc(parsed)
+  }
+  return undefined
+}
+
+function currentMessageIdOf(record: Record<string, unknown>): number | null | undefined {
+  const fromRoot = coerceMessageId(record.current_message_id)
+  if (fromRoot !== undefined) return fromRoot
+  const session = Reflect.get(record, 'chat_session')
+  if (session !== null && typeof session === 'object') {
+    return coerceMessageId(Reflect.get(session as object, 'current_message_id'))
+  }
+  return undefined
+}
+
+function transcriptFromBiz(
+  record: Record<string, unknown>,
+  title: string,
+  source: WebChatTranscript['source'],
+): WebChatTranscript {
+  const messages = messagesFromBizRecord(record)
+  assertRichBudget(messages)
+  const turns = richMessagesToPreviewTurns(messages)
+  assertTurns(turns)
+  const currentMessageId = currentMessageIdOf(record)
+  return {
+    title,
+    turns,
+    messages,
+    ...(currentMessageId === undefined ? {} : { currentMessageId }),
+    partial: false,
+    source,
+  }
 }
 
 /** Map DeepSeek public share API JSON into a transcript. */
 export function parseWebChatShareContent(
   data: unknown,
-  options: { readonly shareUrl: string, readonly shareId: string },
+  options: { readonly shareUrl: string; readonly shareId: string },
 ): WebChatTranscript {
   const record = bizRecord(data)
   if (record === null) {
@@ -153,20 +157,12 @@ export function parseWebChatShareContent(
     ? titleRaw.trim()
     : `Shared chat ${options.shareId}`
 
-  const turns = turnsFromBizRecord(record)
-  assertTurns(turns)
-
-  return {
-    title,
-    turns,
-    partial: false,
-    source: {
-      kind: 'share-link',
-      url: options.shareUrl,
-      chatSessionId: options.shareId,
-      capturedAt: new Date().toISOString(),
-    },
-  }
+  return transcriptFromBiz(record, title, {
+    kind: 'share-link',
+    url: options.shareUrl,
+    chatSessionId: options.shareId,
+    capturedAt: new Date().toISOString(),
+  })
 }
 
 /** Map logged-in `history_messages` JSON into a transcript. */
@@ -192,22 +188,18 @@ export function parseWebChatHistoryMessages(
     : undefined
   const title = (options.title?.trim() || titleFromApi || `Chat ${options.chatSessionId}`).trim()
 
-  const turns = turnsFromBizRecord(record)
-  if (turns.length === 0) {
-    throw new Error('Account history has no messages')
-  }
-  assertTurns(turns)
-
-  return {
-    title,
-    turns,
-    partial: false,
-    source: {
+  try {
+    return transcriptFromBiz(record, title, {
       kind: 'account-history',
       chatSessionId: options.chatSessionId,
       ...(options.url === undefined || options.url.trim() === '' ? {} : { url: options.url }),
       capturedAt: new Date().toISOString(),
-    },
+    })
+  } catch (error) {
+    if (error instanceof Error && /no messages/i.test(error.message)) {
+      throw new Error('Account history has no messages')
+    }
+    throw error
   }
 }
 

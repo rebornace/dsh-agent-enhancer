@@ -61,7 +61,9 @@ function remoteErrorMessage(error: unknown, t: TranslateNS<'agent-enhancer'>): s
           ? t('webChatImportMissingCwd')
           : t('webChatImportMissingCwdDetail').replace('{detail}', error.message)
       case 'invalid-transcript':
-        return t('webChatImportInvalid')
+        return error.message.trim() === ''
+          ? t('webChatImportInvalid')
+          : t('webChatImportInvalidDetail').replace('{detail}', error.message)
       case 'import-failed':
         return error.message || t('webChatImportFailed')
       default: {
@@ -208,6 +210,11 @@ export function WebChatBridgePreview(props: WebChatBridgePreviewProps) {
           {transcript.partial ? (
             <p className={styles.webChatPreviewPartial} role="status">
               {props.t('webChatPreviewPartial')}
+            </p>
+          ) : null}
+          {Array.isArray(transcript.messages) && transcript.messages.length > 0 ? (
+            <p className={styles.webChatPreviewPartial} role="status">
+              {props.t('webChatPreviewFidelity')}
             </p>
           ) : null}
         </div>

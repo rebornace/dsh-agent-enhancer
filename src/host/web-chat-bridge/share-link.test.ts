@@ -41,9 +41,10 @@ describe('parseWebChatShareContent', () => {
       { role: 'user', text: 'hi' },
       { role: 'assistant', text: 'hello' },
     ])
+    expect(transcript.messages).toHaveLength(2)
   })
 
-  it('reads REQUEST/RESPONSE fragments used by live share API', () => {
+  it('keeps THINK / TOOL_SEARCH in rich messages while preview stays RESPONSE-only', () => {
     const transcript = parseWebChatShareContent({
       code: 0,
       data: {
@@ -58,6 +59,12 @@ describe('parseWebChatShareContent', () => {
               role: 'ASSISTANT',
               fragments: [
                 { type: 'THINK', content: '先想一下…' },
+                {
+                  type: 'TOOL_SEARCH',
+                  queries: ['name'],
+                  results: [{ url: 'https://example.com', title: 'Ex' }],
+                  status: 'FINISHED',
+                },
                 { type: 'RESPONSE', content: '虚舟' },
                 { type: 'TIP', content: '提示' },
               ],
@@ -73,6 +80,44 @@ describe('parseWebChatShareContent', () => {
       { role: 'user', text: '起个名字' },
       { role: 'assistant', text: '虚舟' },
     ])
+    const assistant = transcript.messages?.[1]
+    expect(assistant?.fragments.map(frag => frag.type)).toEqual([
+      'THINK',
+      'TOOL_SEARCH',
+      'RESPONSE',
+    ])
+  })
+
+  it('prefers message_id / parent_id from public share payloads', () => {
+    const transcript = parseWebChatShareContent({
+      code: 0,
+      data: {
+        biz_data: {
+          title: 'Shared ids',
+          current_message_id: 20,
+          messages: [
+            {
+              message_id: 10,
+              parent_id: null,
+              role: 'USER',
+              fragments: [{ type: 'REQUEST', content: 'q' }],
+            },
+            {
+              message_id: '20',
+              parent_id: '10',
+              role: 'ASSISTANT',
+              fragments: [{ type: 'RESPONSE', content: 'a' }],
+            },
+          ],
+        },
+      },
+    }, {
+      shareId: 'msgidtest',
+      shareUrl: webChatSharePageUrl('msgidtest'),
+    })
+    expect(transcript.messages?.map(m => m.id)).toEqual([10, 20])
+    expect(transcript.messages?.[1]?.parent_id).toBe(10)
+    expect(transcript.currentMessageId).toBe(20)
   })
 })
 
@@ -99,7 +144,7 @@ describe('parseWebChatSessionList', () => {
 })
 
 describe('parseWebChatHistoryMessages', () => {
-  it('maps history_messages fragments into a transcript', () => {
+  it('maps history_messages fragments into a rich transcript', () => {
     const transcript = parseWebChatHistoryMessages({
       code: 0,
       data: {
@@ -124,5 +169,6 @@ describe('parseWebChatHistoryMessages', () => {
       { role: 'user', text: 'ping' },
       { role: 'assistant', text: 'pong' },
     ])
+    expect(transcript.messages).toHaveLength(2)
   })
 })

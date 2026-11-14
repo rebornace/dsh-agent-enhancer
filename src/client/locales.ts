@@ -55,7 +55,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'webChatChooserCurrentTitle' | 'webChatChooserCurrentDesc' |
       'webChatChooserShareTitle' | 'webChatChooserShareDesc' |
       'webChatChooserSharePlaceholder' | 'webChatChooserShareSubmit' |
-      'webChatPreviewTitle' | 'webChatPreviewPartial' | 'webChatPreviewWorkspace' |
+      'webChatPreviewTitle' | 'webChatPreviewPartial' | 'webChatPreviewFidelity' | 'webChatPreviewWorkspace' |
       'webChatPreviewNoWorkspace' | 'webChatPreviewCreateWorkspace' |
       'webChatPreviewCreatingWorkspace' | 'webChatPreviewCreateWorkspaceFailed' |
       'webChatPreviewConfirm' | 'webChatPreviewCancel' |
@@ -68,9 +68,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'webChatImportSuccess' |
       'webChatImportFailed' | 'webChatImportNoWorkspace' |
       'webChatImportMissingCwd' | 'webChatImportMissingCwdDetail' |
-      'webChatImportInvalid' |
+      'webChatImportInvalid' | 'webChatImportInvalidDetail' |
       'webChatCaptureFailed' | 'webChatCaptureGenerating' | 'webChatCaptureUnsentDraft' |
       'webChatCaptureEmpty' | 'webChatCaptureStructure' | 'webChatCaptureGuestNotReady' |
+      'webChatCaptureNoSession' | 'webChatCaptureHistoryFailed' |
       'webChatExportTooLarge' |
       'webChatShareEmpty' | 'webChatShareUnrecognized' | 'webChatShareFetchFailed' |
       'browserAgent' | 'browserAgentDescription' |
@@ -412,26 +413,27 @@ export const agentLocales = {
     runAlertsError: '{title}：出错 — {message}',
     webChatBridge: '网页聊天',
     webChatBridgeDescription:
-      '在主区打开官方网页版聊天。首次需在网页内登录；可将当前对话或分享链接转到工作区继续。默认开启。不会把网页账号额度接到本地 API。',
+      '在主区打开官方网页版聊天。首次需在网页内登录；可将当前对话，或任意账号的公开分享链接，转到工作区继续（单段保真）。全量 deepseek_data ZIP 请用官方实验插件「DeepSeek 会话导入」。默认开启。不会把网页账号额度接到本地 API。',
     webChat: '网页聊天',
     webChatLeftNavUnsupported: '当前版本没有左侧「网页聊天」入口，请升级 DeepSeek Harness 或确认功能已开启',
     webChatTitle: '网页聊天',
-    webChatIntro: '打开官方网页版聊天。登录后可在此继续浏览；需要时把某段对话转到工作区。',
+    webChatIntro: '打开官方网页版聊天。登录后可在此继续浏览；需要时把某段对话转到工作区。全量历史导出请用官方「DeepSeek 会话导入」。',
     webChatPreparing: '正在打开官方网页…',
     webChatGuestBridgeMissing: '当前版本不支持内嵌网页，无法打开官方网页聊天。请升级 DeepSeek Harness。',
     webChatGuestLoadFailed: '网页未能打开，请重试或重启应用。',
     webChatToWorkspace: '转到工作区',
     webChatChooserTitle: '转到工作区',
-    webChatChooserIntro: '把网页里的对话带到本地工作区，作为新的工作会话继续：',
+    webChatChooserIntro: '用网页官方接口读取当前会话完整历史（含思考 / 联网），转到工作区继续。全量 ZIP 请用官方「DeepSeek 会话导入」。',
     webChatChooserCancel: '取消',
-    webChatChooserCurrentTitle: '当前对话',
-    webChatChooserCurrentDesc: '使用本页正在看的这段对话。很长时请先滚动到底部加载全部消息。',
-    webChatChooserShareTitle: '分享链接',
-    webChatChooserShareDesc: '在网页右上角点「分享」，复制生成的链接粘贴到下方。适合把完整单段对话转到工作区。',
+    webChatChooserCurrentTitle: '导入当前对话',
+    webChatChooserCurrentDesc: '读取本页打开的会话完整历史（与分享链接同级保真）。请先打开具体对话，而不是空白新会话页。',
+    webChatChooserShareTitle: '导入分享链接',
+    webChatChooserShareDesc: '支持任意账号的公开分享（不必是当前登录账号）。粘贴 chat.deepseek.com/share/…，保真与「导入当前对话」相同。',
     webChatChooserSharePlaceholder: 'https://chat.deepseek.com/share/…',
-    webChatChooserShareSubmit: '解析链接',
+    webChatChooserShareSubmit: '导入',
     webChatPreviewTitle: '转到工作区',
     webChatPreviewPartial: '当前页内容可能不完整：若对话很长，请先滚动到底部，或返回改用「分享链接」。',
+    webChatPreviewFidelity: '若接口返回了思考 / 联网等片段，将按官方会话导入同级保真写入；预览列表只显示提问与回答正文。个别公开分享可能不含思考过程。',
     webChatPreviewWorkspace: '目标工作区',
     webChatPreviewNoWorkspace: '暂无可用工作区。可点「新建工作区」选择文件夹。',
     webChatPreviewCreateWorkspace: '新建工作区',
@@ -457,16 +459,19 @@ export const agentLocales = {
     webChatImportMissingCwd: '无法准备工作区目录（权限不足或路径不是文件夹）。请换一个工作区，或检查该路径是否可写。',
     webChatImportMissingCwdDetail: '无法准备工作区目录：{detail}',
     webChatImportInvalid: '对话内容无效或无法识别。',
+    webChatImportInvalidDetail: '对话内容无效或无法识别：{detail}',
     webChatCaptureFailed: '未能读取当前对话，请确认页面上已打开一段对话。',
     webChatCaptureGenerating: '网页仍在生成回复，请等待完成后再试。',
     webChatCaptureUnsentDraft: '输入框有未发送文字，请先发送或清空后再试。',
     webChatCaptureEmpty: '未找到可转到工作区的消息。',
     webChatCaptureStructure: '无法识别网页结构，请改用「分享链接」。',
     webChatCaptureGuestNotReady: '官方网页尚未就绪，请稍后再试。',
+    webChatCaptureNoSession: '当前不是已打开的对话页。请先点开左侧一段对话，或改用下方分享链接。',
+    webChatCaptureHistoryFailed: '未能通过官方接口读取当前对话历史（可能未登录或会话已失效）。请确认已登录，或改用分享链接。',
     webChatExportTooLarge: '内容超过限额（5 MiB / 5000 条），请删减后重试。',
     webChatShareEmpty: '请粘贴分享链接。',
-    webChatShareUnrecognized: '无法识别该分享链接。请使用网页右上角「分享」生成的 chat.deepseek.com/share/… 链接。',
-    webChatShareFetchFailed: '分享内容读取失败。请确认链接仍有效，或在网页内重新分享后再试。',
+    webChatShareUnrecognized: '无法识别该分享链接。请粘贴任意账号通过网页「分享」生成的 chat.deepseek.com/share/… 公开链接。',
+    webChatShareFetchFailed: '分享内容读取失败。请确认链接仍有效（任意账号的公开分享均可），或重新生成分享后再试。',
     browserAgent: '浏览器控制',
     browserAgentDescription: '让智能体用专用浏览器打开并操作网页（点击、填写等需你批准）。Mac 为 Safari / Chrome，Windows 为 Chrome / Edge。默认关闭。开启后可在对话中自动启动。不同于官方侧栏网页浏览。',
     browserAgentBrowser: '专用浏览器',
@@ -1057,22 +1062,23 @@ export const agentLocales = {
     webChat: 'Web chat',
     webChatLeftNavUnsupported: 'No left Web chat entry in this build. Upgrade DeepSeek Harness or confirm the feature is on',
     webChatTitle: 'Web chat',
-    webChatIntro: 'Opens the official web chat. After sign-in, browse here, then move a conversation into a workspace when needed.',
+    webChatIntro: 'Opens the official web chat. After sign-in, browse here, then move a conversation into a workspace when needed. For full-history ZIP export, use the official DeepSeek chat import plugin.',
     webChatPreparing: 'Opening the official web page…',
     webChatGuestBridgeMissing: 'This build cannot embed web pages, so official web chat cannot open. Upgrade DeepSeek Harness.',
     webChatGuestLoadFailed: 'The web page could not open. Retry or restart the app.',
     webChatToWorkspace: 'Move to workspace',
     webChatChooserTitle: 'Move to workspace',
-    webChatChooserIntro: 'Bring a web chat into a local workspace as a new session:',
+    webChatChooserIntro: 'Read the full current chat via the official web API (thinking / search included) and continue in a workspace. For bulk ZIP, use the official DeepSeek chat import plugin.',
     webChatChooserCancel: 'Cancel',
-    webChatChooserCurrentTitle: 'This conversation',
-    webChatChooserCurrentDesc: 'Use the chat open on this page. For long chats, scroll to the bottom first to load all messages.',
-    webChatChooserShareTitle: 'Share link',
-    webChatChooserShareDesc: 'In the web UI, use Share (top-right), copy the link, and paste it below. Best for a complete single conversation.',
+    webChatChooserCurrentTitle: 'Import this conversation',
+    webChatChooserCurrentDesc: 'Loads the full history of the chat open on this page (same fidelity as a share link). Open a concrete chat first — not a blank new-chat page.',
+    webChatChooserShareTitle: 'Import share link',
+    webChatChooserShareDesc: 'Works with any account’s public share — not only the account signed in here. Paste chat.deepseek.com/share/…. Same fidelity as “Import this conversation”.',
     webChatChooserSharePlaceholder: 'https://chat.deepseek.com/share/…',
-    webChatChooserShareSubmit: 'Parse link',
+    webChatChooserShareSubmit: 'Import',
     webChatPreviewTitle: 'Move to workspace',
     webChatPreviewPartial: 'This page may be incomplete. For long chats, scroll to load all messages, or go back and use a Share link.',
+    webChatPreviewFidelity: 'When the API returns thinking / web steps, they are written at the same fidelity as the official chat import. The preview list still shows only questions and answers. Some public shares omit thinking.',
     webChatPreviewWorkspace: 'Target workspace',
     webChatPreviewNoWorkspace: 'No workspace yet. Use Create workspace to pick a folder.',
     webChatPreviewCreateWorkspace: 'Create workspace',
@@ -1098,19 +1104,22 @@ export const agentLocales = {
     webChatImportMissingCwd: 'Could not prepare the workspace folder (permission denied, or the path is not a directory). Pick another workspace, or check that the path is writable.',
     webChatImportMissingCwdDetail: 'Could not prepare the workspace folder: {detail}',
     webChatImportInvalid: 'The conversation is invalid or unrecognized.',
+    webChatImportInvalidDetail: 'The conversation is invalid or unrecognized: {detail}',
     webChatCaptureFailed: 'Could not read this conversation. Open a chat on the page first.',
     webChatCaptureGenerating: 'A reply is still generating. Wait until it finishes.',
     webChatCaptureUnsentDraft: 'The composer has unsent text. Send or clear it first.',
     webChatCaptureEmpty: 'No messages found to move to a workspace.',
     webChatCaptureStructure: 'Could not read the page structure. Use a Share link instead.',
     webChatCaptureGuestNotReady: 'The official web page is not ready yet.',
+    webChatCaptureNoSession: 'This is not an open chat page. Open a conversation in the left list, or use a share link below.',
+    webChatCaptureHistoryFailed: 'Could not load this chat via the official history API (sign-in missing or session expired). Sign in, or use a share link instead.',
     webChatExportTooLarge: 'Content exceeds limits (5 MiB / 5000 messages). Shorten and retry.',
     webChatShareEmpty: 'Paste a share link first.',
-    webChatShareUnrecognized: 'Unrecognized share link. Use the chat.deepseek.com/share/… link from the web Share control.',
-    webChatShareFetchFailed: 'Could not read the shared chat. Confirm the link is still valid, or create a new share and retry.',
+    webChatShareUnrecognized: 'Unrecognized share link. Paste any account’s public chat.deepseek.com/share/… link from the web Share control.',
+    webChatShareFetchFailed: 'Could not read the shared chat. Confirm the link is still valid (any account’s public share works), or create a new share and retry.',
     webChatBridge: 'Web chat',
     webChatBridgeDescription:
-      'Opens official web chat in the main area. Sign in on the web the first time. Move the current chat or a share link into a workspace session. On by default. Does not connect web-account quota to the local API.',
+      'Opens official web chat in the main area. Sign in on the web the first time. Move the current chat, or any account’s public share link, into a workspace session (single conversation). For bulk deepseek_data ZIP, use the official experimental DeepSeek chat import plugin. On by default. Does not connect web-account quota to the local API.',
     browserAgent: 'Browser control',
     browserAgentDescription: 'Let the agent open and use a dedicated browser window (clicks and typing need your approval). Mac: Safari / Chrome; Windows: Chrome / Edge. Off by default. Auto-launches from chat when needed. Not the official sidebar browser.',
     browserAgentBrowser: 'Dedicated browser',

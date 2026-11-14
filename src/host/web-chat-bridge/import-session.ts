@@ -49,6 +49,7 @@ import {
 } from '@deepseek-ai/dsh-session'
 import type { AuxiliaryErrorCode } from '../../errors.ts'
 import { pickDirectoryNow } from '../extra-folders/pick.ts'
+import { convertWebChatConversation, WebChatConvertError } from './convert-conversation.ts'
 import { WEB_CHAT_MAX_MESSAGES, WEB_CHAT_MAX_TEXT_BYTES } from './limits.ts'
 import type { WebChatTranscript } from './types.ts'
 
@@ -222,6 +223,10 @@ export function resolveWebChatImportTitle(transcript: WebChatTranscript): string
   return 'Imported chat'
 }
 
+function transcriptHasRichMessages(transcript: WebChatTranscript): boolean {
+  return Array.isArray(transcript.messages) && transcript.messages.length > 0
+}
+
 function closeOpenTurn(session: Session, turn: number): void {
   session.append('turn/end', { turn, reason: { kind: 'completed' } })
 }
@@ -293,6 +298,15 @@ function appendProtectedSystemHead(
 
 /** Append imported turns with explicit turn/step boundaries for consecutive roles. */
 export function appendTranscript(session: Session, transcript: WebChatTranscript): void {
+  // Rich fragment trees are written via `buildWebChatImportSeed` (tool/result
+  // sourceEventSeqs). Callers with only createSession should fall back to seed create.
+  if (transcriptHasRichMessages(transcript)) {
+    throw new WebChatImportError(
+      'import-failed',
+      'Rich web-chat transcripts require seed import',
+    )
+  }
+
   const provenance = importProvenancePrefix(transcript)
   const turns = transcript.turns
   let turn = 1
@@ -359,9 +373,29 @@ export function appendTranscript(session: Session, transcript: WebChatTranscript
 
 /**
  * Transcript log used as `agents.create({ seed })`.
- * Events match `appendTranscript` (including the closing `turn/end`) with contiguous seqs.
+ * Rich share / history_messages trees use the official fragment→Session mapping;
+ * flat DOM / markdown turns keep the legacy text-only path.
  */
 export function buildWebChatImportSeed(transcript: WebChatTranscript): SessionEvent[] {
+  if (transcriptHasRichMessages(transcript)) {
+    try {
+      const converted = convertWebChatConversation({
+        title: resolveWebChatImportTitle(transcript),
+        currentMessageId: transcript.currentMessageId,
+        messages: transcript.messages!,
+      }, {
+        createId: () => randomUUID(),
+        provenancePrefix: importProvenancePrefix(transcript),
+      })
+      return [...converted.events]
+    } catch (error) {
+      if (error instanceof WebChatConvertError) {
+        throw new WebChatImportError('invalid-transcript', error.message)
+      }
+      throw error
+    }
+  }
+
   const events: SessionEvent[] = []
   const recordOne = (
     type: string,
@@ -429,7 +463,9 @@ async function openAgentWorkSession(
   cwd: string,
 ): Promise<OpenedAgentSession> {
   const agents = input.agents
-  if (typeof agents.createSession === 'function') {
+  // Flat transcripts can append onto a blank createSession; rich fragment trees
+  // need contiguous seed events (including tool/result sourceEventSeqs).
+  if (typeof agents.createSession === 'function' && !transcriptHasRichMessages(input.transcript)) {
     let created: { readonly agent: WebChatAgentSession, dispose?: () => Promise<void> }
     try {
       created = await agents.createSession({
