@@ -1,6 +1,30 @@
 # Changelog
 
-## Unreleased
+## 0.3.14 - 2026-11-18
+
+### Added
+
+- **浏览器 Agent · 调试工具：** `browser_network` / `browser_console` / `browser_emulate`，由设置 → 功能 → 浏览器 Agent → **调试工具**（`browserAgentDebugTools`，默认关）统一开关。只记 URL / 状态码 / 耗时 / 失败原因 / console 文本与位置，**不读请求头、Cookie、响应体**；URL 中疑似密钥的 query（`token` / `code` / `sig` / `session` 等）与 console 文本里的 URL 一律替换为 `***`；环形缓冲 300 条，驱动销毁即清空。
+- **浏览器 Agent · 只读标签：** 侧栏标签行新增「只读」按钮（`browserAgentSetTabReadOnly`）。开启后 `browser_click` / `browser_type` / 同标签 `browser_navigate` 直接以 `tab_read_only` 失败并不再弹批准框，读工具、滚动、`newTab: true` 不受限。
+- **浏览器 Agent · 闲置标签回收：** 设置 → **自动关闭闲置标签**（`browserAgentIdleClose`，默认开）。约 10 分钟未使用的标签自动关闭；会话绑定标签、当前页、最后一个标签永不关闭；关闭时同步解绑会话并丢弃该会话记忆。
+- **浏览器 Agent · 诊断：** `browser_status` 与侧栏给出 `diagnosis` + `next:`（功能未开 / 未启动 / WebKit 引擎缺失 / 本机无可用浏览器 / profile 被占用 / 其它启动失败），可用性探针每会话只探一次，不随侧栏轮询 spawn `where` / `which`。
+- **浏览器 Agent · 快照自检行：** `browser_snapshot` 回显 `emulation:`（当前模拟状态）与 `harvest:`（页面侧可交互元素 / 控件 / 锚点计数）。
+
+### Fixed
+
+- **浏览器 Agent · 标签与 ref：** tabId 由 `TabRegistry` 单调分配、关闭不回收；ref 全局唯一，驱动与会话层均按 tab 存。切走再切回原标签可直接点击、无需重拍快照；用别的标签的 ref 会指名所属标签（`ref 9 belongs to tab 2`），不再有静默点中同号元素的风险；关闭标签或删除会话时对应记忆一并丢弃。
+- **浏览器 Agent · 人工介入卡片：** `browser_ask_user` 的普通请求（关标签、开开关…）不再套用「登录 / 验证码 / 二次验证」文案，改为只显示该请求本身与「已完成，继续」；登录墙仍用原登录文案。
+- **浏览器 Agent · console 脱敏：** 修复只给 network 打码、console 文本明文泄露 token 的问题（Chrome 的 `Failed to load resource` 会把请求 URL 写进消息）。
+- **浏览器 Agent · 快照预算：** 链接密集页不再把搜索框 / 按钮挤出 80 条预算；proximity 补 href 的控件不再被当作链接排序。
+- **启动开销：** `playwright-core` 改为按需动态加载，插件入口导入 609 ms → 213 ms（功能关闭的用户不再付这笔钱）。
+
+### Changed
+
+- **浏览器 Agent · 状态文案：** `browser_status` 清掉 MV3 时代的 `bridge:` / `extension:` 说法，改为 `browser:` / `driver:`。
+
+### Docs
+
+- README 中英文钉 `0.3.14`。
 
 ## 0.3.13 - 2026-11-14
 
