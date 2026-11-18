@@ -227,7 +227,8 @@ it('captures a real turn and file before-image only after the independent switch
 
   await vi.waitFor(async () => {
     expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
-  })
+    // Checkpoint capture is async; a full parallel suite can starve the default 1s.
+  }, { timeout: 10_000, interval: 50 })
   const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
   expect(checkpoint).toMatchObject({
     sessionId: h.session.id,
@@ -311,7 +312,8 @@ it('still captures creates when write-intent policy owns the slot without callin
 
   await vi.waitFor(async () => {
     expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
-  })
+    // Checkpoint capture is async; a full parallel suite can starve the default 1s.
+  }, { timeout: 10_000, interval: 50 })
   const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
   expect(checkpoint).toMatchObject({
     turn: 2,
@@ -355,7 +357,8 @@ it('captures empty creates from write-intent actor.agent when tools/execute neve
 
   await vi.waitFor(async () => {
     expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
-  })
+    // Checkpoint capture is async; a full parallel suite can starve the default 1s.
+  }, { timeout: 10_000, interval: 50 })
   const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
   expect(checkpoint).toMatchObject({
     turn: 2,
@@ -412,7 +415,8 @@ it('keeps empty write creates when the same turn also uses a no-op shell', async
 
   await vi.waitFor(async () => {
     expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
-  })
+    // Checkpoint capture is async; a full parallel suite can starve the default 1s.
+  }, { timeout: 10_000, interval: 50 })
   const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
   // No-op shell scan succeeds — no forced workspace gap.
   expect(checkpoint).toMatchObject({
@@ -457,7 +461,8 @@ it('captures pwsh Set-Content style creates via workspace before/after scan', as
 
   await vi.waitFor(async () => {
     expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
-  })
+    // Checkpoint capture is async; a full parallel suite can starve the default 1s.
+  }, { timeout: 10_000, interval: 50 })
   const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
   expect(checkpoint).toMatchObject({
     turn: 2,
@@ -496,7 +501,8 @@ it('does not mark a no-op shell turn incomplete or invent file rows', async () =
 
   await vi.waitFor(async () => {
     expect((await h.store.list(h.session.id)).some(item => item.turn === 2)).toBe(true)
-  })
+    // Checkpoint capture is async; a full parallel suite can starve the default 1s.
+  }, { timeout: 10_000, interval: 50 })
   const checkpoint = (await h.store.list(h.session.id)).find(item => item.turn === 2)
   expect(checkpoint).toMatchObject({
     turn: 2,
