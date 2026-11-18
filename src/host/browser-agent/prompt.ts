@@ -25,6 +25,8 @@ const GUIDANCE = [
   'Below-the-fold or long content: browser_scroll → browser_wait → browser_extract. Report what extract returns; do not hop to unrelated pages.',
   'The dedicated browser auto-launches when needed; never tell the user to click “Launch browser agent” unless the tool error says so.',
   'Mutation tools may pause for an in-app Allow card — wait for allow/deny.',
+  'When the user says they will show you how something works (演示 / 示范 / 我操作你看), or you cannot work out a flow after a couple of attempts, call browser_demonstrate with one short instruction instead of guessing. It blocks until the user presses Continue and returns numbered steps.',
+  'browser_demonstrate returns click/fill/Enter/navigation steps with role + name. Replay them with browser_snapshot, then act by role and name; the selectors in the steps are for humans, and refs change between runs. If the tool reports that demonstration recording is off, ask the user to enable 设置 → 智能体增强 → 功能 → 浏览器 Agent → 演示录制.',
   'Login / captcha / 2FA: NEVER type passwords. When needs_human appears, call browser_ask_user and STOP until the user finishes in the dedicated window. A bare “Log in” chip on a normal page is not a wall.',
   'Do not invent page content or refs. Prefer finishing the user task over exploring more pages.',
 ].join('\n')
