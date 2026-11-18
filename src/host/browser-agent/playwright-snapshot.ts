@@ -230,6 +230,10 @@ for (var ri = 0; ri < records.length; ri++) {
  * in, so controls get a reserved half of the budget, links fill the rest, and
  * geometry-only anchors only take what is left over.
  *
+ * The result is ordered for reading: real controls first (the rare, actionable
+ * items), then links with an href, then inferred anchors. Incoming order is kept
+ * inside each group.
+ *
  * Priority contract: 0 = link with href, 1 = other interactive control,
  * 2 = anchor inferred from geometry (not a real element).
  */
@@ -263,8 +267,8 @@ export function selectSnapshotRows<T extends { readonly priority: number }>(
       remaining -= 1
     }
   }
-  // Keep the incoming order (links first, then controls, then anchors).
-  return rows.filter(row => picked.has(row))
+  const groupOf = (row: T): number => (row.priority === 1 ? 0 : row.priority <= 0 ? 1 : 2)
+  return rows.filter(row => picked.has(row)).sort((a, b) => groupOf(a) - groupOf(b))
 }
 
 export async function capturePlaywrightSnapshot(

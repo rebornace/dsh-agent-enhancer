@@ -72,7 +72,7 @@ function formatSnapshot(body: SnapshotBody, extra?: readonly string[]): string {
       const shown = body.nodes.length
       const tally = controls > 0 ? `${links} link / ${controls} control` : `${links} link`
       return controls > 0
-        ? `interactive (${shown} shown: ${tally} — controls are at the end; prefer refs that include href=… ; never invent URLs; re-snapshot after navigation):`
+        ? `interactive (${shown} shown: ${tally} — controls listed first; prefer refs that include href=… ; never invent URLs; re-snapshot after navigation):`
         : `interactive (${shown} shown: ${tally}; prefer refs that include href=… ; never invent URLs; re-snapshot after navigation):`
     })(),
     ...body.nodes.slice(0, 80).map(node => (

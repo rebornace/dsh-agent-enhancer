@@ -87,6 +87,6 @@ describe('snapshot output', () => {
       ],
     })
     expect(out).toContain('interactive (3 shown: 2 link / 1 control')
-    expect(out).toContain('controls are at the end')
+    expect(out).toContain('controls listed first')
   })
 })

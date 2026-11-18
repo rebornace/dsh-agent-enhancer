@@ -33,15 +33,21 @@ describe('selectSnapshotRows', () => {
       row(1, 'button-a'),
       row(2, 'anchor-b'),
     ]
+    // Display order: controls first, then links, then inferred anchors.
     expect(selectSnapshotRows(rows, 80).map(item => item.name))
-      .toEqual(['anchor-a', 'link-a', 'button-a', 'anchor-b'])
-    // Two slots: the anchor loses both of them to a real link and a real control.
-    expect(selectSnapshotRows(rows, 2).map(item => item.name)).toEqual(['link-a', 'button-a'])
+      .toEqual(['button-a', 'link-a', 'anchor-a', 'anchor-b'])
+    // Two slots: the anchor loses both of them to a real control and a real link.
+    expect(selectSnapshotRows(rows, 2).map(item => item.name)).toEqual(['button-a', 'link-a'])
   })
 
-  it('preserves incoming order and favours controls in a tight budget', () => {
-    expect(selectSnapshotRows([row(0, 'a'), row(1, 'b'), row(0, 'c')], 2).map(item => item.name))
-      .toEqual(['a', 'b'])
+  it('puts controls first and keeps the incoming order inside a group', () => {
+    const selected = selectSnapshotRows([
+      row(0, 'a'),
+      row(1, 'b'),
+      row(0, 'c'),
+      row(1, 'd'),
+    ], 4)
+    expect(selected.map(item => item.name)).toEqual(['b', 'd', 'a', 'c'])
     expect(selectSnapshotRows([row(0, 'a')], 0)).toEqual([])
     expect(selectSnapshotRows([], 80)).toEqual([])
   })
