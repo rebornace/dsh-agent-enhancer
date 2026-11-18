@@ -1,15 +1,18 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { IconChevronRightOutlineRegular, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
+  BROWSER_AGENT_IDLE_CLOSE,
   browserAgentBrowsersForPlatform,
   coerceBrowserAgentBrowserForPlatform,
   detectUiPlatform,
   RUN_ALERTS_LEVELS,
   resolveBrowserAgentBrowser,
+  resolveBrowserAgentIdleClose,
   resolveRunAlertsLevel,
 } from '../../config.ts'
 import type {
   BrowserAgentBrowser,
+  BrowserAgentIdleClose,
   ConfigurableAuxiliaryFeature,
   EnhancerSettings,
   ModuleName,
@@ -26,7 +29,7 @@ export interface SettingsFeaturesPanelProps {
   readonly onRunAlertsLevel?: (level: RunAlertsLevel) => void
   readonly onBrowserAgentBrowser?: (browser: BrowserAgentBrowser) => void
   readonly onBrowserAgentDebugTools?: (enabled: boolean) => void
-  readonly onBrowserAgentIdleClose?: (enabled: boolean) => void
+  readonly onBrowserAgentIdleClose?: (value: BrowserAgentIdleClose) => void
   readonly onOpenModel: (feature: ConfigurableAuxiliaryFeature) => void
   /** Optional per-module extra description (e.g. host capability warnings). */
   readonly featureExtraDescription?: (module: ModuleName) => string | undefined
@@ -140,12 +143,21 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                       <p className={styles.settingDescription}>{t('browserAgentDebugToolsHint')}</p>
                       <label className={styles.browserAgentExtraRow}>
                         <span>{t('browserAgentIdleClose')}</span>
-                        <Switch
-                          label={t('browserAgentIdleClose')}
-                          checked={settings.browserAgentIdleClose}
+                        <select
+                          className={styles.settingsSelect}
+                          aria-label={t('browserAgentIdleClose')}
                           disabled={busy || onBrowserAgentIdleClose === undefined}
-                          onChange={checked => { onBrowserAgentIdleClose?.(checked) }}
-                        />
+                          value={settings.browserAgentIdleClose}
+                          onChange={event => {
+                            onBrowserAgentIdleClose?.(resolveBrowserAgentIdleClose(event.target.value))
+                          }}
+                        >
+                          {BROWSER_AGENT_IDLE_CLOSE.map(value => (
+                            <option key={value} value={value}>
+                              {t(`browserAgentIdleClose_${value}` as 'browserAgentIdleClose_10m')}
+                            </option>
+                          ))}
+                        </select>
                       </label>
                       <p className={styles.settingDescription}>{t('browserAgentIdleCloseHint')}</p>
                     </div>

@@ -29,6 +29,40 @@ export function resolveRunAlertsLevel(value: string | undefined): RunAlertsLevel
 export const BROWSER_AGENT_BROWSERS = ['auto', 'chrome', 'edge', 'safari'] as const
 export type BrowserAgentBrowser = typeof BROWSER_AGENT_BROWSERS[number]
 
+/** How long an unused agent tab survives before the idle sweep closes it. */
+export const BROWSER_AGENT_IDLE_CLOSE = ['10m', '30m', '60m', 'never'] as const
+export type BrowserAgentIdleClose = typeof BROWSER_AGENT_IDLE_CLOSE[number]
+
+/**
+ * Old configs stored a boolean (true = 10 minutes, false = never). Keep reading
+ * them so an update does not silently re-enable a sweep the user turned off.
+ */
+export function resolveBrowserAgentIdleClose(value: unknown): BrowserAgentIdleClose {
+  if (value === false) return 'never'
+  if (value === true) return '10m'
+  return BROWSER_AGENT_IDLE_CLOSE.includes(value as BrowserAgentIdleClose)
+    ? (value as BrowserAgentIdleClose)
+    : '10m'
+}
+
+/** Sweep age in ms, or null when the sweep is off. */
+export function browserAgentIdleCloseMs(value: BrowserAgentIdleClose): number | null {
+  switch (value) {
+    case '10m':
+      return 10 * 60_000
+    case '30m':
+      return 30 * 60_000
+    case '60m':
+      return 60 * 60_000
+    case 'never':
+      return null
+    default: {
+      const _exhaustive: never = value
+      return _exhaustive
+    }
+  }
+}
+
 export function resolveBrowserAgentBrowser(value: string | undefined): BrowserAgentBrowser {
   switch (value) {
     case 'auto':
@@ -100,10 +134,10 @@ export type EnhancerSettings = Readonly<Record<`${ModuleName}Enabled`, boolean>>
   readonly runAlertsLevel: RunAlertsLevel
   /** Dedicated window: auto (Win→Edge, Mac→Safari), or force a platform browser. */
   readonly browserAgentBrowser: BrowserAgentBrowser
-  /** Debug tools (network / console / emulate) for the browser agent. Default off. */
+  /** Debug + page emulation tools for the browser agent. Default off. */
   readonly browserAgentDebugTools: boolean
-  /** Close agent tabs nobody used for ~10 minutes (never the bound/active tab). */
-  readonly browserAgentIdleClose: boolean
+  /** Close agent tabs nobody used for this long; `never` disables the sweep. */
+  readonly browserAgentIdleClose: BrowserAgentIdleClose
   readonly optimizeProvider: string
   readonly optimizeModel: string
   readonly optimizeReasoningEffort: string
@@ -150,7 +184,7 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   browserAgentEnabled: false,
   browserAgentBrowser: 'auto',
   browserAgentDebugTools: false,
-  browserAgentIdleClose: true,
+  browserAgentIdleClose: '10m',
   webChatBridgeEnabled: true,
   instructionsSkillsEnabled: true,
   mcpConnectorsEnabled: true,
@@ -199,7 +233,7 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     browserAgentEnabled: value?.browserAgentEnabled ?? false,
     browserAgentBrowser: resolveBrowserAgentBrowser(value?.browserAgentBrowser),
     browserAgentDebugTools: value?.browserAgentDebugTools === true,
-    browserAgentIdleClose: value?.browserAgentIdleClose !== false,
+    browserAgentIdleClose: resolveBrowserAgentIdleClose(value?.browserAgentIdleClose),
     webChatBridgeEnabled: value?.webChatBridgeEnabled ?? true,
     instructionsSkillsEnabled: value?.instructionsSkillsEnabled ?? true,
     mcpConnectorsEnabled: value?.mcpConnectorsEnabled ?? true,

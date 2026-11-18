@@ -9,6 +9,7 @@ import type {} from '@deepseek-ai/dsh-typert-registry'
 import {
   coerceBrowserAgentBrowserForPlatform,
   resolveBrowserAgentBrowser,
+  resolveBrowserAgentIdleClose,
   resolveRunAlertsLevel,
   resolveSettings,
 } from '../config.ts'
@@ -273,8 +274,8 @@ export const Config = z.object({
   browserAgentBrowser: z.string().default('auto').volatile(),
   /** Debug tools (network / console / emulate); default off, gated per tool. */
   browserAgentDebugTools: z.boolean().default(false).volatile(),
-  /** Close idle agent tabs after ~10 min; default on, never the bound/active tab. */
-  browserAgentIdleClose: z.boolean().default(true).volatile(),
+  /** Close idle agent tabs after ~10 min; coerced via resolveBrowserAgentIdleClose. */
+  browserAgentIdleClose: z.union([z.boolean(), z.string()]).default('10m').volatile(),
   /** Default off; embeds official web chat + import to work. */
   webChatBridgeEnabled: z.boolean().default(true).volatile(),
   instructionsSkillsEnabled: z.boolean().default(true).volatile(),
@@ -1442,7 +1443,7 @@ function readSettings(config: Config): EnhancerSettings {
     browserAgentEnabled: config.browserAgentEnabled.get(),
     browserAgentBrowser: hostBrowserPreference(config.browserAgentBrowser.get()),
     browserAgentDebugTools: config.browserAgentDebugTools.get(),
-    browserAgentIdleClose: config.browserAgentIdleClose.get(),
+    browserAgentIdleClose: resolveBrowserAgentIdleClose(config.browserAgentIdleClose.get()),
     webChatBridgeEnabled: config.webChatBridgeEnabled.get(),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
     mcpConnectorsEnabled: config.mcpConnectorsEnabled.get(),

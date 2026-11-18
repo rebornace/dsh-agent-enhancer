@@ -75,6 +75,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentBrowser' | 'browserAgentBrowser_auto' |
       'browserAgentDebugTools' | 'browserAgentDebugToolsHint' |
       'browserAgentIdleClose' | 'browserAgentIdleCloseHint' |
+      'browserAgentIdleClose_10m' | 'browserAgentIdleClose_30m' |
+      'browserAgentIdleClose_60m' | 'browserAgentIdleClose_never' |
       'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
       'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
       'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
@@ -465,10 +467,14 @@ export const agentLocales = {
     browserAgent: '浏览器控制',
     browserAgentDescription: '让智能体用专用浏览器打开并操作网页（点击、填写等需你批准）。Mac 为 Safari / Chrome，Windows 为 Chrome / Edge。默认关闭。开启后可在对话中自动启动。不同于官方侧栏网页浏览。',
     browserAgentBrowser: '专用浏览器',
-    browserAgentDebugTools: '调试工具',
-    browserAgentDebugToolsHint: '开启后智能体可读取网络请求与控制台输出、模拟深色模式或视口尺寸（browser_network / browser_console / browser_emulate）。不记录请求头、Cookie 与响应体。',
+    browserAgentDebugTools: '调试与页面模拟',
+    browserAgentDebugToolsHint: '一个开关同时启用：读取网络请求与控制台输出（browser_network / browser_console），以及模拟深色模式、减少动画、视口尺寸（browser_emulate）。只记录 URL、状态、耗时与 console 文本，不读请求头、Cookie、响应体。',
     browserAgentIdleClose: '自动关闭闲置标签',
-    browserAgentIdleCloseHint: '约 10 分钟没人用的标签自动关闭，避免专用浏览器越开越多。当前绑定标签、正在看的标签和最后一个标签不会被关。',
+    browserAgentIdleCloseHint: '超过所选时长没人用的标签自动关闭，避免专用浏览器越开越多。当前绑定标签、正在看的标签和最后一个标签不会被关。',
+    browserAgentIdleClose_10m: '10 分钟',
+    browserAgentIdleClose_30m: '30 分钟',
+    browserAgentIdleClose_60m: '60 分钟',
+    browserAgentIdleClose_never: '不自动关闭',
     browserAgentBrowser_auto: '自动（Mac 优先 Safari，Windows 优先 Edge）',
     browserAgentBrowser_chrome: 'Google Chrome',
     browserAgentBrowser_edge: 'Microsoft Edge',
@@ -1115,10 +1121,14 @@ export const agentLocales = {
     browserAgent: 'Browser control',
     browserAgentDescription: 'Let the agent open and use a dedicated browser window (clicks and typing need your approval). Mac: Safari / Chrome; Windows: Chrome / Edge. Off by default. Auto-launches from chat when needed. Not the official sidebar browser.',
     browserAgentBrowser: 'Dedicated browser',
-    browserAgentDebugTools: 'Debug tools',
-    browserAgentDebugToolsHint: 'Lets the agent read network requests and console output, and emulate dark mode or a viewport size (browser_network / browser_console / browser_emulate). Request headers, cookies and response bodies are never recorded.',
+    browserAgentDebugTools: 'Debug & page emulation',
+    browserAgentDebugToolsHint: 'One switch enables both: reading network requests and console output (browser_network / browser_console), and emulating dark mode, reduced motion or a viewport size (browser_emulate). Only URLs, status, timing and console text are recorded — never request headers, cookies or bodies.',
     browserAgentIdleClose: 'Close idle tabs',
-    browserAgentIdleCloseHint: 'Closes tabs nobody used for about 10 minutes so the dedicated browser does not pile them up. The bound tab, the tab you are looking at, and the last tab are never closed.',
+    browserAgentIdleCloseHint: 'Closes tabs nobody used for longer than the selected time, so the dedicated browser does not pile them up. The bound tab, the tab you are looking at, and the last tab are never closed.',
+    browserAgentIdleClose_10m: '10 minutes',
+    browserAgentIdleClose_30m: '30 minutes',
+    browserAgentIdleClose_60m: '60 minutes',
+    browserAgentIdleClose_never: 'Never',
     browserAgentBrowser_auto: 'Auto (Mac prefers Safari, Windows prefers Edge)',
     browserAgentBrowser_chrome: 'Google Chrome',
     browserAgentBrowser_edge: 'Microsoft Edge',

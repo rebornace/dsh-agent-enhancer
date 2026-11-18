@@ -229,7 +229,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
     }
     throw new Error(
       `${tool}: debug tools are off. Nothing ran. `
-      + 'Ask the user to enable 设置 → 智能体增强 → 功能 → 浏览器 Agent → 调试工具, then retry.',
+      + 'Ask the user to enable 设置 → 智能体增强 → 功能 → 浏览器 Agent → 调试与页面模拟, then retry.',
     )
   }
 

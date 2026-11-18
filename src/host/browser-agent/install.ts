@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { BrowserAgentBrowser } from '../../config.ts'
+import type { BrowserAgentBrowser, BrowserAgentIdleClose } from '../../config.ts'
+import { browserAgentIdleCloseMs } from '../../config.ts'
 import type { SoftPauseGate } from '../soft-pause/gate.ts'
 import { BrowserApprovalGate } from './approval.ts'
 import type { BrowserDriver, BrowserDriverStatus } from './driver.ts'
@@ -21,9 +22,8 @@ import { TabScopeStore } from './tab-scope.ts'
 import { diagnose, type BrowserAvailability, type Diagnosis } from './diagnose.ts'
 import { registerBrowserTools } from './tools.ts'
 
-/** Idle sweep cadence and the age at which an unused tab is closed. */
+/** Idle sweep cadence; the tab age comes from browserAgentIdleClose. */
 const IDLE_TICK_MS = 60_000
-const IDLE_CLOSE_MS = 10 * 60_000
 
 export interface BrowserAgentRuntime {
   readonly approval: BrowserApprovalGate
@@ -103,7 +103,7 @@ export function installBrowserAgent(
     /** Debug tools switch: gates browser_network / browser_console / browser_emulate. */
     readonly debugTools?: () => boolean
     /** Close agent tabs nobody used for a while (never bound / active / last tab). */
-    readonly idleClose?: () => boolean
+    readonly idleClose?: () => BrowserAgentIdleClose
     readonly profileRoot: string
     readonly softPause: SoftPauseGate
     readonly softPauseEnabled: () => boolean
@@ -388,12 +388,14 @@ export function installBrowserAgent(
   refresh()
 
   const sweepIdleTabs = async (): Promise<void> => {
-    if (!options.enabled() || options.idleClose?.() !== true) return
+    if (!options.enabled()) return
+    const idleMs = browserAgentIdleCloseMs(options.idleClose?.() ?? '10m')
+    if (idleMs === null) return
     const driver = activeDriver
     if (driver === null || driver.status().ready !== true) return
     try {
       const closed = await driver.sweepIdleTabs({
-        idleMs: IDLE_CLOSE_MS,
+        idleMs,
         keep: sessions.boundTabIds(),
       })
       for (const tabId of closed) {

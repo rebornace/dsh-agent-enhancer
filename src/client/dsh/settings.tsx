@@ -6,6 +6,7 @@ import type { ErrorInfo, ReactNode } from 'react'
 import { resolveSettings } from '../../config.ts'
 import type {
   BrowserAgentBrowser,
+  BrowserAgentIdleClose,
   ConfigurableAuxiliaryFeature,
   EnhancerSettings,
   ModuleName,
@@ -237,12 +238,12 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
     }
   }
 
-  const onBrowserAgentIdleClose = async (enabled: boolean) => {
+  const onBrowserAgentIdleClose = async (value: BrowserAgentIdleClose) => {
     setSaving('browserAgentIdleClose')
     setError(false)
     setSaveDetail(null)
     try {
-      await writeOps([{ op: 'set', path: ['browserAgentIdleClose'], value: enabled }])
+      await writeOps([{ op: 'set', path: ['browserAgentIdleClose'], value }])
     } catch (cause) {
       setError(true)
       setSaveDetail(cause instanceof Error ? cause.message : String(cause))
@@ -374,7 +375,7 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
           onRunAlertsLevel={level => { void onRunAlertsLevel(level) }}
           onBrowserAgentBrowser={browser => { void onBrowserAgentBrowser(browser) }}
           onBrowserAgentDebugTools={enabled => { void onBrowserAgentDebugTools(enabled) }}
-          onBrowserAgentIdleClose={enabled => { void onBrowserAgentIdleClose(enabled) }}
+          onBrowserAgentIdleClose={value => { void onBrowserAgentIdleClose(value) }}
           onOpenModel={feature => {
             setHighlightFeature(feature)
             setTab('models')
