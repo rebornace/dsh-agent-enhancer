@@ -147,25 +147,31 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
   }
 
   if (snapshot.needsHuman !== null) {
+    const needsHuman = snapshot.needsHuman
     const acknowledge = async () => {
       setBusy(true)
       try {
         const result = await agentEnhancerBrowserAgentAcknowledgeHuman.invoke(props.getRemote(), {
-          sessionId: snapshot.needsHuman!.sessionId,
+          sessionId: needsHuman.sessionId,
         })
         setSnapshot(result.snapshot)
       } finally {
         setBusy(false)
       }
     }
+    // Login/captcha gets the wall-specific wording; anything else the agent asked
+    // for (close a tab, toggle a switch) shows only that instruction.
+    const asksHuman = needsHuman.kind === 'human'
     return (
       <NeedsHumanBanner
         titleId={titleId}
         bodyId={bodyId}
-        title={props.t('browserAgentNeedsHumanTitle')}
-        body={props.t('browserAgentNeedsHumanBody')}
-        detail={snapshot.needsHuman.detail}
-        continueLabel={props.t('browserAgentNeedsHumanContinue')}
+        title={asksHuman ? props.t('browserAgentNeedsHumanTitle') : props.t('browserAgentAskTitle')}
+        body={asksHuman ? props.t('browserAgentNeedsHumanBody') : needsHuman.detail}
+        detail={asksHuman ? needsHuman.detail : ''}
+        continueLabel={asksHuman
+          ? props.t('browserAgentNeedsHumanContinue')
+          : props.t('browserAgentAskContinue')}
         closeLabel={props.t('browserAgentClose')}
         busy={busy}
         continueRef={humanContinueRef}

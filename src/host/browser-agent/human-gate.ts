@@ -3,6 +3,13 @@
 export interface BrowserHumanRequest {
   readonly id: string
   readonly sessionId: string
+  /**
+   * `human` = login / captcha / 2FA on the page; `ask` = any other "do this in
+   * the browser" request from the agent. The Desktop card words itself
+   * differently: login boilerplate on an "close that tab" request reads as a
+   * mistake and hides what the user actually has to do.
+   */
+  readonly kind: 'human' | 'ask'
   readonly prompt: string
   readonly detail: string
   readonly url?: string
@@ -60,6 +67,7 @@ export class BrowserHumanGate {
     readonly sessionId: string
     readonly prompt: string
     readonly detail: string
+    readonly kind?: 'human' | 'ask'
     readonly url?: string
     readonly signal: AbortSignal
   }): Promise<'continued' | 'cancelled'> {
@@ -70,6 +78,7 @@ export class BrowserHumanGate {
     const request: BrowserHumanRequest = {
       id,
       sessionId: input.sessionId,
+      kind: input.kind ?? 'human',
       prompt: input.prompt,
       detail: input.detail,
       ...(input.url === undefined ? {} : { url: input.url }),

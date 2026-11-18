@@ -89,6 +89,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentTabFollow' | 'browserAgentTabStay' |
       'browserAgentNeedsHumanTitle' | 'browserAgentNeedsHumanBody' |
       'browserAgentNeedsHumanContinue' |
+      'browserAgentAskTitle' | 'browserAgentAskContinue' |
       'browserAgentBoundTab' | 'browserAgentSessionOrigins' | 'browserAgentAudit' |
       'browserAgentQuotePage' |
       'browserAgentQuoteOk' | 'browserAgentQuoteFailed' | 'browserAgentQuoteNoSession' |
@@ -504,6 +505,8 @@ export const agentLocales = {
     browserAgentNeedsHumanTitle: '浏览器需要你操作',
     browserAgentNeedsHumanBody: '请在专用浏览器窗口完成登录、验证码或二次验证，然后点「我已完成，继续」。完成后会自动把结果交回模型，无需再发一条「继续」。不要反复点同一按钮，也不要改用日常浏览器。',
     browserAgentNeedsHumanContinue: '我已完成，继续',
+    browserAgentAskTitle: '需要你在浏览器里操作',
+    browserAgentAskContinue: '已完成，继续',
     browserAgentBoundTab: '已绑定标签 {tabId}',
     browserAgentSessionOrigins: '本会话已允许的网站',
     browserAgentAudit: '最近操作',
@@ -1152,6 +1155,8 @@ export const agentLocales = {
     browserAgentNeedsHumanTitle: 'Browser needs you',
     browserAgentNeedsHumanBody: 'Finish login, captcha, or 2FA in the dedicated browser window, then click “I’m done — continue”. After that the result returns to the model automatically — no need to type “continue” in chat. Do not mash the same button or switch to your everyday browser.',
     browserAgentNeedsHumanContinue: 'I’m done — continue',
+    browserAgentAskTitle: 'Do this in the browser',
+    browserAgentAskContinue: 'Done — continue',
     browserAgentBoundTab: 'Bound tab {tabId}',
     browserAgentSessionOrigins: 'Allowed sites this session',
     browserAgentAudit: 'Recent actions',

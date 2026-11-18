@@ -43,4 +43,28 @@ describe('BrowserHumanGate', () => {
     gate.clearSession('s1')
     await expect(wait).resolves.toBe('cancelled')
   })
+
+  it('defaults to the login card and keeps an explicit ask kind', async () => {
+    const gate = new BrowserHumanGate()
+    const login = gate.waitForHuman({
+      sessionId: 's1',
+      prompt: 'log in',
+      detail: 'login wall',
+      signal: new AbortController().signal,
+    })
+    expect(gate.current()?.kind).toBe('human')
+    gate.acknowledge('s1')
+    await login
+
+    const ask = gate.waitForHuman({
+      sessionId: 's1',
+      prompt: 'close tab B',
+      detail: 'close tab B',
+      kind: 'ask',
+      signal: new AbortController().signal,
+    })
+    expect(gate.current()?.kind).toBe('ask')
+    gate.acknowledge('s1')
+    await ask
+  })
 })

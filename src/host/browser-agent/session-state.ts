@@ -33,7 +33,7 @@ function emptyMemory(): RefMemory {
 export class BrowserSessionState {
   private readonly tabBySession = new Map<string, number>()
   private readonly sessionByTab = new Map<number, string>()
-  private readonly needsHumanBySession = new Map<string, string>()
+  private readonly needsHumanBySession = new Map<string, { detail: string, kind: 'human' | 'ask' }>()
   /**
    * Snapshot memory lives with the tab, not the session: refs captured in a tab
    * stay valid when the session switches away and back (refs are unique per
@@ -207,8 +207,8 @@ export class BrowserSessionState {
     return this.conflict
   }
 
-  setNeedsHuman(sessionId: string, detail: string): void {
-    this.needsHumanBySession.set(sessionId, detail)
+  setNeedsHuman(sessionId: string, detail: string, kind: 'human' | 'ask' = 'human'): void {
+    this.needsHumanBySession.set(sessionId, { detail, kind })
   }
 
   clearNeedsHuman(sessionId: string): void {
@@ -216,12 +216,12 @@ export class BrowserSessionState {
   }
 
   needsHuman(sessionId: string): string | undefined {
-    return this.needsHumanBySession.get(sessionId)
+    return this.needsHumanBySession.get(sessionId)?.detail
   }
 
-  anyNeedsHuman(): { sessionId: string, detail: string } | null {
-    for (const [sessionId, detail] of this.needsHumanBySession) {
-      return { sessionId, detail }
+  anyNeedsHuman(): { sessionId: string, detail: string, kind: 'human' | 'ask' } | null {
+    for (const [sessionId, value] of this.needsHumanBySession) {
+      return { sessionId, detail: value.detail, kind: value.kind }
     }
     return null
   }

@@ -656,6 +656,8 @@ export type BrowserAgentTabConflictWire = z.infer<typeof browserAgentTabConflict
 export const browserAgentNeedsHumanSchema = z.strictObject({
   sessionId: z.string().min(1),
   detail: z.string().min(1),
+  /** `human` = login/captcha on the page; `ask` = any other browser-side request. */
+  kind: z.enum(['human', 'ask']),
 })
 export type BrowserAgentNeedsHumanWire = z.infer<typeof browserAgentNeedsHumanSchema>
 

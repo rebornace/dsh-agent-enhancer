@@ -301,17 +301,19 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
     readonly sessionId: string
     readonly prompt: string
     readonly detail: string
+    readonly kind?: 'human' | 'ask'
     readonly url?: string
     readonly tabId?: number
     readonly signal: AbortSignal
   }): Promise<'continued' | 'cancelled'> => {
-    options.sessions.setNeedsHuman(input.sessionId, input.detail)
+    options.sessions.setNeedsHuman(input.sessionId, input.detail, input.kind ?? 'human')
     await focusBoundTab(input.sessionId, input.tabId)
     try {
       return await options.human.waitForHuman({
         sessionId: input.sessionId,
         prompt: input.prompt,
         detail: input.detail,
+        ...(input.kind === undefined ? {} : { kind: input.kind }),
         ...(input.url === undefined ? {} : { url: input.url }),
         signal: input.signal,
       })
@@ -569,6 +571,8 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         sessionId,
         prompt,
         detail: prompt.slice(0, 240),
+        // A generic "do this in the browser" request must not wear the login card.
+        kind: 'ask',
         ...(url === undefined ? {} : { url }),
         ...(tabId === undefined ? {} : { tabId }),
         signal: exec.signal,

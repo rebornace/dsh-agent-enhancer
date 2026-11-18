@@ -369,6 +369,7 @@ export class AgentEnhancerService extends TypertRemoteService {
       ? {
         sessionId: waiting.sessionId,
         detail: waiting.prompt.trim() !== '' ? waiting.prompt : waiting.detail,
+        kind: waiting.kind,
       }
       : (this.browserAgent?.sessions.anyNeedsHuman() ?? null)
     const overlayBound = pending !== null
