@@ -2,7 +2,7 @@
 
 ## Iteration priority
 
-Post-`0.3.8` current P0 is **L7 browser agent**. **v1 main path is landed** (Playwright dedicated browser, `browser_*`, dialog approval, auto-launch, Settings hard-switch; MV3 bridge retired). **Mac platform path is landed** (Safari/WebKit menu + Auto sticky fallback; no Edge on Mac). Step-0 polish landed: real `tabId`, WebKit install hint, needsHuman a11y; chat quote yields to official Desktop. Multi-tab sidebar picker is landed. Skip official viewer URL mirror and sidebar window-reveal chrome (low practical value). Benchmark Cursor / Claude in Chrome. See [`docs/roadmap.md`](docs/roadmap.md), [`docs/architecture/browser-agent-playwright.md`](docs/architecture/browser-agent-playwright.md) and the browse-parity decision record [`docs/architecture/browser-agent-browse-parity.md`](docs/architecture/browser-agent-browse-parity.md). Still deferred: Checkpoint/Rewind deep polish, approval UX parallel product, memory/prefs product, Computer Use on Windows. Do not ship a second “viewer-only” sidebar browser.
+Post-`0.3.8` current P0 is **L7 browser agent**. **v1 main path is landed** (Playwright dedicated browser, `browser_*`, dialog approval, auto-launch, Settings hard-switch; MV3 bridge retired). **Mac platform path is landed** (Safari/WebKit menu + Auto sticky fallback; no Edge on Mac). Step-0 polish landed: real `tabId`, WebKit install hint, needsHuman a11y; chat quote yields to official Desktop. Multi-tab sidebar picker is landed. Skip official viewer URL mirror and sidebar window-reveal chrome (low practical value). Benchmark Cursor / Claude in Chrome. Background notes live in `docs/roadmap.md`, `docs/architecture/browser-agent-playwright.md` and `docs/architecture/browser-agent-browse-parity.md` — local-only files, not in git; read them on this machine, rebuild from the code if a fresh clone lacks them. Still deferred: Checkpoint/Rewind deep polish, approval UX parallel product, memory/prefs product, Computer Use on Windows. Do not ship a second “viewer-only” sidebar browser.
 
 **0.3.14 landed** the browse-parity batch (D6 + A-1…A-6). Rules that must survive future edits:
 
@@ -12,7 +12,7 @@ Post-`0.3.8` current P0 is **L7 browser agent**. **v1 main path is landed** (Pla
 - **Debug capture never records headers, cookies or response bodies**, and console text goes through `redactText` (Chrome writes request URLs into `Failed to load resource` messages).
 - **`playwright-core` stays lazily imported**; `lazy-playwright.test.ts` fails if a runtime static import comes back.
 
-**Web chat (`webChatBridge`)** main path is landed: left-nav embed of `chat.deepseek.com`; Move to workspace = **导入当前对话** (`history_messages` + guest Bearer) or **导入分享链接** (public `share/content`, any account). Same fragment→Session mapping as official `@deepseek-ai/dsh-deepseek-chat-import` (THINK→reasoning, `web_search` / `web_fetch`) when the API payload includes those fragments. Preview lists Q&A only; thinking appears after import. Share rows use `message_id` (not bare `id`); orphan parents fall back to linear import. Do **not** silent-fallback current chat to DOM when the session API fails — fail and suggest share. Do **not** ship a bulk `deepseek_data-*.zip` product line (use official experimental「DeepSeek 会话导入」). Do **not** reintroduce account-bulk scraping. See [`docs/architecture/web-chat-bridge.md`](docs/architecture/web-chat-bridge.md). Screenshots: `docs/images/web-chat-left-nav.png`, `docs/images/web-chat-to-workspace.png`.
+**Web chat (`webChatBridge`)** main path is landed: left-nav embed of `chat.deepseek.com`; Move to workspace = **导入当前对话** (`history_messages` + guest Bearer) or **导入分享链接** (public `share/content`, any account). Same fragment→Session mapping as official `@deepseek-ai/dsh-deepseek-chat-import` (THINK→reasoning, `web_search` / `web_fetch`) when the API payload includes those fragments. Preview lists Q&A only; thinking appears after import. Share rows use `message_id` (not bare `id`); orphan parents fall back to linear import. Do **not** silent-fallback current chat to DOM when the session API fails — fail and suggest share. Do **not** ship a bulk `deepseek_data-*.zip` product line (use official experimental「DeepSeek 会话导入」). Do **not** reintroduce account-bulk scraping. Background: `docs/architecture/web-chat-bridge.md` (local-only). Screenshots: `docs/images/web-chat-left-nav.png`, `docs/images/web-chat-to-workspace.png`.
 
 ## Browser agent — platform rules
 
@@ -55,4 +55,8 @@ When a session is deleted from this plugin, **all plugin-owned persistence for t
 
 Any new feature that writes per-session data under `plugin-data` (or elsewhere keyed by session) **must** register a `SessionCleaner` in the same change set and update `docs/architecture/session-delete.md`. Leaving orphan session files after delete is a product bug.
 
-See: `docs/architecture/session-delete.md`.
+See: `docs/architecture/session-delete.md` (local-only).
+
+## Docs policy
+
+Publish only what stays true: `README` (what the plugin does and does not do), `CHANGELOG` (what shipped), `AGENTS.md` (invariants), tests. Keep plans and decision logs local under `docs/` (ignored by git) — an AI-written roadmap in a public repo reads as a promise and rots fastest. Do not add `docs/roadmap.md` or `docs/architecture/` to git without an explicit decision to publish them.
