@@ -3,7 +3,7 @@ import { decodeWindowsPickerPathBase64 } from './pick.ts'
 
 describe('decodeWindowsPickerPathBase64', () => {
   it('round-trips Chinese folder names that used to mojibake under console ANSI', () => {
-    const path = 'C:\\Users\\Administrator\\Desktop\\新建文件夹'
+    const path = 'C:\\Users\\tester\\Desktop\\新建文件夹'
     const encoded = Buffer.from(path, 'utf8').toString('base64')
     expect(decodeWindowsPickerPathBase64(encoded)).toBe(path)
   })
