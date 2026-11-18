@@ -63,4 +63,4 @@ Publish only what stays true: `README` (what the plugin does and does not do), `
 
 ## CI
 
-`.github/workflows/ci.yml` runs on push to `main` and on PRs: `pnpm check` (typecheck + vitest + build + pack verification) on Ubuntu, plus typecheck/tests on Windows. Only the 36 test files under `src/` ship; the ~95 integration tests in `tests/` are local-only, so a clone runs a thinner suite. `vitest.global-setup.ts` (tracked) builds `lib/` once when it is missing — do not point `globalSetup` back at `tests/`, which git ignores.
+`.github/workflows/ci.yml` runs on push to `main` and on PRs: `pnpm check` (typecheck + vitest + build + pack verification) on Ubuntu, plus typecheck/tests on Windows. The integration suite under `tests/` ships with the repo (sanitized: no real home paths, tokens or chat content — keep it that way); `vitest.global-setup.ts` (tracked) builds `lib/` once when it is missing.

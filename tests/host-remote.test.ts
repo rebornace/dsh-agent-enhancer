@@ -1,0 +1,460 @@
+import { Context } from '@deepseek-ai/cordis'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { apply, AgentEnhancerService, Config, hostContribution, inject } from '../src/host/index.ts'
+import { AuxiliaryError } from '../src/errors.ts'
+import { AuxiliaryModels } from '../src/host/model.ts'
+import { checkpointRemoteInfo, remoteInfo, rpcPayloadSchema } from '../src/host/rpc.ts'
+import type { RpcPayload } from '../src/host/rpc.ts'
+
+const contexts: Context[] = []
+
+function context(): Context {
+  const ctx = new Context()
+  contexts.push(ctx)
+  return ctx
+}
+
+function payload(): RpcPayload {
+  return rpcPayloadSchema.parse({
+    method: 'generate',
+    data: {
+      operation: 'optimize',
+      requestId: 'req-1',
+      sessionId: 'session-1',
+      source: '原稿',
+      references: [],
+      context: [],
+    },
+  })
+}
+
+afterEach(async () => {
+  for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
+})
+
+describe('composer configuration and Remote metadata', () => {
+  it('defaults input helpers on and the independent rollback switch off', () => {
+    const values = (input: unknown) => Object.fromEntries(Object.entries(input as Record<string, { get(): unknown }>)
+      .map(([key, value]) => [key, value.get()]))
+    expect(Config.dict!.historyEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.optimizeEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.predictEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.rollbackEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.contextInspectEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.quoteEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.usageEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.sessionDeleteEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.fileEditEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.softPauseEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.runAlertsEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.browserAgentEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.browserAgentBrowser?.meta.volatile).toBe(true)
+    expect(Config.dict!.webChatBridgeEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.instructionsSkillsEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.mcpConnectorsEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.optimizeProvider?.meta.volatile).toBe(true)
+    expect(Config.dict!.optimizeModel?.meta.volatile).toBe(true)
+    expect(Config.dict!.optimizeReasoningEffort?.meta.volatile).toBe(true)
+    expect(Config.dict!.predictProvider?.meta.volatile).toBe(true)
+    expect(Config.dict!.predictModel?.meta.volatile).toBe(true)
+    expect(Config.dict!.predictReasoningEffort?.meta.volatile).toBe(true)
+    expect(Config.dict!.compactProvider?.meta.volatile).toBe(true)
+    expect(values(Config({}))).toEqual({
+      historyEnabled: true,
+      optimizeEnabled: true,
+      predictEnabled: true,
+      quoteEnabled: true,
+      rollbackEnabled: true,
+      contextInspectEnabled: true,
+      usageEnabled: true,
+      sessionDeleteEnabled: true,
+      fileEditEnabled: true,
+      softPauseEnabled: true,
+      runAlertsEnabled: true,
+      runAlertsLevel: 'unfocused',
+      browserAgentEnabled: false,
+      browserAgentBrowser: 'auto',
+      browserAgentDebugTools: false,
+      browserAgentIdleClose: true,
+      webChatBridgeEnabled: true,
+      instructionsSkillsEnabled: true,
+      mcpConnectorsEnabled: true,
+      optimizeProvider: '',
+      optimizeModel: '',
+      optimizeReasoningEffort: '',
+      predictProvider: '',
+      predictModel: '',
+      predictReasoningEffort: '',
+      compactProvider: '',
+      compactModel: '',
+      compactReasoningEffort: '',
+      autoClassifierEnabled: false,
+      autoInstantProvider: '',
+      autoInstantModel: '',
+      autoInstantReasoningEffort: '',
+      autoThinkingProvider: '',
+      autoThinkingModel: '',
+      autoThinkingReasoningEffort: '',
+      autoProProvider: '',
+      autoProModel: '',
+      autoProReasoningEffort: '',
+      autoClassifierProvider: '',
+      autoClassifierModel: '',
+      autoClassifierReasoningEffort: '',
+    })
+    expect(values(Config({
+      historyEnabled: false,
+      optimizeEnabled: false,
+      predictEnabled: false,
+      rollbackEnabled: false,
+      quoteEnabled: true,
+      contextInspectEnabled: true,
+      usageEnabled: true,
+      sessionDeleteEnabled: true,
+      fileEditEnabled: true,
+      softPauseEnabled: false,
+      runAlertsEnabled: false,
+      runAlertsLevel: 'always',
+      browserAgentEnabled: true,
+      browserAgentBrowser: 'chrome',
+      browserAgentDebugTools: false,
+      browserAgentIdleClose: true,
+      webChatBridgeEnabled: true,
+      instructionsSkillsEnabled: false,
+      mcpConnectorsEnabled: false,
+      optimizeProvider: 'deepseek',
+      optimizeModel: 'deepseek-chat',
+      optimizeReasoningEffort: 'low',
+      predictProvider: 'deepseek',
+      predictModel: 'deepseek-chat',
+      predictReasoningEffort: 'high',
+      compactProvider: 'deepseek',
+      compactModel: 'deepseek-chat',
+      compactReasoningEffort: 'low',
+    }))).toEqual({
+      historyEnabled: false,
+      optimizeEnabled: false,
+      predictEnabled: false,
+      quoteEnabled: true,
+      rollbackEnabled: false,
+      contextInspectEnabled: true,
+      usageEnabled: true,
+      sessionDeleteEnabled: true,
+      fileEditEnabled: true,
+      softPauseEnabled: false,
+      runAlertsEnabled: false,
+      runAlertsLevel: 'always',
+      browserAgentEnabled: true,
+      browserAgentBrowser: 'chrome',
+      browserAgentDebugTools: false,
+      browserAgentIdleClose: true,
+      webChatBridgeEnabled: true,
+      instructionsSkillsEnabled: false,
+      mcpConnectorsEnabled: false,
+      optimizeProvider: 'deepseek',
+      optimizeModel: 'deepseek-chat',
+      optimizeReasoningEffort: 'low',
+      predictProvider: 'deepseek',
+      predictModel: 'deepseek-chat',
+      predictReasoningEffort: 'high',
+      compactProvider: 'deepseek',
+      compactModel: 'deepseek-chat',
+      compactReasoningEffort: 'low',
+      autoClassifierEnabled: false,
+      autoInstantProvider: '',
+      autoInstantModel: '',
+      autoInstantReasoningEffort: '',
+      autoThinkingProvider: '',
+      autoThinkingModel: '',
+      autoThinkingReasoningEffort: '',
+      autoProProvider: '',
+      autoProModel: '',
+      autoProReasoningEffort: '',
+      autoClassifierProvider: '',
+      autoClassifierModel: '',
+      autoClassifierReasoningEffort: '',
+    })
+    expect(Object.keys(Config({}))).toEqual([
+      'historyEnabled', 'optimizeEnabled', 'predictEnabled', 'quoteEnabled', 'rollbackEnabled', 'contextInspectEnabled',
+      'usageEnabled', 'sessionDeleteEnabled', 'fileEditEnabled', 'softPauseEnabled', 'runAlertsEnabled', 'runAlertsLevel',
+      'browserAgentEnabled', 'browserAgentBrowser', 'browserAgentDebugTools', 'browserAgentIdleClose',
+      'webChatBridgeEnabled',
+      'instructionsSkillsEnabled',
+      'mcpConnectorsEnabled',
+      'optimizeProvider', 'optimizeModel', 'optimizeReasoningEffort',
+      'predictProvider', 'predictModel', 'predictReasoningEffort',
+      'compactProvider', 'compactModel', 'compactReasoningEffort',
+      'autoClassifierEnabled',
+      'autoInstantProvider', 'autoInstantModel', 'autoInstantReasoningEffort',
+      'autoThinkingProvider', 'autoThinkingModel', 'autoThinkingReasoningEffort',
+      'autoProProvider', 'autoProModel', 'autoProReasoningEffort',
+      'autoClassifierProvider', 'autoClassifierModel', 'autoClassifierReasoningEffort',
+    ])
+    expect(inject).toEqual([
+      'llm', 'sessions', 'agents', 'sessionProjections', 'agentDefaultModel',
+      'fs', 'tools', 'tokenMeter', 'typert', 'typertGateway', 'commands',
+      'workspaceRegistry', 'storageDomain',
+    ])
+  })
+
+  it('publishes one strict cancellable call with a nullable result', () => {
+    expect(remoteInfo.package).toBe('dsh-agent-enhancer')
+    expect(remoteInfo.descriptors).toHaveLength(54)
+    const byMethod = Object.fromEntries(
+      remoteInfo.descriptors.map(entry => [entry.method, entry]),
+    )
+    expect(byMethod.call).toMatchObject({
+      namespace: 'agentEnhancer',
+      method: 'call',
+      service: 'agentEnhancer',
+      implementation: 'call',
+      cancellation: { parameter: 'signal' },
+    })
+    expect(byMethod.listCatalog).toMatchObject({
+      namespace: 'agentEnhancer',
+      method: 'listCatalog',
+      service: 'agentEnhancer',
+      implementation: 'listCatalog',
+    })
+    expect(byMethod.listCatalog).not.toHaveProperty('cancellation')
+    expect(byMethod.inspectContext).toMatchObject({
+      cancellation: { parameter: 'signal' },
+    })
+    expect(byMethod.compactContext).toMatchObject({
+      cancellation: { parameter: 'signal' },
+    })
+    expect(byMethod.deleteSession).toMatchObject({
+      cancellation: { parameter: 'signal' },
+    })
+    expect(byMethod.readWorkspaceFile).toMatchObject({
+      cancellation: { parameter: 'signal' },
+    })
+    expect(byMethod.writeWorkspaceFile).toMatchObject({
+      cancellation: { parameter: 'signal' },
+    })
+    expect(byMethod.checkUpdate).toBeUndefined()
+    expect(byMethod.applyUpdate).toBeUndefined()
+    expect(byMethod.usageSummary).not.toHaveProperty('cancellation')
+    expect(byMethod.providerBalances).not.toHaveProperty('cancellation')
+    expect(byMethod.browserAgentSelectTab).toMatchObject({
+      namespace: 'agentEnhancer',
+      implementation: 'browserAgentSelectTab',
+    })
+    expect(byMethod.restartMcpConnector).toMatchObject({
+      namespace: 'agentEnhancer',
+      implementation: 'restartMcpConnector',
+    })
+    expect(byMethod.probeMcpConnector).toMatchObject({
+      namespace: 'agentEnhancer',
+      implementation: 'probeMcpConnector',
+    })
+    expect(byMethod.listInstructionsSkills).toMatchObject({
+      namespace: 'agentEnhancer',
+      implementation: 'listInstructionsSkills',
+    })
+    expect(byMethod.getSkillInstallProgress).toMatchObject({
+      namespace: 'agentEnhancer',
+      implementation: 'getSkillInstallProgress',
+    })
+    expect(hostContribution).toEqual({
+      package: 'dsh-agent-enhancer',
+      face: 'host',
+      schemas: [],
+      model: { services: [], events: [], objects: [] },
+      invocations: [...remoteInfo.descriptors, ...checkpointRemoteInfo.descriptors],
+    })
+    const method = remoteInfo.methods['agentEnhancer/call']!
+    const parser = method.input({ strict: true }).create()
+    const value = payload()
+    expect(parser.parse({ payload: value })).toEqual({ payload: value })
+    expect(method.result.create().parse(null)).toBeNull()
+    expect(method.result.create().parse({
+      requestId: 'req-1', text: '结果', route: { provider: 'deepseek', model: 'deepseek-chat' },
+    })).toEqual({
+      requestId: 'req-1', text: '结果', route: { provider: 'deepseek', model: 'deepseek-chat' },
+    })
+  })
+
+  it('requires optimize references and accepts validated result segments', () => {
+    const data = {
+      operation: 'optimize',
+      requestId: 'req-1',
+      sessionId: 'session-1',
+      source: '分析 @a.ts',
+      references: [{ offset: 3, length: 5, text: '@a.ts' }],
+      context: [],
+    }
+    expect(rpcPayloadSchema.parse({ method: 'generate', data })).toEqual({ method: 'generate', data })
+    expect(() => rpcPayloadSchema.parse({
+      method: 'generate',
+      data: { ...data, references: undefined },
+    })).toThrow()
+    expect(() => rpcPayloadSchema.parse({
+      method: 'generate',
+      data: {
+        operation: 'predict',
+        requestId: 'req-predict',
+        sessionId: 'session-1',
+        references: data.references,
+        context: [],
+      },
+    })).toThrow()
+    const parser = remoteInfo.methods['agentEnhancer/call']!.result.create()
+    const result = {
+      requestId: 'req-1',
+      text: '分析 @a.ts',
+      segments: ['分析 ', '@a.ts'],
+      route: { provider: 'deepseek', model: 'deepseek-chat' },
+    }
+    expect(parser.parse(result)).toEqual(result)
+  })
+
+  it.each([
+    ['negative offset', { offset: -1, length: 5, text: '@a.ts' }],
+    ['fractional offset', { offset: 1.5, length: 5, text: '@a.ts' }],
+    ['zero length', { offset: 3, length: 0, text: '@a.ts' }],
+    ['empty text', { offset: 3, length: 5, text: '' }],
+    ['extra field', { offset: 3, length: 5, text: '@a.ts', extra: true }],
+  ])('rejects a reference with %s', (_name, reference) => {
+    const parsed = rpcPayloadSchema.safeParse({
+      method: 'generate',
+      data: {
+        operation: 'optimize',
+        requestId: 'req-1',
+        sessionId: 'session-1',
+        source: '分析 @a.ts',
+        references: [reference],
+        context: [],
+      },
+    })
+    if (parsed.success) throw new Error('Expected reference validation to fail')
+    expect(parsed.error.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: expect.arrayContaining(['references', 0]) }),
+    ]))
+  })
+
+  it.each([
+    ['provider', { provider: 'other' }],
+    ['model', { model: 'other' }],
+    ['credentials', { apiKey: 'secret' }],
+    ['extra payload field', { extra: true }],
+  ])('rejects client-supplied %s', async (_name, extra) => {
+    const value = payload()
+    expect(() => rpcPayloadSchema.parse({
+      ...value,
+      data: { ...value.data, ...extra },
+    })).toThrow()
+    const parser = remoteInfo.methods['agentEnhancer/call']!.input({ strict: true }).create()
+    expect(() => parser.parse({ payload: { ...value, data: { ...value.data, ...extra } } })).toThrow()
+  })
+
+  it('rejects methods and operations outside the fixed auxiliary vocabulary', () => {
+    expect(() => rpcPayloadSchema.parse({ ...payload(), method: 'retry' })).toThrow()
+    expect(() => rpcPayloadSchema.parse({
+      ...payload(),
+      data: { ...payload().data, operation: 'history' },
+    })).toThrow()
+  })
+})
+
+describe('AgentEnhancerService', () => {
+  it('allows only the desktop owner to generate', async () => {
+    const ownerCtx = context()
+    ownerCtx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
+    const generate = vi.fn(async () => null)
+    const owner = new AgentEnhancerService(ownerCtx, { generate } as never)
+    const request = payload()
+    const signal = new AbortController().signal
+    await expect(owner.call(request, signal)).resolves.toBeNull()
+    expect(generate).toHaveBeenCalledWith(request.data, signal)
+
+    const guestCtx = context()
+    guestCtx.provide('invocation', { peer: { principal: { kind: 'guest' } } } as never)
+    const guest = new AgentEnhancerService(guestCtx, { generate } as never)
+    await expect(guest.call(request, signal)).rejects.toMatchObject({
+      code: 'agent-enhancer/forbidden',
+      message: 'Only the desktop owner may use Agent Enhance',
+    })
+    expect(generate).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves auxiliary categories without exposing internal details', async () => {
+    const ctx = context()
+    ctx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
+    const service = new AgentEnhancerService(ctx, {
+      generate: vi.fn(async () => { throw new AuxiliaryError('MODEL_UNAVAILABLE') }),
+    } as never)
+    const rejection = await service.call(payload(), new AbortController().signal).catch((error: unknown) => error)
+    expect(rejection).toBeInstanceOf(RemoteError)
+    expect(rejection).toMatchObject({
+      code: 'agent-enhancer/failed',
+      message: 'No model is available for Agent Enhance',
+      details: { code: 'MODEL_UNAVAILABLE' },
+    })
+    expect((rejection as Error).message).not.toContain('provider credential')
+  })
+
+  it('maps ordinary errors to a sanitized model failure', async () => {
+    const ctx = context()
+    ctx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
+    const service = new AgentEnhancerService(ctx, {
+      generate: vi.fn(async () => { throw new Error('provider credential and private text') }),
+    } as never)
+    const rejection = await service.call(payload(), new AbortController().signal).catch((error: unknown) => error)
+    expect(rejection).toMatchObject({
+      code: 'agent-enhancer/failed',
+      message: 'Agent Enhance request failed',
+      details: { code: 'MODEL_FAILED' },
+    })
+    expect((rejection as Error).message).not.toContain('provider credential')
+  })
+
+  it('preserves caller cancellation', async () => {
+    const ctx = context()
+    ctx.provide('invocation', { peer: { principal: { kind: 'owner' } } } as never)
+    const controller = new AbortController()
+    controller.abort()
+    const service = new AgentEnhancerService(ctx, {
+      generate: vi.fn(async () => { throw controller.signal.reason }),
+    } as never)
+    await expect(service.call(payload(), controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+  })
+})
+
+describe('host composition', () => {
+  it('registers the Remote contribution through the host effect and cleans it up', async () => {
+    const ctx = context()
+    const unregister = vi.fn()
+    const register = vi.fn(() => unregister)
+    ctx.provide('llm', {} as never)
+    ctx.provide('sessions', { get: vi.fn() } as never)
+    ctx.provide('sessionProjections', { stateOf: vi.fn() } as never)
+    ctx.provide('agentDefaultModel', { currentSelection: vi.fn() } as never)
+    ctx.provide('typert', { register } as never)
+    ctx.provide('agents', { get: vi.fn() } as never)
+    ctx.provide('fs', {} as never)
+    ctx.provide('tools', {} as never)
+    ctx.provide('tokenMeter', {} as never)
+    ctx.provide('typertGateway', {} as never)
+    ctx.provide('commands', { execute: vi.fn() } as never)
+    apply(ctx, Config({}))
+    expect(register).toHaveBeenCalledTimes(1)
+    expect(register).toHaveBeenCalledWith(hostContribution)
+    expect(hostContribution.invocations.map(entry => entry.namespace)).toEqual([
+      ...Array.from({ length: 54 }, () => 'agentEnhancer'),
+      'checkpointRollback', 'checkpointRollback', 'checkpointRollback',
+      'checkpointRollback',
+    ])
+    expect(ctx.agentEnhancer).toBeInstanceOf(AgentEnhancerService)
+    await ctx.fiber.dispose()
+    expect(unregister).toHaveBeenCalledTimes(1)
+  })
+
+  it('constructs the single model entry used by the Remote service', () => {
+    const ctx = context()
+    const models = new AuxiliaryModels(ctx)
+    const service = new AgentEnhancerService(ctx, models)
+    expect(service).toBeInstanceOf(AgentEnhancerService)
+  })
+})
