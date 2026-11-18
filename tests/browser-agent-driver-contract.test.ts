@@ -57,6 +57,7 @@ function fakePlaywrightDriver(overrides: Partial<{
     screenshot: vi.fn(async () => ({ mime: 'image/png', base64: 'aa' })),
     listTabs: vi.fn(async () => ({ tabs: [], boundTabId: null })),
     startCapture: vi.fn(),
+    stopCapture: vi.fn(),
     sweepIdleTabs: vi.fn(async () => []),
     readCapture: vi.fn(() => ({ entries: [], dropped: 0 })),
     emulate: vi.fn(async () => ({

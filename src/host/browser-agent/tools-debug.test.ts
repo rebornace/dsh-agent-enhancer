@@ -49,6 +49,7 @@ function harness(debugTools: () => boolean) {
     followTab: async (tabId: number) => ({ tabId, url: 'https://example.com/', title: 'Example' }),
     pageStatus: async () => ({ connected: true, url: 'https://example.com/', title: 'Example', tabId: 2, bound: true }),
     startCapture: vi.fn(),
+    stopCapture: vi.fn(),
     readCapture: vi.fn((input: { kind: string }) => ({
       entries: input.kind === 'console' ? [consoleEntry] : [networkEntry],
       dropped: 0,
@@ -89,6 +90,7 @@ describe('debug tools switch', () => {
     await expect(h.run('browser_console')).rejects.toThrow(/debug tools are off/)
     await expect(h.run('browser_emulate', { colorScheme: 'dark' })).rejects.toThrow(/debug tools are off/)
     expect(h.driver.startCapture).not.toHaveBeenCalled()
+    expect(h.driver.stopCapture).toHaveBeenCalled()
     expect(h.driver.emulate).not.toHaveBeenCalled()
   })
 
@@ -96,6 +98,7 @@ describe('debug tools switch', () => {
     const h = harness(() => true)
     const out = await h.run('browser_network', { limit: 5 }) as string
     expect(h.driver.startCapture).toHaveBeenCalled()
+    expect(h.driver.stopCapture).not.toHaveBeenCalled()
     expect(out).toContain('network entries: 1')
     expect(out).toContain('200 GET https://example.com/api?token=*** 12ms')
   })

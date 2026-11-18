@@ -221,6 +221,12 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
   /** Debug tools are opt-in: the switch gates all three, capture included. */
   const requireDebugTools = (tool: string) => {
     if (options.debugTools?.() === true) return
+    // Turning the switch off must also stop recording, not just refuse calls.
+    try {
+      driverOf(options).stopCapture?.()
+    } catch {
+      // No driver mounted yet — nothing is recording.
+    }
     throw new Error(
       `${tool}: debug tools are off. Nothing ran. `
       + 'Ask the user to enable 设置 → 智能体增强 → 功能 → 浏览器 Agent → 调试工具, then retry.',

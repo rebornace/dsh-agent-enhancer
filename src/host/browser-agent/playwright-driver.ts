@@ -676,15 +676,29 @@ export class PlaywrightDriver implements BrowserDriver {
     context.on('page', page => this.attachCapture(page))
   }
 
+  /**
+   * Stop recording and drop the buffer. Listeners stay attached (they close over
+   * the old buffer), so each one checks that it is still the live buffer.
+   */
+  stopCapture(): void {
+    this.capture = null
+  }
+
   private attachCapture(page: Page): void {
-    const buffer = this.capture
-    if (buffer === null || this.captureStartedPages.has(page)) return
+    if (this.capture === null || this.captureStartedPages.has(page)) return
     this.captureStartedPages.add(page)
     const tabId = this.tabIdFor(page)
     const stamp = () => Date.now()
+    // Listeners cannot be detached from a live page, so they always read the
+    // current buffer: stopCapture() nulls it, and a later startCapture() picks the
+    // same listeners back up without attaching duplicates.
+    const record = (entry: CaptureEntry): void => {
+      this.capture?.push(entry)
+    }
     page.on('console', message => {
+      if (this.capture === null) return
       try {
-        buffer.push({
+        record({
           kind: 'console',
           at: stamp(),
           tabId,
@@ -701,7 +715,8 @@ export class PlaywrightDriver implements BrowserDriver {
       }
     })
     page.on('pageerror', error => {
-      buffer.push({
+      if (this.capture === null) return
+      record({
         kind: 'console',
         at: stamp(),
         tabId,
@@ -710,12 +725,14 @@ export class PlaywrightDriver implements BrowserDriver {
       })
     })
     page.on('request', request => {
+      if (this.capture === null) return
       this.requestStart.set(request, performance.now())
     })
     page.on('response', response => {
+      if (this.capture === null) return
       const request = response.request()
       const started = this.requestStart.get(request)
-      buffer.push({
+      record({
         kind: 'request',
         at: stamp(),
         tabId,
@@ -727,8 +744,9 @@ export class PlaywrightDriver implements BrowserDriver {
       })
     })
     page.on('requestfailed', request => {
+      if (this.capture === null) return
       const started = this.requestStart.get(request)
-      buffer.push({
+      record({
         kind: 'request',
         at: stamp(),
         tabId,

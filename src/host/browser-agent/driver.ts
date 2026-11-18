@@ -84,6 +84,8 @@ export interface BrowserDriver {
   }): Promise<readonly number[]>
   /** Start buffering console + network for every page (idempotent). */
   startCapture(): void
+  /** Stop buffering and drop what was buffered (switch off / teardown). */
+  stopCapture(): void
   /** Read buffered entries; `kind` selects network, console or both. */
   readCapture(input: {
     readonly kind: CaptureKind

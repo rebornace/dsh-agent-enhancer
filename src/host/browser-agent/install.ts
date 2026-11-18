@@ -352,6 +352,10 @@ export function installBrowserAgent(
   const refresh = () => {
     // Settings changed (feature switch, browser choice): re-probe on next snapshot.
     availabilityCache = null
+    // Switching debug tools off must stop buffering, not just hide the tools.
+    // `?.` on the call keeps a driver instance from a previous hot-reloaded
+    // build (no stopCapture yet) from breaking a settings update.
+    if (options.debugTools?.() !== true) activeDriver?.stopCapture?.()
     const want = options.enabled()
 
     if (!want) {
