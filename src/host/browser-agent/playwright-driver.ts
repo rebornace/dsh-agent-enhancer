@@ -763,11 +763,13 @@ export class PlaywrightDriver implements BrowserDriver {
     readonly kind: CaptureKind
     readonly limit?: number
     readonly clear?: boolean
-  }): { readonly entries: readonly CaptureEntry[]; readonly dropped: number } {
-    if (this.capture === null) return { entries: [], dropped: 0 }
+    readonly tabId?: number
+  }): { readonly entries: readonly CaptureEntry[]; readonly dropped: number; readonly skipped: number } {
+    if (this.capture === null) return { entries: [], dropped: 0, skipped: 0 }
     return this.capture.read(input.kind, {
       ...(input.limit === undefined ? {} : { limit: input.limit }),
       ...(input.clear === undefined ? {} : { clear: input.clear }),
+      ...(input.tabId === undefined ? {} : { tabId: input.tabId }),
     })
   }
 

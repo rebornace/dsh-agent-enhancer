@@ -59,7 +59,7 @@ function fakePlaywrightDriver(overrides: Partial<{
     startCapture: vi.fn(),
     stopCapture: vi.fn(),
     sweepIdleTabs: vi.fn(async () => []),
-    readCapture: vi.fn(() => ({ entries: [], dropped: 0 })),
+    readCapture: vi.fn(() => ({ entries: [], dropped: 0, skipped: 0 })),
     emulate: vi.fn(async () => ({
       url: 'https://example.com/',
       title: 'Example',

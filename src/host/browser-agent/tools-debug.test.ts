@@ -50,10 +50,11 @@ function harness(debugTools: () => boolean) {
     pageStatus: async () => ({ connected: true, url: 'https://example.com/', title: 'Example', tabId: 2, bound: true }),
     startCapture: vi.fn(),
     stopCapture: vi.fn(),
-    readCapture: vi.fn((input: { kind: string }) => ({
-      entries: input.kind === 'console' ? [consoleEntry] : [networkEntry],
-      dropped: 0,
-    })),
+    readCapture: vi.fn((input: { kind: string, tabId?: number }) => {
+      const kindEntry = input.kind === 'console' ? [consoleEntry] : [networkEntry]
+      const scoped = input.tabId === undefined ? kindEntry : kindEntry.filter(entry => entry.tabId === input.tabId)
+      return { entries: scoped, dropped: 0, skipped: kindEntry.length - scoped.length }
+    }),
     emulate: vi.fn(async () => ({
       url: 'https://example.com/',
       title: 'Example',
@@ -99,8 +100,31 @@ describe('debug tools switch', () => {
     const out = await h.run('browser_network', { limit: 5 }) as string
     expect(h.driver.startCapture).toHaveBeenCalled()
     expect(h.driver.stopCapture).not.toHaveBeenCalled()
-    expect(out).toContain('network entries: 1')
+    expect(out).toContain('network entries: 1 (tab 2)')
     expect(out).toContain('200 GET https://example.com/api?token=*** 12ms')
+  })
+
+  it('scopes reads to the bound tab unless allTabs is set', async () => {
+    const h = harness(() => true)
+    const readCapture = vi.mocked(h.driver.readCapture)
+    await h.run('browser_network')
+    expect(readCapture).toHaveBeenCalledWith(expect.objectContaining({ tabId: 2 }))
+
+    readCapture.mockClear()
+    await h.run('browser_network', { allTabs: true })
+    expect(readCapture).toHaveBeenCalledWith(expect.not.objectContaining({ tabId: expect.anything() }))
+  })
+
+  it('tells the model when other tabs hold entries', async () => {
+    const h = harness(() => true)
+    vi.mocked(h.driver.readCapture).mockImplementationOnce(() => ({
+      entries: [],
+      dropped: 0,
+      skipped: 4,
+    }))
+    const out = await h.run('browser_network') as string
+    expect(out).toContain('no network activity buffered for tab 2')
+    expect(out).toContain('4 entries came from other tabs')
   })
 
   it('prints console rows with location', async () => {

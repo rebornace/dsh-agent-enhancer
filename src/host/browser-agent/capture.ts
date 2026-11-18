@@ -78,19 +78,30 @@ export class CaptureBuffer {
   }
 
   /** Newest `limit` entries of the requested kind, optionally clearing them. */
-  read(kind: CaptureKind, options: { readonly limit?: number; readonly clear?: boolean } = {}): {
+  read(kind: CaptureKind, options: {
+    readonly limit?: number
+    readonly clear?: boolean
+    /** Only entries from this tab; omit for every tab. */
+    readonly tabId?: number
+  } = {}): {
     readonly entries: readonly CaptureEntry[]
     readonly dropped: number
+    /** Matching entries from other tabs, so the caller can offer "all tabs". */
+    readonly skipped: number
   } {
     const limit = Math.min(Math.max(Math.trunc(options.limit ?? 40), 1), 200)
-    const matched = this.entries.filter(entry => kind === 'all' || entry.kind === (kind === 'network' ? 'request' : 'console'))
+    const ofKind = this.entries.filter(entry => kind === 'all' || entry.kind === (kind === 'network' ? 'request' : 'console'))
+    const matched = options.tabId === undefined
+      ? ofKind
+      : ofKind.filter(entry => entry.tabId === options.tabId)
+    const skipped = ofKind.length - matched.length
     const selected = matched.slice(-limit)
     if (options.clear === true) {
       const keep = this.entries.filter(entry => !selected.includes(entry))
       this.entries.length = 0
       this.entries.push(...keep)
     }
-    return { entries: selected, dropped: this.dropped }
+    return { entries: selected, dropped: this.dropped, skipped }
   }
 
   clear(): void {

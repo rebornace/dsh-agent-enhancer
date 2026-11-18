@@ -1088,11 +1088,15 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   disposers.push(ctx.tools.register(textTool(
     'browser_network',
-    'Read buffered network activity for the bound tab (method, url, status, duration, failures). Read-only; no approval. Headers, cookies and bodies are never recorded; secret-looking query values are masked. Requires the Debug tools switch in Settings → 智能体增强 → 浏览器 Agent. Capture starts automatically when that switch is on, so navigate first, then read.',
+    'Read buffered network activity for the bound tab (method, url, status, duration, failures). Read-only; no approval. Defaults to the bound tab; pass allTabs: true to include other tabs. Headers, cookies and bodies are never recorded; secret-looking query values are masked. Requires the Debug tools switch in Settings → 智能体增强 → 浏览器 Agent. Capture starts automatically when that switch is on, so navigate first, then read.',
     {
       limit: {
         type: 'number',
         description: 'Newest N entries (default 40, max 200).',
+      },
+      allTabs: {
+        type: 'boolean',
+        description: 'Read every tab instead of only the bound tab.',
       },
       clear: {
         type: 'boolean',
@@ -1106,19 +1110,27 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       await ensureConnected()
       await ensureSessionTab(sessionId)
       const limit = Number(args.limit)
+      const tabId = options.sessions.tabOf(sessionId)
+      const allTabs = args.allTabs === true || tabId === undefined
       const driver = driverOf(options)
       driver.startCapture()
-      const { entries, dropped } = driver.readCapture({
+      const { entries, dropped, skipped } = driver.readCapture({
         kind: 'network',
         ...(Number.isFinite(limit) ? { limit } : {}),
         ...(args.clear === true ? { clear: true } : {}),
+        ...(allTabs ? {} : { tabId: tabId as number }),
       })
       const rows = entries.filter(entry => entry.kind === 'request')
       if (rows.length === 0) {
-        return 'no network activity buffered yet. Navigate or wait for the page to load, then call browser_network again.'
+        return [
+          allTabs ? 'no network activity buffered yet.' : `no network activity buffered for tab ${tabId ?? '?'}.`,
+          ...(skipped > 0 ? [`${skipped} entries came from other tabs — pass allTabs: true to read them.`] : []),
+          'Navigate or wait for the page to load, then call browser_network again.',
+        ].join('\n')
       }
       return [
-        `network entries: ${rows.length}${dropped > 0 ? ` (${dropped} older dropped)` : ''}`,
+        `network entries: ${rows.length} (${allTabs ? 'all tabs' : `tab ${tabId}`})${dropped > 0 ? ` (${dropped} older dropped)` : ''}`,
+        ...(skipped > 0 ? [`${skipped} entries from other tabs not shown — pass allTabs: true to include them.`] : []),
         ...rows.map(entry => {
           const status = entry.kind !== 'request' ? '' : (entry.status === undefined ? (entry.failure ?? 'failed') : String(entry.status))
           const ms = entry.kind === 'request' && entry.durationMs !== undefined ? ` ${entry.durationMs}ms` : ''
@@ -1131,11 +1143,15 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   disposers.push(ctx.tools.register(textTool(
     'browser_console',
-    'Read buffered console messages and uncaught page errors for the bound tab. Read-only; no approval. Requires the Debug tools switch in Settings → 智能体增强 → 浏览器 Agent.',
+    'Read buffered console messages and uncaught page errors for the bound tab. Read-only; no approval. Defaults to the bound tab; pass allTabs: true to include other tabs. Requires the Debug tools switch in Settings → 智能体增强 → 浏览器 Agent.',
     {
       limit: {
         type: 'number',
         description: 'Newest N entries (default 40, max 200).',
+      },
+      allTabs: {
+        type: 'boolean',
+        description: 'Read every tab instead of only the bound tab.',
       },
       clear: {
         type: 'boolean',
@@ -1149,18 +1165,26 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       await ensureConnected()
       await ensureSessionTab(sessionId)
       const limit = Number(args.limit)
+      const tabId = options.sessions.tabOf(sessionId)
+      const allTabs = args.allTabs === true || tabId === undefined
       const driver = driverOf(options)
       driver.startCapture()
-      const { entries } = driver.readCapture({
+      const { entries, skipped } = driver.readCapture({
         kind: 'console',
         ...(Number.isFinite(limit) ? { limit } : {}),
         ...(args.clear === true ? { clear: true } : {}),
+        ...(allTabs ? {} : { tabId: tabId as number }),
       })
       if (entries.length === 0) {
-        return 'no console output buffered yet. Reload or interact with the page, then call browser_console again.'
+        return [
+          allTabs ? 'no console output buffered yet.' : `no console output buffered for tab ${tabId ?? '?'}.`,
+          ...(skipped > 0 ? [`${skipped} entries came from other tabs — pass allTabs: true to read them.`] : []),
+          'Reload or interact with the page, then call browser_console again.',
+        ].join('\n')
       }
       return [
-        `console entries: ${entries.length}`,
+        `console entries: ${entries.length} (${allTabs ? 'all tabs' : `tab ${tabId}`})`,
+        ...(skipped > 0 ? [`${skipped} entries from other tabs not shown — pass allTabs: true to include them.`] : []),
         ...entries.map(entry => {
           if (entry.kind !== 'console') return ''
           const where = entry.location === undefined ? '' : ` (${entry.location})`

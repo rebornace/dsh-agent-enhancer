@@ -100,4 +100,28 @@ describe('CaptureBuffer', () => {
     expect(buffer.size).toBe(1)
     expect(buffer.read('console').entries[0]).toMatchObject({ text: 'keep me' })
   })
+
+  it('scopes to one tab and reports what it skipped', () => {
+    const buffer = new CaptureBuffer()
+    buffer.push(net('https://a/1', 1))
+    buffer.push(net('https://b/1', 2))
+    buffer.push(net('https://b/2', 2))
+    buffer.push(log('b log', 2))
+
+    const mine = buffer.read('network', { tabId: 2 })
+    expect(mine.entries.map(entry => (entry.kind === 'request' ? entry.url : ''))).toEqual([
+      'https://b/1',
+      'https://b/2',
+    ])
+    expect(mine.skipped).toBe(1)
+
+    const all = buffer.read('network')
+    expect(all.entries).toHaveLength(3)
+    expect(all.skipped).toBe(0)
+
+    // Clearing a scoped read leaves the other tab's entries alone.
+    buffer.read('network', { tabId: 2, clear: true })
+    expect(buffer.read('network', { tabId: 2 }).entries).toHaveLength(0)
+    expect(buffer.read('network', { tabId: 1 }).entries).toHaveLength(1)
+  })
 })

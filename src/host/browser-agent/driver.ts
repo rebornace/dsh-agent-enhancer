@@ -91,7 +91,9 @@ export interface BrowserDriver {
     readonly kind: CaptureKind
     readonly limit?: number
     readonly clear?: boolean
-  }): { readonly entries: readonly CaptureEntry[]; readonly dropped: number }
+    /** Only this tab's entries; omit for every tab. */
+    readonly tabId?: number
+  }): { readonly entries: readonly CaptureEntry[]; readonly dropped: number; readonly skipped: number }
   /** Page-level emulation (media features, viewport). Returns what was applied. */
   emulate(input: {
     readonly colorScheme?: 'light' | 'dark' | 'no-preference' | 'reset'
