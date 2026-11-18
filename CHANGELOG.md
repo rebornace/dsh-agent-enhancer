@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **浏览器 Agent · 演示录制：** 新增 `browser_demonstrate`（设置 → 功能 → 浏览器 Agent → **演示录制**，默认关）。你在专用窗口演示一遍流程，智能体拿到编号步骤再自己重放；记录点击 / 填写 / 回车 / 跳转，密码 / OTP / token 字段只记 `***`。步骤实时经 `exposeBinding` 回到 Host，页面跳转不会丢；点进输入框再输入不会多出多余步骤。
+
 ## 0.3.15 - 2026-11-18
 
 ### Fixed

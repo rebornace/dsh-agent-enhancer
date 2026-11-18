@@ -33,6 +33,14 @@ import {
   PLAYWRIGHT_REF_ATTR,
   type PlaywrightRefRecord,
 } from './playwright-snapshot.ts'
+import {
+  DEMO_RECORDER_SOURCE,
+  DEMO_STOP_SOURCE,
+  mergeDemoSteps,
+  pushDemoStep,
+  sanitizeDemoSteps,
+  type DemoStep,
+} from './demo.ts'
 import { CaptureBuffer, redactText, redactUrl, type CaptureEntry, type CaptureKind } from './capture.ts'
 import { pathsDiffer } from './auto-nav.ts'
 import { TabRegistry } from './tab-registry.ts'
@@ -88,6 +96,13 @@ export class PlaywrightDriver implements BrowserDriver {
     reducedMotion?: string
     viewport?: { readonly width: number; readonly height: number }
   }>()
+  /** Active "show me" recording: bound page plus navigations seen meanwhile. */
+  private demoPage: Page | null = null
+  private demoNavSteps: DemoStep[] = []
+  private demoPageSteps: DemoStep[] = []
+  private demoTrackedPages = new WeakSet<Page>()
+  private demoPageHandler: ((page: Page) => void) | null = null
+  private demoBindingReady = false
   /** Last agent/UI use per page; a page's clock starts when it is first seen. */
   private readonly lastUse = new WeakMap<Page, number>()
 
@@ -807,6 +822,76 @@ export class PlaywrightDriver implements BrowserDriver {
       applied,
       tabId: this.tabIdFor(page),
     }
+  }
+
+  /** Record a user demonstration in the bound tab until stopDemonstration(). */
+  async startDemonstration(): Promise<void> {
+    const page = await this.requirePage()
+    if (this.demoPage !== null) await this.stopDemonstration().catch(() => undefined)
+    this.demoPage = page
+    this.demoNavSteps = []
+    this.demoPageSteps = []
+    const context = page.context()
+    if (!this.demoBindingReady) {
+      // Steps cross into Node as they happen, so a navigation cannot lose them.
+      try {
+        await context.exposeBinding('__dshDemoPush', (_source, step: DemoStep) => {
+          if (this.demoPage === null) return
+          pushDemoStep(this.demoPageSteps, step)
+        })
+        this.demoBindingReady = true
+      } catch {
+        // Already exposed by an earlier demonstration; the recorder keeps sending.
+        this.demoBindingReady = true
+      }
+    }
+    this.watchDemoNavigation(page)
+    await page.evaluate(`(() => { ${DEMO_RECORDER_SOURCE} })()`).catch(() => undefined)
+    if (this.demoPageHandler === null) {
+      this.demoPageHandler = (opened: Page) => {
+        if (this.demoPage === null) return
+        this.watchDemoNavigation(opened)
+        void opened.evaluate(`(() => { ${DEMO_RECORDER_SOURCE} })()`).catch(() => undefined)
+      }
+      context.on('page', this.demoPageHandler)
+    }
+  }
+
+  /**
+   * Record top-level http(s) navigations of the pages the demo touches and
+   * re-arm the recorder on the new document (the old one dies with the page).
+   */
+  private watchDemoNavigation(page: Page): void {
+    if (this.demoTrackedPages.has(page)) return
+    this.demoTrackedPages.add(page)
+    page.on('framenavigated', frame => {
+      if (this.demoPage === null || frame !== page.mainFrame()) return
+      const url = frame.url()
+      if (!/^https?:\/\//i.test(url)) return
+      this.demoNavSteps.push({ kind: 'navigate', at: Date.now(), url: redactUrl(url) })
+      void frame.page().evaluate(`(() => { ${DEMO_RECORDER_SOURCE} })()`).catch(() => undefined)
+    })
+  }
+
+  /** Stop recording and return the flow, secrets masked, repeats dropped. */
+  async stopDemonstration(): Promise<readonly DemoStep[]> {
+    const page = this.demoPage
+    this.demoPage = null
+    if (this.demoPageHandler !== null) {
+      this.context?.off('page', this.demoPageHandler)
+      this.demoPageHandler = null
+    }
+    if (page !== null && !page.isClosed()) {
+      await page.evaluate(DEMO_STOP_SOURCE).catch(() => undefined)
+    }
+    for (const other of this.context?.pages() ?? []) {
+      if (other === page || other.isClosed()) continue
+      await other.evaluate(DEMO_STOP_SOURCE).catch(() => undefined)
+    }
+    const steps = sanitizeDemoSteps(mergeDemoSteps(this.demoPageSteps, this.demoNavSteps))
+    this.demoNavSteps = []
+    this.demoPageSteps = []
+    return steps
   }
 
   /** Record what is now emulated on this tab, so snapshot can echo it. */

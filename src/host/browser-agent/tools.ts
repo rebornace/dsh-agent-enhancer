@@ -9,6 +9,7 @@ import type { SnapshotBody } from './protocol.ts'
 import type { BrowserSessionState } from './session-state.ts'
 import type { TabScopeStore } from './tab-scope.ts'
 import type { Diagnosis } from './diagnose.ts'
+import { summarizeDemoSteps } from './demo.ts'
 
 type ToolExec = {
   readonly signal: AbortSignal
@@ -151,6 +152,8 @@ export interface BrowserToolsOptions {
   readonly tabScope?: TabScopeStore
   /** Debug tools switch (browser_network / browser_console / browser_emulate). */
   readonly debugTools?: () => boolean
+  /** "Show me" recorder switch (browser_demonstrate). */
+  readonly demonstrate?: () => boolean
   /** What is wrong (if anything) and the concrete next step. */
   readonly diagnosis?: () => Diagnosis
   readonly enabled: () => boolean
@@ -216,6 +219,15 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       return
     }
     await driverOf(options).ensureReady(startUrl)
+  }
+
+  /** Demonstration recording is opt-in: it observes what the user does. */
+  const requireDemonstrate = () => {
+    if (options.demonstrate?.() === true) return
+    throw new Error(
+      'browser_demonstrate: demonstration recording is off. Nothing is recording. '
+      + 'Ask the user to enable 设置 → 智能体增强 → 功能 → 浏览器 Agent → 演示录制, then retry.',
+    )
   }
 
   /** Debug tools are opt-in: the switch gates all three, capture included. */
@@ -1243,6 +1255,77 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         'Action: browser_snapshot now echoes the emulation line, so you can confirm the mode the page is in.',
       ].filter(line => line !== null).join('\n')
     },
+  )))
+
+  disposers.push(ctx.tools.register(textTool(
+    'browser_demonstrate',
+    'Ask the user to show you a flow in the dedicated browser window (they click and type, you watch), blocking until they press Continue. Records clicks, filled fields, Enter presses and top-level navigations; password / OTP / token fields are masked as ***. Use it when you cannot work out how a flow works. Returns numbered steps to replay with browser_snapshot then browser_click / browser_type by name (refs change between runs). Requires the Demonstrate switch in Settings → 智能体增强 → 浏览器 Agent.',
+    {
+      message: {
+        type: 'string',
+        required: true,
+        description: 'What to show, in the user\'s language, e.g. "Show me how you export the report, then click Continue."',
+      },
+      timeoutMs: {
+        type: 'number',
+        description: 'How long to wait for the user, in ms (default 300000).',
+      },
+    },
+    async (args, exec) => {
+      guardEnabled()
+      requireDemonstrate()
+      const sessionId = sessionIdOf(exec)
+      const message = String(args.message ?? '').trim()
+      if (message === '') throw new Error('message is required')
+      const timeoutRaw = Number(args.timeoutMs)
+      const timeoutMs = Number.isFinite(timeoutRaw)
+        ? Math.min(Math.max(Math.trunc(timeoutRaw), 30_000), 900_000)
+        : HUMAN_WAIT_TIMEOUT_MS
+      await ensureConnected()
+      await ensureSessionTab(sessionId)
+      const driver = driverOf(options)
+      const tabId = options.sessions.tabOf(sessionId)
+      await driver.startDemonstration()
+      options.sessions.record({
+        sessionId,
+        tool: 'browser_demonstrate',
+        summary: message.slice(0, 160),
+        outcome: 'needs_human',
+      })
+      const status = await pauseForHuman({
+        sessionId,
+        prompt: message,
+        detail: message.slice(0, 240),
+        kind: 'ask',
+        ...(tabId === undefined ? {} : { tabId }),
+        signal: exec.signal,
+      })
+      const steps = await driver.stopDemonstration().catch(() => [])
+      if (status === 'cancelled') {
+        return 'user_ack: cancelled\nAction: the demonstration was cancelled. Ask what they want next.'
+      }
+      const summary = summarizeDemoSteps(steps)
+      options.sessions.record({
+        sessionId,
+        tool: 'browser_demonstrate',
+        summary: `Demonstrated ${summary.shown} step(s)`,
+        outcome: 'ok',
+      })
+      if (summary.shown === 0) {
+        return [
+          'demonstrated steps: 0',
+          'Nothing was recorded — the user may have pressed Continue without acting, or the flow happened in another tab.',
+          'Action: call browser_ask_user to check, or browser_snapshot and continue on your own.',
+        ].join('\n')
+      }
+      return [
+        `demonstrated steps: ${summary.shown}${steps.length > summary.shown ? ` (of ${steps.length})` : ''}`,
+        ...(summary.masked > 0 ? [`masked fields: ${summary.masked} (secret values are never shown)`] : []),
+        ...summary.lines,
+        'Action: replay with browser_snapshot, then browser_click / browser_type by the role+name shown here. Refs change between runs; never invent selectors.',
+      ].join('\n')
+    },
+    HUMAN_WAIT_TIMEOUT_MS,
   )))
 
   disposers.push(ctx.tools.register(textTool(

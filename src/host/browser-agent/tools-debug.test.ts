@@ -50,6 +50,8 @@ function harness(debugTools: () => boolean) {
     pageStatus: async () => ({ connected: true, url: 'https://example.com/', title: 'Example', tabId: 2, bound: true }),
     startCapture: vi.fn(),
     stopCapture: vi.fn(),
+    startDemonstration: vi.fn(async () => undefined),
+    stopDemonstration: vi.fn(async () => []),
     readCapture: vi.fn((input: { kind: string, tabId?: number }) => {
       const kindEntry = input.kind === 'console' ? [consoleEntry] : [networkEntry]
       const scoped = input.tabId === undefined ? kindEntry : kindEntry.filter(entry => entry.tabId === input.tabId)

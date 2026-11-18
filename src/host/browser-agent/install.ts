@@ -102,6 +102,8 @@ export function installBrowserAgent(
     readonly browserPreference: () => BrowserAgentBrowser
     /** Debug tools switch: gates browser_network / browser_console / browser_emulate. */
     readonly debugTools?: () => boolean
+    /** Demonstration recorder switch: gates browser_demonstrate. */
+    readonly demonstrate?: () => boolean
     /** Close agent tabs nobody used for a while (never bound / active / last tab). */
     readonly idleClose?: () => BrowserAgentIdleClose
     readonly profileRoot: string
@@ -265,6 +267,7 @@ export function installBrowserAgent(
         sessions,
         tabScope,
         debugTools: () => options.debugTools?.() === true,
+        demonstrate: () => options.demonstrate?.() === true,
         diagnosis: diagnoseNow,
         // Gate on settings only — `active` flips false during driver align and
         // must not make browser_* look "disabled" mid-turn.

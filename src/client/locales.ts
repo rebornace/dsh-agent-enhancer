@@ -74,6 +74,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgent' | 'browserAgentDescription' |
       'browserAgentBrowser' | 'browserAgentBrowser_auto' |
       'browserAgentDebugTools' | 'browserAgentDebugToolsHint' |
+      'browserAgentDemonstrate' | 'browserAgentDemonstrateHint' |
       'browserAgentIdleClose' | 'browserAgentIdleCloseHint' |
       'browserAgentIdleClose_10m' | 'browserAgentIdleClose_30m' |
       'browserAgentIdleClose_60m' | 'browserAgentIdleClose_never' |
@@ -469,6 +470,8 @@ export const agentLocales = {
     browserAgentBrowser: '专用浏览器',
     browserAgentDebugTools: '调试与页面模拟',
     browserAgentDebugToolsHint: '一个开关同时启用：读取网络请求与控制台输出（browser_network / browser_console），以及模拟深色模式、减少动画、视口尺寸（browser_emulate）。只记录 URL、状态、耗时与 console 文本，不读请求头、Cookie、响应体。',
+    browserAgentDemonstrate: '演示录制',
+    browserAgentDemonstrateHint: '允许你亲手演示一遍流程（点击、填写、回车、跳转），智能体把它记成步骤再自己重放。密码 / 验证码 / token 类字段只会记录为 ***。演示结束后点「已完成，继续」才会把步骤交回模型。',
     browserAgentIdleClose: '自动关闭闲置标签',
     browserAgentIdleCloseHint: '超过所选时长没人用的标签自动关闭，避免专用浏览器越开越多。当前绑定标签、正在看的标签和最后一个标签不会被关。',
     browserAgentIdleClose_10m: '10 分钟',
@@ -1123,6 +1126,8 @@ export const agentLocales = {
     browserAgentBrowser: 'Dedicated browser',
     browserAgentDebugTools: 'Debug & page emulation',
     browserAgentDebugToolsHint: 'One switch enables both: reading network requests and console output (browser_network / browser_console), and emulating dark mode, reduced motion or a viewport size (browser_emulate). Only URLs, status, timing and console text are recorded — never request headers, cookies or bodies.',
+    browserAgentDemonstrate: 'Demonstration recording',
+    browserAgentDemonstrateHint: 'Lets you show a flow once (clicks, typing, Enter, navigations) and the agent turns it into steps it can replay. Password / OTP / token fields are recorded only as ***. Steps come back to the model when you press Done.',
     browserAgentIdleClose: 'Close idle tabs',
     browserAgentIdleCloseHint: 'Closes tabs nobody used for longer than the selected time, so the dedicated browser does not pile them up. The bound tab, the tab you are looking at, and the last tab are never closed.',
     browserAgentIdleClose_10m: '10 minutes',

@@ -29,6 +29,7 @@ export interface SettingsFeaturesPanelProps {
   readonly onRunAlertsLevel?: (level: RunAlertsLevel) => void
   readonly onBrowserAgentBrowser?: (browser: BrowserAgentBrowser) => void
   readonly onBrowserAgentDebugTools?: (enabled: boolean) => void
+  readonly onBrowserAgentDemonstrate?: (enabled: boolean) => void
   readonly onBrowserAgentIdleClose?: (value: BrowserAgentIdleClose) => void
   readonly onOpenModel: (feature: ConfigurableAuxiliaryFeature) => void
   /** Optional per-module extra description (e.g. host capability warnings). */
@@ -82,6 +83,7 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
     onRunAlertsLevel,
     onBrowserAgentBrowser,
     onBrowserAgentDebugTools,
+    onBrowserAgentDemonstrate,
     onBrowserAgentIdleClose,
     onOpenModel,
     featureExtraDescription,
@@ -141,6 +143,16 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                         />
                       </label>
                       <p className={styles.settingDescription}>{t('browserAgentDebugToolsHint')}</p>
+                      <label className={styles.browserAgentExtraRow}>
+                        <span>{t('browserAgentDemonstrate')}</span>
+                        <Switch
+                          label={t('browserAgentDemonstrate')}
+                          checked={settings.browserAgentDemonstrate}
+                          disabled={busy || onBrowserAgentDemonstrate === undefined}
+                          onChange={checked => { onBrowserAgentDemonstrate?.(checked) }}
+                        />
+                      </label>
+                      <p className={styles.settingDescription}>{t('browserAgentDemonstrateHint')}</p>
                       <label className={styles.browserAgentExtraRow}>
                         <span>{t('browserAgentIdleClose')}</span>
                         <select

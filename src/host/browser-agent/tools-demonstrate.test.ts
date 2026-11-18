@@ -1,0 +1,96 @@
+import { describe, expect, it, vi } from 'vitest'
+import type { Context } from '@deepseek-ai/cordis'
+import type { BrowserDriver } from './driver.ts'
+import type { DemoStep } from './demo.ts'
+import { BrowserHumanGate } from './human-gate.ts'
+import { BrowserSessionState } from './session-state.ts'
+import { registerBrowserTools } from './tools.ts'
+
+interface RegisteredTool {
+  readonly name: string
+  execute(args: Record<string, unknown>, exec: unknown): Promise<unknown>
+}
+
+const steps: DemoStep[] = [
+  { kind: 'navigate', at: 1, url: 'https://example.com/login' },
+  { kind: 'fill', at: 2, role: 'textbox', name: 'Email', selector: '#email', field: 'email', value: 'me@example.com', masked: false },
+  { kind: 'fill', at: 3, role: 'textbox', name: 'Password', selector: '#pw', field: 'password', value: '***', masked: true },
+  { kind: 'click', at: 4, role: 'button', name: 'Sign in', selector: '#signin' },
+]
+
+function harness(demonstrate: boolean) {
+  const tools = new Map<string, RegisteredTool>()
+  const ctx = {
+    tools: {
+      register(tool: RegisteredTool) {
+        tools.set(tool.name, tool)
+        return () => tools.delete(tool.name)
+      },
+    },
+  } as unknown as Context
+
+  const driver = {
+    kind: 'playwright',
+    status: () => ({ kind: 'playwright', ready: true, listening: true }),
+    ensureReady: async () => undefined,
+    pageStatus: async () => ({ connected: true, url: 'https://example.com/login', title: 'Login', tabId: 1, bound: true }),
+    bind: async (tabId: number) => ({ tabId, url: 'https://example.com/login', title: 'Login' }),
+    followTab: async (tabId: number) => ({ tabId, url: 'https://example.com/login', title: 'Login' }),
+    startDemonstration: vi.fn(async () => undefined),
+    stopDemonstration: vi.fn(async () => steps),
+  } as unknown as BrowserDriver
+
+  const gate = new BrowserHumanGate()
+  gate.setListener(request => {
+    if (request !== null) gate.acknowledge(request.sessionId)
+  })
+
+  const sessions = new BrowserSessionState()
+  registerBrowserTools(ctx, {
+    driver,
+    approval: { requestApproval: async () => 'allow', current: () => null } as never,
+    human: gate,
+    sessions,
+    demonstrate: () => demonstrate,
+    enabled: () => true,
+  })
+
+  const exec = { agent: { session: { id: 's1' } }, signal: new AbortController().signal }
+  return {
+    driver,
+    run: (args: Record<string, unknown>) => {
+      const tool = tools.get('browser_demonstrate')
+      if (tool === undefined) throw new Error('browser_demonstrate not registered')
+      return tool.execute(args, exec)
+    },
+  }
+}
+
+describe('browser_demonstrate', () => {
+  it('refuses when the recording switch is off and records nothing', async () => {
+    const h = harness(false)
+    await expect(h.run({ message: 'show me' })).rejects.toThrow(/演示录制/)
+    expect(h.driver.startDemonstration).not.toHaveBeenCalled()
+  })
+
+  it('records, then returns replayable steps with secrets masked', async () => {
+    const h = harness(true)
+    const out = await h.run({ message: 'show me how you sign in' }) as string
+    expect(h.driver.startDemonstration).toHaveBeenCalled()
+    expect(h.driver.stopDemonstration).toHaveBeenCalled()
+    expect(out).toContain('demonstrated steps: 4')
+    expect(out).toContain('masked fields: 1')
+    expect(out).toContain('navigate -> https://example.com/login')
+    expect(out).toContain('"me@example.com"')
+    expect(out).toContain('= ***')
+    expect(out).toContain('click button "Sign in"')
+    expect(out).toContain('browser_snapshot')
+  })
+
+  it('requires a message', async () => {
+    const h = harness(true)
+    // The tool schema rejects the missing argument before the handler runs.
+    await expect(h.run({})).rejects.toThrow(/message/)
+    expect(h.driver.startDemonstration).not.toHaveBeenCalled()
+  })
+})

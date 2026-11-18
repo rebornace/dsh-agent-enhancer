@@ -274,6 +274,8 @@ export const Config = z.object({
   browserAgentBrowser: z.string().default('auto').volatile(),
   /** Debug tools (network / console / emulate); default off, gated per tool. */
   browserAgentDebugTools: z.boolean().default(false).volatile(),
+  /** "Show me" recorder; observes user actions in the bound tab, default off. */
+  browserAgentDemonstrate: z.boolean().default(false).volatile(),
   /** Close idle agent tabs after ~10 min; coerced via resolveBrowserAgentIdleClose. */
   browserAgentIdleClose: z.union([z.boolean(), z.string()]).default('10m').volatile(),
   /** Default off; embeds official web chat + import to work. */
@@ -1443,6 +1445,7 @@ function readSettings(config: Config): EnhancerSettings {
     browserAgentEnabled: config.browserAgentEnabled.get(),
     browserAgentBrowser: hostBrowserPreference(config.browserAgentBrowser.get()),
     browserAgentDebugTools: config.browserAgentDebugTools.get(),
+    browserAgentDemonstrate: config.browserAgentDemonstrate.get(),
     browserAgentIdleClose: resolveBrowserAgentIdleClose(config.browserAgentIdleClose.get()),
     webChatBridgeEnabled: config.webChatBridgeEnabled.get(),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
@@ -1534,6 +1537,7 @@ export function apply(ctx: Context, config: Config): void {
     enabled: () => browserAgentLive.enabled,
     browserPreference: () => browserAgentLive.browser,
     debugTools: () => settings().browserAgentDebugTools,
+    demonstrate: () => settings().browserAgentDemonstrate,
     idleClose: () => settings().browserAgentIdleClose,
     profileRoot: pluginDataPackageRoot,
     softPause: softPauseGate,

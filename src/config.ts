@@ -136,6 +136,8 @@ export type EnhancerSettings = Readonly<Record<`${ModuleName}Enabled`, boolean>>
   readonly browserAgentBrowser: BrowserAgentBrowser
   /** Debug + page emulation tools for the browser agent. Default off. */
   readonly browserAgentDebugTools: boolean
+  /** "Show me" recorder: watch the user demonstrate a flow. Default off. */
+  readonly browserAgentDemonstrate: boolean
   /** Close agent tabs nobody used for this long; `never` disables the sweep. */
   readonly browserAgentIdleClose: BrowserAgentIdleClose
   readonly optimizeProvider: string
@@ -184,6 +186,7 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   browserAgentEnabled: false,
   browserAgentBrowser: 'auto',
   browserAgentDebugTools: false,
+  browserAgentDemonstrate: false,
   browserAgentIdleClose: '10m',
   webChatBridgeEnabled: true,
   instructionsSkillsEnabled: true,
@@ -233,6 +236,7 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     browserAgentEnabled: value?.browserAgentEnabled ?? false,
     browserAgentBrowser: resolveBrowserAgentBrowser(value?.browserAgentBrowser),
     browserAgentDebugTools: value?.browserAgentDebugTools === true,
+    browserAgentDemonstrate: value?.browserAgentDemonstrate === true,
     browserAgentIdleClose: resolveBrowserAgentIdleClose(value?.browserAgentIdleClose),
     webChatBridgeEnabled: value?.webChatBridgeEnabled ?? true,
     instructionsSkillsEnabled: value?.instructionsSkillsEnabled ?? true,

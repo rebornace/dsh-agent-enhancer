@@ -7,6 +7,7 @@ import type {
   CaptureEntry,
   CaptureKind,
 } from './capture.ts'
+import type { DemoStep } from './demo.ts'
 import type {
   ExtractBody,
   SnapshotBody,
@@ -100,6 +101,10 @@ export interface BrowserDriver {
     readonly reducedMotion?: 'reduce' | 'no-preference' | 'reset'
     readonly viewport?: { readonly width: number; readonly height: number }
   }): Promise<EmulateResult>
+  /** Start recording what the user does in the bound tab (one flow at a time). */
+  startDemonstration(): Promise<void>
+  /** Stop recording and return the flow as replayable steps. */
+  stopDemonstration(): Promise<readonly DemoStep[]>
   followTab(tabId: number, activate?: boolean): Promise<{
     readonly tabId: number
     readonly url: string

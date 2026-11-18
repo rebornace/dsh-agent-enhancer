@@ -252,6 +252,20 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
     }
   }
 
+  const onBrowserAgentDemonstrate = async (enabled: boolean) => {
+    setSaving('browserAgentDemonstrate')
+    setError(false)
+    setSaveDetail(null)
+    try {
+      await writeOps([{ op: 'set', path: ['browserAgentDemonstrate'], value: enabled }])
+    } catch (cause) {
+      setError(true)
+      setSaveDetail(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(null)
+    }
+  }
+
   const saveFields = async (fields: ReadonlyArray<readonly [keyof EnhancerSettings, string]>) => {
     setSaving(fields.map(([field]) => field).join(','))
     setError(false)
@@ -375,6 +389,7 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
           onRunAlertsLevel={level => { void onRunAlertsLevel(level) }}
           onBrowserAgentBrowser={browser => { void onBrowserAgentBrowser(browser) }}
           onBrowserAgentDebugTools={enabled => { void onBrowserAgentDebugTools(enabled) }}
+          onBrowserAgentDemonstrate={enabled => { void onBrowserAgentDemonstrate(enabled) }}
           onBrowserAgentIdleClose={value => { void onBrowserAgentIdleClose(value) }}
           onOpenModel={feature => {
             setHighlightFeature(feature)
