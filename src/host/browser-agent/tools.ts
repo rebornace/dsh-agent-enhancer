@@ -66,7 +66,15 @@ function formatSnapshot(body: SnapshotBody, extra?: readonly string[]): string {
       ].filter((part): part is string => part !== null).join(' ')}`,
     typeof body.note === 'string' && body.note.trim() !== '' ? `note: ${body.note.trim()}` : null,
     ...(extra ?? []),
-    'interactive (prefer refs that include href=… ; never invent URLs; re-snapshot after navigation):',
+    (() => {
+      const links = body.nodes.filter(node => node.tag === 'a').length
+      const controls = body.nodes.length - links
+      const shown = body.nodes.length
+      const tally = controls > 0 ? `${links} link / ${controls} control` : `${links} link`
+      return controls > 0
+        ? `interactive (${shown} shown: ${tally} — controls are at the end; prefer refs that include href=… ; never invent URLs; re-snapshot after navigation):`
+        : `interactive (${shown} shown: ${tally}; prefer refs that include href=… ; never invent URLs; re-snapshot after navigation):`
+    })(),
     ...body.nodes.slice(0, 80).map(node => (
       `- [${node.ref}] ${node.role}${node.tag !== undefined ? `/${node.tag}` : ''}${node.sensitive === true ? ' [sensitive]' : ''}${typeof node.href === 'string' && node.href !== '' ? ` href=${JSON.stringify(node.href)}` : ''} ${JSON.stringify(node.name)}`
     )),

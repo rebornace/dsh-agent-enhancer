@@ -73,4 +73,20 @@ describe('snapshot output', () => {
     expect(out).not.toContain('emulation:')
     expect(out).not.toContain('harvest:')
   })
+
+  it('counts links and controls so a link-heavy list cannot read as "all links"', async () => {
+    const out = await harness({
+      url: 'https://example.com/',
+      title: 'Example',
+      tabId: 3,
+      textPreview: '',
+      nodes: [
+        { ref: 1, role: 'link', name: 'A', tag: 'a', href: 'https://example.com/a' },
+        { ref: 2, role: 'link', name: 'B', tag: 'a', href: 'https://example.com/b' },
+        { ref: 3, role: 'button', name: 'Search', tag: 'button' },
+      ],
+    })
+    expect(out).toContain('interactive (3 shown: 2 link / 1 control')
+    expect(out).toContain('controls are at the end')
+  })
 })
