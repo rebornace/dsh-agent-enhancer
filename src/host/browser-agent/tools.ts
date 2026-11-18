@@ -331,6 +331,17 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   const requireFreshRef = (sessionId: string, ref: number, tool: string) => {
     if (options.sessions.hasRef(sessionId, ref)) return
+    // Refs are unique per driver and kept with their tab, so a misplaced ref can
+    // name its real tab instead of a generic "call browser_snapshot".
+    const active = options.sessions.tabOf(sessionId)
+    const owner = options.sessions.tabHoldingRef(ref, active)
+    if (owner !== undefined) {
+      throw new Error(
+        `${tool}: ref ${ref} belongs to tab ${owner}, but tab ${active ?? 'none'} is active. `
+        + `Switch back with browser_follow_tab (tabId ${owner}) — that tab's refs are still valid — `
+        + 'or call browser_snapshot to get refs for the current tab.',
+      )
+    }
     const known = options.sessions.lastRefList(sessionId)
     if (known.length === 0) {
       throw new Error(

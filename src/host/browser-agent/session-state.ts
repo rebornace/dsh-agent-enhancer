@@ -17,22 +17,54 @@ export interface BrowserAuditEntry {
 
 const MAX_AUDIT = 40
 
+/** What a session remembers about one tab's last snapshot. */
+interface RefMemory {
+  refs: Set<number>
+  hrefs: Map<number, string>
+  names: Map<number, string>
+  /** Refs that already failed a click with no navigation — block re-click until a fresh snapshot. */
+  dead: Set<number>
+}
+
+function emptyMemory(): RefMemory {
+  return { refs: new Set(), hrefs: new Map(), names: new Map(), dead: new Set() }
+}
+
 export class BrowserSessionState {
   private readonly tabBySession = new Map<string, number>()
   private readonly sessionByTab = new Map<number, string>()
   private readonly needsHumanBySession = new Map<string, string>()
-  /** Refs from the latest successful browser_snapshot for this session. */
-  private readonly lastRefsBySession = new Map<string, ReadonlySet<number>>()
-  /** Optional href per ref from the latest snapshot (follow only that ref's href after a dead click). */
-  private readonly lastHrefBySession = new Map<string, ReadonlyMap<number, string>>()
-  /** Optional accessible name per ref from the latest snapshot (name-matched auto-nav). */
-  private readonly lastNameBySession = new Map<string, ReadonlyMap<number, string>>()
-  /** Refs that already failed a click with no navigation — block re-click until a fresh snapshot. */
-  private readonly deadClickRefsBySession = new Map<string, Set<number>>()
+  /**
+   * Snapshot memory lives with the tab, not the session: refs captured in a tab
+   * stay valid when the session switches away and back (refs are unique per
+   * driver, so there is no cross-tab aliasing).
+   */
+  private readonly memoryByTab = new Map<number, RefMemory>()
+  /** Snapshots taken before a tab is bound (rare, first call) land here. */
+  private readonly memoryUnbound = new Map<string, RefMemory>()
   /** Last http(s) page URL for approval origin when pageStatus is blank/about:blank. */
   private readonly lastHttpUrlBySession = new Map<string, string>()
   private conflict: BrowserTabConflict | null = null
   private readonly audit: BrowserAuditEntry[] = []
+
+  /** Memory for this session's current tab, creating it on first use. */
+  private memoryOf(sessionId: string): RefMemory {
+    const tabId = this.tabBySession.get(sessionId)
+    if (tabId === undefined) {
+      let memory = this.memoryUnbound.get(sessionId)
+      if (memory === undefined) {
+        memory = emptyMemory()
+        this.memoryUnbound.set(sessionId, memory)
+      }
+      return memory
+    }
+    let memory = this.memoryByTab.get(tabId)
+    if (memory === undefined) {
+      memory = emptyMemory()
+      this.memoryByTab.set(tabId, memory)
+    }
+    return memory
+  }
 
   bind(sessionId: string, tabId: number): void {
     const prev = this.tabBySession.get(sessionId)
@@ -65,23 +97,42 @@ export class BrowserSessionState {
   unbindTab(tabId: number): string | undefined {
     const sessionId = this.sessionByTab.get(tabId)
     this.sessionByTab.delete(tabId)
+    // Refs die with the tab, whether or not a session was bound to it.
+    this.memoryByTab.delete(tabId)
     if (sessionId === undefined) return undefined
     if (this.tabBySession.get(sessionId) === tabId) this.tabBySession.delete(sessionId)
-    this.clearLastRefs(sessionId)
-    this.deadClickRefsBySession.delete(sessionId)
+    this.memoryUnbound.delete(sessionId)
     if (this.conflict?.sessionId === sessionId) this.conflict = null
     return sessionId
+  }
+
+  /** Which tab still holds this ref (refs are driver-unique), if any. */
+  tabHoldingRef(ref: number, exceptTabId?: number): number | undefined {
+    for (const [tabId, memory] of this.memoryByTab) {
+      if (tabId === exceptTabId) continue
+      if (memory.refs.has(ref)) return tabId
+    }
+    return undefined
+  }
+
+  /** Drop snapshot memory for tabs that no longer exist. */
+  retainTabs(tabIds: Iterable<number>): void {
+    const alive = new Set(tabIds)
+    for (const tabId of [...this.memoryByTab.keys()]) {
+      if (!alive.has(tabId)) this.memoryByTab.delete(tabId)
+    }
   }
 
   clearSession(sessionId: string): void {
     const tabId = this.tabBySession.get(sessionId)
     this.tabBySession.delete(sessionId)
-    if (tabId !== undefined) this.sessionByTab.delete(tabId)
+    if (tabId !== undefined) {
+      this.sessionByTab.delete(tabId)
+      // The tab is reused by whoever binds next; never hand them this session's refs.
+      this.memoryByTab.delete(tabId)
+    }
+    this.memoryUnbound.delete(sessionId)
     this.needsHumanBySession.delete(sessionId)
-    this.lastRefsBySession.delete(sessionId)
-    this.lastHrefBySession.delete(sessionId)
-    this.lastNameBySession.delete(sessionId)
-    this.deadClickRefsBySession.delete(sessionId)
     this.lastHttpUrlBySession.delete(sessionId)
     if (this.conflict?.sessionId === sessionId) this.conflict = null
     for (let i = this.audit.length - 1; i >= 0; i -= 1) {
@@ -90,45 +141,45 @@ export class BrowserSessionState {
   }
 
   setLastRefs(sessionId: string, refs: readonly number[]): void {
-    this.lastRefsBySession.set(sessionId, new Set(refs.filter(ref => Number.isFinite(ref))))
-    // Fresh snapshot clears dead-click bans for this session.
-    this.deadClickRefsBySession.delete(sessionId)
+    const memory = this.memoryOf(sessionId)
+    memory.refs = new Set(refs.filter(ref => Number.isFinite(ref)))
+    // Fresh snapshot clears dead-click bans for this tab.
+    memory.dead = new Set()
   }
 
   setLastHrefs(sessionId: string, hrefs: ReadonlyMap<number, string>): void {
-    this.lastHrefBySession.set(sessionId, hrefs)
+    this.memoryOf(sessionId).hrefs = new Map(hrefs)
   }
 
   setLastNames(sessionId: string, names: ReadonlyMap<number, string>): void {
-    this.lastNameBySession.set(sessionId, names)
+    this.memoryOf(sessionId).names = new Map(names)
   }
 
   clearLastRefs(sessionId: string): void {
-    this.lastRefsBySession.delete(sessionId)
-    this.lastHrefBySession.delete(sessionId)
-    this.lastNameBySession.delete(sessionId)
+    const memory = this.memoryOf(sessionId)
+    memory.refs = new Set()
+    memory.hrefs = new Map()
+    memory.names = new Map()
   }
 
   markDeadClickRef(sessionId: string, ref: number): void {
-    const set = this.deadClickRefsBySession.get(sessionId) ?? new Set<number>()
-    set.add(ref)
-    this.deadClickRefsBySession.set(sessionId, set)
+    this.memoryOf(sessionId).dead.add(ref)
   }
 
   isDeadClickRef(sessionId: string, ref: number): boolean {
-    return this.deadClickRefsBySession.get(sessionId)?.has(ref) === true
+    return this.memoryOf(sessionId).dead.has(ref)
   }
 
   hasRef(sessionId: string, ref: number): boolean {
-    return this.lastRefsBySession.get(sessionId)?.has(ref) === true
+    return this.memoryOf(sessionId).refs.has(ref)
   }
 
   hrefOfRef(sessionId: string, ref: number): string | undefined {
-    return this.lastHrefBySession.get(sessionId)?.get(ref)
+    return this.memoryOf(sessionId).hrefs.get(ref)
   }
 
   nameOfRef(sessionId: string, ref: number): string | undefined {
-    return this.lastNameBySession.get(sessionId)?.get(ref)
+    return this.memoryOf(sessionId).names.get(ref)
   }
 
   rememberHttpUrl(sessionId: string, url: string): void {
@@ -141,7 +192,7 @@ export class BrowserSessionState {
   }
 
   lastRefList(sessionId: string): readonly number[] {
-    return [...(this.lastRefsBySession.get(sessionId) ?? [])]
+    return [...this.memoryOf(sessionId).refs]
   }
 
   setConflict(conflict: BrowserTabConflict): void {

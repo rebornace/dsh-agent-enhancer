@@ -446,6 +446,7 @@ export function installBrowserAgent(
         // Retire scopes of tabs that are gone (ids are never reused, so this is
         // only growth control, not a correctness requirement).
         tabScope.retain(body.tabs.map(tab => tab.tabId))
+        sessions.retainTabs(body.tabs.map(tab => tab.tabId))
         return {
           tabs: body.tabs.map(tab => ({
             ...tab,

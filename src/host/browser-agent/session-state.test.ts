@@ -35,4 +35,41 @@ describe('BrowserSessionState tab binding', () => {
     expect(state.tabOf('a')).toBeUndefined()
     expect(state.tabOf('b')).toBe(6)
   })
+
+  it('keeps refs with the tab across a switch away and back', () => {
+    const state = new BrowserSessionState()
+    state.bind('a', 5)
+    state.setLastRefs('a', [1, 2])
+    state.setLastHrefs('a', new Map([[1, 'https://example.com/one']]))
+
+    state.bind('a', 6)
+    expect(state.hasRef('a', 1)).toBe(false)
+    expect(state.tabHoldingRef(1)).toBe(5)
+
+    state.bind('a', 5)
+    expect(state.hasRef('a', 1)).toBe(true)
+    expect(state.hrefOfRef('a', 1)).toBe('https://example.com/one')
+  })
+
+  it('never leaks refs to whoever binds the tab next', () => {
+    const state = new BrowserSessionState()
+    state.bind('a', 5)
+    state.setLastRefs('a', [1])
+
+    state.clearSession('a')
+    state.bind('b', 5)
+    expect(state.hasRef('b', 1)).toBe(false)
+  })
+
+  it('prunes memory for tabs that no longer exist', () => {
+    const state = new BrowserSessionState()
+    state.bind('a', 5)
+    state.setLastRefs('a', [1])
+    state.bind('a', 6)
+    state.setLastRefs('a', [2])
+
+    state.retainTabs([6])
+    expect(state.tabHoldingRef(1)).toBeUndefined()
+    expect(state.hasRef('a', 2)).toBe(true)
+  })
 })
