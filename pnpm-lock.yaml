@@ -13,7 +13,7 @@ importers:
   .:
     dependencies:
       '@deepseek-ai/dsh-mcp-client':
-        specifier: 0.2.2-rc.5
+        specifier: '>=0.2.2-rc.2 <0.3.0-0'
         version: 0.2.2-rc.5(0bff3e2100af50505bf115504612218c)
       '@deepseek-ai/schemastery':
         specifier: 3.19.0

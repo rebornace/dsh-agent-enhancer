@@ -64,3 +64,7 @@ Publish only what stays true: `README` (what the plugin does and does not do), `
 ## CI
 
 `.github/workflows/ci.yml` runs on push to `main` and on PRs: `pnpm check` (typecheck + vitest + build + pack verification) on Ubuntu, plus typecheck/tests on Windows. The integration suite under `tests/` ships with the repo (sanitized: no real home paths, tokens or chat content — keep it that way); `vitest.global-setup.ts` (tracked) builds `lib/` once when it is missing.
+
+## Host version policy
+
+Desktop ships its own `@deepseek-ai/*` packages, so the plugin has two version lines: `devDependencies` pin the newest candidate we build and test against (currently `0.2.2-rc.5`), while `peerDependencies` accept `>=0.2.2-rc.2 <0.3.0-0` so a Desktop that has not taken the latest candidate still loads the plugin. `tests/package.test.ts` enforces that shape (peer mirrors dev exactly, or the range; dev is always a concrete version). When a new candidate lands, check its real source diff — the GitHub compare API caps at 300 files, so pull both tag tarballs and hash-compare the trees instead — then bump devDeps only.

@@ -28,15 +28,30 @@ const SHARED_RUNTIME = [
   'react-dom',
 ] as const
 
-it('shares host runtime packages through mirrored peer and dev dependencies', async () => {
+/**
+ * Peers accept every 0.2.2 prerelease from rc.2 on, so the plugin loads on a
+ * Desktop that has not taken the latest candidate yet; devDeps stay pinned to
+ * the newest one we build and test against. Exact-mirroring peers is also fine
+ * for packages with their own version line (cordis).
+ */
+const PEER_RANGE = '>=0.2.2-rc.2 <0.3.0-0'
+
+it('shares host runtime packages through peer and dev dependencies', async () => {
   const manifest = JSON.parse(await readFile('package.json', 'utf8')) as {
     dependencies: Record<string, string>
     devDependencies: Record<string, string>
     peerDependencies: Record<string, string>
   }
   for (const name of SHARED_RUNTIME) {
-    expect(manifest.peerDependencies[name], `${name} peer`).toBeDefined()
-    expect(manifest.devDependencies[name], `${name} dev`).toBe(manifest.peerDependencies[name])
+    const dev = manifest.devDependencies[name]
+    const peer = manifest.peerDependencies[name]
+    expect(peer, `${name} peer`).toBeDefined()
+    // Dev pins a concrete build; no `^`, `latest` or `workspace:` drift.
+    expect(dev, `${name} dev`).toMatch(/^\d+\.\d+\.\d+/)
+    expect(
+      peer === dev || peer === PEER_RANGE,
+      `${name} peer must mirror dev (${dev}) or accept ${PEER_RANGE}`,
+    ).toBe(true)
     expect(manifest.dependencies[name], `${name} must not be duplicated`).toBeUndefined()
   }
   // Host Config + RPC codecs are build externals; the profile pack must ship

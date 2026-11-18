@@ -10,6 +10,7 @@
 
 ### Changed
 
+- **宿主依赖对齐 Desktop `0.2.2-rc.5`：** `devDependencies` 钉 `0.2.2-rc.5`（构建与测试基准），`peerDependencies` 放宽为 `>=0.2.2-rc.2 <0.3.0-0`，于是还停在 rc.2 的 Desktop 也能加载。rc.2→rc.5 的源码改动只落在官方内部包（`ui-sidebar` 新增 `sidebar.session.action`、`ui-workspace` 新增 `workspace.picker`、`ui-primitives` 新增图标、`dsh-web` 增加 `llmProvider` 选项、`dsh-llm` 增加 `CONTENT_REFUSED` 错误码），对我们用到的槽位与类型均为新增。
 - **浏览器 Agent · 闲置标签：** 关闭时间由固定 10 分钟改为可选 **10 / 30 / 60 分钟 / 不自动关闭**；0.3.14 的布尔配置自动映射（`true` → 10 分钟，`false` → 不自动关闭）。
 - **浏览器 Agent · 开关命名：** 「调试工具」改为「**调试与页面模拟**」，说明里写清它同时管网络/控制台读取与深色模式、视口模拟。
 
