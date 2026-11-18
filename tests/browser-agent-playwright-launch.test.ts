@@ -34,7 +34,7 @@ describe('PlaywrightDriver scaffold', () => {
   it.skipIf(!hasSystemChromium)('ensureReady launches a persistent context', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-pw-'))
     dirs.push(dir)
-    const driver = new PlaywrightDriver({ profileDir: dir, preference: 'auto' })
+    const driver = new PlaywrightDriver({ profileDir: dir, preference: 'auto', headless: true })
     try {
       await driver.ensureReady('about:blank')
       expect(driver.status().ready).toBe(true)

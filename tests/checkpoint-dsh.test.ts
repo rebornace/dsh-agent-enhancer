@@ -2,12 +2,14 @@ import { Context } from '@deepseek-ai/cordis'
 import { MessageId } from '@deepseek-ai/dsh-llm'
 import { Session, SESSION_FORMAT_VERSION, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DshCheckpointSessions } from '../src/host/checkpoint/dsh.ts'
 
 const contexts: Context[] = []
 const sessionId = 'session-real' as SessionId
-const workspaceRoot = 'C:/workspace/project'
+// `Session.create` requires an absolute cwd, and "C:/…" is not absolute on Linux CI.
+const workspaceRoot = resolve('/workspace/project')
 
 function fixture() {
   const ctx = new Context()
