@@ -82,6 +82,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentDemoStop' | 'browserAgentDemoRecording' | 'browserAgentDemoRecordingHint' |
       'browserAgentDemoRecordingAgent' | 'browserAgentDemoEmpty' | 'browserAgentDemoCopy' |
       'browserAgentDemoCopied' | 'browserAgentDemoCopyFailed' | 'browserAgentDemoFailed' |
+      'browserAgentDemoSend' | 'browserAgentDemoSendLead' | 'browserAgentDemoSent' |
+      'browserAgentDemoSendFailed' |
       'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
       'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
       'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
@@ -491,6 +493,10 @@ export const agentLocales = {
     browserAgentDemoRecordingAgent: '智能体正在录制；完成后点上方卡片「已完成，继续」。',
     browserAgentDemoEmpty: '没有录到步骤：可能只打开了页面，或在别的标签里操作。',
     browserAgentDemoCopy: '复制步骤',
+    browserAgentDemoSend: '发给智能体',
+    browserAgentDemoSendLead: '我刚刚在浏览器里演示了一遍流程，请按这些步骤完成同样的操作（先 browser_snapshot，再按 role/name 点击或输入）：',
+    browserAgentDemoSent: '已插入输入框，确认后发送',
+    browserAgentDemoSendFailed: '插入失败：先在聊天里发一条消息建立会话，再试一次',
     browserAgentDemoCopied: '已复制步骤',
     browserAgentDemoCopyFailed: '复制失败，请手动选中文本复制',
     browserAgentDemoFailed: '演示录制失败',
@@ -1159,6 +1165,10 @@ export const agentLocales = {
     browserAgentDemoRecordingAgent: 'The agent is recording; press Continue on the card above when you are done.',
     browserAgentDemoEmpty: 'No steps recorded: only a page may have opened, or you worked in another tab.',
     browserAgentDemoCopy: 'Copy steps',
+    browserAgentDemoSend: 'Send to agent',
+    browserAgentDemoSendLead: 'I just demonstrated this flow in the browser. Please repeat it using these steps (browser_snapshot first, then click or type by role/name):',
+    browserAgentDemoSent: 'Inserted into the composer; send it when ready',
+    browserAgentDemoSendFailed: 'Could not insert: send one message in the chat first, then retry',
     browserAgentDemoCopied: 'Steps copied',
     browserAgentDemoCopyFailed: 'Could not copy; select the text manually',
     browserAgentDemoFailed: 'Demonstration recording failed',

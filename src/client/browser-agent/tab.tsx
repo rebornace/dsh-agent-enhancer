@@ -199,6 +199,17 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
     }
   }
 
+  /** Hand the steps to the chat composer as a quote, so the agent sees them. */
+  const sendDemoSteps = () => {
+    if (demoSteps === null || demoSteps.length === 0) return
+    const text = [
+      t('browserAgentDemoSendLead'),
+      ...demoSteps,
+    ].join('\n')
+    const inserted = quoteSelectedText(text, lastQuoteSessionId())
+    setHint(inserted ? t('browserAgentDemoSent') : t('browserAgentDemoSendFailed'))
+  }
+
   const connected = snapshot?.bridge.extensionConnected === true
   const diagnosis = snapshot?.diagnosis
   const diagnosisHint = diagnosis !== undefined && diagnosis.code !== 'ok'
@@ -377,14 +388,24 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                   {demoSteps.length === 0 ? t('browserAgentDemoEmpty') : demoSteps.join('\n')}
                 </pre>
                 {demoSteps.length > 0 ? (
-                  <button
-                    type="button"
-                    className={styles.browserAgentButton}
-                    disabled={busy}
-                    onClick={() => { void copyDemoSteps() }}
-                  >
-                    {t('browserAgentDemoCopy')}
-                  </button>
+                  <div className={styles.browserAgentActions}>
+                    <button
+                      type="button"
+                      className={styles.browserAgentButton}
+                      disabled={busy}
+                      onClick={() => { void copyDemoSteps() }}
+                    >
+                      {t('browserAgentDemoCopy')}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.browserAgentButton}
+                      disabled={busy}
+                      onClick={sendDemoSteps}
+                    >
+                      {t('browserAgentDemoSend')}
+                    </button>
+                  </div>
                 ) : null}
               </>
             ) : null}
