@@ -33,26 +33,30 @@ export type CaptureEntry = NetworkCaptureEntry | ConsoleCaptureEntry
 export type CaptureKind = 'network' | 'console' | 'all'
 
 const SECRET_PARAM = /^(access_?token|id_?token|auth|authorization|code|key|password|secret|session|sessionid|sig|signature|token)$/i
+const URL_IN_TEXT = /https?:\/\/[^\s"'<>]+/g
 
 /** Mask userinfo and secret-looking query values; drop the fragment. */
 export function redactUrl(raw: string): string {
-  let parsed: URL
-  try {
-    parsed = new URL(raw)
-  } catch {
-    return raw.length > 200 ? `${raw.slice(0, 200)}…` : raw
-  }
-  parsed.hash = ''
-  if (parsed.username !== '' || parsed.password !== '') {
-    parsed.username = ''
-    parsed.password = ''
-  }
-  for (const key of [...parsed.searchParams.keys()]) {
-    if (!SECRET_PARAM.test(key)) continue
-    parsed.searchParams.set(key, '***')
-  }
-  const text = parsed.toString()
-  return text.length > 300 ? `${text.slice(0, 300)}…` : text
+  const withoutUserInfo = raw.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#@]*@/i, '$1')
+  const withoutFragment = withoutUserInfo.replace(/#.*$/, '')
+  const masked = withoutFragment.replace(
+    /([?&])([^=&#]+)=([^&#]*)/g,
+    (match, separator: string, key: string) => (SECRET_PARAM.test(decodeURIComponent(key)) ? `${separator}${key}=***` : match),
+  )
+  return masked.length > 300 ? `${masked.slice(0, 300)}…` : masked
+}
+
+/**
+ * Redact every http(s) URL inside free text. Console messages embed request URLs
+ * (a failed resource logs its full URL), so redacting only the network layer
+ * would leak a token that the network layer had masked.
+ */
+export function redactText(text: string): string {
+  return text.replace(URL_IN_TEXT, match => {
+    const trailing = match.match(/[),.;]+$/)?.[0] ?? ''
+    const core = trailing === '' ? match : match.slice(0, -trailing.length)
+    return `${redactUrl(core)}${trailing}`
+  })
 }
 
 export class CaptureBuffer {

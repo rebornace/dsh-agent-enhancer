@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CaptureBuffer, redactUrl } from './capture.ts'
+import { CaptureBuffer, redactText, redactUrl } from './capture.ts'
 import type { CaptureEntry } from './capture.ts'
 
 const net = (url: string, tabId = 1): CaptureEntry => ({
@@ -36,6 +36,25 @@ describe('redactUrl', () => {
     expect(redactUrl('about:blank')).toBe('about:blank')
     const long = `data:text/html,${'x'.repeat(400)}`
     expect(redactUrl(long).length).toBeLessThanOrEqual(301)
+  })
+})
+
+describe('redactText', () => {
+  it('masks tokens inside console messages', () => {
+    const text = 'Failed to load resource: the server responded with a status of 404 () '
+      + '(https://example.com/probe?token=dsh-secret&page=2:0)'
+    const out = redactText(text)
+    expect(out).not.toContain('dsh-secret')
+    expect(out).toContain('token=***')
+    expect(out.endsWith(')')).toBe(true)
+  })
+
+  it('masks every URL in a message and leaves plain text alone', () => {
+    const out = redactText('a https://x.test/?code=abc b https://y.test/?session=zzz c')
+    expect(out).not.toContain('abc')
+    expect(out).not.toContain('zzz')
+    expect(out.startsWith('a https://x.test/?code=*** b https://y.test/?session=*** c')).toBe(true)
+    expect(redactText('plain message, no links')).toBe('plain message, no links')
   })
 })
 

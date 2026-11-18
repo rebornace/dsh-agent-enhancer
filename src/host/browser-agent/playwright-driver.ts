@@ -33,7 +33,7 @@ import {
   PLAYWRIGHT_REF_ATTR,
   type PlaywrightRefRecord,
 } from './playwright-snapshot.ts'
-import { CaptureBuffer, redactUrl, type CaptureEntry, type CaptureKind } from './capture.ts'
+import { CaptureBuffer, redactText, redactUrl, type CaptureEntry, type CaptureKind } from './capture.ts'
 import { pathsDiffer } from './auto-nav.ts'
 import { TabRegistry } from './tab-registry.ts'
 
@@ -82,6 +82,12 @@ export class PlaywrightDriver implements BrowserDriver {
   private capture: CaptureBuffer | null = null
   private readonly captureStartedPages = new WeakSet<Page>()
   private readonly requestStart = new WeakMap<object, number>()
+  /** Last applied emulation per tab, echoed in snapshot so the agent can see it. */
+  private readonly emulationByTab = new Map<number, {
+    colorScheme?: string
+    reducedMotion?: string
+    viewport?: { readonly width: number; readonly height: number }
+  }>()
   /** Last agent/UI use per page; a page's clock starts when it is first seen. */
   private readonly lastUse = new WeakMap<Page, number>()
 
@@ -123,6 +129,7 @@ export class PlaywrightDriver implements BrowserDriver {
       this.trackedPages.add(page)
       page.on('close', () => {
         this.tabs.release(page)
+        this.emulationByTab.delete(tabId)
         this.trackedPages.delete(page)
       })
     }
@@ -391,7 +398,8 @@ export class PlaywrightDriver implements BrowserDriver {
     this.nextRef += body.nodes.length
     // Refs belong to this tab only; other tabs keep theirs.
     this.tabs.setRefs(tabId, refs)
-    return { ...body, tabId }
+    const emulation = this.emulationByTab.get(tabId)
+    return { ...body, ...(emulation === undefined ? {} : { emulation }), tabId }
   }
 
   async extract(input: { readonly focus?: string; readonly maxChars?: number } = {}): Promise<ExtractBody> {
@@ -681,10 +689,12 @@ export class PlaywrightDriver implements BrowserDriver {
           at: stamp(),
           tabId,
           level: message.type(),
-          text: clipText(message.text(), 500),
+          // Console text can embed a request URL, so it gets the same masking as
+          // the network layer; otherwise a failed fetch leaks its query string.
+          text: clipText(redactText(message.text()), 500),
           ...(message.location().url === ''
             ? {}
-            : { location: `${message.location().url}:${message.location().lineNumber}` }),
+            : { location: redactText(`${message.location().url}:${message.location().lineNumber}`) }),
         })
       } catch {
         // Page went away mid-event; captured data is best-effort.
@@ -696,7 +706,7 @@ export class PlaywrightDriver implements BrowserDriver {
         at: stamp(),
         tabId,
         level: 'pageerror',
-        text: clipText(error instanceof Error ? error.message : String(error), 500),
+        text: clipText(redactText(error instanceof Error ? error.message : String(error)), 500),
       })
     })
     page.on('request', request => {
@@ -769,12 +779,42 @@ export class PlaywrightDriver implements BrowserDriver {
       await page.setViewportSize({ width, height })
       applied.push(`viewport=${width}x${height}`)
     }
+    const tabId = this.tabIdFor(page)
+    this.rememberEmulation(tabId, input)
     return {
       url: page.url(),
       title: await page.title().catch(() => ''),
       applied,
       tabId: this.tabIdFor(page),
     }
+  }
+
+  /** Record what is now emulated on this tab, so snapshot can echo it. */
+  private rememberEmulation(
+    tabId: number,
+    input: {
+      readonly colorScheme?: 'light' | 'dark' | 'no-preference' | 'reset'
+      readonly reducedMotion?: 'reduce' | 'no-preference' | 'reset'
+      readonly viewport?: { readonly width: number; readonly height: number }
+    },
+  ): void {
+    const next = { ...(this.emulationByTab.get(tabId) ?? {}) }
+    if (input.colorScheme !== undefined) {
+      if (input.colorScheme === 'reset') delete next.colorScheme
+      else next.colorScheme = input.colorScheme
+    }
+    if (input.reducedMotion !== undefined) {
+      if (input.reducedMotion === 'reset') delete next.reducedMotion
+      else next.reducedMotion = input.reducedMotion
+    }
+    if (input.viewport !== undefined) {
+      next.viewport = {
+        width: Math.min(Math.max(Math.trunc(input.viewport.width), 320), 3840),
+        height: Math.min(Math.max(Math.trunc(input.viewport.height), 240), 2160),
+      }
+    }
+    if (Object.keys(next).length === 0) this.emulationByTab.delete(tabId)
+    else this.emulationByTab.set(tabId, next)
   }
 
   async followTab(tabId: number, _activate = false): Promise<{

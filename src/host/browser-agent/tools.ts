@@ -54,6 +54,16 @@ function formatSnapshot(body: SnapshotBody, extra?: readonly string[]): string {
     typeof body.source === 'string' ? `snapshot_source: ${body.source}` : null,
     typeof body.extensionVersion === 'string' ? `extension: ${body.extensionVersion}` : null,
     typeof body.anchorCount === 'number' ? `anchors_in_dom: ${body.anchorCount}` : null,
+    body.harvest === undefined
+      ? null
+      : `harvest: interactive=${body.harvest.interactive} controls=${body.harvest.controls} anchors=${body.harvest.anchors}`,
+    body.emulation === undefined
+      ? null
+      : `emulation: ${[
+        body.emulation.colorScheme === undefined ? null : `colorScheme=${body.emulation.colorScheme}`,
+        body.emulation.reducedMotion === undefined ? null : `reducedMotion=${body.emulation.reducedMotion}`,
+        body.emulation.viewport === undefined ? null : `viewport=${body.emulation.viewport.width}x${body.emulation.viewport.height}`,
+      ].filter((part): part is string => part !== null).join(' ')}`,
     typeof body.note === 'string' && body.note.trim() !== '' ? `note: ${body.note.trim()}` : null,
     ...(extra ?? []),
     'interactive (prefer refs that include href=… ; never invent URLs; re-snapshot after navigation):',
@@ -1188,7 +1198,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         `url: ${result.url}`,
         `title: ${result.title}`,
         result.tabId !== undefined ? `tabId: ${result.tabId}` : null,
-        'Action: browser_snapshot to see the page in this mode. Emulation persists for this page until the tab reloads or you reset it.',
+        'Action: browser_snapshot now echoes the emulation line, so you can confirm the mode the page is in.',
       ].filter(line => line !== null).join('\n')
     },
   )))

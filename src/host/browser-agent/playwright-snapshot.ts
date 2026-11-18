@@ -393,6 +393,11 @@ export async function capturePlaywrightSnapshot(
     source: harvest.anchors.length > 0 || proximityHits > 0 ? 'playwright+anchors' : 'playwright',
     extensionVersion: PLAYWRIGHT_DRIVER_VERSION,
     anchorCount: harvest.anchors.length,
+    harvest: {
+      interactive: harvest.interactive.length,
+      controls: rows.filter(row => row.priority === 1).length,
+      anchors: proximityAnchors.length,
+    },
     ...(withHref === 0
       ? {
         note: `No http(s) href on interactive refs yet (anchors_in_dom=${harvest.anchors.length}). browser_wait then browser_snapshot again.`,

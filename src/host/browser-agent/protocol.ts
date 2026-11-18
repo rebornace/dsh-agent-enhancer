@@ -99,6 +99,18 @@ export interface SnapshotBody {
   readonly source?: string
   /** Optional guidance when the page exposes no navigable hrefs on refs. */
   readonly note?: string
+  /** Applied emulation for this tab, when the agent used browser_emulate. */
+  readonly emulation?: {
+    readonly colorScheme?: string
+    readonly reducedMotion?: string
+    readonly viewport?: { readonly width: number; readonly height: number }
+  }
+  /** Page-side harvest counters: how many interactive elements the page had. */
+  readonly harvest?: {
+    readonly interactive: number
+    readonly controls: number
+    readonly anchors: number
+  }
   /** MV3 extension build id — use to verify desktop:link + browser relaunch. */
   readonly extensionVersion?: string
   /** Live document anchors harvested during snapshot (0 ⇒ harvest failed or page empty). */
