@@ -8,7 +8,7 @@ export default defineConfig({
       // Archived MV3 bridge — not part of the shipping driver.
       'extensions/chrome-legacy/**',
     ],
-    globalSetup: ['tests/global-setup.ts'],
+    globalSetup: ['vitest.global-setup.ts'],
     server: {
       deps: {
         inline: ['@deepseek-ai/dsh-client-ui-primitives'],

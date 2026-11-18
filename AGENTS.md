@@ -60,3 +60,7 @@ See: `docs/architecture/session-delete.md` (local-only).
 ## Docs policy
 
 Publish only what stays true: `README` (what the plugin does and does not do), `CHANGELOG` (what shipped), `AGENTS.md` (invariants), tests. Keep plans and decision logs local under `docs/` (ignored by git) — an AI-written roadmap in a public repo reads as a promise and rots fastest. Do not add `docs/roadmap.md` or `docs/architecture/` to git without an explicit decision to publish them.
+
+## CI
+
+`.github/workflows/ci.yml` runs on push to `main` and on PRs: `pnpm check` (typecheck + vitest + build + pack verification) on Ubuntu, plus typecheck/tests on Windows. Only the 36 test files under `src/` ship; the ~95 integration tests in `tests/` are local-only, so a clone runs a thinner suite. `vitest.global-setup.ts` (tracked) builds `lib/` once when it is missing — do not point `globalSetup` back at `tests/`, which git ignores.
