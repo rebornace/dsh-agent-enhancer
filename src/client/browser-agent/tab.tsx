@@ -14,6 +14,7 @@ import { lastQuoteSessionId } from '../quote/session.ts'
 import styles from '../styles.module.css'
 import {
   agentEnhancerBrowserAgentLaunchBrowser,
+  agentEnhancerBrowserAgentDemo,
   agentEnhancerBrowserAgentQuotePage,
   agentEnhancerBrowserAgentSelectTab,
   agentEnhancerBrowserAgentSetBrowser,
@@ -170,6 +171,34 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
     }
   }
 
+  const [demoSteps, setDemoSteps] = useState<readonly string[] | null>(null)
+
+  const runDemo = async (action: 'start' | 'stop') => {
+    setBusy(true)
+    setHint(null)
+    try {
+      const result = await agentEnhancerBrowserAgentDemo.invoke(remote(), { action })
+      setSnapshot(result.snapshot)
+      if (!result.ok) {
+        setHint(result.error ?? t('browserAgentDemoFailed'))
+        return
+      }
+      if (action === 'stop') setDemoSteps(result.steps ?? [])
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const copyDemoSteps = async () => {
+    if (demoSteps === null || demoSteps.length === 0) return
+    try {
+      await navigator.clipboard.writeText(demoSteps.join('\n'))
+      setHint(t('browserAgentDemoCopied'))
+    } catch {
+      setHint(t('browserAgentDemoCopyFailed'))
+    }
+  }
+
   const connected = snapshot?.bridge.extensionConnected === true
   const diagnosis = snapshot?.diagnosis
   const diagnosisHint = diagnosis !== undefined && diagnosis.code !== 'ok'
@@ -305,6 +334,60 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                 })}
               </ul>
             )}
+          </div>
+        ) : null}
+        {snapshot?.demo.enabled === true ? (
+          <div className={styles.browserAgentTabListSection}>
+            <p className={styles.browserAgentPaneStatus}>
+              {snapshot.demo.recording ? t('browserAgentDemoRecording') : t('browserAgentDemoTitle')}
+            </p>
+            <p className={styles.browserAgentPaneNote}>
+              {snapshot.demo.recording
+                ? (snapshot.needsHuman === null
+                  ? t('browserAgentDemoRecordingHint')
+                  : t('browserAgentDemoRecordingAgent'))
+                : t('browserAgentDemoHint')}
+            </p>
+            <div className={styles.browserAgentActions}>
+              {snapshot.demo.recording
+                ? (snapshot.needsHuman === null ? (
+                  <button
+                    type="button"
+                    className={styles.browserAgentButton}
+                    disabled={busy}
+                    onClick={() => { void runDemo('stop') }}
+                  >
+                    {t('browserAgentDemoStop')}
+                  </button>
+                ) : null)
+                : (
+                  <button
+                    type="button"
+                    className={styles.browserAgentButton}
+                    disabled={busy}
+                    onClick={() => { void runDemo('start') }}
+                  >
+                    {t('browserAgentDemoStart')}
+                  </button>
+                )}
+            </div>
+            {demoSteps !== null ? (
+              <>
+                <pre className={styles.browserAgentDemoSteps}>
+                  {demoSteps.length === 0 ? t('browserAgentDemoEmpty') : demoSteps.join('\n')}
+                </pre>
+                {demoSteps.length > 0 ? (
+                  <button
+                    type="button"
+                    className={styles.browserAgentButton}
+                    disabled={busy}
+                    onClick={() => { void copyDemoSteps() }}
+                  >
+                    {t('browserAgentDemoCopy')}
+                  </button>
+                ) : null}
+              </>
+            ) : null}
           </div>
         ) : null}
         {hint !== null ? (

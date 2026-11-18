@@ -20,6 +20,7 @@ import { registerBrowserAgentPrompt } from './prompt.ts'
 import { BrowserSessionState } from './session-state.ts'
 import { TabScopeStore } from './tab-scope.ts'
 import { diagnose, type BrowserAvailability, type Diagnosis } from './diagnose.ts'
+import { summarizeDemoSteps } from './demo.ts'
 import { registerBrowserTools } from './tools.ts'
 
 /** Idle sweep cadence; the tab age comes from browserAgentIdleClose. */
@@ -57,6 +58,10 @@ export interface BrowserAgentRuntime {
     readonly tabId: number
     readonly readOnly: boolean
   }): { readonly ok: boolean; readonly error?: string }
+  /** Sidebar demonstration recorder: watch the user, then hand back the steps. */
+  demoStart(): Promise<{ readonly ok: boolean; readonly error?: string }>
+  demoStop(): Promise<{ readonly ok: boolean; readonly steps?: readonly string[]; readonly error?: string }>
+  demoActive(): boolean
   /**
    * Focus a tab for Agent ops; optionally bind it to a chat session.
    * Used by the right-sidebar multi-tab picker.
@@ -478,6 +483,46 @@ export function installBrowserAgent(
         outcome: 'ok',
       })
       return { ok: true }
+    },
+    async demoStart() {
+      if (!options.enabled()) return { ok: false, error: 'Browser agent disabled' }
+      if (options.demonstrate?.() !== true) {
+        return { ok: false, error: '演示录制未开启：设置 → 功能 → 浏览器 Agent' }
+      }
+      try {
+        const aligned = await alignToPreference()
+        if (!aligned.ok) return { ok: false, error: aligned.error ?? 'Browser agent failed to start' }
+        await requireDriver().startDemonstration()
+        sessions.record({
+          sessionId: 'sidebar',
+          tool: 'browser_demonstrate',
+          summary: 'Demonstration recording started from the sidebar',
+          outcome: 'needs_human',
+        })
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    },
+    async demoStop() {
+      const driver = activeDriver
+      if (driver === null) return { ok: false, error: 'Browser agent is not running' }
+      try {
+        const steps = await driver.stopDemonstration()
+        const summary = summarizeDemoSteps(steps)
+        sessions.record({
+          sessionId: 'sidebar',
+          tool: 'browser_demonstrate',
+          summary: `Demonstration stopped from the sidebar (${summary.shown} step(s))`,
+          outcome: 'ok',
+        })
+        return { ok: true, steps: summary.lines }
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    },
+    demoActive() {
+      return activeDriver?.demonstrationActive() === true
     },
     async selectTab(input) {
       if (!options.enabled()) return { ok: false, error: 'Browser agent disabled' }

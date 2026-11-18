@@ -719,6 +719,11 @@ export const browserAgentSnapshotSchema = z.strictObject({
   pending: browserAgentPendingSchema.nullable(),
   /** Why the browser is (not) usable and the concrete next step. */
   diagnosis: browserAgentDiagnosisSchema,
+  /** Demonstration recorder: switch state and whether it is recording now. */
+  demo: z.strictObject({
+    enabled: z.boolean(),
+    recording: z.boolean(),
+  }),
   tabConflict: browserAgentTabConflictSchema.nullable(),
   needsHuman: browserAgentNeedsHumanSchema.nullable(),
   boundTabId: z.number().int().nullable(),
@@ -733,6 +738,29 @@ const browserAgentSnapshotCodec = codec(
   'dsh-agent-enhancer#BrowserAgentSnapshot',
   browserAgentSnapshotSchema,
 )
+
+export const browserAgentDemoRequestSchema = z.strictObject({
+  action: z.enum(['start', 'stop']),
+})
+export type BrowserAgentDemoRequest = z.infer<typeof browserAgentDemoRequestSchema>
+const browserAgentDemoRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentDemoRequest',
+  browserAgentDemoRequestSchema,
+)
+
+export const browserAgentDemoResultSchema = z.strictObject({
+  ok: z.boolean(),
+  /** One line per recorded step, when stopping. */
+  steps: z.array(z.string()).optional(),
+  error: z.string().optional(),
+  snapshot: browserAgentSnapshotSchema,
+})
+export type BrowserAgentDemoResult = z.infer<typeof browserAgentDemoResultSchema>
+const browserAgentDemoResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentDemoResult',
+  browserAgentDemoResultSchema,
+)
+
 
 export const browserAgentResolveRequestSchema = z.strictObject({
   id: z.string().min(1),
@@ -1706,6 +1734,18 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: browserAgentSelectTabRequestCodec,
       }],
       result: browserAgentSelectTabResultCodec,
+    },
+    'agentEnhancer/browserAgentDemo': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentDemo',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentDemoRequestCodec,
+        strictCodec: browserAgentDemoRequestCodec,
+      }],
+      result: browserAgentDemoResultCodec,
     },
     'agentEnhancer/browserAgentSetTabReadOnly': {
       service: 'agentEnhancer',

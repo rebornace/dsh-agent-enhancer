@@ -35,6 +35,8 @@ import type {
   BrowserAgentSelectTabResult,
   BrowserAgentSetTabReadOnlyRequest,
   BrowserAgentSetTabReadOnlyResult,
+  BrowserAgentDemoRequest,
+  BrowserAgentDemoResult,
   BrowserAgentSnapshot,
   RpcPayload,
   ShowOsNotificationRequest,
@@ -426,6 +428,20 @@ export const clientRemoteInfo = {
       codec: codec('dsh-agent-enhancer#BrowserAgentSelectTabRequest'),
     }],
     result: codec('dsh-agent-enhancer#BrowserAgentSelectTabResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentDemo',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentDemo',
+    implementation: 'browserAgentDemo',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentDemoRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentDemoResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/browserAgentSetTabReadOnly',
     service: 'agentEnhancer',
@@ -1070,6 +1086,9 @@ type BrowserAgentOpenUrlCall = (
 type BrowserAgentQuotePageCall = (
   request: BrowserAgentQuotePageRequest,
 ) => Promise<RemoteResult<BrowserAgentQuotePageResult>>
+type BrowserAgentDemoCall = (
+  request: BrowserAgentDemoRequest,
+) => Promise<RemoteResult<BrowserAgentDemoResult>>
 type BrowserAgentSetTabReadOnlyCall = (
   request: BrowserAgentSetTabReadOnlyRequest,
 ) => Promise<RemoteResult<BrowserAgentSetTabReadOnlyResult>>
@@ -1083,6 +1102,7 @@ function emptyBrowserAgentSnapshot(): BrowserAgentSnapshot {
     allowedOrigins: [],
     bridge: { listening: false, extensionConnected: false, port: 0, lastError: null },
     pending: null,
+    demo: { enabled: false, recording: false },
     diagnosis: {
       code: 'disabled',
       nextStep: 'Browser agent is off. Enable it in 设置 → 智能体增强 → 功能.',
@@ -1370,6 +1390,44 @@ export const agentEnhancerBrowserAgentSelectTab = {
         return empty(message)
       }
       return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty(error instanceof Error ? error.message : String(error))
+    }
+  },
+}
+
+export const agentEnhancerBrowserAgentDemo = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentDemoRequest,
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentDemoResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty = (error: string): BrowserAgentDemoResult => ({
+      ok: false,
+      error,
+      snapshot: emptyBrowserAgentSnapshot(),
+    })
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return empty('Host remote unavailable')
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') {
+      return empty('agentEnhancer remote missing (reload the plugin)')
+    }
+    const call = Reflect.get(namespace, 'browserAgentDemo') as BrowserAgentDemoCall | undefined
+    if (typeof call !== 'function') {
+      return empty('browserAgentDemo missing (reload Desktop / reinstall the plugin)')
+    }
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) {
+        const message = typeof (result as { error?: { message?: string } }).error?.message === 'string'
+          ? (result as { error: { message: string } }).error.message
+          : 'Demonstration RPC failed'
+        return empty(message)
+      }      return result.value
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
       return empty(error instanceof Error ? error.message : String(error))

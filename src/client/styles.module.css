@@ -2669,6 +2669,19 @@
   opacity: 0.6;
 }
 
+.browserAgentDemoSteps {
+  margin: 4px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .settingsTextarea {
   width: 100%;
   resize: vertical;

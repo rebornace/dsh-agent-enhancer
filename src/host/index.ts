@@ -238,6 +238,8 @@ import type {
   BrowserAgentSelectTabResult,
   BrowserAgentSetTabReadOnlyRequest,
   BrowserAgentSetTabReadOnlyResult,
+  BrowserAgentDemoRequest,
+  BrowserAgentDemoResult,
   BrowserAgentLaunchBrowserResult,
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
@@ -349,9 +351,11 @@ export class AgentEnhancerService extends TypertRemoteService {
     private readonly browserAgentSettings: () => {
       readonly enabled: boolean
       readonly browser: 'auto' | 'chrome' | 'edge' | 'safari'
+      readonly demonstrate: boolean
     } = () => ({
       enabled: false,
       browser: 'auto',
+      demonstrate: false,
     }),
     /** Apply an explicit launch preference (client form) before ensureReady. */
     private readonly setBrowserAgentBrowser: (browser: 'auto' | 'chrome' | 'edge' | 'safari') => void = () => undefined,
@@ -419,6 +423,10 @@ export class AgentEnhancerService extends TypertRemoteService {
         summary: pending.summary,
         ...(pending.url === undefined ? {} : { url: pending.url }),
         ...(pending.origin === undefined ? {} : { origin: pending.origin }),
+      },
+      demo: {
+        enabled: settings.demonstrate,
+        recording: this.browserAgent?.demoActive() === true,
       },
       diagnosis: diag ?? {
         code: settings.enabled ? 'idle' : 'disabled',
@@ -1322,6 +1330,29 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
   }
 
+  async browserAgentDemo(
+    request: BrowserAgentDemoRequest,
+  ): Promise<BrowserAgentDemoResult> {
+    this.assertOwner()
+    if (request.action === 'start') {
+      const result = await (this.browserAgent?.demoStart() ?? Promise.resolve({ ok: false, error: 'runtime unavailable' }))
+      return {
+        ok: result.ok === true,
+        ...(result.error === undefined ? {} : { error: result.error }),
+        snapshot: await this.browserSnapshotNow(),
+      }
+    }
+    const stopped: { ok: boolean; steps?: readonly string[]; error?: string } = await (
+      this.browserAgent?.demoStop() ?? Promise.resolve({ ok: false, error: 'runtime unavailable' })
+    )
+    return {
+      ok: stopped.ok === true,
+      ...(stopped.steps === undefined ? {} : { steps: [...stopped.steps] }),
+      ...(stopped.error === undefined ? {} : { error: stopped.error }),
+      snapshot: await this.browserSnapshotNow(),
+    }
+  }
+
   async browserAgentSetTabReadOnly(
     request: BrowserAgentSetTabReadOnlyRequest,
   ): Promise<BrowserAgentSetTabReadOnlyResult> {
@@ -1532,6 +1563,7 @@ export function apply(ctx: Context, config: Config): void {
   const browserAgentLive = {
     enabled: settings().browserAgentEnabled,
     browser: settings().browserAgentBrowser,
+    demonstrate: settings().browserAgentDemonstrate,
   }
   const browserAgent = installBrowserAgent(ctx, {
     enabled: () => browserAgentLive.enabled,
@@ -1585,6 +1617,7 @@ export function apply(ctx: Context, config: Config): void {
     () => ({
       enabled: browserAgentLive.enabled,
       browser: browserAgentLive.browser,
+      demonstrate: browserAgentLive.demonstrate,
     }),
     browser => {
       // Preference only — do not refresh/remount here. launchDedicated hard-resets.
@@ -1604,6 +1637,7 @@ export function apply(ctx: Context, config: Config): void {
       const prevBrowser = browserAgentLive.browser
       browserAgentLive.enabled = cfg.browserAgentEnabled.get()
       browserAgentLive.browser = hostBrowserPreference(cfg.browserAgentBrowser.get())
+      browserAgentLive.demonstrate = cfg.browserAgentDemonstrate.get()
       // Always refresh: heals missing browser_* tools after live pack reload /
       // async teardown races. Idempotent when already mounted.
       browserAgent.refresh()

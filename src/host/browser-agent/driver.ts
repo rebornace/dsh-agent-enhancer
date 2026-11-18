@@ -103,6 +103,8 @@ export interface BrowserDriver {
   }): Promise<EmulateResult>
   /** Start recording what the user does in the bound tab (one flow at a time). */
   startDemonstration(): Promise<void>
+  /** True while a demonstration is being recorded. */
+  demonstrationActive(): boolean
   /** Stop recording and return the flow as replayable steps. */
   stopDemonstration(): Promise<readonly DemoStep[]>
   followTab(tabId: number, activate?: boolean): Promise<{

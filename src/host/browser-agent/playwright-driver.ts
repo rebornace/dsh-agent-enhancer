@@ -874,6 +874,10 @@ export class PlaywrightDriver implements BrowserDriver {
   }
 
   /** Stop recording and return the flow, secrets masked, repeats dropped. */
+  demonstrationActive(): boolean {
+    return this.demoPage !== null
+  }
+
   async stopDemonstration(): Promise<readonly DemoStep[]> {
     const page = this.demoPage
     this.demoPage = null

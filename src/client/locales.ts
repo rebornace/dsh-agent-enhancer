@@ -78,6 +78,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentIdleClose' | 'browserAgentIdleCloseHint' |
       'browserAgentIdleClose_10m' | 'browserAgentIdleClose_30m' |
       'browserAgentIdleClose_60m' | 'browserAgentIdleClose_never' |
+      'browserAgentDemoTitle' | 'browserAgentDemoHint' | 'browserAgentDemoStart' |
+      'browserAgentDemoStop' | 'browserAgentDemoRecording' | 'browserAgentDemoRecordingHint' |
+      'browserAgentDemoRecordingAgent' | 'browserAgentDemoEmpty' | 'browserAgentDemoCopy' |
+      'browserAgentDemoCopied' | 'browserAgentDemoCopyFailed' | 'browserAgentDemoFailed' |
       'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
       'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
       'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
@@ -471,13 +475,25 @@ export const agentLocales = {
     browserAgentDebugTools: '调试与页面模拟',
     browserAgentDebugToolsHint: '一个开关同时启用：读取网络请求与控制台输出（browser_network / browser_console），以及模拟深色模式、减少动画、视口尺寸（browser_emulate）。只记录 URL、状态、耗时与 console 文本，不读请求头、Cookie、响应体。',
     browserAgentDemonstrate: '演示录制',
-    browserAgentDemonstrateHint: '允许你亲手演示一遍流程（点击、填写、回车、跳转），智能体把它记成步骤再自己重放。密码 / 验证码 / token 类字段只会记录为 ***。演示结束后点「已完成，继续」才会把步骤交回模型。',
+    browserAgentDemonstrateHint: '开启后可以在右侧栏浏览器面板点「开始演示」，演示一遍流程后点「结束并查看步骤」；智能体也能在对话里发起演示。密码 / 验证码 / token 类字段只会记录为 ***。',
     browserAgentIdleClose: '自动关闭闲置标签',
     browserAgentIdleCloseHint: '超过所选时长没人用的标签自动关闭，避免专用浏览器越开越多。当前绑定标签、正在看的标签和最后一个标签不会被关。',
     browserAgentIdleClose_10m: '10 分钟',
     browserAgentIdleClose_30m: '30 分钟',
     browserAgentIdleClose_60m: '60 分钟',
     browserAgentIdleClose_never: '不自动关闭',
+    browserAgentDemoTitle: '演示录制',
+    browserAgentDemoHint: '点「开始演示」，在专用浏览器里操作一遍，回来点「结束并查看步骤」。智能体也能自己发起演示。',
+    browserAgentDemoStart: '开始演示',
+    browserAgentDemoStop: '结束并查看步骤',
+    browserAgentDemoRecording: '正在录制演示…',
+    browserAgentDemoRecordingHint: '在专用浏览器里操作，完成后回来点「结束并查看步骤」。',
+    browserAgentDemoRecordingAgent: '智能体正在录制；完成后点上方卡片「已完成，继续」。',
+    browserAgentDemoEmpty: '没有录到步骤：可能只打开了页面，或在别的标签里操作。',
+    browserAgentDemoCopy: '复制步骤',
+    browserAgentDemoCopied: '已复制步骤',
+    browserAgentDemoCopyFailed: '复制失败，请手动选中文本复制',
+    browserAgentDemoFailed: '演示录制失败',
     browserAgentBrowser_auto: '自动（Mac 优先 Safari，Windows 优先 Edge）',
     browserAgentBrowser_chrome: 'Google Chrome',
     browserAgentBrowser_edge: 'Microsoft Edge',
@@ -1127,13 +1143,25 @@ export const agentLocales = {
     browserAgentDebugTools: 'Debug & page emulation',
     browserAgentDebugToolsHint: 'One switch enables both: reading network requests and console output (browser_network / browser_console), and emulating dark mode, reduced motion or a viewport size (browser_emulate). Only URLs, status, timing and console text are recorded — never request headers, cookies or bodies.',
     browserAgentDemonstrate: 'Demonstration recording',
-    browserAgentDemonstrateHint: 'Lets you show a flow once (clicks, typing, Enter, navigations) and the agent turns it into steps it can replay. Password / OTP / token fields are recorded only as ***. Steps come back to the model when you press Done.',
+    browserAgentDemonstrateHint: 'Once on, press Start recording in the browser pane of the right sidebar, perform the flow, then press Stop and show steps. The agent can also start a demonstration from chat. Password / OTP / token fields are recorded only as ***.',
     browserAgentIdleClose: 'Close idle tabs',
     browserAgentIdleCloseHint: 'Closes tabs nobody used for longer than the selected time, so the dedicated browser does not pile them up. The bound tab, the tab you are looking at, and the last tab are never closed.',
     browserAgentIdleClose_10m: '10 minutes',
     browserAgentIdleClose_30m: '30 minutes',
     browserAgentIdleClose_60m: '60 minutes',
     browserAgentIdleClose_never: 'Never',
+    browserAgentDemoTitle: 'Demonstration recording',
+    browserAgentDemoHint: 'Press Start, perform the flow in the dedicated browser, then come back and press Stop to see the steps. The agent can also start a demonstration itself.',
+    browserAgentDemoStart: 'Start recording',
+    browserAgentDemoStop: 'Stop and show steps',
+    browserAgentDemoRecording: 'Recording your demonstration…',
+    browserAgentDemoRecordingHint: 'Work in the dedicated browser, then press Stop and show steps.',
+    browserAgentDemoRecordingAgent: 'The agent is recording; press Continue on the card above when you are done.',
+    browserAgentDemoEmpty: 'No steps recorded: only a page may have opened, or you worked in another tab.',
+    browserAgentDemoCopy: 'Copy steps',
+    browserAgentDemoCopied: 'Steps copied',
+    browserAgentDemoCopyFailed: 'Could not copy; select the text manually',
+    browserAgentDemoFailed: 'Demonstration recording failed',
     browserAgentBrowser_auto: 'Auto (Mac prefers Safari, Windows prefers Edge)',
     browserAgentBrowser_chrome: 'Google Chrome',
     browserAgentBrowser_edge: 'Microsoft Edge',
