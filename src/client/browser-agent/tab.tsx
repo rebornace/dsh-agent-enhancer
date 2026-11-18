@@ -17,6 +17,7 @@ import {
   agentEnhancerBrowserAgentQuotePage,
   agentEnhancerBrowserAgentSelectTab,
   agentEnhancerBrowserAgentSetBrowser,
+  agentEnhancerBrowserAgentSetTabReadOnly,
   agentEnhancerBrowserAgentSnapshot,
 } from '../remote.ts'
 
@@ -155,7 +156,37 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
     }
   }
 
+  const toggleReadOnly = async (tabId: number, readOnly: boolean) => {
+    setBusy(true)
+    setHint(null)
+    try {
+      const result = await agentEnhancerBrowserAgentSetTabReadOnly.invoke(remote(), { tabId, readOnly })
+      setSnapshot(result.snapshot)
+      setHint(result.ok
+        ? (readOnly ? t('browserAgentTabReadOnlyOk') : t('browserAgentTabReadOnlyOff')).replace('{tabId}', String(tabId))
+        : (result.error ?? t('browserAgentTabReadOnlyFailed')))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const connected = snapshot?.bridge.extensionConnected === true
+  const diagnosis = snapshot?.diagnosis
+  const diagnosisHint = diagnosis !== undefined && diagnosis.code !== 'ok'
+    ? (
+      diagnosis.code === 'idle'
+        ? t('browserAgentDiagnosis_idle')
+        : diagnosis.code === 'disabled'
+          ? t('browserAgentDiagnosis_disabled')
+          : diagnosis.code === 'webkit_missing'
+            ? t('browserAgentDiagnosis_webkit_missing')
+            : diagnosis.code === 'browser_missing'
+              ? t('browserAgentDiagnosis_browser_missing')
+              : diagnosis.code === 'profile_locked'
+                ? t('browserAgentDiagnosis_profile_locked')
+                : t('browserAgentDiagnosis_launch_failed')
+    )
+    : null
   const boundTabId = snapshot?.boundTabId ?? null
   const tabs = snapshot?.tabs ?? []
   const launched = snapshot?.launchedBrowser
@@ -174,6 +205,9 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
       </div>
       <div className={styles.browserAgentPaneBody}>
         <p className={styles.browserAgentPaneStatus}>{statusLabel}</p>
+        {diagnosisHint !== null ? (
+          <p className={styles.browserAgentPaneNote}>{diagnosisHint}</p>
+        ) : null}
         <p className={styles.browserAgentPaneNote}>{t('browserAgentSwitchHint')}</p>
         <label className={styles.browserAgentExtraRow}>
           <span>{t('browserAgentBrowser')}</span>
@@ -253,6 +287,18 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                         {tab.bound ? (
                           <span className={styles.browserAgentTabBadge}>{t('browserAgentTabBoundBadge')}</span>
                         ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        className={tab.readOnly
+                          ? `${styles.browserAgentTabGuard} ${styles.browserAgentTabGuardOn}`
+                          : styles.browserAgentTabGuard}
+                        disabled={busy}
+                        aria-pressed={tab.readOnly}
+                        title={tab.readOnly ? t('browserAgentTabReadOnlyOff') : t('browserAgentTabReadOnlyOn')}
+                        onClick={() => { void toggleReadOnly(tab.tabId, !tab.readOnly) }}
+                      >
+                        {t('browserAgentTabReadOnlyBadge')}
                       </button>
                     </li>
                   )

@@ -7,6 +7,8 @@ import type { BrowserHumanGate } from './human-gate.ts'
 import { pickAutoNavigateHref, pathsDiffer } from './auto-nav.ts'
 import type { SnapshotBody } from './protocol.ts'
 import type { BrowserSessionState } from './session-state.ts'
+import type { TabScopeStore } from './tab-scope.ts'
+import type { Diagnosis } from './diagnose.ts'
 
 type ToolExec = {
   readonly signal: AbortSignal
@@ -127,6 +129,12 @@ export interface BrowserToolsOptions {
   readonly approval: BrowserApprovalGate
   readonly human: BrowserHumanGate
   readonly sessions: BrowserSessionState
+  /** Per-tab write guard shared with the sidebar toggle. */
+  readonly tabScope?: TabScopeStore
+  /** Debug tools switch (browser_network / browser_console / browser_emulate). */
+  readonly debugTools?: () => boolean
+  /** What is wrong (if anything) and the concrete next step. */
+  readonly diagnosis?: () => Diagnosis
   readonly enabled: () => boolean
   readonly onMutation?: (info: {
     readonly sessionId: string
@@ -138,6 +146,20 @@ export interface BrowserToolsOptions {
 function driverOf(options: BrowserToolsOptions): BrowserDriver {
   const value = options.driver
   return typeof value === 'function' ? value() : value
+}
+
+/** Narrow a string arg to a known enum, or throw with the allowed values. */
+function pickEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  field: string,
+): T | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  const text = String(value).trim().toLowerCase()
+  if (!(allowed as readonly string[]).includes(text)) {
+    throw new Error(`${field} must be one of: ${allowed.join(' | ')}`)
+  }
+  return text as T
 }
 
 export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions): () => void {
@@ -176,6 +198,33 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       return
     }
     await driverOf(options).ensureReady(startUrl)
+  }
+
+  /** Debug tools are opt-in: the switch gates all three, capture included. */
+  const requireDebugTools = (tool: string) => {
+    if (options.debugTools?.() === true) return
+    throw new Error(
+      `${tool}: debug tools are off. Nothing ran. `
+      + 'Ask the user to enable 设置 → 智能体增强 → 功能 → 浏览器 Agent → 调试工具, then retry.',
+    )
+  }
+
+  /**
+   * Read-only tab: refuse the mutation before any dialog or page op, so a run on
+   * a sensitive tab fails fast instead of prompting on every click.
+   */
+  const requireWritableTab = (sessionId: string, tool: string) => {
+    const scope = options.tabScope
+    if (scope === undefined) return
+    const tabId = options.sessions.tabOf(sessionId)
+    if (tabId === undefined || !scope.isReadOnly(tabId)) return
+    options.sessions.record({
+      sessionId,
+      tool,
+      summary: `Blocked: tab ${tabId} is read-only`,
+      outcome: 'denied',
+    })
+    throw new Error(scope.refusal(tabId))
   }
 
   const requireMutation = async (
@@ -381,30 +430,31 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   disposers.push(ctx.tools.register(textTool(
     'browser_status',
-    'Check the Desktop dedicated-browser bridge (Mac: Safari/Chrome; Windows: Chrome/Edge): connection, bound tab URL/title/tabId. Use this for any real-browser / webpage / on-page task. Auto-launches the dedicated browser when disconnected — do not ask the user to launch manually first.',
+    'Check the Desktop dedicated browser (Mac: Safari/Chrome; Windows: Chrome/Edge): whether it is usable, the bound tab URL/title/tabId, and — when something is wrong — the concrete next step. Use this for any real-browser / webpage / on-page task. Auto-launches the dedicated browser when disconnected — do not ask the user to launch manually first.',
     {},
     async (_args, exec) => {
       guardEnabled()
       const sessionId = sessionIdOf(exec)
+      const diag = options.diagnosis?.()
+      const diagLines = diag === undefined
+        ? []
+        : [
+          `diagnosis: ${diag.code}`,
+          `next: ${diag.nextStep}`,
+          diag.detail === undefined ? null : `detail: ${diag.detail}`,
+        ].filter((line): line is string => line !== null)
       const st = driverOf(options).status()
-      if (!st.listening) {
-        return [
-          `driver: ${st.kind}`,
-          'bridge: not listening',
-          st.port !== undefined ? `port: ${st.port}` : null,
-          `error: ${st.lastError ?? 'not started'}`,
-        ].filter(line => line !== null).join('\n')
-      }
-      if (!st.ready) {
+      if (!st.listening || !st.ready) {
         try {
           await ensureConnected()
         } catch (error) {
           return [
             `driver: ${st.kind}`,
-            st.endpoint !== undefined ? `bridge: listening on ${st.endpoint}` : 'bridge: listening',
-            'extension: disconnected',
+            `browser: ${st.listening ? 'listening, not ready' : 'not started'}`,
+            st.endpoint !== undefined ? `endpoint: ${st.endpoint}` : null,
+            ...diagLines,
             formatBridgeError(error),
-          ].join('\n')
+          ].filter((line): line is string => line !== null).join('\n')
         }
       }
       try {
@@ -413,8 +463,8 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         await rememberTab(sessionId, tab.tabId)
         return [
           `driver: ${driverOf(options).kind}`,
-          'bridge: ok',
-          'extension: connected',
+          'browser: ready',
+          ...diagLines,
           `url: ${tab.url}`,
           `title: ${tab.title}`,
           `tabId: ${tab.tabId}`,
@@ -422,10 +472,15 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
           `bound: ${tab.bound === false ? 'no' : 'yes'}`,
           tab.rebound === true ? 'note: rebound to focused tab' : null,
           tab.conflict === true ? 'note: tab focus conflict pending' : null,
-        ].filter(line => line !== null).join('\n')
+        ].filter((line): line is string => line !== null).join('\n')
       } catch (error) {
         noteHuman(sessionId, {}, error)
-        return `driver: ${driverOf(options).kind}\nbridge: listening\nextension: connected but status failed: ${formatBridgeError(error)}`
+        return [
+          `driver: ${driverOf(options).kind}`,
+          'browser: ready, status call failed',
+          ...diagLines,
+          formatBridgeError(error),
+        ].join('\n')
       }
     },
   )))
@@ -539,6 +594,8 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       if (url === '') throw new Error('url is required')
       await ensureConnected(url)
       await ensureSessionTab(sessionId)
+      // Opening a fresh tab is the documented escape hatch from a read-only tab.
+      if (!newTab) requireWritableTab(sessionId, 'browser_navigate')
       await requireMutation(
         exec,
         'browser_navigate',
@@ -595,6 +652,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       if (!Number.isFinite(ref)) throw new Error('ref must be a number')
       await ensureConnected()
       await ensureSessionTab(sessionId)
+      requireWritableTab(sessionId, 'browser_click')
       let url: string | undefined
       try {
         url = (await driverOf(options).pageStatus()).url
@@ -741,6 +799,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       if (!Number.isFinite(ref)) throw new Error('ref must be a number')
       await ensureConnected()
       await ensureSessionTab(sessionId)
+      requireWritableTab(sessionId, 'browser_type')
       let url: string | undefined
       try {
         url = (await driverOf(options).pageStatus()).url
@@ -984,6 +1043,141 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         `url: ${result.url}`,
         `title: ${result.title}`,
         result.tabId !== undefined ? `tabId: ${result.tabId}` : null,
+      ].filter(line => line !== null).join('\n')
+    },
+  )))
+
+  disposers.push(ctx.tools.register(textTool(
+    'browser_network',
+    'Read buffered network activity for the bound tab (method, url, status, duration, failures). Read-only; no approval. Headers, cookies and bodies are never recorded; secret-looking query values are masked. Requires the Debug tools switch in Settings → 智能体增强 → 浏览器 Agent. Capture starts automatically when that switch is on, so navigate first, then read.',
+    {
+      limit: {
+        type: 'number',
+        description: 'Newest N entries (default 40, max 200).',
+      },
+      clear: {
+        type: 'boolean',
+        description: 'Drop the returned entries from the buffer.',
+      },
+    },
+    async (args, exec) => {
+      guardEnabled()
+      requireDebugTools('browser_network')
+      const sessionId = sessionIdOf(exec)
+      await ensureConnected()
+      await ensureSessionTab(sessionId)
+      const limit = Number(args.limit)
+      const driver = driverOf(options)
+      driver.startCapture()
+      const { entries, dropped } = driver.readCapture({
+        kind: 'network',
+        ...(Number.isFinite(limit) ? { limit } : {}),
+        ...(args.clear === true ? { clear: true } : {}),
+      })
+      const rows = entries.filter(entry => entry.kind === 'request')
+      if (rows.length === 0) {
+        return 'no network activity buffered yet. Navigate or wait for the page to load, then call browser_network again.'
+      }
+      return [
+        `network entries: ${rows.length}${dropped > 0 ? ` (${dropped} older dropped)` : ''}`,
+        ...rows.map(entry => {
+          const status = entry.kind !== 'request' ? '' : (entry.status === undefined ? (entry.failure ?? 'failed') : String(entry.status))
+          const ms = entry.kind === 'request' && entry.durationMs !== undefined ? ` ${entry.durationMs}ms` : ''
+          const method = entry.kind === 'request' ? entry.method : 'GET'
+          return `- [${entry.tabId}] ${status} ${method} ${entry.kind === 'request' ? entry.url : ''}${ms}`
+        }),
+      ].join('\n')
+    },
+  )))
+
+  disposers.push(ctx.tools.register(textTool(
+    'browser_console',
+    'Read buffered console messages and uncaught page errors for the bound tab. Read-only; no approval. Requires the Debug tools switch in Settings → 智能体增强 → 浏览器 Agent.',
+    {
+      limit: {
+        type: 'number',
+        description: 'Newest N entries (default 40, max 200).',
+      },
+      clear: {
+        type: 'boolean',
+        description: 'Drop the returned entries from the buffer.',
+      },
+    },
+    async (args, exec) => {
+      guardEnabled()
+      requireDebugTools('browser_console')
+      const sessionId = sessionIdOf(exec)
+      await ensureConnected()
+      await ensureSessionTab(sessionId)
+      const limit = Number(args.limit)
+      const driver = driverOf(options)
+      driver.startCapture()
+      const { entries } = driver.readCapture({
+        kind: 'console',
+        ...(Number.isFinite(limit) ? { limit } : {}),
+        ...(args.clear === true ? { clear: true } : {}),
+      })
+      if (entries.length === 0) {
+        return 'no console output buffered yet. Reload or interact with the page, then call browser_console again.'
+      }
+      return [
+        `console entries: ${entries.length}`,
+        ...entries.map(entry => {
+          if (entry.kind !== 'console') return ''
+          const where = entry.location === undefined ? '' : ` (${entry.location})`
+          return `- [${entry.tabId}] ${entry.level}: ${entry.text}${where}`
+        }),
+      ].filter(line => line !== '').join('\n')
+    },
+  )))
+
+  disposers.push(ctx.tools.register(textTool(
+    'browser_emulate',
+    'Change how the bound page renders for testing: color scheme, reduced motion, viewport size. Read-only on page data; no approval. Requires the Debug tools switch in Settings → 智能体增强 → 浏览器 Agent. Call browser_snapshot afterwards to see the effect.',
+    {
+      colorScheme: {
+        type: 'string',
+        description: 'light | dark | no-preference | reset',
+      },
+      reducedMotion: {
+        type: 'string',
+        description: 'reduce | no-preference | reset',
+      },
+      width: {
+        type: 'number',
+        description: 'Viewport width in CSS px (320–3840).',
+      },
+      height: {
+        type: 'number',
+        description: 'Viewport height in CSS px (240–2160).',
+      },
+    },
+    async (args, exec) => {
+      guardEnabled()
+      requireDebugTools('browser_emulate')
+      const sessionId = sessionIdOf(exec)
+      const colorScheme = pickEnum(args.colorScheme, ['light', 'dark', 'no-preference', 'reset'] as const, 'colorScheme')
+      const reducedMotion = pickEnum(args.reducedMotion, ['reduce', 'no-preference', 'reset'] as const, 'reducedMotion')
+      const width = Number(args.width)
+      const height = Number(args.height)
+      const hasViewport = Number.isFinite(width) && Number.isFinite(height)
+      if (colorScheme === undefined && reducedMotion === undefined && !hasViewport) {
+        throw new Error('browser_emulate: pass colorScheme, reducedMotion, or width+height')
+      }
+      await ensureConnected()
+      await ensureSessionTab(sessionId)
+      const result = await runBridge(() => driverOf(options).emulate({
+        ...(colorScheme === undefined ? {} : { colorScheme }),
+        ...(reducedMotion === undefined ? {} : { reducedMotion }),
+        ...(hasViewport ? { viewport: { width, height } } : {}),
+      }))
+      await rememberTab(sessionId, result.tabId)
+      return [
+        `emulated: ${result.applied.join(', ')}`,
+        `url: ${result.url}`,
+        `title: ${result.title}`,
+        result.tabId !== undefined ? `tabId: ${result.tabId}` : null,
+        'Action: browser_snapshot to see the page in this mode. Emulation persists for this page until the tab reloads or you reset it.',
       ].filter(line => line !== null).join('\n')
     },
   )))

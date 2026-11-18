@@ -33,6 +33,8 @@ import type {
   BrowserAgentSetBrowserResult,
   BrowserAgentSelectTabRequest,
   BrowserAgentSelectTabResult,
+  BrowserAgentSetTabReadOnlyRequest,
+  BrowserAgentSetTabReadOnlyResult,
   BrowserAgentSnapshot,
   RpcPayload,
   ShowOsNotificationRequest,
@@ -424,6 +426,20 @@ export const clientRemoteInfo = {
       codec: codec('dsh-agent-enhancer#BrowserAgentSelectTabRequest'),
     }],
     result: codec('dsh-agent-enhancer#BrowserAgentSelectTabResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentSetTabReadOnly',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentSetTabReadOnly',
+    implementation: 'browserAgentSetTabReadOnly',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentSetTabReadOnlyRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentSetTabReadOnlyResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/listInstructionsSkills',
     service: 'agentEnhancer',
@@ -1054,6 +1070,9 @@ type BrowserAgentOpenUrlCall = (
 type BrowserAgentQuotePageCall = (
   request: BrowserAgentQuotePageRequest,
 ) => Promise<RemoteResult<BrowserAgentQuotePageResult>>
+type BrowserAgentSetTabReadOnlyCall = (
+  request: BrowserAgentSetTabReadOnlyRequest,
+) => Promise<RemoteResult<BrowserAgentSetTabReadOnlyResult>>
 
 function emptyBrowserAgentSnapshot(): BrowserAgentSnapshot {
   return {
@@ -1064,6 +1083,11 @@ function emptyBrowserAgentSnapshot(): BrowserAgentSnapshot {
     allowedOrigins: [],
     bridge: { listening: false, extensionConnected: false, port: 0, lastError: null },
     pending: null,
+    diagnosis: {
+      code: 'disabled',
+      nextStep: 'Browser agent is off. Enable it in 设置 → 智能体增强 → 功能.',
+      browsers: { chrome: false, edge: false, safari: false },
+    },
     tabConflict: null,
     needsHuman: null,
     boundTabId: null,
@@ -1343,6 +1367,45 @@ export const agentEnhancerBrowserAgentSelectTab = {
         const message = typeof (result as { error?: { message?: string } }).error?.message === 'string'
           ? (result as { error: { message: string } }).error.message
           : 'Select tab RPC failed'
+        return empty(message)
+      }
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty(error instanceof Error ? error.message : String(error))
+    }
+  },
+}
+
+export const agentEnhancerBrowserAgentSetTabReadOnly = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentSetTabReadOnlyRequest,
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentSetTabReadOnlyResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty = (error: string): BrowserAgentSetTabReadOnlyResult => ({
+      ok: false,
+      error,
+      snapshot: emptyBrowserAgentSnapshot(),
+    })
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return empty('Host remote unavailable')
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') {
+      return empty('agentEnhancer remote missing — reload the plugin')
+    }
+    const call = Reflect.get(namespace, 'browserAgentSetTabReadOnly') as BrowserAgentSetTabReadOnlyCall | undefined
+    if (typeof call !== 'function') {
+      return empty('browserAgentSetTabReadOnly missing — reload Desktop / reinstall the plugin')
+    }
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) {
+        const message = typeof (result as { error?: { message?: string } }).error?.message === 'string'
+          ? (result as { error: { message: string } }).error.message
+          : 'Tab read-only RPC failed'
         return empty(message)
       }
       return result.value

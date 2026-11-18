@@ -52,6 +52,27 @@ export class BrowserSessionState {
     return this.sessionByTab.get(tabId)
   }
 
+  /** Tab ids that some session is bound to; idle-close must never take these. */
+  boundTabIds(): readonly number[] {
+    return [...this.sessionByTab.keys()]
+  }
+
+  /**
+   * The tab went away (closed by idle sweep or by the user): drop the binding and
+   * the refs captured there, so the next tool call re-snapshots instead of
+   * resolving refs that no longer exist.
+   */
+  unbindTab(tabId: number): string | undefined {
+    const sessionId = this.sessionByTab.get(tabId)
+    this.sessionByTab.delete(tabId)
+    if (sessionId === undefined) return undefined
+    if (this.tabBySession.get(sessionId) === tabId) this.tabBySession.delete(sessionId)
+    this.clearLastRefs(sessionId)
+    this.deadClickRefsBySession.delete(sessionId)
+    if (this.conflict?.sessionId === sessionId) this.conflict = null
+    return sessionId
+  }
+
   clearSession(sessionId: string): void {
     const tabId = this.tabBySession.get(sessionId)
     this.tabBySession.delete(sessionId)

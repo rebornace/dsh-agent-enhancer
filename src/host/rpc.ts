@@ -677,8 +677,26 @@ export const browserAgentTabEntrySchema = z.strictObject({
   active: z.boolean(),
   /** True when any chat session is bound to this tab. */
   bound: z.boolean(),
+  /** User marked the tab read-only: mutating tools fail fast there. */
+  readOnly: z.boolean(),
 })
 export type BrowserAgentTabEntryWire = z.infer<typeof browserAgentTabEntrySchema>
+
+export const browserAgentAvailabilitySchema = z.strictObject({
+  chrome: z.boolean(),
+  edge: z.boolean(),
+  safari: z.boolean(),
+})
+export type BrowserAgentAvailabilityWire = z.infer<typeof browserAgentAvailabilitySchema>
+
+export const browserAgentDiagnosisSchema = z.strictObject({
+  code: z.enum(['disabled', 'idle', 'ok', 'webkit_missing', 'browser_missing', 'profile_locked', 'launch_failed']),
+  /** English, model-facing: what to do next. */
+  nextStep: z.string(),
+  detail: z.string().optional(),
+  browsers: browserAgentAvailabilitySchema,
+})
+export type BrowserAgentDiagnosisWire = z.infer<typeof browserAgentDiagnosisSchema>
 
 export const browserAgentSnapshotSchema = z.strictObject({
   enabled: z.boolean(),
@@ -697,6 +715,8 @@ export const browserAgentSnapshotSchema = z.strictObject({
     lastError: z.string().nullable(),
   }),
   pending: browserAgentPendingSchema.nullable(),
+  /** Why the browser is (not) usable and the concrete next step. */
+  diagnosis: browserAgentDiagnosisSchema,
   tabConflict: browserAgentTabConflictSchema.nullable(),
   needsHuman: browserAgentNeedsHumanSchema.nullable(),
   boundTabId: z.number().int().nullable(),
@@ -882,6 +902,27 @@ export type BrowserAgentSelectTabResult = z.infer<typeof browserAgentSelectTabRe
 const browserAgentSelectTabResultCodec = codec(
   'dsh-agent-enhancer#BrowserAgentSelectTabResult',
   browserAgentSelectTabResultSchema,
+)
+
+export const browserAgentSetTabReadOnlyRequestSchema = z.strictObject({
+  tabId: z.number().int().positive(),
+  readOnly: z.boolean(),
+})
+export type BrowserAgentSetTabReadOnlyRequest = z.infer<typeof browserAgentSetTabReadOnlyRequestSchema>
+const browserAgentSetTabReadOnlyRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentSetTabReadOnlyRequest',
+  browserAgentSetTabReadOnlyRequestSchema,
+)
+
+export const browserAgentSetTabReadOnlyResultSchema = z.strictObject({
+  ok: z.boolean(),
+  error: z.string().optional(),
+  snapshot: browserAgentSnapshotSchema,
+})
+export type BrowserAgentSetTabReadOnlyResult = z.infer<typeof browserAgentSetTabReadOnlyResultSchema>
+const browserAgentSetTabReadOnlyResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentSetTabReadOnlyResult',
+  browserAgentSetTabReadOnlyResultSchema,
 )
 
 const instructionScopeSchema = z.enum(['global', 'shared', 'project'])
@@ -1663,6 +1704,18 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: browserAgentSelectTabRequestCodec,
       }],
       result: browserAgentSelectTabResultCodec,
+    },
+    'agentEnhancer/browserAgentSetTabReadOnly': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentSetTabReadOnly',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentSetTabReadOnlyRequestCodec,
+        strictCodec: browserAgentSetTabReadOnlyRequestCodec,
+      }],
+      result: browserAgentSetTabReadOnlyResultCodec,
     },
     'agentEnhancer/listInstructionsSkills': {
       service: 'agentEnhancer',

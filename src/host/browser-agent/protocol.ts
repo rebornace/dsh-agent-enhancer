@@ -130,6 +130,8 @@ export interface TabListEntry {
   readonly url: string
   readonly active: boolean
   readonly bound: boolean
+  /** User marked the tab read-only: mutating tools fail fast there. Filled by the host layer. */
+  readonly readOnly: boolean
 }
 
 export interface TabListBody {

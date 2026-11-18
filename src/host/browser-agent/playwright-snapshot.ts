@@ -7,7 +7,7 @@ import type { Page } from 'playwright-core'
 import type { SnapshotBody, SnapshotNode } from './protocol.ts'
 import { attachHrefByProximity, type ProximityAnchor, type ProximityNode } from './proximity.ts'
 
-export const PLAYWRIGHT_DRIVER_VERSION = 'pw-0.1.0'
+export const PLAYWRIGHT_DRIVER_VERSION = 'pw-0.2.0'
 export const PLAYWRIGHT_REF_ATTR = 'data-dsh-ba-ref'
 const MAX_NODES = 80
 
@@ -224,7 +224,53 @@ for (var ri = 0; ri < records.length; ri++) {
 }
 `
 
-export async function capturePlaywrightSnapshot(page: Page): Promise<{
+/**
+ * Pick at most `max` rows for the model. A plain sort is not enough: on a page
+ * with 200 links the node budget would be spent before a single search box gets
+ * in, so controls get a reserved half of the budget, links fill the rest, and
+ * geometry-only anchors only take what is left over.
+ *
+ * Priority contract: 0 = link with href, 1 = other interactive control,
+ * 2 = anchor inferred from geometry (not a real element).
+ */
+export function selectSnapshotRows<T extends { readonly priority: number }>(
+  rows: readonly T[],
+  max: number,
+): T[] {
+  const budget = Math.max(0, Math.trunc(max))
+  if (budget === 0) return []
+
+  const links = rows.filter(row => row.priority <= 0)
+  const controls = rows.filter(row => row.priority === 1)
+  const anchors = rows.filter(row => row.priority > 1)
+
+  const controlSlots = Math.min(controls.length, Math.max(1, Math.floor(budget / 2)))
+  const linkSlots = Math.min(links.length, budget - controlSlots)
+  let remaining = budget - controlSlots - linkSlots
+  const anchorSlots = Math.min(anchors.length, remaining)
+  remaining -= anchorSlots
+
+  const picked = new Set<T>([
+    ...controls.slice(0, controlSlots),
+    ...links.slice(0, linkSlots),
+    ...anchors.slice(0, anchorSlots),
+  ])
+  // Budget left over (few controls, no anchors) goes back to links.
+  if (remaining > 0) {
+    for (const row of [...links.slice(linkSlots), ...controls.slice(controlSlots)]) {
+      if (remaining === 0) break
+      picked.add(row)
+      remaining -= 1
+    }
+  }
+  // Keep the incoming order (links first, then controls, then anchors).
+  return rows.filter(row => picked.has(row))
+}
+
+export async function capturePlaywrightSnapshot(
+  page: Page,
+  options: { readonly startRef?: number } = {},
+): Promise<{
   readonly body: SnapshotBody
   readonly refs: ReadonlyMap<number, PlaywrightRefRecord>
 }> {
@@ -269,7 +315,10 @@ export async function capturePlaywrightSnapshot(page: Page): Promise<{
       x: typeof node.x === 'number' ? node.x : 0,
       y: typeof node.y === 'number' ? node.y : 0,
       sensitive: item?.sensitive === true,
-      priority: node.priority ?? (href ? 0 : 1),
+      // Rank by element kind, not by whether proximity bound an href: a button
+      // sitting near a link would otherwise be treated as a link and lose the
+      // node budget to real anchors.
+      priority: (item?.tag ?? 'a') === 'a' ? 0 : 1,
     }
   })
 
@@ -285,17 +334,22 @@ export async function capturePlaywrightSnapshot(page: Page): Promise<{
       x: anchor.x + anchor.w / 2,
       y: anchor.y + anchor.h / 2,
       sensitive: false,
-      priority: 0,
+      // 2, not 0: a synthetic anchor (harvested from geometry, not an element)
+      // must never push a real button/input out of the node budget.
+      priority: 2,
     })
   }
 
-  rows.sort((a, b) => a.priority - b.priority)
-  const limited = rows.slice(0, MAX_NODES)
+  const limited = selectSnapshotRows(rows, MAX_NODES)
 
   const nodes: SnapshotNode[] = []
   const refs = new Map<number, PlaywrightRefRecord>()
+  // Refs are global to the driver, not per snapshot: a ref captured in one tab can
+  // never collide with a ref in another tab, so a stale cross-tab ref fails loudly
+  // instead of clicking an unrelated element in the tab that happens to be active.
+  const refBase = Number.isFinite(options.startRef) ? Math.max(1, Math.trunc(options.startRef as number)) : 1
   for (const row of limited) {
-    const ref = nodes.length + 1
+    const ref = refBase + nodes.length
     nodes.push({
       ref,
       role: row.role,
@@ -336,7 +390,6 @@ export async function capturePlaywrightSnapshot(page: Page): Promise<{
     title: await page.title().catch(() => ''),
     nodes,
     textPreview: harvest.textPreview,
-    tabId: 1,
     source: harvest.anchors.length > 0 || proximityHits > 0 ? 'playwright+anchors' : 'playwright',
     extensionVersion: PLAYWRIGHT_DRIVER_VERSION,
     anchorCount: harvest.anchors.length,

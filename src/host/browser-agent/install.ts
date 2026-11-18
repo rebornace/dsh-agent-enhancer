@@ -9,6 +9,7 @@ import {
   browserAgentProfileDirFor,
   browserAgentProfileSlotDir,
   playwrightChannelSatisfiesPreference,
+  resolveBrowserExecutable,
   stopAgentBrowserProcesses,
   type PlaywrightChannel,
 } from './launch.ts'
@@ -16,13 +17,21 @@ import { PlaywrightDriver } from './playwright-driver.ts'
 import type { TabListBody } from './protocol.ts'
 import { registerBrowserAgentPrompt } from './prompt.ts'
 import { BrowserSessionState } from './session-state.ts'
+import { TabScopeStore } from './tab-scope.ts'
+import { diagnose, type BrowserAvailability, type Diagnosis } from './diagnose.ts'
 import { registerBrowserTools } from './tools.ts'
+
+/** Idle sweep cadence and the age at which an unused tab is closed. */
+const IDLE_TICK_MS = 60_000
+const IDLE_CLOSE_MS = 10 * 60_000
 
 export interface BrowserAgentRuntime {
   readonly approval: BrowserApprovalGate
   readonly human: BrowserHumanGate
   readonly sessions: BrowserSessionState
   driverStatus(): BrowserDriverStatus | null
+  /** What is wrong (if anything) and the concrete next step. */
+  diagnose(): Diagnosis
   activeProfileDir(): string
   /**
    * Kill any running agent browser and launch with an explicit preference.
@@ -40,6 +49,14 @@ export interface BrowserAgentRuntime {
   refresh(): void
   /** Open tabs in the dedicated browser (no auto-launch). */
   listTabs(): Promise<TabListBody>
+  /**
+   * Sidebar toggle: mark a tab read-only so mutating tools fail fast there.
+   * Reading tools (snapshot / extract / scroll / wait) keep working.
+   */
+  setTabReadOnly(input: {
+    readonly tabId: number
+    readonly readOnly: boolean
+  }): { readonly ok: boolean; readonly error?: string }
   /**
    * Focus a tab for Agent ops; optionally bind it to a chat session.
    * Used by the right-sidebar multi-tab picker.
@@ -83,6 +100,10 @@ export function installBrowserAgent(
   options: {
     readonly enabled: () => boolean
     readonly browserPreference: () => BrowserAgentBrowser
+    /** Debug tools switch: gates browser_network / browser_console / browser_emulate. */
+    readonly debugTools?: () => boolean
+    /** Close agent tabs nobody used for a while (never bound / active / last tab). */
+    readonly idleClose?: () => boolean
     readonly profileRoot: string
     readonly softPause: SoftPauseGate
     readonly softPauseEnabled: () => boolean
@@ -96,6 +117,35 @@ export function installBrowserAgent(
   const approval = new BrowserApprovalGate()
   const human = new BrowserHumanGate()
   const sessions = new BrowserSessionState()
+  const tabScope = new TabScopeStore()
+
+  /**
+   * Browser probe, cached until settings change. resolveBrowserExecutable spawns
+   * `where`/`which` when a browser is not in the usual places, and the sidebar
+   * polls the snapshot every ~800 ms, so this must not run per snapshot.
+   */
+  let availabilityCache: BrowserAvailability | null = null
+  const browserAvailability = (): BrowserAvailability => {
+    if (availabilityCache !== null) return availabilityCache
+    availabilityCache = {
+      chrome: resolveBrowserExecutable('chrome') !== null,
+      edge: resolveBrowserExecutable('edge') !== null,
+      safari: resolveBrowserExecutable('safari') !== null,
+    }
+    return availabilityCache
+  }
+
+  const diagnoseNow = (): Diagnosis => {
+    const status = activeDriver?.status()
+    return diagnose({
+      enabled: options.enabled(),
+      ready: status?.ready === true,
+      preference: options.browserPreference(),
+      platform: process.platform,
+      lastError: status?.lastError ?? null,
+      availability: browserAvailability(),
+    })
+  }
   let unregisterTools: (() => void) | null = null
   let unregisterPrompt: (() => void) | null = null
   let active = false
@@ -144,6 +194,8 @@ export function installBrowserAgent(
     const previousPreference = mountedPreference
     activeDriver = null
     mountedPreference = null
+    // Tab ids belong to the driver instance; its tabs close with it.
+    tabScope.clear()
     const pw = playwrightDriver
     playwrightDriver = null
     if (pw !== null) {
@@ -211,6 +263,9 @@ export function installBrowserAgent(
         approval,
         human,
         sessions,
+        tabScope,
+        debugTools: () => options.debugTools?.() === true,
+        diagnosis: diagnoseNow,
         // Gate on settings only — `active` flips false during driver align and
         // must not make browser_* look "disabled" mid-turn.
         enabled: () => options.enabled(),
@@ -233,6 +288,7 @@ export function installBrowserAgent(
     try {
       if (preferenceMatchesRunning(preference)) {
         await requireDriver().ensureReady(startUrl)
+        primeCapture()
         active = true
         return { ok: true }
       }
@@ -260,6 +316,7 @@ export function installBrowserAgent(
       // cannot race back to stale Cordis. Next align without override rebuilds
       // from live. For Agent path (no override), rebuild from live each mismatch.
       await activeDriver.ensureReady(startUrl)
+      primeCapture()
       // Re-point mountedPreference to live after launch so activeProfileDir stays honest.
       mountedPreference = preference
       return { ok: true }
@@ -272,6 +329,20 @@ export function installBrowserAgent(
     }
   }
 
+  /**
+   * Capture must be running before the traffic happens, so start it as soon as
+   * the debug switch is on and the driver lives. Best-effort: the tools also
+   * call startCapture().
+   */
+  const primeCapture = () => {
+    if (options.debugTools?.() !== true) return
+    try {
+      requireDriver().startCapture()
+    } catch {
+      // Driver not mounted yet; the first debug tool call will start the buffer.
+    }
+  }
+
   const mount = () => {
     const preference = options.browserPreference()
     createDriver(preference)
@@ -279,6 +350,8 @@ export function installBrowserAgent(
   }
 
   const refresh = () => {
+    // Settings changed (feature switch, browser choice): re-probe on next snapshot.
+    availabilityCache = null
     const want = options.enabled()
 
     if (!want) {
@@ -310,12 +383,46 @@ export function installBrowserAgent(
 
   refresh()
 
+  const sweepIdleTabs = async (): Promise<void> => {
+    if (!options.enabled() || options.idleClose?.() !== true) return
+    const driver = activeDriver
+    if (driver === null || driver.status().ready !== true) return
+    try {
+      const closed = await driver.sweepIdleTabs({
+        idleMs: IDLE_CLOSE_MS,
+        keep: sessions.boundTabIds(),
+      })
+      for (const tabId of closed) {
+        const sessionId = sessions.unbindTab(tabId)
+        tabScope.setReadOnly(tabId, false)
+        sessions.record({
+          sessionId: sessionId ?? 'host',
+          tool: 'browser_idle_close',
+          summary: `Closed idle tab ${tabId}`,
+          outcome: 'ok',
+        })
+      }
+    } catch (error) {
+      ctx.logger.warn(
+        `agent-enhancer: idle tab sweep failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  // One minute tick: cheap when nothing is idle, and unref'd so a plugin reload
+  // never keeps the Desktop process alive.
+  const idleTimer = setInterval(() => { void sweepIdleTabs() }, IDLE_TICK_MS)
+  idleTimer.unref?.()
+
   return {
     approval,
     human,
     sessions,
     driverStatus() {
       return activeDriver?.status() ?? null
+    },
+    diagnose() {
+      return diagnoseNow()
     },
     activeProfileDir() {
       if (mountedPreference !== null) {
@@ -336,16 +443,31 @@ export function installBrowserAgent(
       }
       try {
         const body = await activeDriver.listTabs()
+        // Retire scopes of tabs that are gone (ids are never reused, so this is
+        // only growth control, not a correctness requirement).
+        tabScope.retain(body.tabs.map(tab => tab.tabId))
         return {
           tabs: body.tabs.map(tab => ({
             ...tab,
             bound: sessions.sessionOf(tab.tabId) !== undefined,
+            readOnly: tabScope.isReadOnly(tab.tabId),
           })),
           boundTabId: body.boundTabId,
         }
       } catch {
         return { tabs: [], boundTabId: null }
       }
+    },
+    setTabReadOnly(input) {
+      if (!options.enabled()) return { ok: false, error: 'Browser agent disabled' }
+      tabScope.setReadOnly(input.tabId, input.readOnly)
+      sessions.record({
+        sessionId: 'sidebar',
+        tool: 'browser_tab_read_only',
+        summary: `${input.readOnly ? 'Read-only' : 'Writable'} tab ${input.tabId}`,
+        outcome: 'ok',
+      })
+      return { ok: true }
     },
     async selectTab(input) {
       if (!options.enabled()) return { ok: false, error: 'Browser agent disabled' }
@@ -496,6 +618,7 @@ export function installBrowserAgent(
     },
     async dispose() {
       active = false
+      clearInterval(idleTimer)
       approval.clearAll()
       human.clearAll()
       await switchGate.catch(() => undefined)

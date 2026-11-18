@@ -4,11 +4,11 @@
 
 import { existsSync, mkdirSync } from 'node:fs'
 import type { BrowserContext, Page } from 'playwright-core'
-import { chromium, webkit } from 'playwright-core'
 import type {
   BrowserActResult,
   BrowserDriver,
   BrowserDriverStatus,
+  EmulateResult,
 } from './driver.ts'
 import {
   BROWSER_AGENT_PROFILE_SLOTS,
@@ -33,7 +33,24 @@ import {
   PLAYWRIGHT_REF_ATTR,
   type PlaywrightRefRecord,
 } from './playwright-snapshot.ts'
+import { CaptureBuffer, redactUrl, type CaptureEntry, type CaptureKind } from './capture.ts'
 import { pathsDiffer } from './auto-nav.ts'
+import { TabRegistry } from './tab-registry.ts'
+
+type PlaywrightModule = typeof import('playwright-core')
+
+let playwrightModule: PlaywrightModule | null = null
+
+/**
+ * Load playwright-core on first launch rather than at plugin import.
+ * A static import made every Desktop boot pay ~350 ms of module evaluation,
+ * even with the browser feature switched off. See
+ * docs/architecture/browser-agent-browse-parity.md (D6).
+ */
+async function loadPlaywright(): Promise<PlaywrightModule> {
+  playwrightModule ??= await import('playwright-core')
+  return playwrightModule
+}
 
 export interface PlaywrightDriverOptions {
   /** Static dir, or live getter so Chrome↔Edge switches pick the right profile. */
@@ -57,7 +74,16 @@ export class PlaywrightDriver implements BrowserDriver {
   private lastError: string | null = null
   private channel: PlaywrightChannel | null = null
   private launchedProfileDir: string | null = null
-  private lastRefs = new Map<number, PlaywrightRefRecord>()
+  private readonly tabs = new TabRegistry<PlaywrightRefRecord>()
+  private readonly trackedPages = new WeakSet<Page>()
+  /** Monotonic per-driver ref counter, so refs never collide across tabs. */
+  private nextRef = 1
+  /** Null until the debug tools ask for capture; stays on for the driver lifetime. */
+  private capture: CaptureBuffer | null = null
+  private readonly captureStartedPages = new WeakSet<Page>()
+  private readonly requestStart = new WeakMap<object, number>()
+  /** Last agent/UI use per page; a page's clock starts when it is first seen. */
+  private readonly lastUse = new WeakMap<Page, number>()
 
   constructor(options: PlaywrightDriverOptions) {
     this.profileDirOption = options.profileDir
@@ -85,9 +111,63 @@ export class PlaywrightDriver implements BrowserDriver {
     return this.currentProfileDir()
   }
 
-  /** Latest snapshot refs — used by the click/type path. */
-  refOf(ref: number): PlaywrightRefRecord | undefined {
-    return this.lastRefs.get(ref)
+  /**
+   * Stable id for a page, and the place its refs live. Ids survive other tabs
+   * opening/closing and are never reused; refs stay with the tab that captured
+   * them, so switching tabs no longer invalidates the snapshot you came from.
+   */
+  private tabIdFor(page: Page): number {
+    const tabId = this.tabs.idOf(page)
+    if (!this.lastUse.has(page)) this.lastUse.set(page, Date.now())
+    if (!this.trackedPages.has(page)) {
+      this.trackedPages.add(page)
+      page.on('close', () => {
+        this.tabs.release(page)
+        this.trackedPages.delete(page)
+      })
+    }
+    return tabId
+  }
+
+  private clearRefs(page: Page): void {
+    this.tabs.clearRefs(this.tabIdFor(page))
+  }
+
+  /** Any real use of a page resets its idle clock; sidebar listing does not. */
+  private touch(page: Page): void {
+    this.lastUse.set(page, Date.now())
+  }
+
+  async sweepIdleTabs(input: {
+    readonly idleMs: number
+    readonly keep?: readonly number[]
+  }): Promise<readonly number[]> {
+    const context = this.context
+    if (context === null) return []
+    const keep = new Set(input.keep ?? [])
+    const pages = context.pages()
+    const closed: number[] = []
+    const now = Date.now()
+    for (const page of pages) {
+      // Keep at least one tab alive: closing it would quit the dedicated browser.
+      if (pages.length - closed.length <= 1) break
+      if (page === this.page || page.isClosed()) continue
+      const tabId = this.tabIdFor(page)
+      if (keep.has(tabId)) continue
+      const last = this.lastUse.get(page) ?? now
+      if (now - last < input.idleMs) continue
+      await page.close().catch(() => undefined)
+      if (page.isClosed()) closed.push(tabId)
+    }
+    return closed
+  }
+
+  /** Page still attached to this context and not closed. */
+  private isLivePage(page: unknown): page is Page {
+    if (page === null || typeof page !== 'object') return false
+    const candidate = page as Page
+    if (typeof candidate.isClosed !== 'function' || candidate.isClosed()) return false
+    return this.context?.pages().includes(candidate) === true
   }
 
   status(): BrowserDriverStatus {
@@ -160,7 +240,7 @@ export class PlaywrightDriver implements BrowserDriver {
           this.context = null
           this.page = null
           this.launchedProfileDir = null
-          this.lastRefs.clear()
+          this.capture = null
         })
         return
       } catch (error) {
@@ -195,6 +275,7 @@ export class PlaywrightDriver implements BrowserDriver {
       }
     }
     let webkitExe: string
+    const { webkit } = await loadPlaywright()
     try {
       webkitExe = webkit.executablePath()
     } catch (error) {
@@ -233,6 +314,7 @@ export class PlaywrightDriver implements BrowserDriver {
       return null
     }
 
+    const { chromium } = await loadPlaywright()
     return chromium.launchPersistentContext(profileDir, {
       executablePath: resolved!.executable,
       headless: this.headless,
@@ -262,6 +344,7 @@ export class PlaywrightDriver implements BrowserDriver {
     if (this.page === null || this.page.isClosed()) {
       throw new Error('Playwright page is not available')
     }
+    this.touch(this.page)
     return this.page
   }
 
@@ -271,7 +354,7 @@ export class PlaywrightDriver implements BrowserDriver {
       connected: true,
       url: page.url(),
       title: await page.title().catch(() => ''),
-      tabId: tabIdOf(page.context(), page),
+      tabId: this.tabIdFor(page),
       bound: true,
     }
   }
@@ -292,19 +375,23 @@ export class PlaywrightDriver implements BrowserDriver {
 
     await page.goto(url, { waitUntil: 'domcontentloaded' })
     await settlePage(page)
-    this.lastRefs.clear()
+    this.touch(page)
+    this.clearRefs(page)
     return {
       url: page.url(),
       title: await page.title().catch(() => ''),
-      tabId: tabIdOf(page.context(), page),
+      tabId: this.tabIdFor(page),
     }
   }
 
   async snapshot(): Promise<SnapshotBody> {
     const page = await this.requirePage()
-    const { body, refs } = await capturePlaywrightSnapshot(page)
-    this.lastRefs = new Map(refs)
-    return { ...body, tabId: tabIdOf(page.context(), page) }
+    const tabId = this.tabIdFor(page)
+    const { body, refs } = await capturePlaywrightSnapshot(page, { startRef: this.nextRef })
+    this.nextRef += body.nodes.length
+    // Refs belong to this tab only; other tabs keep theirs.
+    this.tabs.setRefs(tabId, refs)
+    return { ...body, tabId }
   }
 
   async extract(input: { readonly focus?: string; readonly maxChars?: number } = {}): Promise<ExtractBody> {
@@ -318,15 +405,16 @@ export class PlaywrightDriver implements BrowserDriver {
       text: clipped.slice(0, maxChars),
       truncated: clipped.length > maxChars,
       ...(input.focus === undefined || input.focus.trim() === '' ? {} : { focus: input.focus.trim() }),
-      tabId: tabIdOf(page.context(), page),
+      tabId: this.tabIdFor(page),
     }
   }
 
   async click(ref: number): Promise<BrowserActResult> {
     const page = await this.requirePage()
-    const record = this.lastRefs.get(ref)
+    const tabId = this.tabIdFor(page)
+    const record = this.tabs.ref(tabId, ref)
     if (record === undefined) {
-      throw new Error(`Unknown ref ${ref}; call browser_snapshot first`)
+      throw new Error(this.tabs.unknownRefMessage(ref, tabId))
     }
     const beforeUrl = page.url()
     const href = /^https?:\/\//i.test(record.href) ? record.href : ''
@@ -347,14 +435,14 @@ export class PlaywrightDriver implements BrowserDriver {
     if (href !== '' && pathsDiffer(beforeUrl, href)) {
       await page.goto(href, { waitUntil: 'domcontentloaded' })
       await settlePage(page)
-      this.lastRefs.clear()
+      this.clearRefs(page)
       const after = page.url()
       return {
         url: after,
         title: await page.title().catch(() => ''),
         changed: pathsDiffer(beforeUrl, after),
         href,
-        tabId: tabIdOf(page.context(), page),
+        tabId: this.tabIdFor(page),
         warning: "Opened this ref's href after snapshot bound a nearby document link.",
       }
     }
@@ -368,14 +456,14 @@ export class PlaywrightDriver implements BrowserDriver {
       const adopted = await adoptPopup(popup, beforeUrl)
       if (adopted) {
         this.page = popup
-        this.lastRefs.clear()
+        this.clearRefs(page)
         await settlePage(popup)
         return {
           url: popup.url(),
           title: await popup.title().catch(() => ''),
           changed: true,
           ...(href !== '' ? { href } : {}),
-          tabId: tabIdOf(context, popup),
+          tabId: this.tabIdFor(popup),
           warning: 'Click opened a new tab; rebound the browser-agent session to it.',
         }
       }
@@ -404,7 +492,7 @@ export class PlaywrightDriver implements BrowserDriver {
       followedHref = changed
     }
 
-    this.lastRefs.clear()
+    this.clearRefs(page)
 
     let pageLinks: Array<{ href: string; name: string }> = []
     if (!changed && href === '') {
@@ -415,7 +503,7 @@ export class PlaywrightDriver implements BrowserDriver {
       url: afterUrl,
       title: await page.title().catch(() => ''),
       changed,
-      tabId: tabIdOf(page.context(), page),
+      tabId: this.tabIdFor(page),
       ...(href !== '' ? { href } : {}),
       ...(pageLinks.length > 0 ? { pageLinks: pageLinks.slice(0, 8) } : {}),
       ...(followedHref
@@ -441,14 +529,14 @@ export class PlaywrightDriver implements BrowserDriver {
     if (href !== '' && pathsDiffer(beforeUrl, href)) {
       await page.goto(href, { waitUntil: 'domcontentloaded' })
       await settlePage(page)
-      this.lastRefs.clear()
+      this.clearRefs(page)
       const after = page.url()
       return {
         url: after,
         title: await page.title().catch(() => ''),
         changed: pathsDiffer(beforeUrl, after),
         href,
-        tabId: tabIdOf(page.context(), page),
+        tabId: this.tabIdFor(page),
         warning: "Ref stamp missing; opened this ref's href directly.",
       }
     }
@@ -458,12 +546,12 @@ export class PlaywrightDriver implements BrowserDriver {
     await settlePage(page)
     const afterUrl = page.url()
     const changed = pathsDiffer(beforeUrl, afterUrl)
-    this.lastRefs.clear()
+    this.clearRefs(page)
     return {
       url: afterUrl,
       title: await page.title().catch(() => ''),
       changed,
-      tabId: tabIdOf(page.context(), page),
+      tabId: this.tabIdFor(page),
       ...(href !== '' ? { href } : {}),
       ...(!changed
         ? {
@@ -475,8 +563,9 @@ export class PlaywrightDriver implements BrowserDriver {
 
   async type(ref: number, text: string): Promise<BrowserActResult> {
     const page = await this.requirePage()
-    if (this.lastRefs.get(ref) === undefined) {
-      throw new Error(`Unknown ref ${ref}; call browser_snapshot first`)
+    const tabId = this.tabIdFor(page)
+    if (this.tabs.ref(tabId, ref) === undefined) {
+      throw new Error(this.tabs.unknownRefMessage(ref, tabId))
     }
     const locator = page.locator(`[${PLAYWRIGHT_REF_ATTR}="${ref}"]`).first()
     const count = await locator.count().catch(() => 0)
@@ -491,12 +580,12 @@ export class PlaywrightDriver implements BrowserDriver {
       await locator.pressSequentially(text, { delay: 10 })
     }
     await settlePage(page)
-    this.lastRefs.clear()
+    this.clearRefs(page)
     return {
       url: page.url(),
       title: await page.title().catch(() => ''),
       changed: false,
-      tabId: tabIdOf(page.context(), page),
+      tabId: this.tabIdFor(page),
     }
   }
 
@@ -508,7 +597,7 @@ export class PlaywrightDriver implements BrowserDriver {
       url: page.url(),
       title: await page.title().catch(() => ''),
       changed: false,
-      tabId: tabIdOf(page.context(), page),
+      tabId: this.tabIdFor(page),
     }
   }
 
@@ -535,7 +624,7 @@ export class PlaywrightDriver implements BrowserDriver {
       url: page.url(),
       title: await page.title().catch(() => ''),
       matched,
-      tabId: tabIdOf(page.context(), page),
+      tabId: this.tabIdFor(page),
     }
   }
 
@@ -545,7 +634,7 @@ export class PlaywrightDriver implements BrowserDriver {
     return {
       mime: 'image/png',
       base64: buf.toString('base64'),
-      tabId: tabIdOf(page.context(), page),
+      tabId: this.tabIdFor(page),
     }
   }
 
@@ -557,15 +646,134 @@ export class PlaywrightDriver implements BrowserDriver {
       return { tabs: [], boundTabId: null }
     }
     return {
-      tabs: await Promise.all(pages.map(async (p, index) => ({
-        tabId: index + 1,
+      tabs: await Promise.all(pages.map(async p => ({
+        tabId: this.tabIdFor(p),
         title: await p.title().catch(() => ''),
         url: p.url(),
         active: p === this.page,
-        // Session bind is layered in install.listTabs; driver marks the live page.
+        // Session bind and read-only scope are layered in install.listTabs.
         bound: p === this.page,
+        readOnly: false,
       }))),
-      boundTabId: this.page ? (pages.indexOf(this.page) + 1) : null,
+      boundTabId: this.page === null ? null : this.tabIdFor(this.page),
+    }
+  }
+
+  startCapture(): void {
+    if (this.capture !== null) return
+    const context = this.context
+    if (context === null) return
+    this.capture = new CaptureBuffer(300)
+    for (const page of context.pages()) this.attachCapture(page)
+    context.on('page', page => this.attachCapture(page))
+  }
+
+  private attachCapture(page: Page): void {
+    const buffer = this.capture
+    if (buffer === null || this.captureStartedPages.has(page)) return
+    this.captureStartedPages.add(page)
+    const tabId = this.tabIdFor(page)
+    const stamp = () => Date.now()
+    page.on('console', message => {
+      try {
+        buffer.push({
+          kind: 'console',
+          at: stamp(),
+          tabId,
+          level: message.type(),
+          text: clipText(message.text(), 500),
+          ...(message.location().url === ''
+            ? {}
+            : { location: `${message.location().url}:${message.location().lineNumber}` }),
+        })
+      } catch {
+        // Page went away mid-event; captured data is best-effort.
+      }
+    })
+    page.on('pageerror', error => {
+      buffer.push({
+        kind: 'console',
+        at: stamp(),
+        tabId,
+        level: 'pageerror',
+        text: clipText(error instanceof Error ? error.message : String(error), 500),
+      })
+    })
+    page.on('request', request => {
+      this.requestStart.set(request, performance.now())
+    })
+    page.on('response', response => {
+      const request = response.request()
+      const started = this.requestStart.get(request)
+      buffer.push({
+        kind: 'request',
+        at: stamp(),
+        tabId,
+        method: request.method(),
+        url: redactUrl(response.url()),
+        resourceType: request.resourceType(),
+        status: response.status(),
+        ...(started === undefined ? {} : { durationMs: Math.round(performance.now() - started) }),
+      })
+    })
+    page.on('requestfailed', request => {
+      const started = this.requestStart.get(request)
+      buffer.push({
+        kind: 'request',
+        at: stamp(),
+        tabId,
+        method: request.method(),
+        url: redactUrl(request.url()),
+        resourceType: request.resourceType(),
+        ...(started === undefined ? {} : { durationMs: Math.round(performance.now() - started) }),
+        failure: clipText(request.failure()?.errorText ?? 'request failed', 160),
+      })
+    })
+  }
+
+  readCapture(input: {
+    readonly kind: CaptureKind
+    readonly limit?: number
+    readonly clear?: boolean
+  }): { readonly entries: readonly CaptureEntry[]; readonly dropped: number } {
+    if (this.capture === null) return { entries: [], dropped: 0 }
+    return this.capture.read(input.kind, {
+      ...(input.limit === undefined ? {} : { limit: input.limit }),
+      ...(input.clear === undefined ? {} : { clear: input.clear }),
+    })
+  }
+
+  async emulate(input: {
+    readonly colorScheme?: 'light' | 'dark' | 'no-preference' | 'reset'
+    readonly reducedMotion?: 'reduce' | 'no-preference' | 'reset'
+    readonly viewport?: { readonly width: number; readonly height: number }
+  }): Promise<EmulateResult> {
+    const page = await this.requirePage()
+    const applied: string[] = []
+    const media: {
+      colorScheme?: 'light' | 'dark' | 'no-preference' | null
+      reducedMotion?: 'reduce' | 'no-preference' | null
+    } = {}
+    if (input.colorScheme !== undefined) {
+      media.colorScheme = input.colorScheme === 'reset' ? null : input.colorScheme
+      applied.push(`colorScheme=${input.colorScheme}`)
+    }
+    if (input.reducedMotion !== undefined) {
+      media.reducedMotion = input.reducedMotion === 'reset' ? null : input.reducedMotion
+      applied.push(`reducedMotion=${input.reducedMotion}`)
+    }
+    if (Object.keys(media).length > 0) await page.emulateMedia(media)
+    if (input.viewport !== undefined) {
+      const width = Math.min(Math.max(Math.trunc(input.viewport.width), 320), 3840)
+      const height = Math.min(Math.max(Math.trunc(input.viewport.height), 240), 2160)
+      await page.setViewportSize({ width, height })
+      applied.push(`viewport=${width}x${height}`)
+    }
+    return {
+      url: page.url(),
+      title: await page.title().catch(() => ''),
+      applied,
+      tabId: this.tabIdFor(page),
     }
   }
 
@@ -575,12 +783,14 @@ export class PlaywrightDriver implements BrowserDriver {
     readonly title: string
   }> {
     await this.ensureReady()
-    const pages = this.context?.pages() ?? []
-    const page = pages[tabId - 1]
-    if (page === undefined) throw new Error(`No Playwright page for tabId ${tabId}`)
-    this.page = page
-    this.lastRefs.clear()
-    return { tabId, url: page.url(), title: await page.title().catch(() => '') }
+    const candidate = this.tabs.page(tabId)
+    if (!this.isLivePage(candidate)) {
+      throw new Error(`No running browser tab for tabId ${tabId} (it may have been closed); call browser_list_tabs for current ids`)
+    }
+    // Refs are kept per tab, so switching back does not force a re-snapshot.
+    this.page = candidate
+    this.touch(candidate)
+    return { tabId, url: candidate.url(), title: await candidate.title().catch(() => '') }
   }
 
   async bind(tabId: number, _sessionId?: string): Promise<{
@@ -598,7 +808,7 @@ export class PlaywrightDriver implements BrowserDriver {
     this.page = null
     this.channel = null
     this.launchedProfileDir = null
-    this.lastRefs.clear()
+    this.capture = null
     if (ctx !== null) {
       await ctx.close().catch(() => undefined)
     }
@@ -612,6 +822,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => {
     setTimeout(resolve, ms)
   })
+}
+
+function clipText(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat
 }
 
 /** domcontentloaded + short network quiet (capped) for SPA hydration. */
@@ -634,12 +849,6 @@ async function adoptPopup(popup: Page, beforeUrl: string): Promise<boolean> {
   }
   const url = popup.isClosed() ? '' : popup.url()
   return /^https?:\/\//i.test(url) && pathsDiffer(beforeUrl, url)
-}
-
-function tabIdOf(context: BrowserContext, page: Page): number {
-  const pages = context.pages()
-  const index = pages.indexOf(page)
-  return index >= 0 ? index + 1 : 1
 }
 
 async function listHttpAnchors(page: Page): Promise<Array<{ href: string; name: string }>> {

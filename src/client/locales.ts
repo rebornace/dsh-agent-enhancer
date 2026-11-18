@@ -73,6 +73,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'webChatShareEmpty' | 'webChatShareUnrecognized' | 'webChatShareFetchFailed' |
       'browserAgent' | 'browserAgentDescription' |
       'browserAgentBrowser' | 'browserAgentBrowser_auto' |
+      'browserAgentDebugTools' | 'browserAgentDebugToolsHint' |
+      'browserAgentIdleClose' | 'browserAgentIdleCloseHint' |
+      'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
+      'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
+      'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
       'browserAgentBrowser_chrome' | 'browserAgentBrowser_edge' | 'browserAgentBrowser_safari' |
       'browserAgentSwitchHint' | 'browserAgentRunningAs' |
       'browserAgentConnectHint' | 'browserAgentApproveTitle' |
@@ -90,6 +95,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentOpenLinkHint' |
       'browserAgentTabsTitle' | 'browserAgentTabsHint' | 'browserAgentTabsEmpty' |
       'browserAgentTabUntitled' | 'browserAgentTabBoundBadge' |
+      'browserAgentTabReadOnlyBadge' | 'browserAgentTabReadOnlyOn' | 'browserAgentTabReadOnlyOff' |
+      'browserAgentTabReadOnlyOk' | 'browserAgentTabReadOnlyFailed' |
       'browserAgentSelectTabOk' | 'browserAgentSelectTabFailed' |
       'browserAgentGuideDescription' | 'browserAgentSidebarHint' |
       'browserAgentSidebarLoading' | 'browserAgentSidebarConnected' |
@@ -457,6 +464,10 @@ export const agentLocales = {
     browserAgent: '浏览器控制',
     browserAgentDescription: '让智能体用专用浏览器打开并操作网页（点击、填写等需你批准）。Mac 为 Safari / Chrome，Windows 为 Chrome / Edge。默认关闭。开启后可在对话中自动启动。不同于官方侧栏网页浏览。',
     browserAgentBrowser: '专用浏览器',
+    browserAgentDebugTools: '调试工具',
+    browserAgentDebugToolsHint: '开启后智能体可读取网络请求与控制台输出、模拟深色模式或视口尺寸（browser_network / browser_console / browser_emulate）。不记录请求头、Cookie 与响应体。',
+    browserAgentIdleClose: '自动关闭闲置标签',
+    browserAgentIdleCloseHint: '约 10 分钟没人用的标签自动关闭，避免专用浏览器越开越多。当前绑定标签、正在看的标签和最后一个标签不会被关。',
     browserAgentBrowser_auto: '自动（Mac 优先 Safari，Windows 优先 Edge）',
     browserAgentBrowser_chrome: 'Google Chrome',
     browserAgentBrowser_edge: 'Microsoft Edge',
@@ -474,6 +485,12 @@ export const agentLocales = {
     browserAgentSidebarLoading: '正在读取连接状态…',
     browserAgentSidebarConnected: '浏览器已就绪（尚未绑定标签；导航后会绑定）',
     browserAgentSidebarDisconnected: '浏览器未就绪',
+    browserAgentDiagnosis_idle: '还没启动：让智能体调用 browser_navigate，或 Alt+点击对话里的链接即可自动拉起。',
+    browserAgentDiagnosis_disabled: '浏览器 Agent 已关闭：请到 设置 → 智能体增强 → 功能 打开。',
+    browserAgentDiagnosis_webkit_missing: 'Safari 用的 WebKit 引擎没装：运行 npx playwright install webkit，或把浏览器改成 Chrome / Edge。',
+    browserAgentDiagnosis_browser_missing: '这台机器上没找到可用的浏览器：装 Chrome（Windows 可装 Edge），或在设置里换一个浏览器。',
+    browserAgentDiagnosis_profile_locked: '专用 profile 被占用：通常是残留的 Agent 浏览器窗口或另一个 Desktop 实例，关掉后重试即可。',
+    browserAgentDiagnosis_launch_failed: '启动失败：检查设置里的浏览器选择后重试；失败详情见下方诊断。',
     browserAgentSidebarChatHint: '可在对话中让智能体打开或操作页面；Alt+点击链接也会在绑定标签中打开。',
     browserAgentClose: '关闭',
     browserAgentApproveTitle: '浏览器操作待批准',
@@ -500,6 +517,11 @@ export const agentLocales = {
     browserAgentTabsEmpty: '暂无打开的标签。启动后导航一次即可出现。',
     browserAgentTabUntitled: '无标题',
     browserAgentTabBoundBadge: '已绑定',
+    browserAgentTabReadOnlyBadge: '只读',
+    browserAgentTabReadOnlyOn: '设为只读：智能体仍可读取，但不能点击或输入',
+    browserAgentTabReadOnlyOff: '解除只读：允许智能体操作此标签',
+    browserAgentTabReadOnlyOk: '标签 {tabId} 已设为只读',
+    browserAgentTabReadOnlyFailed: '切换只读失败',
     browserAgentSelectTabOk: '已切换到标签 {tabId}',
     browserAgentSelectTabFailed: '无法切换标签',
     instructionsSkills: '技能',
@@ -1090,6 +1112,10 @@ export const agentLocales = {
     browserAgent: 'Browser control',
     browserAgentDescription: 'Let the agent open and use a dedicated browser window (clicks and typing need your approval). Mac: Safari / Chrome; Windows: Chrome / Edge. Off by default. Auto-launches from chat when needed. Not the official sidebar browser.',
     browserAgentBrowser: 'Dedicated browser',
+    browserAgentDebugTools: 'Debug tools',
+    browserAgentDebugToolsHint: 'Lets the agent read network requests and console output, and emulate dark mode or a viewport size (browser_network / browser_console / browser_emulate). Request headers, cookies and response bodies are never recorded.',
+    browserAgentIdleClose: 'Close idle tabs',
+    browserAgentIdleCloseHint: 'Closes tabs nobody used for about 10 minutes so the dedicated browser does not pile them up. The bound tab, the tab you are looking at, and the last tab are never closed.',
     browserAgentBrowser_auto: 'Auto (Mac prefers Safari, Windows prefers Edge)',
     browserAgentBrowser_chrome: 'Google Chrome',
     browserAgentBrowser_edge: 'Microsoft Edge',
@@ -1107,6 +1133,12 @@ export const agentLocales = {
     browserAgentSidebarLoading: 'Reading connection status…',
     browserAgentSidebarConnected: 'Browser ready (no bound tab yet; binding happens after navigation)',
     browserAgentSidebarDisconnected: 'Browser not ready',
+    browserAgentDiagnosis_idle: 'Not launched yet: let the agent call browser_navigate, or Alt+click a chat link.',
+    browserAgentDiagnosis_disabled: 'Browser agent is off: enable it in Settings → 智能体增强 → 功能.',
+    browserAgentDiagnosis_webkit_missing: 'The WebKit engine for Safari is missing: run npx playwright install webkit, or switch to Chrome / Edge.',
+    browserAgentDiagnosis_browser_missing: 'No usable browser found: install Chrome (or Edge on Windows), or pick another browser in Settings.',
+    browserAgentDiagnosis_profile_locked: 'The dedicated profile is in use: close the leftover agent browser window or the other Desktop instance, then retry.',
+    browserAgentDiagnosis_launch_failed: 'Launch failed: check the browser choice in Settings and retry; the detail is in the diagnosis.',
     browserAgentSidebarChatHint: 'In chat, ask the agent to open or drive pages; Alt+click links also open in the bound tab.',
     browserAgentClose: 'Close',
     browserAgentApproveTitle: 'Browser action needs approval',
@@ -1133,6 +1165,11 @@ export const agentLocales = {
     browserAgentTabsEmpty: 'No open tabs yet. Launch and navigate once to populate this list.',
     browserAgentTabUntitled: 'Untitled',
     browserAgentTabBoundBadge: 'Bound',
+    browserAgentTabReadOnlyBadge: 'Read-only',
+    browserAgentTabReadOnlyOn: 'Make read-only: the agent can read, but not click or type',
+    browserAgentTabReadOnlyOff: 'Unlock: allow the agent to act on this tab',
+    browserAgentTabReadOnlyOk: 'Tab {tabId} is read-only',
+    browserAgentTabReadOnlyFailed: 'Could not change the read-only state',
     browserAgentSelectTabOk: 'Switched to tab {tabId}',
     browserAgentSelectTabFailed: 'Could not switch tab',
     instructionsSkills: 'Skills',

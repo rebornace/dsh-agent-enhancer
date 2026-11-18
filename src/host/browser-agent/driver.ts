@@ -4,11 +4,22 @@
  */
 
 import type {
+  CaptureEntry,
+  CaptureKind,
+} from './capture.ts'
+import type {
   ExtractBody,
   SnapshotBody,
   StatusBody,
   TabListBody,
 } from './protocol.ts'
+
+export interface EmulateResult {
+  readonly url: string
+  readonly title: string
+  readonly applied: readonly string[]
+  readonly tabId?: number
+}
 
 export type BrowserDriverKind = 'playwright'
 
@@ -63,6 +74,28 @@ export interface BrowserDriver {
   }>
   screenshot(): Promise<{ readonly mime: string; readonly base64: string; readonly tabId?: number }>
   listTabs(): Promise<TabListBody>
+  /**
+   * Close tabs nobody used for `idleMs`. Never closes `keep` ids, the active
+   * page, or the last remaining tab. Returns the ids that were closed.
+   */
+  sweepIdleTabs(input: {
+    readonly idleMs: number
+    readonly keep?: readonly number[]
+  }): Promise<readonly number[]>
+  /** Start buffering console + network for every page (idempotent). */
+  startCapture(): void
+  /** Read buffered entries; `kind` selects network, console or both. */
+  readCapture(input: {
+    readonly kind: CaptureKind
+    readonly limit?: number
+    readonly clear?: boolean
+  }): { readonly entries: readonly CaptureEntry[]; readonly dropped: number }
+  /** Page-level emulation (media features, viewport). Returns what was applied. */
+  emulate(input: {
+    readonly colorScheme?: 'light' | 'dark' | 'no-preference' | 'reset'
+    readonly reducedMotion?: 'reduce' | 'no-preference' | 'reset'
+    readonly viewport?: { readonly width: number; readonly height: number }
+  }): Promise<EmulateResult>
   followTab(tabId: number, activate?: boolean): Promise<{
     readonly tabId: number
     readonly url: string

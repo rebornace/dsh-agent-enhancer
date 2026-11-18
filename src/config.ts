@@ -100,6 +100,10 @@ export type EnhancerSettings = Readonly<Record<`${ModuleName}Enabled`, boolean>>
   readonly runAlertsLevel: RunAlertsLevel
   /** Dedicated window: auto (Win→Edge, Mac→Safari), or force a platform browser. */
   readonly browserAgentBrowser: BrowserAgentBrowser
+  /** Debug tools (network / console / emulate) for the browser agent. Default off. */
+  readonly browserAgentDebugTools: boolean
+  /** Close agent tabs nobody used for ~10 minutes (never the bound/active tab). */
+  readonly browserAgentIdleClose: boolean
   readonly optimizeProvider: string
   readonly optimizeModel: string
   readonly optimizeReasoningEffort: string
@@ -145,6 +149,8 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   runAlertsLevel: 'unfocused',
   browserAgentEnabled: false,
   browserAgentBrowser: 'auto',
+  browserAgentDebugTools: false,
+  browserAgentIdleClose: true,
   webChatBridgeEnabled: true,
   instructionsSkillsEnabled: true,
   mcpConnectorsEnabled: true,
@@ -192,6 +198,8 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     runAlertsLevel: resolveRunAlertsLevel(value?.runAlertsLevel),
     browserAgentEnabled: value?.browserAgentEnabled ?? false,
     browserAgentBrowser: resolveBrowserAgentBrowser(value?.browserAgentBrowser),
+    browserAgentDebugTools: value?.browserAgentDebugTools === true,
+    browserAgentIdleClose: value?.browserAgentIdleClose !== false,
     webChatBridgeEnabled: value?.webChatBridgeEnabled ?? true,
     instructionsSkillsEnabled: value?.instructionsSkillsEnabled ?? true,
     mcpConnectorsEnabled: value?.mcpConnectorsEnabled ?? true,

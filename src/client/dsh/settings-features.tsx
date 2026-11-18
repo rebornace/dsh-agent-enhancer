@@ -25,6 +25,8 @@ export interface SettingsFeaturesPanelProps {
   readonly onToggle: (module: ModuleName, checked: boolean) => void
   readonly onRunAlertsLevel?: (level: RunAlertsLevel) => void
   readonly onBrowserAgentBrowser?: (browser: BrowserAgentBrowser) => void
+  readonly onBrowserAgentDebugTools?: (enabled: boolean) => void
+  readonly onBrowserAgentIdleClose?: (enabled: boolean) => void
   readonly onOpenModel: (feature: ConfigurableAuxiliaryFeature) => void
   /** Optional per-module extra description (e.g. host capability warnings). */
   readonly featureExtraDescription?: (module: ModuleName) => string | undefined
@@ -76,6 +78,8 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
     onToggle,
     onRunAlertsLevel,
     onBrowserAgentBrowser,
+    onBrowserAgentDebugTools,
+    onBrowserAgentIdleClose,
     onOpenModel,
     featureExtraDescription,
   } = props
@@ -124,6 +128,26 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                         </select>
                       </label>
                       <p className={styles.settingDescription}>{t('browserAgentOpenLinkHint')}</p>
+                      <label className={styles.browserAgentExtraRow}>
+                        <span>{t('browserAgentDebugTools')}</span>
+                        <Switch
+                          label={t('browserAgentDebugTools')}
+                          checked={settings.browserAgentDebugTools}
+                          disabled={busy || onBrowserAgentDebugTools === undefined}
+                          onChange={checked => { onBrowserAgentDebugTools?.(checked) }}
+                        />
+                      </label>
+                      <p className={styles.settingDescription}>{t('browserAgentDebugToolsHint')}</p>
+                      <label className={styles.browserAgentExtraRow}>
+                        <span>{t('browserAgentIdleClose')}</span>
+                        <Switch
+                          label={t('browserAgentIdleClose')}
+                          checked={settings.browserAgentIdleClose}
+                          disabled={busy || onBrowserAgentIdleClose === undefined}
+                          onChange={checked => { onBrowserAgentIdleClose?.(checked) }}
+                        />
+                      </label>
+                      <p className={styles.settingDescription}>{t('browserAgentIdleCloseHint')}</p>
                     </div>
                   ) : null}
                 </div>

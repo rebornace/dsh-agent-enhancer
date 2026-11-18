@@ -235,6 +235,8 @@ import type {
   BrowserAgentSetBrowserResult,
   BrowserAgentSelectTabRequest,
   BrowserAgentSelectTabResult,
+  BrowserAgentSetTabReadOnlyRequest,
+  BrowserAgentSetTabReadOnlyResult,
   BrowserAgentLaunchBrowserResult,
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
@@ -269,6 +271,10 @@ export const Config = z.object({
   /** High-risk; default off. */
   browserAgentEnabled: z.boolean().default(false).volatile(),
   browserAgentBrowser: z.string().default('auto').volatile(),
+  /** Debug tools (network / console / emulate); default off, gated per tool. */
+  browserAgentDebugTools: z.boolean().default(false).volatile(),
+  /** Close idle agent tabs after ~10 min; default on, never the bound/active tab. */
+  browserAgentIdleClose: z.boolean().default(true).volatile(),
   /** Default off; embeds official web chat + import to work. */
   webChatBridgeEnabled: z.boolean().default(true).volatile(),
   instructionsSkillsEnabled: z.boolean().default(true).volatile(),
@@ -373,6 +379,7 @@ export class AgentEnhancerService extends TypertRemoteService {
           ? (this.browserAgent?.sessions.tabOf(needsHuman.sessionId) ?? null)
           : null))
     const connected = driverStatus?.ready === true
+    const diag = this.browserAgent?.diagnose()
     const listed = connected
       ? await this.browserAgent?.listTabs()
       : undefined
@@ -408,6 +415,13 @@ export class AgentEnhancerService extends TypertRemoteService {
         summary: pending.summary,
         ...(pending.url === undefined ? {} : { url: pending.url }),
         ...(pending.origin === undefined ? {} : { origin: pending.origin }),
+      },
+      diagnosis: diag ?? {
+        code: settings.enabled ? 'idle' : 'disabled',
+        nextStep: settings.enabled
+          ? 'Nothing launched yet. Call browser_navigate (or Alt+click a chat link) to launch the dedicated browser.'
+          : 'Browser agent is off. Enable it in 设置 → 智能体增强 → 功能.',
+        browsers: { chrome: false, edge: false, safari: false },
       },
       tabConflict: conflict,
       needsHuman,
@@ -1304,6 +1318,21 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
   }
 
+  async browserAgentSetTabReadOnly(
+    request: BrowserAgentSetTabReadOnlyRequest,
+  ): Promise<BrowserAgentSetTabReadOnlyResult> {
+    this.assertOwner()
+    const result = this.browserAgent?.setTabReadOnly({
+      tabId: request.tabId,
+      readOnly: request.readOnly,
+    })
+    return {
+      ok: result?.ok === true,
+      ...(result?.error === undefined ? {} : { error: result.error }),
+      snapshot: await this.browserSnapshotNow(),
+    }
+  }
+
 }
 
 function resolveCheckpointRoot(dshHome: string): string {
@@ -1411,6 +1440,8 @@ function readSettings(config: Config): EnhancerSettings {
     runAlertsLevel: resolveRunAlertsLevel(config.runAlertsLevel.get()),
     browserAgentEnabled: config.browserAgentEnabled.get(),
     browserAgentBrowser: hostBrowserPreference(config.browserAgentBrowser.get()),
+    browserAgentDebugTools: config.browserAgentDebugTools.get(),
+    browserAgentIdleClose: config.browserAgentIdleClose.get(),
     webChatBridgeEnabled: config.webChatBridgeEnabled.get(),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
     mcpConnectorsEnabled: config.mcpConnectorsEnabled.get(),
@@ -1500,6 +1531,8 @@ export function apply(ctx: Context, config: Config): void {
   const browserAgent = installBrowserAgent(ctx, {
     enabled: () => browserAgentLive.enabled,
     browserPreference: () => browserAgentLive.browser,
+    debugTools: () => settings().browserAgentDebugTools,
+    idleClose: () => settings().browserAgentIdleClose,
     profileRoot: pluginDataPackageRoot,
     softPause: softPauseGate,
     softPauseEnabled: () => settings().softPauseEnabled,

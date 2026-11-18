@@ -223,6 +223,34 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
     }
   }
 
+  const onBrowserAgentDebugTools = async (enabled: boolean) => {
+    setSaving('browserAgentDebugTools')
+    setError(false)
+    setSaveDetail(null)
+    try {
+      await writeOps([{ op: 'set', path: ['browserAgentDebugTools'], value: enabled }])
+    } catch (cause) {
+      setError(true)
+      setSaveDetail(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const onBrowserAgentIdleClose = async (enabled: boolean) => {
+    setSaving('browserAgentIdleClose')
+    setError(false)
+    setSaveDetail(null)
+    try {
+      await writeOps([{ op: 'set', path: ['browserAgentIdleClose'], value: enabled }])
+    } catch (cause) {
+      setError(true)
+      setSaveDetail(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(null)
+    }
+  }
+
   const saveFields = async (fields: ReadonlyArray<readonly [keyof EnhancerSettings, string]>) => {
     setSaving(fields.map(([field]) => field).join(','))
     setError(false)
@@ -345,6 +373,8 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
           onToggle={(module, checked) => { void onToggle(module, checked) }}
           onRunAlertsLevel={level => { void onRunAlertsLevel(level) }}
           onBrowserAgentBrowser={browser => { void onBrowserAgentBrowser(browser) }}
+          onBrowserAgentDebugTools={enabled => { void onBrowserAgentDebugTools(enabled) }}
+          onBrowserAgentIdleClose={enabled => { void onBrowserAgentIdleClose(enabled) }}
           onOpenModel={feature => {
             setHighlightFeature(feature)
             setTab('models')
