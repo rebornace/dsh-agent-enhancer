@@ -24,7 +24,7 @@ import {
 describe('composer settings', () => {
   it('enables history, optimize, predict, and rollback by default', () => {
     expect(MODULES).toEqual([
-      'history', 'optimize', 'predict', 'quote', 'rollback', 'softPause', 'runAlerts', 'contextInspect', 'usage',
+      'history', 'optimize', 'predict', 'quote', 'rollback', 'softPause', 'runAlerts', 'runProgress', 'contextInspect', 'usage',
       'sessionDelete', 'fileEdit', 'instructionsSkills', 'mcpConnectors', 'webChatBridge', 'browserAgent',
     ])
     expect(DEFAULT_SETTINGS.autoClassifierEnabled).toBe(false)
@@ -39,6 +39,7 @@ describe('composer settings', () => {
       softPauseEnabled: true,
       runAlertsEnabled: true,
       runAlertsLevel: 'unfocused',
+      runProgressEnabled: true,
       browserAgentEnabled: false,
       browserAgentBrowser: 'auto',
       browserAgentDebugTools: false,
@@ -92,6 +93,7 @@ describe('composer settings', () => {
       softPauseEnabled: true,
       runAlertsEnabled: true,
       runAlertsLevel: 'unfocused',
+      runProgressEnabled: true,
       browserAgentEnabled: false,
       browserAgentBrowser: 'auto',
       browserAgentDebugTools: false,
@@ -140,6 +142,7 @@ describe('composer settings', () => {
       softPauseEnabled: true,
       runAlertsEnabled: true,
       runAlertsLevel: 'unfocused',
+      runProgressEnabled: true,
       browserAgentEnabled: false,
       browserAgentBrowser: 'auto',
       browserAgentDebugTools: false,

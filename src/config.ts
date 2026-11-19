@@ -2,8 +2,8 @@ import { AUTO_MODEL, AUTO_PROVIDER } from './host/auto-route/sentinel.ts'
 import type { AutoRouteMap } from './host/auto-route/types.ts'
 
 export const MODULES = [
-  'history', 'optimize', 'predict', 'quote', 'rollback', 'softPause', 'runAlerts', 'contextInspect', 'usage',
-  'sessionDelete', 'fileEdit', 'instructionsSkills', 'mcpConnectors', 'webChatBridge', 'browserAgent',
+  'history', 'optimize', 'predict', 'quote', 'rollback', 'softPause', 'runAlerts', 'runProgress', 'contextInspect',
+  'usage', 'sessionDelete', 'fileEdit', 'instructionsSkills', 'mcpConnectors', 'webChatBridge', 'browserAgent',
 ] as const
 export type ModuleName = typeof MODULES[number]
 
@@ -183,6 +183,7 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   softPauseEnabled: true,
   runAlertsEnabled: true,
   runAlertsLevel: 'unfocused',
+  runProgressEnabled: true,
   browserAgentEnabled: false,
   browserAgentBrowser: 'auto',
   browserAgentDebugTools: false,
@@ -233,6 +234,7 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     softPauseEnabled: value?.softPauseEnabled ?? true,
     runAlertsEnabled: value?.runAlertsEnabled ?? true,
     runAlertsLevel: resolveRunAlertsLevel(value?.runAlertsLevel),
+    runProgressEnabled: value?.runProgressEnabled ?? true,
     browserAgentEnabled: value?.browserAgentEnabled ?? false,
     browserAgentBrowser: resolveBrowserAgentBrowser(value?.browserAgentBrowser),
     browserAgentDebugTools: value?.browserAgentDebugTools === true,

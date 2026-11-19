@@ -2478,6 +2478,115 @@
   object-position: top left;
 }
 
+/* Run progress: one quiet line above the composer, expandable to the stages. */
+.runProgressDock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 auto 4px;
+  max-width: 100%;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.runProgressLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.runProgressLine:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.runProgressLine:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: 1px;
+}
+
+.runProgressDot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.runProgressDock[data-running] .runProgressDot {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.runProgressText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runProgressChevron {
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+
+.runProgressList {
+  margin: 2px 0 0;
+  padding: 0 0 0 4px;
+  max-height: 168px;
+  overflow: auto;
+  list-style: none;
+}
+
+.runProgressItem {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 0;
+}
+
+.runProgressGlyph {
+  flex: 0 0 auto;
+  width: 10px;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.runProgressItem[data-status='done'] .runProgressGlyph,
+.runProgressItem[data-status='running'] .runProgressGlyph {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.runProgressItem[data-status='failed'] .runProgressGlyph,
+.runProgressItem[data-status='failed'] .runProgressError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.runProgressItemText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runProgressError {
+  flex: 0 1 auto;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .browserAgentButton:focus-visible,
 .browserAgentClose:focus-visible {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);

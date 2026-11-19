@@ -784,6 +784,31 @@ const browserAgentThumbnailResultCodec = codec(
   browserAgentThumbnailResultSchema,
 )
 
+export const runProgressRequestSchema = z.strictObject({
+  sessionId: z.string().min(1),
+})
+export type RunProgressRequest = z.infer<typeof runProgressRequestSchema>
+const runProgressRequestCodec = codec('dsh-agent-enhancer#RunProgressRequest', runProgressRequestSchema)
+
+export const runProgressStageSchema = z.strictObject({
+  id: z.number().int(),
+  tool: z.string().min(1),
+  detail: z.string().optional(),
+  status: z.enum(['running', 'done', 'failed']),
+  startedAt: z.number(),
+  endedAt: z.number().optional(),
+  error: z.string().optional(),
+})
+export type RunProgressStageWire = z.infer<typeof runProgressStageSchema>
+
+export const runProgressResultSchema = z.strictObject({
+  stages: z.array(runProgressStageSchema),
+  running: z.boolean(),
+  startedAt: z.number().optional(),
+})
+export type RunProgressResult = z.infer<typeof runProgressResultSchema>
+const runProgressResultCodec = codec('dsh-agent-enhancer#RunProgressResult', runProgressResultSchema)
+
 
 export const browserAgentResolveRequestSchema = z.strictObject({
   id: z.string().min(1),
@@ -1757,6 +1782,18 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: browserAgentSelectTabRequestCodec,
       }],
       result: browserAgentSelectTabResultCodec,
+    },
+    'agentEnhancer/runProgress': {
+      service: 'agentEnhancer',
+      implementation: 'runProgress',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: runProgressRequestCodec,
+        strictCodec: runProgressRequestCodec,
+      }],
+      result: runProgressResultCodec,
     },
     'agentEnhancer/browserAgentThumbnail': {
       service: 'agentEnhancer',

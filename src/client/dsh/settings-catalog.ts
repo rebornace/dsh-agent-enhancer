@@ -14,6 +14,7 @@ export type FeatureLabelKey =
   | 'rollback'
   | 'softPause'
   | 'runAlerts'
+  | 'runProgress'
   | 'contextInspect'
   | 'usage'
   | 'sessionDelete'
@@ -31,6 +32,7 @@ export type FeatureDescriptionKey =
   | 'rollbackDescription'
   | 'softPauseDescription'
   | 'runAlertsDescription'
+  | 'runProgressDescription'
   | 'contextInspectDescription'
   | 'usageDescription'
   | 'sessionDeleteDescription'
@@ -99,6 +101,12 @@ export const SETTINGS_FEATURE_GROUPS: readonly SettingsFeatureGroup[] = [
         module: 'runAlerts',
         labelKey: 'runAlerts',
         descriptionKey: 'runAlertsDescription',
+        modelFeature: null,
+      },
+      {
+        module: 'runProgress',
+        labelKey: 'runProgress',
+        descriptionKey: 'runProgressDescription',
         modelFeature: null,
       },
       {

@@ -73,6 +73,7 @@ describe('composer configuration and Remote metadata', () => {
       softPauseEnabled: true,
       runAlertsEnabled: true,
       runAlertsLevel: 'unfocused',
+      runProgressEnabled: true,
       browserAgentEnabled: false,
       browserAgentBrowser: 'auto',
       browserAgentDebugTools: false,
@@ -117,6 +118,7 @@ describe('composer configuration and Remote metadata', () => {
       softPauseEnabled: false,
       runAlertsEnabled: false,
       runAlertsLevel: 'always',
+      runProgressEnabled: true,
       browserAgentEnabled: true,
       browserAgentBrowser: 'chrome',
       browserAgentDebugTools: false,
@@ -147,6 +149,7 @@ describe('composer configuration and Remote metadata', () => {
       softPauseEnabled: false,
       runAlertsEnabled: false,
       runAlertsLevel: 'always',
+      runProgressEnabled: true,
       browserAgentEnabled: true,
       browserAgentBrowser: 'chrome',
       browserAgentDebugTools: false,
@@ -180,7 +183,7 @@ describe('composer configuration and Remote metadata', () => {
     })
     expect(Object.keys(Config({}))).toEqual([
       'historyEnabled', 'optimizeEnabled', 'predictEnabled', 'quoteEnabled', 'rollbackEnabled', 'contextInspectEnabled',
-      'usageEnabled', 'sessionDeleteEnabled', 'fileEditEnabled', 'softPauseEnabled', 'runAlertsEnabled', 'runAlertsLevel',
+      'usageEnabled', 'sessionDeleteEnabled', 'fileEditEnabled', 'softPauseEnabled', 'runAlertsEnabled', 'runAlertsLevel', 'runProgressEnabled',
       'browserAgentEnabled', 'browserAgentBrowser', 'browserAgentDebugTools', 'browserAgentDemonstrate', 'browserAgentIdleClose',
       'webChatBridgeEnabled',
       'instructionsSkillsEnabled',
