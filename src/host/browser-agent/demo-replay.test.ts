@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DemoStep } from './demo.ts'
 import {
   matchDemoControl,
+  samePage,
   normalizeControlName,
   replayDemoSteps,
   type DemoReplayDriver,
@@ -39,11 +40,13 @@ function fakeDriver(input: {
   readonly nodes?: readonly DemoReplayNode[]
   readonly url?: string
   readonly followFails?: boolean
+  readonly tabs?: ReadonlyArray<{ readonly tabId: number; readonly url: string }>
 } = {}): { driver: DemoReplayDriver; calls: Calls } {
   const calls: Calls = { clicks: [], types: [], presses: [], navigates: [], follows: [] }
   let url = input.url ?? 'https://example.com/'
   const driver: DemoReplayDriver = {
     snapshot: vi.fn(async () => ({ url, nodes: input.nodes ?? nodes })),
+    listTabs: vi.fn(async () => ({ tabs: input.tabs ?? [] })),
     click: vi.fn(async (ref: number) => {
       calls.clicks.push(ref)
       return { url }
@@ -157,6 +160,54 @@ describe('replayDemoSteps', () => {
     expect(result.reason).toContain('select')
   })
 
+  it('does not touch tab ids for a single-tab flow (saved recipes outlive them)', async () => {
+    const { driver, calls } = fakeDriver()
+    const steps: DemoStep[] = [
+      { ...click('导出报表'), tabId: 1, tabUrl: 'https://example.com/a' },
+      { ...fill('日期', '2026-11-01'), tabId: 1, tabUrl: 'https://example.com/a' },
+    ]
+    const result = await replayDemoSteps(driver, steps)
+    expect(result.status).toBe('done')
+    expect(calls.follows).toEqual([])
+  })
+
+  it('re-maps a recorded tab to the live tab with the same page', async () => {
+    const { driver, calls } = fakeDriver({
+      tabs: [
+        { tabId: 1, url: 'https://example.com/' },
+        { tabId: 9, url: 'https://b.example/reports?range=1' },
+      ],
+    })
+    const steps: DemoStep[] = [
+      { ...click('导出报表'), tabId: 1, tabUrl: 'https://example.com/' },
+      { ...click('取消'), tabId: 2, tabUrl: 'https://b.example/reports' },
+    ]
+    const result = await replayDemoSteps(driver, steps)
+    expect(result.status).toBe('done')
+    expect(calls.follows).toContain(9)
+    expect(calls.follows).not.toContain(2)
+    expect(calls.clicks).toEqual([3, 4])
+  })
+
+  it('reopens the recorded page when its tab is gone', async () => {
+    const { driver, calls } = fakeDriver({ followFails: true, tabs: [] })
+    const steps: DemoStep[] = [
+      { ...click('导出报表'), tabId: 1, tabUrl: 'https://example.com/' },
+      { ...click('取消'), tabId: 2, tabUrl: 'https://b.example/reports' },
+    ]
+    const result = await replayDemoSteps(driver, steps)
+    expect(result.status).toBe('done')
+    expect(calls.navigates).toContain('https://b.example/reports')
+  })
+
+  it('matches pages by origin and path, ignoring query and hash', () => {
+    expect(samePage('https://a.example/x?q=1', 'https://a.example/x')).toBe(true)
+    expect(samePage('https://a.example/x#top', 'https://a.example/x/')).toBe(true)
+    expect(samePage('https://a.example/x', 'https://a.example/y')).toBe(false)
+    expect(samePage('https://a.example/x', 'https://b.example/x')).toBe(false)
+    expect(samePage('not a url', 'not a url')).toBe(true)
+  })
+
   it('follows the tab a step belongs to and blocks when it is gone', async () => {
     const { driver, calls } = fakeDriver()
     const steps: DemoStep[] = [
@@ -165,7 +216,8 @@ describe('replayDemoSteps', () => {
     ]
     const done = await replayDemoSteps(driver, steps.slice(0, 1))
     expect(done.status).toBe('done')
-    expect(calls.follows).toEqual([2])
+    // One recorded tab: no id juggling at all (saved recipes outlive the ids).
+    expect(calls.follows).toEqual([])
 
     const missing = fakeDriver({ followFails: true })
     const blocked = await replayDemoSteps(missing.driver, steps)

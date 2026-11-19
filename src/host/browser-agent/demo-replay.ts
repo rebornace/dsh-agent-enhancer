@@ -32,6 +32,8 @@ export interface DemoReplayDriver {
   press(key: string): Promise<{ readonly url: string }>
   navigate(url: string): Promise<{ readonly url: string }>
   followTab(tabId: number): Promise<{ readonly url: string }>
+  /** Live tabs, used to re-map recorded tab ids by URL (ids do not outlive a run). */
+  listTabs?(): Promise<{ readonly tabs: ReadonlyArray<{ readonly tabId: number; readonly url: string }> }>
 }
 
 export interface DemoReplayDone {
@@ -142,6 +144,18 @@ async function performStep(driver: DemoReplayDriver, step: DemoStep): Promise<St
   }
 }
 
+/** Same page for replay purposes: origin + pathname, ignoring query and hash. */
+export function samePage(a: string, b: string): boolean {
+  try {
+    const left = new URL(a)
+    const right = new URL(b)
+    const path = (value: string): string => value.replace(/\/+$/u, '')
+    return left.origin === right.origin && path(left.pathname) === path(right.pathname)
+  } catch {
+    return a === b
+  }
+}
+
 /**
  * Run the recorded steps in order. Stops at the first step that cannot be
  * reproduced, so the caller can name it instead of claiming a full replay.
@@ -154,22 +168,63 @@ export async function replayDemoSteps(
   let currentTab: number | undefined
   let url: string | undefined
 
+  // Tab ids belong to the browser run that recorded them; a saved recipe outlives
+  // it. Only multi-tab flows need switching, and then by URL, never by stale id.
+  const recordedTabs: number[] = []
+  const tabUrls = new Map<number, string>()
+  for (const step of steps) {
+    if (step.tabId === undefined) continue
+    if (!recordedTabs.includes(step.tabId)) recordedTabs.push(step.tabId)
+    if (!tabUrls.has(step.tabId) && step.tabUrl !== undefined) tabUrls.set(step.tabId, step.tabUrl)
+  }
+  const multiTab = recordedTabs.length > 1
+  const liveTabs = multiTab && typeof driver.listTabs === 'function'
+    ? await driver.listTabs().then(result => result.tabs).catch(() => [])
+    : []
+
+  const resolveTab = (recordedId: number): number | undefined => {
+    const wanted = tabUrls.get(recordedId)
+    if (wanted === undefined) return undefined
+    return liveTabs.find(tab => samePage(tab.url, wanted))?.tabId
+  }
+
   for (let index = 0; index < steps.length; index += 1) {
     const step = steps[index]!
-    if (step.tabId !== undefined && step.tabId !== currentTab) {
+    if (multiTab && step.tabId !== undefined && step.tabId !== currentTab) {
       try {
-        const followed = await driver.followTab(step.tabId)
+        const followed = await driver.followTab(resolveTab(step.tabId) ?? step.tabId)
         currentTab = step.tabId
         url = followed.url
       } catch {
-        return {
-          status: 'blocked',
-          performed: index,
-          total: steps.length,
-          lines,
-          reason: `tab ${step.tabId} is no longer open`,
-          pending: steps.slice(index),
-          ...(url === undefined ? {} : { url }),
+        // The tab was closed since recording: reopen its page in the current tab
+        // when the recording knows the URL, instead of failing on a stale id.
+        const tabUrl = tabUrls.get(step.tabId)
+        if (tabUrl !== undefined) {
+          try {
+            const navigated = await driver.navigate(tabUrl)
+            currentTab = step.tabId
+            url = navigated.url
+          } catch {
+            return {
+              status: 'blocked',
+              performed: index,
+              total: steps.length,
+              lines,
+              reason: `tab ${step.tabId} is no longer open and ${tabUrl} could not be reopened`,
+              pending: steps.slice(index),
+              ...(url === undefined ? {} : { url }),
+            }
+          }
+        } else {
+          return {
+            status: 'blocked',
+            performed: index,
+            total: steps.length,
+            lines,
+            reason: `tab ${step.tabId} is no longer open and the recording has no URL for it`,
+            pending: steps.slice(index),
+            ...(url === undefined ? {} : { url }),
+          }
         }
       }
     }
