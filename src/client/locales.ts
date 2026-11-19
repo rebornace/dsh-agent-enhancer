@@ -43,7 +43,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'runAlertsLevel_hidden' | 'runAlertsLevel_unfocused' | 'runAlertsLevel_always' |
       'runAlertsFinished' | 'runAlertsWaitingApproval' | 'runAlertsWaitingQuestion' |
       'runAlertsWaitingPlanReview' | 'runAlertsWaitingBrowserHuman' | 'runAlertsWaiting' | 'runAlertsError' |
-      'runProgress' | 'runProgressDescription' | 'runProgressRunning' | 'runProgressFinished' |
+      'runProgress' | 'runProgressDescription' | 'runProgressRunning' | 'runProgressFinished' | 'runProgressThinking' | 'runProgressSteps' |
       'runProgressFailed' | 'runProgressExpand' | 'runProgressCollapse' |
       'runProgressVerbShell' | 'runProgressVerbRead' | 'runProgressVerbWrite' |
       'runProgressVerbBrowser' | 'runProgressVerbOther' |
@@ -419,6 +419,8 @@ export const agentLocales = {
     runProgress: '运行进度',
     runProgressDescription: '在输入框上方显示这一轮正在做什么：按实际发生的工具调用列出步骤，当前一步高亮，可展开看全过程。不是计划，也不会让模型额外写清单。',
     runProgressRunning: '运行中',
+    runProgressThinking: '思考中',
+    runProgressSteps: '{n} 步',
     runProgressFinished: '本次运行',
     runProgressFailed: '{n} 步失败',
     runProgressExpand: '展开步骤',
@@ -1105,6 +1107,8 @@ export const agentLocales = {
     runProgress: 'Run progress',
     runProgressDescription: 'Shows what this turn is doing above the composer: the tool calls that actually ran, with the current step highlighted and the full list one click away. Derived from the run, not a plan the model has to write.',
     runProgressRunning: 'Running',
+    runProgressThinking: 'Thinking',
+    runProgressSteps: '{n} steps',
     runProgressFinished: 'This run',
     runProgressFailed: '{n} failed',
     runProgressExpand: 'Show steps',

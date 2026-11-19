@@ -1342,11 +1342,12 @@ export class AgentEnhancerService extends TypertRemoteService {
 
   async runProgress(request: RunProgressRequest): Promise<RunProgressResult> {
     this.assertOwner()
-    if (!this.runProgressEnabled()) return { stages: [], running: false }
+    if (!this.runProgressEnabled()) return { stages: [], running: false, active: false }
     const view = this.runStages.view(request.sessionId)
     return {
       stages: [...view.stages],
       running: view.running,
+      active: view.active,
       ...(view.startedAt === undefined ? {} : { startedAt: view.startedAt }),
     }
   }
@@ -1634,8 +1635,12 @@ export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => {
     const enabled = () => settings().runProgressEnabled
     const offTurn = ctx.on('session/event', (session, event) => {
-      if (!enabled() || event.type !== 'turn/start') return
-      runStages.startTurn(session.id)
+      if (!enabled()) return
+      if (event.type === 'turn/start') {
+        runStages.startTurn(session.id)
+        return
+      }
+      if (event.type === 'turn/end') runStages.endTurn(session.id)
     })
     const offDisposed = ctx.on('session/disposed', session => {
       runStages.clearSession(session.id)

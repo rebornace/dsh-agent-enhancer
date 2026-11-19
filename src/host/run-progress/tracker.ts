@@ -22,6 +22,8 @@ export interface RunProgressView {
   readonly stages: readonly RunStage[]
   /** True while at least one stage is still running. */
   readonly running: boolean
+  /** True from turn/start until turn/end, so the chip can say "thinking". */
+  readonly active: boolean
   /** When the current turn's first stage started. */
   readonly startedAt?: number
 }
@@ -33,6 +35,7 @@ interface SessionRun {
   stages: RunStage[]
   seq: number
   startedAt: number | undefined
+  active: boolean
 }
 
 export class RunProgress {
@@ -71,19 +74,28 @@ export class RunProgress {
     }
   }
 
-  /** A new turn means a new run: forget the previous stages. */
-  startTurn(sessionId: string): void {
+  /** A new turn means a new run: forget the previous stages and open the chip. */
+  startTurn(sessionId: string, now = Date.now()): void {
     const run = this.runFor(sessionId)
     run.stages = []
-    run.startedAt = undefined
+    run.startedAt = now
+    run.active = true
+  }
+
+  /** The turn closed (any reason): the chip disappears until the next turn. */
+  endTurn(sessionId: string): void {
+    const run = this.runs.get(sessionId)
+    if (run === undefined) return
+    run.active = false
   }
 
   view(sessionId: string): RunProgressView {
     const run = this.runs.get(sessionId)
-    if (run === undefined) return { stages: [], running: false }
+    if (run === undefined) return { stages: [], running: false, active: false }
     return {
       stages: run.stages.map(stage => ({ ...stage })),
       running: run.stages.some(stage => stage.status === 'running'),
+      active: run.active,
       ...(run.startedAt === undefined ? {} : { startedAt: run.startedAt }),
     }
   }
@@ -99,7 +111,7 @@ export class RunProgress {
   private runFor(sessionId: string): SessionRun {
     let run = this.runs.get(sessionId)
     if (run === undefined) {
-      run = { stages: [], seq: 0, startedAt: undefined }
+      run = { stages: [], seq: 0, startedAt: undefined, active: false }
       this.runs.set(sessionId, run)
     }
     return run

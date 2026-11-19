@@ -1481,7 +1481,7 @@ export const agentEnhancerRunProgress = {
     signal?: AbortSignal,
   ): Promise<RunProgressResult> {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    const empty = (): RunProgressResult => ({ stages: [], running: false })
+    const empty = (): RunProgressResult => ({ stages: [], running: false, active: false })
     if (remote === null || remote === undefined || typeof remote !== 'object') return empty()
     const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
     if (namespace === undefined || typeof namespace !== 'object') return empty()

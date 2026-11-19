@@ -804,6 +804,8 @@ export type RunProgressStageWire = z.infer<typeof runProgressStageSchema>
 export const runProgressResultSchema = z.strictObject({
   stages: z.array(runProgressStageSchema),
   running: z.boolean(),
+  /** True from turn/start until turn/end. */
+  active: z.boolean(),
   startedAt: z.number().optional(),
 })
 export type RunProgressResult = z.infer<typeof runProgressResultSchema>

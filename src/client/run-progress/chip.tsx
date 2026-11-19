@@ -79,9 +79,11 @@ export function RunProgressChip(props: RunProgressChipProps) {
   }, [open])
 
   const stages = view?.stages ?? []
-  if (!enabled || stages.length === 0) return null
+  if (!enabled || view === null || !view.active) return null
   const summary = summarizeRun(stages)
-  if (summary.current === undefined) return null
+  const headline = summary.current === undefined
+    ? props.t('runProgressThinking')
+    : stageLabel(props.t, summary.current)
 
   const toggle = () => {
     if (open) {
@@ -108,8 +110,7 @@ export function RunProgressChip(props: RunProgressChipProps) {
         onClick={toggle}
       >
         <span className={styles.runProgressChipDot} aria-hidden="true" />
-        <span className={styles.runProgressChipText}>{stageLabel(props.t, summary.current)}</span>
-        <span className={styles.runProgressChipCount}>{summary.done}/{summary.total}</span>
+        <span className={styles.runProgressChipText}>{headline}</span>
       </button>
       {open && pos !== null ? createPortal(
         <div
@@ -120,22 +121,31 @@ export function RunProgressChip(props: RunProgressChipProps) {
           style={{ left: pos.left, bottom: pos.bottom }}
         >
           <div className={styles.runProgressPopoverHead}>
-            <span>{props.t('runProgressRunning')}</span>
-            <span>{summary.done}/{summary.total}</span>
+            <span>{summary.running ? props.t('runProgressRunning') : props.t('runProgressFinished')}</span>
+            <span>
+              {props.t('runProgressSteps').replace('{n}', String(summary.total))}
+              {summary.failed > 0
+                ? ` · ${props.t('runProgressFailed').replace('{n}', String(summary.failed))}`
+                : ''}
+            </span>
           </div>
-          <ol className={styles.runProgressList}>
-            {stages.slice(-MAX_LISTED).map(stage => (
-              <li key={stage.id} className={styles.runProgressItem} data-status={stage.status}>
-                <span className={styles.runProgressGlyph} aria-hidden="true">
-                  {stage.status === 'running' ? '●' : stage.status === 'failed' ? '✕' : '✓'}
-                </span>
-                <span className={styles.runProgressItemText}>{stageLabel(props.t, stage)}</span>
-                {stage.error === undefined ? null : (
-                  <span className={styles.runProgressError}>{stage.error}</span>
-                )}
-              </li>
-            ))}
-          </ol>
+          {stages.length === 0 ? (
+            <p className={styles.runProgressEmpty}>{props.t('runProgressThinking')}</p>
+          ) : (
+            <ol className={styles.runProgressList}>
+              {stages.slice(-MAX_LISTED).map(stage => (
+                <li key={stage.id} className={styles.runProgressItem} data-status={stage.status}>
+                  <span className={styles.runProgressGlyph} aria-hidden="true">
+                    {stage.status === 'running' ? '●' : stage.status === 'failed' ? '✕' : '✓'}
+                  </span>
+                  <span className={styles.runProgressItemText}>{stageLabel(props.t, stage)}</span>
+                  {stage.error === undefined ? null : (
+                    <span className={styles.runProgressError}>{stage.error}</span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
         </div>,
         document.body,
       ) : null}

@@ -29,9 +29,13 @@ describe('RunProgress', () => {
 
   it('starts a fresh list on a new turn', () => {
     const run = new RunProgress()
+    run.startTurn('s1', 500)
+    expect(run.view('s1')).toEqual({ stages: [], running: false, active: true, startedAt: 500 })
     run.begin('s1', 'read', { path: 'a' })
-    run.startTurn('s1')
-    expect(run.view('s1')).toEqual({ stages: [], running: false })
+    run.endTurn('s1')
+    expect(run.view('s1').active).toBe(false)
+    run.startTurn('s1', 600)
+    expect(run.view('s1')).toEqual({ stages: [], running: false, active: true, startedAt: 600 })
     run.begin('s1', 'read', { path: 'b' })
     expect(run.view('s1').stages.map(stage => stage.detail)).toEqual(['b'])
   })
@@ -43,7 +47,7 @@ describe('RunProgress', () => {
     expect(run.view('s1').stages.map(stage => stage.detail)).toEqual(['a'])
     expect(run.view('s2').stages.map(stage => stage.detail)).toEqual(['ls'])
     run.clearSession('s1')
-    expect(run.view('s1')).toEqual({ stages: [], running: false })
+    expect(run.view('s1')).toEqual({ stages: [], running: false, active: false })
     expect(run.view('s2').stages).toHaveLength(1)
   })
 

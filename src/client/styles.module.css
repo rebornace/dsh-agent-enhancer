@@ -2483,7 +2483,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 232px;
+  max-width: 260px;
   height: 24px;
   padding: 0 9px;
   border: 0;
@@ -2515,14 +2515,14 @@
 .runProgressChipText {
   flex: 1 1 auto;
   min-width: 0;
-  max-width: 168px;
+  max-width: 230px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.runProgressChipCount {
-  flex: 0 0 auto;
+.runProgressEmpty {
+  margin: 0;
   color: var(--dsw-alias-label-tertiary);
 }
 
