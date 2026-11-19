@@ -784,6 +784,45 @@ const browserAgentThumbnailResultCodec = codec(
   browserAgentThumbnailResultSchema,
 )
 
+export const demoRecipeMetaSchema = z.strictObject({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+  steps: z.number().int(),
+})
+export type DemoRecipeMetaWire = z.infer<typeof demoRecipeMetaSchema>
+
+export const browserAgentDemoRecipesRequestSchema = z.discriminatedUnion('action', [
+  z.strictObject({ action: z.literal('list') }),
+  z.strictObject({ action: z.literal('save'), name: z.string() }),
+  z.strictObject({ action: z.literal('run'), id: z.string().min(1) }),
+  z.strictObject({ action: z.literal('delete'), id: z.string().min(1) }),
+])
+export type BrowserAgentDemoRecipesRequest = z.infer<typeof browserAgentDemoRecipesRequestSchema>
+const browserAgentDemoRecipesRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentDemoRecipesRequest',
+  browserAgentDemoRecipesRequestSchema,
+)
+
+export const browserAgentDemoRecipesResultSchema = z.strictObject({
+  ok: z.boolean(),
+  recipes: z.array(demoRecipeMetaSchema).optional(),
+  recipe: demoRecipeMetaSchema.optional(),
+  /** Replay lines when running a recipe (`1. ok …`). */
+  lines: z.array(z.string()).optional(),
+  /** 1-based step where a replay stopped. */
+  stoppedAt: z.number().int().optional(),
+  reason: z.string().optional(),
+  error: z.string().optional(),
+})
+export type BrowserAgentDemoRecipesResult = z.infer<typeof browserAgentDemoRecipesResultSchema>
+const browserAgentDemoRecipesResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentDemoRecipesResult',
+  browserAgentDemoRecipesResultSchema,
+)
+
+
 
 export const browserAgentResolveRequestSchema = z.strictObject({
   id: z.string().min(1),
@@ -1757,6 +1796,18 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: browserAgentSelectTabRequestCodec,
       }],
       result: browserAgentSelectTabResultCodec,
+    },
+    'agentEnhancer/browserAgentDemoRecipes': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentDemoRecipes',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentDemoRecipesRequestCodec,
+        strictCodec: browserAgentDemoRecipesRequestCodec,
+      }],
+      result: browserAgentDemoRecipesResultCodec,
     },
     'agentEnhancer/browserAgentThumbnail': {
       service: 'agentEnhancer',

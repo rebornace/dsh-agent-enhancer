@@ -39,6 +39,8 @@ import type {
   BrowserAgentDemoResult,
   BrowserAgentThumbnailRequest,
   BrowserAgentThumbnailResult,
+  BrowserAgentDemoRecipesRequest,
+  BrowserAgentDemoRecipesResult,
   BrowserAgentSnapshot,
   RpcPayload,
   ShowOsNotificationRequest,
@@ -444,6 +446,20 @@ export const clientRemoteInfo = {
       codec: codec('dsh-agent-enhancer#BrowserAgentDemoRequest'),
     }],
     result: codec('dsh-agent-enhancer#BrowserAgentDemoResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentDemoRecipes',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentDemoRecipes',
+    implementation: 'browserAgentDemoRecipes',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentDemoRecipesRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentDemoRecipesResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/browserAgentThumbnail',
     service: 'agentEnhancer',
@@ -1108,6 +1124,9 @@ type BrowserAgentDemoCall = (
 type BrowserAgentThumbnailCall = (
   request: BrowserAgentThumbnailRequest,
 ) => Promise<RemoteResult<BrowserAgentThumbnailResult>>
+type BrowserAgentDemoRecipesCall = (
+  request: BrowserAgentDemoRecipesRequest,
+) => Promise<RemoteResult<BrowserAgentDemoRecipesResult>>
 type BrowserAgentSetTabReadOnlyCall = (
   request: BrowserAgentSetTabReadOnlyRequest,
 ) => Promise<RemoteResult<BrowserAgentSetTabReadOnlyResult>>
@@ -1445,6 +1464,41 @@ export const agentEnhancerBrowserAgentDemo = {
         const message = typeof (result as { error?: { message?: string } }).error?.message === 'string'
           ? (result as { error: { message: string } }).error.message
           : 'Demonstration RPC failed'
+        return empty(message)
+      }
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty(error instanceof Error ? error.message : String(error))
+    }
+  },
+}
+
+export const agentEnhancerBrowserAgentDemoRecipes = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentDemoRecipesRequest,
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentDemoRecipesResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty = (error: string): BrowserAgentDemoRecipesResult => ({ ok: false, error })
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return empty('Host remote unavailable')
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') {
+      return empty('agentEnhancer remote missing (reload the plugin)')
+    }
+    const call = Reflect.get(namespace, 'browserAgentDemoRecipes') as BrowserAgentDemoRecipesCall | undefined
+    if (typeof call !== 'function') {
+      return empty('browserAgentDemoRecipes missing (reload Desktop / reinstall the plugin)')
+    }
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) {
+        const message = typeof (result as { error?: { message?: string } }).error?.message === 'string'
+          ? (result as { error: { message: string } }).error.message
+          : 'Recipe RPC failed'
         return empty(message)
       }
       return result.value

@@ -23,6 +23,7 @@ function hostBrowserPreference(value: string | undefined): BrowserAgentBrowser {
   )
 }
 import { installBrowserAgent } from './browser-agent/install.ts'
+import { DemoRecipeStore } from './browser-agent/demo-recipes.ts'
 import type { BrowserAgentRuntime } from './browser-agent/install.ts'
 import { defaultBrowserAgentProfileDir } from './browser-agent/launch.ts'
 import { AuxiliaryError } from '../errors.ts'
@@ -242,6 +243,8 @@ import type {
   BrowserAgentDemoResult,
   BrowserAgentThumbnailRequest,
   BrowserAgentThumbnailResult,
+  BrowserAgentDemoRecipesRequest,
+  BrowserAgentDemoRecipesResult,
   BrowserAgentLaunchBrowserResult,
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
@@ -1342,6 +1345,28 @@ export class AgentEnhancerService extends TypertRemoteService {
     return { ok: true, mime: thumb.mime, base64: thumb.base64 }
   }
 
+  async browserAgentDemoRecipes(
+    request: BrowserAgentDemoRecipesRequest,
+  ): Promise<BrowserAgentDemoRecipesResult> {
+    this.assertOwner()
+    const runtime = this.browserAgent
+    if (runtime === null) return { ok: false, error: 'runtime unavailable' }
+    const result = await runtime.demoRecipes({
+      action: request.action,
+      ...('name' in request ? { name: request.name } : {}),
+      ...('id' in request ? { id: request.id } : {}),
+    })
+    return {
+      ok: result.ok,
+      ...(result.recipes === undefined ? {} : { recipes: result.recipes.map(recipe => ({ ...recipe })) }),
+      ...(result.recipe === undefined ? {} : { recipe: { ...result.recipe } }),
+      ...(result.lines === undefined ? {} : { lines: [...result.lines] }),
+      ...(result.stoppedAt === undefined ? {} : { stoppedAt: result.stoppedAt }),
+      ...(result.reason === undefined ? {} : { reason: result.reason }),
+      ...(result.error === undefined ? {} : { error: result.error }),
+    }
+  }
+
   async browserAgentDemo(
     request: BrowserAgentDemoRequest,
   ): Promise<BrowserAgentDemoResult> {
@@ -1583,6 +1608,7 @@ export function apply(ctx: Context, config: Config): void {
     debugTools: () => settings().browserAgentDebugTools,
     demonstrate: () => settings().browserAgentDemonstrate,
     idleClose: () => settings().browserAgentIdleClose,
+    recipes: new DemoRecipeStore(join(pluginDataPackageRoot, 'demo-recipes.json')),
     profileRoot: pluginDataPackageRoot,
     softPause: softPauseGate,
     softPauseEnabled: () => settings().softPauseEnabled,

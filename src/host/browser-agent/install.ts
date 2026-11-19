@@ -20,7 +20,9 @@ import { registerBrowserAgentPrompt } from './prompt.ts'
 import { BrowserSessionState } from './session-state.ts'
 import { TabScopeStore } from './tab-scope.ts'
 import { diagnose, type BrowserAvailability, type Diagnosis } from './diagnose.ts'
-import { demoTabLegend, summarizeDemoSteps } from './demo.ts'
+import { demoTabLegend, summarizeDemoSteps, type DemoStep } from './demo.ts'
+import { replayDemoSteps } from './demo-replay.ts'
+import type { DemoRecipeMeta, DemoRecipeStore } from './demo-recipes.ts'
 import { registerBrowserTools } from './tools.ts'
 
 /** Idle sweep cadence; the tab age comes from browserAgentIdleClose. */
@@ -62,6 +64,23 @@ export interface BrowserAgentRuntime {
   demoStart(): Promise<{ readonly ok: boolean; readonly error?: string }>
   demoStop(): Promise<{ readonly ok: boolean; readonly steps?: readonly string[]; readonly error?: string }>
   demoActive(): boolean
+  /**
+   * Saved demonstrations (cross-session): list, save the last recording, run one
+   * back, or delete it. Steps are stored sanitized; secrets stay `***`.
+   */
+  demoRecipes(input: {
+    readonly action: 'list' | 'save' | 'run' | 'delete'
+    readonly name?: string
+    readonly id?: string
+  }): Promise<{
+    readonly ok: boolean
+    readonly recipes?: readonly DemoRecipeMeta[]
+    readonly recipe?: DemoRecipeMeta
+    readonly lines?: readonly string[]
+    readonly stoppedAt?: number
+    readonly reason?: string
+    readonly error?: string
+  }>
   /**
    * Focus a tab for Agent ops; optionally bind it to a chat session.
    * Used by the right-sidebar multi-tab picker.
@@ -111,6 +130,8 @@ export function installBrowserAgent(
     readonly demonstrate?: () => boolean
     /** Close agent tabs nobody used for a while (never bound / active / last tab). */
     readonly idleClose?: () => BrowserAgentIdleClose
+    /** Saved demonstrations; omitted in tests that do not care. */
+    readonly recipes?: DemoRecipeStore
     readonly profileRoot: string
     readonly softPause: SoftPauseGate
     readonly softPauseEnabled: () => boolean
@@ -125,6 +146,9 @@ export function installBrowserAgent(
   const human = new BrowserHumanGate()
   const sessions = new BrowserSessionState()
   const tabScope = new TabScopeStore()
+  const recipes = options.recipes
+  /** Steps from the last sidebar demonstration, until the next one starts. */
+  let lastDemoSteps: readonly DemoStep[] = []
 
   /**
    * Browser probe, cached until settings change. resolveBrowserExecutable spawns
@@ -493,6 +517,7 @@ export function installBrowserAgent(
         const aligned = await alignToPreference()
         if (!aligned.ok) return { ok: false, error: aligned.error ?? 'Browser agent failed to start' }
         await requireDriver().startDemonstration()
+        lastDemoSteps = []
         sessions.record({
           sessionId: 'sidebar',
           tool: 'browser_demonstrate',
@@ -509,6 +534,7 @@ export function installBrowserAgent(
       if (driver === null) return { ok: false, error: 'Browser agent is not running' }
       try {
         const steps = await driver.stopDemonstration()
+        lastDemoSteps = steps
         const summary = summarizeDemoSteps(steps)
         sessions.record({
           sessionId: 'sidebar',
@@ -523,6 +549,70 @@ export function installBrowserAgent(
     },
     demoActive() {
       return activeDriver?.demonstrationActive() === true
+    },
+    async demoRecipes(input) {
+      if (!options.enabled()) return { ok: false, error: 'Browser agent disabled' }
+      if (recipes === undefined) return { ok: false, error: 'recipe store unavailable' }
+      if (input.action === 'list') {
+        return { ok: true, recipes: recipes.list() }
+      }
+      if (input.action === 'delete') {
+        const id = input.id ?? ''
+        const removed = recipes.remove(id)
+        sessions.record({
+          sessionId: 'sidebar',
+          tool: 'browser_demo_recipe',
+          summary: removed ? `Deleted demonstration recipe ${id}` : `Recipe ${id} not found`,
+          outcome: removed ? 'ok' : 'error',
+        })
+        return removed ? { ok: true, recipes: recipes.list() } : { ok: false, error: '流程不存在', recipes: recipes.list() }
+      }
+      if (input.action === 'save') {
+        if (options.demonstrate?.() !== true) {
+          return { ok: false, error: '演示录制未开启：设置 → 功能 → 浏览器 Agent' }
+        }
+        if (lastDemoSteps.length === 0) {
+          return { ok: false, error: '先录制一次，再保存为流程', recipes: recipes.list() }
+        }
+        const saved = recipes.save({ name: input.name ?? '', steps: lastDemoSteps })
+        if (!saved.ok) return { ok: false, error: saved.error, recipes: recipes.list() }
+        sessions.record({
+          sessionId: 'sidebar',
+          tool: 'browser_demo_recipe',
+          summary: `Saved demonstration recipe "${saved.recipe.name}" (${saved.recipe.steps} step(s))`,
+          outcome: 'ok',
+        })
+        return { ok: true, recipe: saved.recipe, recipes: recipes.list() }
+      }
+      // run
+      const recipe = recipes.get(input.id ?? '')
+      if (recipe === undefined) return { ok: false, error: '流程不存在', recipes: recipes.list() }
+      const driver = activeDriver
+      if (driver === null) return { ok: false, error: 'Browser agent is not running', recipes: recipes.list() }
+      const aligned = await alignToPreference().catch(() => ({ ok: true as const, error: undefined }))
+      if (!aligned.ok) return { ok: false, error: aligned.error ?? 'Browser agent failed to start', recipes: recipes.list() }
+      const outcome = await replayDemoSteps(driver, recipe.steps).catch(error => ({
+        status: 'blocked' as const,
+        performed: 0,
+        total: recipe.steps.length,
+        lines: [] as string[],
+        reason: error instanceof Error ? error.message : String(error),
+        pending: [...recipe.steps],
+      }))
+      const ranAll = outcome.status === 'done'
+      sessions.record({
+        sessionId: 'sidebar',
+        tool: 'browser_demo_recipe',
+        summary: `Ran demonstration recipe "${recipe.name}" (${outcome.performed}/${outcome.total}${ranAll ? '' : ', stopped'})`,
+        outcome: ranAll ? 'ok' : 'error',
+      })
+      return {
+        ok: true,
+        recipes: recipes.list(),
+        lines: [...outcome.lines],
+        ...(ranAll ? {} : { stoppedAt: outcome.performed + 1 }),
+        ...(ranAll ? {} : { reason: outcome.reason }),
+      }
     },
     async selectTab(input) {
       if (!options.enabled()) return { ok: false, error: 'Browser agent disabled' }

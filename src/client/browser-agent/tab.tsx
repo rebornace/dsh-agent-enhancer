@@ -8,13 +8,14 @@ import {
   resolveBrowserAgentBrowser,
 } from '../../config.ts'
 import type { BrowserAgentBrowser } from '../../config.ts'
-import type { BrowserAgentSnapshot } from '../../host/rpc.ts'
+import type { BrowserAgentSnapshot, DemoRecipeMetaWire } from '../../host/rpc.ts'
 import { quoteSelectedText } from '../quote/insert.ts'
 import { lastQuoteSessionId } from '../quote/session.ts'
 import styles from '../styles.module.css'
 import {
   agentEnhancerBrowserAgentLaunchBrowser,
   agentEnhancerBrowserAgentDemo,
+  agentEnhancerBrowserAgentDemoRecipes,
   agentEnhancerBrowserAgentQuotePage,
   agentEnhancerBrowserAgentSelectTab,
   agentEnhancerBrowserAgentSetBrowser,
@@ -186,6 +187,75 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
       if (action === 'stop') setDemoSteps(result.steps ?? [])
     } finally {
       setBusy(false)
+    }
+  }
+
+  const [recipes, setRecipes] = useState<readonly DemoRecipeMetaWire[]>([])
+  const [recipeName, setRecipeName] = useState('')
+  const [recipeBusy, setRecipeBusy] = useState(false)
+
+  const loadRecipes = async () => {
+    const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'list' })
+    if (result.recipes !== undefined) setRecipes(result.recipes)
+  }
+
+  useEffect(() => {
+    if (snapshot?.demo.enabled === true) void loadRecipes()
+  }, [snapshot?.demo.enabled])
+
+  const saveRecipe = async () => {
+    const name = recipeName.trim()
+    if (name === '') {
+      setHint(t('browserAgentDemoRecipeNameRequired'))
+      return
+    }
+    setRecipeBusy(true)
+    setHint(null)
+    try {
+      const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'save', name })
+      if (result.recipes !== undefined) setRecipes(result.recipes)
+      if (!result.ok) {
+        setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
+        return
+      }
+      setRecipeName('')
+      setHint(t('browserAgentDemoRecipeSaved').replace('{name}', result.recipe?.name ?? name))
+    } finally {
+      setRecipeBusy(false)
+    }
+  }
+
+  const runRecipe = async (recipe: DemoRecipeMetaWire) => {
+    setRecipeBusy(true)
+    setHint(null)
+    try {
+      const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'run', id: recipe.id })
+      if (result.recipes !== undefined) setRecipes(result.recipes)
+      if (!result.ok) {
+        setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
+        return
+      }
+      setHint(result.stoppedAt === undefined
+        ? t('browserAgentDemoRecipeRan')
+          .replace('{name}', recipe.name)
+          .replace('{n}', String(result.lines?.length ?? 0))
+        : t('browserAgentDemoRecipeStopped')
+          .replace('{step}', String(result.stoppedAt))
+          .replace('{reason}', result.reason ?? ''))
+    } finally {
+      setRecipeBusy(false)
+    }
+  }
+
+  const deleteRecipe = async (recipe: DemoRecipeMetaWire) => {
+    setRecipeBusy(true)
+    setHint(null)
+    try {
+      const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'delete', id: recipe.id })
+      if (result.recipes !== undefined) setRecipes(result.recipes)
+      if (!result.ok) setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
+    } finally {
+      setRecipeBusy(false)
     }
   }
 
@@ -382,6 +452,57 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                   </button>
                 )}
             </div>
+            {demoSteps !== null && demoSteps.length > 0 ? (
+              <div className={styles.browserAgentDemoSave}>
+                <input
+                  className={styles.browserAgentDemoName}
+                  value={recipeName}
+                  placeholder={t('browserAgentDemoRecipeName')}
+                  aria-label={t('browserAgentDemoRecipeName')}
+                  disabled={recipeBusy}
+                  onChange={event => { setRecipeName(event.target.value) }}
+                />
+                <button
+                  type="button"
+                  className={styles.browserAgentButton}
+                  disabled={recipeBusy}
+                  onClick={() => { void saveRecipe() }}
+                >
+                  {t('browserAgentDemoRecipeSave')}
+                </button>
+              </div>
+            ) : null}
+            {recipes.length > 0 ? (
+              <div className={styles.browserAgentTabListSection}>
+                <p className={styles.browserAgentPaneNote}>{t('browserAgentDemoRecipesTitle')}</p>
+                <ul className={styles.browserAgentRecipeList}>
+                  {recipes.map(recipe => (
+                    <li key={recipe.id} className={styles.browserAgentRecipeRow}>
+                      <span className={styles.browserAgentRecipeName}>{recipe.name}</span>
+                      <span className={styles.browserAgentRecipeSteps}>
+                        {t('browserAgentDemoRecipeStepCount').replace('{n}', String(recipe.steps))}
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.browserAgentButton}
+                        disabled={recipeBusy}
+                        onClick={() => { void runRecipe(recipe) }}
+                      >
+                        {t('browserAgentDemoRecipeRun')}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.browserAgentButton}
+                        disabled={recipeBusy}
+                        onClick={() => { void deleteRecipe(recipe) }}
+                      >
+                        {t('browserAgentDemoRecipeDelete')}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {demoSteps !== null ? (
               <>
                 <pre className={styles.browserAgentDemoSteps}>

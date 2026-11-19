@@ -83,7 +83,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentDemoRecordingAgent' | 'browserAgentDemoEmpty' | 'browserAgentDemoCopy' |
       'browserAgentDemoCopied' | 'browserAgentDemoCopyFailed' | 'browserAgentDemoFailed' |
       'browserAgentDemoSend' | 'browserAgentDemoSendLead' | 'browserAgentDemoSent' |
-      'browserAgentDemoSendFailed' |
+      'browserAgentDemoSendFailed' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' |
       'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
       'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
       'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
@@ -499,6 +499,17 @@ export const agentLocales = {
     browserAgentDemoSendLead: '我刚刚在浏览器里演示了一遍流程，请按这些步骤完成同样的操作（先 browser_snapshot，再按 role/name 点击或输入）：',
     browserAgentDemoSent: '已插入输入框，确认后发送',
     browserAgentDemoSendFailed: '插入失败：先在聊天里发一条消息建立会话，再试一次',
+    browserAgentDemoRecipeName: '流程名',
+    browserAgentDemoRecipeSave: '保存为流程',
+    browserAgentDemoRecipeSaved: '已保存「{name}」',
+    browserAgentDemoRecipeFailed: '流程操作失败',
+    browserAgentDemoRecipeNameRequired: '先给流程起个名字',
+    browserAgentDemoRecipeRan: '已运行「{name}」：{n} 步',
+    browserAgentDemoRecipeStopped: '停在第 {step} 步：{reason}',
+    browserAgentDemoRecipesTitle: '已保存的流程',
+    browserAgentDemoRecipeStepCount: '{n} 步',
+    browserAgentDemoRecipeRun: '运行',
+    browserAgentDemoRecipeDelete: '删除',
     browserAgentDemoCopied: '已复制步骤',
     browserAgentDemoCopyFailed: '复制失败，请手动选中文本复制',
     browserAgentDemoFailed: '演示录制失败',
@@ -1173,6 +1184,17 @@ export const agentLocales = {
     browserAgentDemoSendLead: 'I just demonstrated this flow in the browser. Please repeat it using these steps (browser_snapshot first, then click or type by role/name):',
     browserAgentDemoSent: 'Inserted into the composer; send it when ready',
     browserAgentDemoSendFailed: 'Could not insert: send one message in the chat first, then retry',
+    browserAgentDemoRecipeName: 'Flow name',
+    browserAgentDemoRecipeSave: 'Save as flow',
+    browserAgentDemoRecipeSaved: 'Saved "{name}"',
+    browserAgentDemoRecipeFailed: 'Flow action failed',
+    browserAgentDemoRecipeNameRequired: 'Name the flow first',
+    browserAgentDemoRecipeRan: 'Ran "{name}": {n} steps',
+    browserAgentDemoRecipeStopped: 'Stopped at step {step}: {reason}',
+    browserAgentDemoRecipesTitle: 'Saved flows',
+    browserAgentDemoRecipeStepCount: '{n} steps',
+    browserAgentDemoRecipeRun: 'Run',
+    browserAgentDemoRecipeDelete: 'Delete',
     browserAgentDemoCopied: 'Steps copied',
     browserAgentDemoCopyFailed: 'Could not copy; select the text manually',
     browserAgentDemoFailed: 'Demonstration recording failed',
