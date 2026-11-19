@@ -54,7 +54,7 @@ User-facing capabilities **must** appear under **设置 → 智能体增强 → 
 
 ## Run progress stays derived
 
-`run-progress` (the line above the composer) is built from the `tools/execute` middleware, which must stay registered with `{ global: true }` — Desktop dispatches it with an agent carrier, so a host-fiber listener without the flag never fires. Never replace the derived stages with a model-authored plan or a todo list: the value is that it cannot drift from what actually ran.
+`run-progress` (the chip in the composer tool row) is built from the `tools/execute` middleware, which must stay registered with `{ global: true }` — Desktop dispatches it with an agent carrier, so a host-fiber listener without the flag never fires. Never replace the derived stages with a model-authored plan or a todo list: the value is that it cannot drift from what actually ran.
 
 The tracker is memory-only and session-scoped: a new `turn/start` resets it, and `session/disposed` plus the `run-progress` `SessionCleaner` drop it. Keep it bounded (`MAX_STAGES`); the client polls it once a second, so anything heavier belongs behind the browser snapshot instead.
 

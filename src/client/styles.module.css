@@ -2478,64 +2478,77 @@
   object-position: top left;
 }
 
-/* Run progress: one quiet line above the composer, expandable to the stages. */
-.runProgressDock {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0 auto 4px;
-  max-width: 100%;
-  color: var(--dsw-alias-label-secondary);
-  font: var(--dsw-font-xxs-12);
-}
-
-.runProgressLine {
-  display: flex;
+/* Run progress: a composer-row chip (current step + count) that opens stages. */
+.runProgressChip {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  width: 100%;
-  padding: 2px 4px;
+  max-width: 232px;
+  height: 24px;
+  padding: 0 9px;
   border: 0;
-  border-radius: var(--dsw-radius-xs);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
   cursor: pointer;
 }
 
-.runProgressLine:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+.runProgressChip:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
 }
 
-.runProgressLine:focus-visible {
+.runProgressChip:focus-visible {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
-.runProgressDot {
+.runProgressChipDot {
   flex: 0 0 auto;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--dsw-alias-label-tertiary);
-}
-
-.runProgressDock[data-running] .runProgressDot {
   background: var(--dsw-alias-state-business-primary);
 }
 
-.runProgressText {
-  flex: 1;
+.runProgressChipText {
+  flex: 1 1 auto;
   min-width: 0;
+  max-width: 168px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.runProgressChevron {
+.runProgressChipCount {
   flex: 0 0 auto;
-  opacity: 0.7;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.runProgressPopover {
+  position: fixed;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  width: min(340px, calc(100vw - 16px));
+  max-height: 320px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-shadow-lv3);
+  font: var(--dsw-font-xxs-12);
+}
+
+.runProgressPopoverHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .runProgressList {
