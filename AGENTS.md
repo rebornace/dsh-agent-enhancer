@@ -58,6 +58,12 @@ Plans live in `docs/plans/<name>.md` (local-only); the check is the first sectio
 
 User-facing capabilities **must** appear under **设置 → 智能体增强 → 功能** with an on/off switch in the **same change set** (`MODULES` + Config + `SETTINGS_FEATURE_GROUPS` + locales + runtime gate). Do not ship always-on surfaces with no switch. See `.cursor/rules/no-orphan-features.mdc`.
 
+## Persisted data must not hold volatile handles
+
+Anything saved and re-run later (demo recipes, bookmarks, caches) must store semantics, not runtime handles: no `tabId`, no element `ref`, no page/window/process object, no temp path, no per-run counter. Re-resolve from the URL / role+name / current DOM at run time. When the target is gone, stop at the exact step with a reason; do not poke at a stale handle.
+
+This is not theoretical: saved demo recipes originally kept the recording's `tabId`, so after a restart replay died on step 1 with "tab 1 is no longer open". Recipes now drop `tabId` on save, keep `tabUrl`, and match live tabs by page URL. The planning template (`docs/plans/_template.md`, §4) carries the same checklist.
+
 ## Session delete must stay thorough
 
 When a session is deleted from this plugin, **all plugin-owned persistence for that `sessionId` must be purged**.

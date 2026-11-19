@@ -59,11 +59,14 @@ function isStep(value: unknown): value is DemoStep {
   return kind === 'navigate' || kind === 'click' || kind === 'fill' || kind === 'press'
 }
 
-/** Keep only well-formed, sanitized steps; drop anything unexpected. */
+/** Keep only well-formed, sanitized steps; drop volatile handles (tab ids). */
 export function sanitizeRecipeSteps(raw: unknown): DemoStep[] {
   if (!Array.isArray(raw)) return []
   const steps = raw.filter(isStep).slice(0, MAX_RECIPE_STEPS)
-  return sanitizeDemoSteps(steps)
+  return sanitizeDemoSteps(steps).map(step => {
+    const { tabId: _volatileTabId, ...rest } = step
+    return rest as DemoStep
+  })
 }
 
 export class DemoRecipeStore {

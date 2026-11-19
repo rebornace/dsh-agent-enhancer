@@ -71,6 +71,38 @@ describe('DemoRecipeStore', () => {
     expect(store.save({ name: 'one too many', steps: [click('a')] })).toMatchObject({ ok: false })
   })
 
+  it('drops volatile tab ids but keeps the page url', () => {
+    const { store, file } = tempStore()
+    store.save({
+      name: 'multi tab',
+      steps: [
+        { ...click('导出'), tabId: 1, tabUrl: 'https://example.com/a' } as DemoStep,
+        { ...click('确认'), tabId: 2, tabUrl: 'https://example.com/b' } as DemoStep,
+      ],
+    })
+    const raw = readFileSync(file, 'utf8')
+    expect(raw).not.toContain('"tabId"')
+    expect(raw).toContain('"tabUrl": "https://example.com/b"')
+    const reloaded = new DemoRecipeStore(file).get(store.list()[0]!.id)?.steps ?? []
+    expect(reloaded.every(step => step.tabId === undefined)).toBe(true)
+    expect(reloaded.map(step => step.tabUrl)).toEqual(['https://example.com/a', 'https://example.com/b'])
+  })
+
+  it('strips a tab id that an older recipe still carries', () => {
+    const { store, file } = tempStore()
+    writeFileSync(file, JSON.stringify({
+      version: 1,
+      recipes: [{
+        id: 'old', name: 'old', createdAt: 1, updatedAt: 1,
+        steps: [{ kind: 'click', at: 1, role: 'button', name: 'a', selector: '#a', tabId: 7, tabUrl: 'https://example.com/x' }],
+      }],
+    }), 'utf8')
+    const steps = store.get('old')?.steps ?? []
+    expect(steps).toHaveLength(1)
+    expect(steps[0]!.tabId).toBeUndefined()
+    expect(steps[0]!.tabUrl).toBe('https://example.com/x')
+  })
+
   it('keeps secrets masked when saving', () => {
     const { store, file } = tempStore()
     store.save({ name: 'login', steps: [fill('Password', 'hunter2'), fill('email', 'me@example.com')] })
