@@ -119,7 +119,10 @@ async function performStep(driver: DemoReplayDriver, step: DemoStep): Promise<St
       const snapshot = await driver.snapshot()
       const node = matchDemoControl(snapshot.nodes, step.role, step.name)
       if (node === undefined) {
-        return { ok: false, reason: `no control matching ${step.role} ${JSON.stringify(step.name)} on this page` }
+        return {
+          ok: false,
+          reason: `no control matching ${step.role} ${JSON.stringify(step.name)} on ${snapshot.url}`,
+        }
       }
       const result = await driver.click(node.ref)
       return { ok: true, url: result.url }
@@ -128,7 +131,10 @@ async function performStep(driver: DemoReplayDriver, step: DemoStep): Promise<St
       const snapshot = await driver.snapshot()
       const node = matchDemoControl(snapshot.nodes, step.role, step.name)
       if (node === undefined) {
-        return { ok: false, reason: `no field matching ${step.role} ${JSON.stringify(step.name)} on this page` }
+        return {
+          ok: false,
+          reason: `no field matching ${step.role} ${JSON.stringify(step.name)} on ${snapshot.url}`,
+        }
       }
       const result = await driver.type(node.ref, step.value)
       return { ok: true, url: result.url }
@@ -181,6 +187,18 @@ export async function replayDemoSteps(
   const liveTabs = multiTab && typeof driver.listTabs === 'function'
     ? await driver.listTabs().then(result => result.tabs).catch(() => [])
     : []
+
+  // A saved flow starts on the page it was recorded on; the agent's earlier
+  // navigate is not part of the recording, so reopen that page when the current
+  // tab is somewhere else.
+  const first = steps[0]
+  if (first !== undefined && first.kind !== 'navigate' && first.tabUrl !== undefined
+    && /^https?:\/\//i.test(first.tabUrl)) {
+    const current = await driver.snapshot().then(result => result.url).catch(() => undefined)
+    if (current === undefined || !samePage(current, first.tabUrl)) {
+      await driver.navigate(first.tabUrl).catch(() => undefined)
+    }
+  }
 
   const resolveTab = (recordedId: number): number | undefined => {
     const wanted = tabUrls.get(recordedId)

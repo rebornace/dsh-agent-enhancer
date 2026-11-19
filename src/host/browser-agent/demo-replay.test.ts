@@ -160,6 +160,35 @@ describe('replayDemoSteps', () => {
     expect(result.reason).toContain('select')
   })
 
+  it('reopens the recorded start page when the current tab is elsewhere', async () => {
+    const { driver, calls } = fakeDriver({ url: 'about:blank' })
+    const steps: DemoStep[] = [
+      { ...click('导出报表'), tabId: 1, tabUrl: 'https://example.com/admin' },
+      { ...click('取消'), tabId: 1, tabUrl: 'https://example.com/admin' },
+    ]
+    const result = await replayDemoSteps(driver, steps)
+    expect(result.status).toBe('done')
+    expect(calls.navigates).toEqual(['https://example.com/admin'])
+    expect(calls.clicks).toEqual([3, 4])
+  })
+
+  it('does not navigate when the flow already starts on that page', async () => {
+    const { driver, calls } = fakeDriver({ url: 'https://example.com/admin?tab=1' })
+    await replayDemoSteps(driver, [{ ...click('导出报表'), tabId: 1, tabUrl: 'https://example.com/admin' }])
+    expect(calls.navigates).toEqual([])
+  })
+
+  it('leaves the first step alone when it is a navigate', async () => {
+    const { driver, calls } = fakeDriver({ url: 'https://other.example/' })
+    const steps: DemoStep[] = [
+      { kind: 'navigate', at: 1, url: 'https://example.com/', tabId: 1, tabUrl: 'https://example.com/' },
+      { ...click('导出报表'), tabId: 1, tabUrl: 'https://example.com/' },
+    ]
+    const result = await replayDemoSteps(driver, steps)
+    expect(result.status).toBe('done')
+    expect(calls.navigates).toEqual(['https://example.com/'])
+  })
+
   it('does not touch tab ids for a single-tab flow (saved recipes outlive them)', async () => {
     const { driver, calls } = fakeDriver()
     const steps: DemoStep[] = [

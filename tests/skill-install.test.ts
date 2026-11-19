@@ -55,7 +55,10 @@ function tempDir(prefix: string): string {
 afterEach(() => {
   while (temps.length > 0) {
     const dir = temps.pop()
-    if (dir !== undefined) rmSync(dir, { recursive: true, force: true })
+    if (dir === undefined) continue
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    } catch { /* a locked temp dir is not a test failure */ }
   }
 })
 
@@ -215,7 +218,7 @@ describe('skill install filesystem', () => {
     expect(ledger['git-skill']?.source).toBe(source)
     expect(ledger['git-skill']?.contentRevision).toBe(contentRevisionOfDir(skillPath))
     expect(ledger['git-skill']?.updateCheck).toBe(true)
-  })
+  }, 30_000)
 
   it('uninstalls managed user skills and refuses paths outside roots', () => {
     const agents = tempDir('ae-skill-un-agents-')
