@@ -39,8 +39,6 @@ import type {
   BrowserAgentDemoResult,
   BrowserAgentThumbnailRequest,
   BrowserAgentThumbnailResult,
-  RunProgressRequest,
-  RunProgressResult,
   BrowserAgentSnapshot,
   RpcPayload,
   ShowOsNotificationRequest,
@@ -432,20 +430,6 @@ export const clientRemoteInfo = {
       codec: codec('dsh-agent-enhancer#BrowserAgentSelectTabRequest'),
     }],
     result: codec('dsh-agent-enhancer#BrowserAgentSelectTabResult'),
-  }, {
-    id: 'dsh-agent-enhancer#agentEnhancer/runProgress',
-    service: 'agentEnhancer',
-    namespace: 'agentEnhancer',
-    method: 'runProgress',
-    implementation: 'runProgress',
-    invocation: { kind: 'direct' },
-    parameters: [{
-      name: 'request',
-      wire: 'request',
-      source: 'json',
-      codec: codec('dsh-agent-enhancer#RunProgressRequest'),
-    }],
-    result: codec('dsh-agent-enhancer#RunProgressResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/browserAgentDemo',
     service: 'agentEnhancer',
@@ -1124,9 +1108,6 @@ type BrowserAgentDemoCall = (
 type BrowserAgentThumbnailCall = (
   request: BrowserAgentThumbnailRequest,
 ) => Promise<RemoteResult<BrowserAgentThumbnailResult>>
-type RunProgressCall = (
-  request: RunProgressRequest,
-) => Promise<RemoteResult<RunProgressResult>>
 type BrowserAgentSetTabReadOnlyCall = (
   request: BrowserAgentSetTabReadOnlyRequest,
 ) => Promise<RemoteResult<BrowserAgentSetTabReadOnlyResult>>
@@ -1470,30 +1451,6 @@ export const agentEnhancerBrowserAgentDemo = {
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
       return empty(error instanceof Error ? error.message : String(error))
-    }
-  },
-}
-
-export const agentEnhancerRunProgress = {
-  async invoke(
-    remote: unknown,
-    request: RunProgressRequest,
-    signal?: AbortSignal,
-  ): Promise<RunProgressResult> {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    const empty = (): RunProgressResult => ({ stages: [], running: false, active: false })
-    if (remote === null || remote === undefined || typeof remote !== 'object') return empty()
-    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
-    if (namespace === undefined || typeof namespace !== 'object') return empty()
-    const call = Reflect.get(namespace, 'runProgress') as RunProgressCall | undefined
-    if (typeof call !== 'function') return empty()
-    try {
-      const result = await call.apply(namespace, [request])
-      if (!result.ok) return empty()
-      return result.value
-    } catch (error) {
-      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
-      return empty()
     }
   },
 }

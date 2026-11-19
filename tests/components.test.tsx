@@ -144,18 +144,6 @@ const translations: Record<string, string> = {
   runAlerts: 'Run alerts',
   runAlertsDescription: 'Notify when a run finishes, waits for approval, or errors while you are away',
   runAlertsLevel: 'Alert level',
-  runProgress: 'Run progress',
-  runProgressDescription: 'Shows what this turn is doing above the composer',
-  runProgressVerbShell: 'Ran',
-  runProgressVerbRead: 'Read',
-  runProgressVerbWrite: 'Changed',
-  runProgressVerbBrowser: 'Browser',
-  runProgressVerbOther: 'Ran',
-  runProgressRunning: 'Running',
-  runProgressFinished: 'This run',
-  runProgressFailed: '{n} failed',
-  runProgressExpand: 'Show steps',
-  runProgressCollapse: 'Hide steps',
   runAlertsLevel_hidden: 'Background only',
   runAlertsLevel_unfocused: 'When unfocused',
   runAlertsLevel_always: 'Always',
@@ -1077,7 +1065,7 @@ describe('AgentOverlay prompt history search', () => {
 })
 
 describe('PluginSettings', () => {
-  it('renders sixteen module switches on the Features tab by default', () => {
+  it('renders fifteen module switches on the Features tab by default', () => {
     settingsHarness()
     expect(screen.getByText('Toggle input helpers as needed')).toBeTruthy()
     expect(screen.getByText('↑↓ revisit sent prompts; Alt+R to search (Ctrl+R in compatible environments)')).toBeTruthy()
@@ -1092,10 +1080,10 @@ describe('PluginSettings', () => {
     expect(screen.getByText(translations.usageDescription!)).toBeTruthy()
     expect(screen.getByText('Permanently delete a session and its local data from the sidebar ⋯ menu (cannot be undone)')).toBeTruthy()
     expect(screen.getByText(translations.browserAgentDescription!)).toBeTruthy()
-    expect(screen.getAllByRole('switch')).toHaveLength(16)
+    expect(screen.getAllByRole('switch')).toHaveLength(15)
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-label'))).toEqual([
       'Prompt history', 'Optimize prompt', 'Next-prompt prediction', 'Select to quote', 'Conversation and file rollback', 'Soft pause',
-      'Run alerts', 'Run progress',
+      'Run alerts',
       'Context details', 'Model bill', 'Delete session', 'Edit files', 'Skills', 'Connectors', 'Web chat bridge', 'Browser agent',
     ])
     expect(screen.getByRole('tab', { name: 'Features' })).toBeTruthy()
@@ -1485,7 +1473,7 @@ describe('CoexistenceHints', () => {
     expect(store.getSnapshot()).toEqual(['optimize', 'predict'])
     expect(set).not.toHaveBeenCalled()
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-checked'))).toEqual([
-      'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'false',
+      'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'false',
     ])
 
     const reopened = new OverlapHintStore(localStorage, 'test-release')

@@ -43,10 +43,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'runAlertsLevel_hidden' | 'runAlertsLevel_unfocused' | 'runAlertsLevel_always' |
       'runAlertsFinished' | 'runAlertsWaitingApproval' | 'runAlertsWaitingQuestion' |
       'runAlertsWaitingPlanReview' | 'runAlertsWaitingBrowserHuman' | 'runAlertsWaiting' | 'runAlertsError' |
-      'runProgress' | 'runProgressDescription' | 'runProgressRunning' | 'runProgressFinished' | 'runProgressThinking' | 'runProgressSteps' |
-      'runProgressFailed' | 'runProgressExpand' | 'runProgressCollapse' |
-      'runProgressVerbShell' | 'runProgressVerbRead' | 'runProgressVerbWrite' |
-      'runProgressVerbBrowser' | 'runProgressVerbOther' |
       'webChatBridge' | 'webChatBridgeDescription' |
       'webChat' | 'webChatLeftNavUnsupported' |
       'webChatTitle' | 'webChatIntro' |
@@ -416,20 +412,6 @@ export const agentLocales = {
     runAlertsWaitingBrowserHuman: '{title}：浏览器需要登录或验证',
     runAlertsWaiting: '{title}：等待你的操作',
     runAlertsError: '{title}：出错 — {message}',
-    runProgress: '运行进度',
-    runProgressDescription: '在输入框上方显示这一轮正在做什么：按实际发生的工具调用列出步骤，当前一步高亮，可展开看全过程。不是计划，也不会让模型额外写清单。',
-    runProgressRunning: '运行中',
-    runProgressThinking: '思考中',
-    runProgressSteps: '{n} 步',
-    runProgressFinished: '本次运行',
-    runProgressFailed: '{n} 步失败',
-    runProgressExpand: '展开步骤',
-    runProgressCollapse: '收起步骤',
-    runProgressVerbShell: '运行命令',
-    runProgressVerbRead: '读取',
-    runProgressVerbWrite: '修改',
-    runProgressVerbBrowser: '浏览器',
-    runProgressVerbOther: '执行',
     webChatBridge: '网页聊天',
     webChatBridgeDescription:
       '在主区打开官方网页版聊天。首次需在网页内登录；可将当前对话，或任意账号的公开分享链接，转到工作区继续（单段保真）。全量 deepseek_data ZIP 请用官方实验插件「DeepSeek 会话导入」。默认开启。不会把网页账号额度接到本地 API。',
@@ -1104,20 +1086,6 @@ export const agentLocales = {
     runAlertsWaitingBrowserHuman: '{title}: browser needs login or verification',
     runAlertsWaiting: '{title}: waiting for you',
     runAlertsError: '{title}: error — {message}',
-    runProgress: 'Run progress',
-    runProgressDescription: 'Shows what this turn is doing above the composer: the tool calls that actually ran, with the current step highlighted and the full list one click away. Derived from the run, not a plan the model has to write.',
-    runProgressRunning: 'Running',
-    runProgressThinking: 'Thinking',
-    runProgressSteps: '{n} steps',
-    runProgressFinished: 'This run',
-    runProgressFailed: '{n} failed',
-    runProgressExpand: 'Show steps',
-    runProgressCollapse: 'Hide steps',
-    runProgressVerbShell: 'Ran',
-    runProgressVerbRead: 'Read',
-    runProgressVerbWrite: 'Changed',
-    runProgressVerbBrowser: 'Browser',
-    runProgressVerbOther: 'Ran',
     webChat: 'Web chat',
     webChatLeftNavUnsupported: 'No left Web chat entry in this build. Upgrade DeepSeek Harness or confirm the feature is on',
     webChatTitle: 'Web chat',

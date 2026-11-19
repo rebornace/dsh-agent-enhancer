@@ -94,7 +94,6 @@ import { QuoteExternalHosts } from './quote/external-hosts.tsx'
 import { SessionDeleteMenuItem } from './session-delete/menu.tsx'
 import { SessionDeleteOverlay } from './session-delete/overlay.tsx'
 import { RunAlertsHost } from './run-alerts/host.tsx'
-import { RunProgressChip } from './run-progress/chip.tsx'
 import { basenameOfPath, parseWorkspaceFileAddress } from './file-edit/address.ts'
 import { FileEditDocumentAction } from './file-edit/action.tsx'
 import { FILE_EDIT_TAB_ID, FILE_EDIT_TAB_KIND } from './file-edit/kind.ts'
@@ -333,34 +332,6 @@ export function apply(ctx: Context): void {
       }, () => createElement(BrowserAgentOverlay, {
         t,
         getRemote: () => agentEnhancerRemote,
-      }))))
-    }
-    const unsubscribe = form.subscribe(synchronize)
-    synchronize()
-    return () => {
-      unsubscribe()
-      clear()
-    }
-  })
-
-  ctx.effect(() => {
-    let disposers: Array<() => void> = []
-    const clear = () => {
-      while (disposers.length > 0) disposers.pop()?.()
-    }
-    const synchronize = () => {
-      clear()
-      const runProgressOn = resolveSettings(form.getSnapshot().value).runProgressEnabled
-      if (!runProgressOn) return
-      disposers.push(ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
-        name: 'conversation.input.left',
-        id: 'agent-enhancer-run-progress',
-        order: 120,
-      }, (props: PropsRuntime<'conversation.input.left'>) => createElement(RunProgressChip, {
-        t,
-        getRemote: () => agentEnhancerRemote,
-        enabled: () => resolveSettings(form.getSnapshot().value).runProgressEnabled,
-        sessionId: (props as { readonly sessionId?: string }).sessionId,
       }))))
     }
     const unsubscribe = form.subscribe(synchronize)

@@ -52,12 +52,6 @@ When adding or restyling client UI that peers an official Desktop surface, read 
 
 User-facing capabilities **must** appear under **设置 → 智能体增强 → 功能** with an on/off switch in the **same change set** (`MODULES` + Config + `SETTINGS_FEATURE_GROUPS` + locales + runtime gate). Do not ship always-on surfaces with no switch. See `.cursor/rules/no-orphan-features.mdc`.
 
-## Run progress stays derived
-
-`run-progress` (the chip in the composer tool row) is built from the `tools/execute` middleware, which must stay registered with `{ global: true }` — Desktop dispatches it with an agent carrier, so a host-fiber listener without the flag never fires. Never replace the derived stages with a model-authored plan or a todo list: the value is that it cannot drift from what actually ran.
-
-The tracker is memory-only and session-scoped: a new `turn/start` resets it, and `session/disposed` plus the `run-progress` `SessionCleaner` drop it. Keep it bounded (`MAX_STAGES`); the client polls it once a second, so anything heavier belongs behind the browser snapshot instead.
-
 ## Session delete must stay thorough
 
 When a session is deleted from this plugin, **all plugin-owned persistence for that `sessionId` must be purged**.

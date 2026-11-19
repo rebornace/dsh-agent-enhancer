@@ -23,7 +23,6 @@ function hostBrowserPreference(value: string | undefined): BrowserAgentBrowser {
   )
 }
 import { installBrowserAgent } from './browser-agent/install.ts'
-import { RunProgress } from './run-progress/tracker.ts'
 import type { BrowserAgentRuntime } from './browser-agent/install.ts'
 import { defaultBrowserAgentProfileDir } from './browser-agent/launch.ts'
 import { AuxiliaryError } from '../errors.ts'
@@ -243,8 +242,6 @@ import type {
   BrowserAgentDemoResult,
   BrowserAgentThumbnailRequest,
   BrowserAgentThumbnailResult,
-  RunProgressRequest,
-  RunProgressResult,
   BrowserAgentLaunchBrowserResult,
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
@@ -276,8 +273,6 @@ export const Config = z.object({
   runAlertsEnabled: z.boolean().default(true).volatile(),
   /** Coerced via resolveRunAlertsLevel in readSettings (`hidden` | `unfocused` | `always`). */
   runAlertsLevel: z.string().default('unfocused').volatile(),
-  /** Stage list under the composer: what the agent is doing right now. */
-  runProgressEnabled: z.boolean().default(true).volatile(),
   /** High-risk; default off. */
   browserAgentEnabled: z.boolean().default(false).volatile(),
   browserAgentBrowser: z.string().default('auto').volatile(),
@@ -369,8 +364,6 @@ export class AgentEnhancerService extends TypertRemoteService {
     private readonly browserAgentProfileDir: string = defaultBrowserAgentProfileDir(
       join(homedir(), '.dsh', 'profiles', 'desktop', 'plugin-data', PACKAGE_NAME),
     ),
-    private readonly runStages: RunProgress = new RunProgress(),
-    private readonly runProgressEnabled: () => boolean = () => false,
   ) {
     super(ctx, 'agentEnhancer')
   }
@@ -1340,18 +1333,6 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
   }
 
-  async runProgress(request: RunProgressRequest): Promise<RunProgressResult> {
-    this.assertOwner()
-    if (!this.runProgressEnabled()) return { stages: [], running: false, active: false }
-    const view = this.runStages.view(request.sessionId)
-    return {
-      stages: [...view.stages],
-      running: view.running,
-      active: view.active,
-      ...(view.startedAt === undefined ? {} : { startedAt: view.startedAt }),
-    }
-  }
-
   async browserAgentThumbnail(
     request: BrowserAgentThumbnailRequest,
   ): Promise<BrowserAgentThumbnailResult> {
@@ -1504,7 +1485,6 @@ function readSettings(config: Config): EnhancerSettings {
     softPauseEnabled: config.softPauseEnabled.get(),
     runAlertsEnabled: config.runAlertsEnabled.get(),
     runAlertsLevel: resolveRunAlertsLevel(config.runAlertsLevel.get()),
-    runProgressEnabled: config.runProgressEnabled.get(),
     browserAgentEnabled: config.browserAgentEnabled.get(),
     browserAgentBrowser: hostBrowserPreference(config.browserAgentBrowser.get()),
     browserAgentDebugTools: config.browserAgentDebugTools.get(),
@@ -1624,51 +1604,6 @@ export function apply(ctx: Context, config: Config): void {
       softPauseGate.release(sessionId)
     },
   })
-  const runStages = new RunProgress()
-  sessionCleanup.register({
-    id: 'run-progress',
-    label: 'Run progress stages',
-    async purge(sessionId) {
-      runStages.clearSession(sessionId)
-    },
-  })
-  ctx.effect(() => {
-    const enabled = () => settings().runProgressEnabled
-    const offTurn = ctx.on('session/event', (session, event) => {
-      if (!enabled()) return
-      if (event.type === 'turn/start') {
-        runStages.startTurn(session.id)
-        return
-      }
-      if (event.type === 'turn/end') runStages.endTurn(session.id)
-    })
-    const offDisposed = ctx.on('session/disposed', session => {
-      runStages.clearSession(session.id)
-    })
-    // global: Desktop dispatches tools/execute with an agent carrier, so a
-    // host-fiber listener without this flag never runs (same as checkpoint).
-    const offTools = ctx.on('tools/execute', async (exec, next) => {
-      const sessionId = exec.agent?.session?.id
-      if (!enabled() || sessionId === undefined) return next()
-      const id = runStages.begin(sessionId, exec.name, exec.arguments)
-      try {
-        const result = await next()
-        runStages.finish(sessionId, id, { ok: true })
-        return result
-      } catch (error) {
-        runStages.finish(sessionId, id, {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        throw error
-      }
-    }, { global: true })
-    return () => {
-      offTurn()
-      offDisposed()
-      offTools()
-    }
-  })
   new AgentEnhancerService(ctx, models, {
       async summarize(range) {
         const stored = await usage.listCalls()
@@ -1701,8 +1636,6 @@ export function apply(ctx: Context, config: Config): void {
       browserAgentLive.browser = hostBrowserPreference(browser)
     },
     browserAgentProfileDir,
-    runStages,
-    () => settings().runProgressEnabled,
   )
   ctx.effect(() => {
     const unsubscribe = ctx.on('internal/update', (resolvedConfig, next) => {
