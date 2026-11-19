@@ -12,6 +12,7 @@ test-results/
 scripts/inspect-sessions.mjs
 docs/superpowers
 docs/architecture
+docs/plans
 docs/roadmap.md
 .cursor/
 .tmp-*/

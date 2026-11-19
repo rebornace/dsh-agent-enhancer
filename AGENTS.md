@@ -48,6 +48,12 @@ When adding or restyling client UI that peers an official Desktop surface, read 
 
 **Only reference design tokens the theme defines.** A `var(--dsw-…)` with an unknown name is dropped, so the declaration silently never applies: that is how the browser approval banner lost its background and rendered see-through over the page (`--dsw-alias-bg-elevated` was never a token). `tests/client-design-tokens.test.ts` fails if `styles.module.css` mentions a token missing from `tests/fixtures/dsh-theme-tokens.txt`; refresh that fixture from `@deepseek-ai/dsh-client-ui-theme` when the Desktop host moves.
 
+## Backlog admission: prove the official surface does not do it
+
+Before planning or implementing a roadmap item, write its three-line duplicate check: the official package/UI surface that would own it, the evidence (screenshot, code path, or test), and what stays uncovered. If the third line is empty, delete the item from the roadmap instead of building it — a plan for a duplicate feature is the most expensive kind of plan. Check by **surface**, not by feature name: L1 (run progress) was justified with "official Todos only cover the plan", missed the conversation's activity block, and had to be reverted after shipping.
+
+Plans live in `docs/plans/<name>.md` (local-only); the check is the first section.
+
 ## No orphan features — every capability needs a settings toggle
 
 User-facing capabilities **must** appear under **设置 → 智能体增强 → 功能** with an on/off switch in the **same change set** (`MODULES` + Config + `SETTINGS_FEATURE_GROUPS` + locales + runtime gate). Do not ship always-on surfaces with no switch. See `.cursor/rules/no-orphan-features.mdc`.
