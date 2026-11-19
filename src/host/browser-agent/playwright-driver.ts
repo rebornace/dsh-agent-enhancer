@@ -678,9 +678,11 @@ export class PlaywrightDriver implements BrowserDriver {
   /** Small crop around the control a pending approval is about. */
   async thumbnail(ref: number): Promise<{ readonly mime: string; readonly base64: string } | null> {
     const page = await this.requirePage()
-    const tabId = this.tabIdFor(page)
-    if (this.tabs.ref(tabId, ref) === undefined) return null
+    // No registry lookup: the DOM stamp is what matters, and a ref can be
+    // dropped from the session map while the element is still on the page.
     const locator = page.locator(`[${PLAYWRIGHT_REF_ATTR}="${ref}"]`).first()
+    const count = await locator.count().catch(() => 0)
+    if (count === 0) return null
     const box = await locator.boundingBox().catch(() => null)
     if (box === null) return null
     const viewport = page.viewportSize() ?? { width: 1280, height: 800 }
