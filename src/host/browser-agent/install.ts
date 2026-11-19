@@ -20,7 +20,7 @@ import { registerBrowserAgentPrompt } from './prompt.ts'
 import { BrowserSessionState } from './session-state.ts'
 import { TabScopeStore } from './tab-scope.ts'
 import { diagnose, type BrowserAvailability, type Diagnosis } from './diagnose.ts'
-import { summarizeDemoSteps } from './demo.ts'
+import { demoTabLegend, summarizeDemoSteps } from './demo.ts'
 import { registerBrowserTools } from './tools.ts'
 
 /** Idle sweep cadence; the tab age comes from browserAgentIdleClose. */
@@ -513,10 +513,10 @@ export function installBrowserAgent(
         sessions.record({
           sessionId: 'sidebar',
           tool: 'browser_demonstrate',
-          summary: `Demonstration stopped from the sidebar (${summary.shown} step(s))`,
+          summary: `Demonstration stopped from the sidebar (${summary.shown} step(s)${summary.multiTab ? ` across ${summary.tabs.length} tabs` : ''})`,
           outcome: 'ok',
         })
-        return { ok: true, steps: summary.lines }
+        return { ok: true, steps: [...demoTabLegend(summary), ...summary.lines] }
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : String(error) }
       }

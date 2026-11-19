@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  attachDemoTab,
+  demoTabLegend,
   isSensitiveFieldName,
   pushDemoStep,
   mergeDemoSteps,
@@ -63,6 +65,26 @@ describe('pushDemoStep', () => {
     pushDemoStep(steps, fill('#q', 'q', 'coffee', 2))
     expect(steps.map(step => step.kind)).toEqual(['click', 'fill'])
   })
+
+  it('does not fold across tabs, even for the same field', () => {
+    const steps: DemoStep[] = []
+    pushDemoStep(steps, attachDemoTab(fill('#q', 'q', 'ad', 1), { tabId: 1 }))
+    pushDemoStep(steps, attachDemoTab(fill('#q', 'q', 'admin', 2), { tabId: 2 }))
+    expect(steps).toHaveLength(2)
+    expect(steps.map(step => step.tabId)).toEqual([1, 2])
+  })
+})
+
+describe('attachDemoTab', () => {
+  it('tags a page-side step with the tab that sent it', () => {
+    const tagged = attachDemoTab(click('#a', 1), { tabId: 7, tabUrl: 'https://example.com/x' })
+    expect(tagged).toMatchObject({ tabId: 7, tabUrl: 'https://example.com/x', selector: '#a' })
+  })
+
+  it('leaves a step alone when no tab is known', () => {
+    const step = click('#a', 1)
+    expect(attachDemoTab(step, {})).toBe(step)
+  })
 })
 
 describe('mergeDemoSteps', () => {
@@ -78,6 +100,17 @@ describe('mergeDemoSteps', () => {
   it('keeps a genuine second click after other work', () => {
     const steps = mergeDemoSteps([click('#a', 10), fill('#q', 'q', 'x', 20), click('#a', 30)], [])
     expect(steps).toHaveLength(3)
+  })
+
+  it('keeps the same click in two tabs instead of deduping it away', () => {
+    const steps = mergeDemoSteps(
+      [
+        attachDemoTab(click('#export', 10), { tabId: 1 }),
+        attachDemoTab(click('#export', 20), { tabId: 2 }),
+      ],
+      [],
+    )
+    expect(steps.map(step => step.tabId)).toEqual([1, 2])
   })
 })
 
@@ -117,5 +150,34 @@ describe('summarizeDemoSteps', () => {
     expect(summary.shown).toBe(3)
     expect(summary.masked).toBe(0)
     expect(summary.lines).toHaveLength(3)
+  })
+
+  it('leaves a single-tab flow untagged, with no legend', () => {
+    const tagged = steps.map(step => attachDemoTab(step, { tabId: 1, tabUrl: 'https://example.com/login' }))
+    const summary = summarizeDemoSteps(tagged)
+    expect(summary.multiTab).toBe(false)
+    expect(summary.tabs).toEqual([{ tabId: 1, url: 'https://example.com/login' }])
+    expect(summary.lines[0]).toBe('1. navigate -> https://example.com/login')
+    expect(demoTabLegend(summary)).toEqual([])
+  })
+
+  it('tags every step once the flow crosses tabs and names each tab', () => {
+    const tagged: DemoStep[] = [
+      attachDemoTab({ kind: 'navigate', at: 1, url: 'https://example.com/' }, { tabId: 1, tabUrl: 'https://example.com/' }),
+      attachDemoTab(click('#open', 2), { tabId: 1 }),
+      attachDemoTab({ kind: 'navigate', at: 3, url: 'https://example.com/docs' }, { tabId: 2, tabUrl: 'https://example.com/docs' }),
+      attachDemoTab(fill('#pw', 'password', '***', 4, true), { tabId: 2 }),
+    ]
+    const summary = summarizeDemoSteps(tagged)
+    expect(summary.multiTab).toBe(true)
+    expect(summary.masked).toBe(1)
+    expect(summary.lines[0]).toBe('1. [tab 1] navigate -> https://example.com/')
+    expect(summary.lines[2]).toBe('3. [tab 2] navigate -> https://example.com/docs')
+    expect(summary.tabs.map(tab => tab.tabId)).toEqual([1, 2])
+    expect(demoTabLegend(summary)).toEqual([
+      'tabs: 2 (each step is tagged with the tab it happened in)',
+      'tab 1: https://example.com/',
+      'tab 2: https://example.com/docs',
+    ])
   })
 })

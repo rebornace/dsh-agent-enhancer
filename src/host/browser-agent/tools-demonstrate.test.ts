@@ -18,7 +18,7 @@ const steps: DemoStep[] = [
   { kind: 'click', at: 4, role: 'button', name: 'Sign in', selector: '#signin' },
 ]
 
-function harness(demonstrate: boolean) {
+function harness(demonstrate: boolean, recorded: readonly DemoStep[] = steps) {
   const tools = new Map<string, RegisteredTool>()
   const ctx = {
     tools: {
@@ -37,7 +37,7 @@ function harness(demonstrate: boolean) {
     bind: async (tabId: number) => ({ tabId, url: 'https://example.com/login', title: 'Login' }),
     followTab: async (tabId: number) => ({ tabId, url: 'https://example.com/login', title: 'Login' }),
     startDemonstration: vi.fn(async () => undefined),
-    stopDemonstration: vi.fn(async () => steps),
+    stopDemonstration: vi.fn(async () => recorded),
   } as unknown as BrowserDriver
 
   const gate = new BrowserHumanGate()
@@ -92,5 +92,29 @@ describe('browser_demonstrate', () => {
     // The tool schema rejects the missing argument before the handler runs.
     await expect(h.run({})).rejects.toThrow(/message/)
     expect(h.driver.startDemonstration).not.toHaveBeenCalled()
+  })
+
+  it('tags steps per tab and points at browser_follow_tab when the flow crosses tabs', async () => {
+    const acrossTabs: DemoStep[] = [
+      { kind: 'navigate', at: 1, url: 'https://example.com/admin', tabId: 1, tabUrl: 'https://example.com/admin' },
+      { kind: 'click', at: 2, role: 'link', name: 'Reports', selector: '#reports', tabId: 1, tabUrl: 'https://example.com/admin' },
+      { kind: 'navigate', at: 3, url: 'https://example.com/reports', tabId: 2, tabUrl: 'https://example.com/reports' },
+      { kind: 'click', at: 4, role: 'button', name: 'Export', selector: '#export', tabId: 2, tabUrl: 'https://example.com/reports' },
+    ]
+    const h = harness(true, acrossTabs)
+    const out = await h.run({ message: 'show me the export flow' }) as string
+    expect(out).toContain('tabs: 2')
+    expect(out).toContain('tab 1: https://example.com/admin')
+    expect(out).toContain('tab 2: https://example.com/reports')
+    expect(out).toContain('2. [tab 1] click link "Reports"')
+    expect(out).toContain('4. [tab 2] click button "Export"')
+    expect(out).toContain('browser_follow_tab')
+  })
+
+  it('keeps the single-tab output free of tab tags', async () => {
+    const h = harness(true)
+    const out = await h.run({ message: 'show me how you sign in' }) as string
+    expect(out).not.toContain('[tab ')
+    expect(out).not.toContain('browser_follow_tab')
   })
 })

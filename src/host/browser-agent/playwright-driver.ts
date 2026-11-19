@@ -34,12 +34,14 @@ import {
   type PlaywrightRefRecord,
 } from './playwright-snapshot.ts'
 import {
+  attachDemoTab,
   DEMO_RECORDER_SOURCE,
   DEMO_STOP_SOURCE,
   mergeDemoSteps,
   pushDemoStep,
   sanitizeDemoSteps,
   type DemoStep,
+  type DemoStepSite,
 } from './demo.ts'
 import { CaptureBuffer, redactText, redactUrl, type CaptureEntry, type CaptureKind } from './capture.ts'
 import { pathsDiffer } from './auto-nav.ts'
@@ -824,7 +826,7 @@ export class PlaywrightDriver implements BrowserDriver {
     }
   }
 
-  /** Record a user demonstration in the bound tab until stopDemonstration(). */
+  /** Record a user demonstration across every tab of the dedicated browser. */
   async startDemonstration(): Promise<void> {
     const page = await this.requirePage()
     if (this.demoPage !== null) await this.stopDemonstration().catch(() => undefined)
@@ -835,9 +837,13 @@ export class PlaywrightDriver implements BrowserDriver {
     if (!this.demoBindingReady) {
       // Steps cross into Node as they happen, so a navigation cannot lose them.
       try {
-        await context.exposeBinding('__dshDemoPush', (_source, step: DemoStep) => {
+        await context.exposeBinding('__dshDemoPush', (source, step: DemoStep) => {
           if (this.demoPage === null) return
-          pushDemoStep(this.demoPageSteps, step)
+          const from = (source as { page?: Page }).page
+          pushDemoStep(
+            this.demoPageSteps,
+            from === undefined || from.isClosed() ? step : attachDemoTab(step, this.demoSite(from)),
+          )
         })
         this.demoBindingReady = true
       } catch {
@@ -845,32 +851,56 @@ export class PlaywrightDriver implements BrowserDriver {
         this.demoBindingReady = true
       }
     }
-    this.watchDemoNavigation(page)
-    await page.evaluate(`(() => { ${DEMO_RECORDER_SOURCE} })()`).catch(() => undefined)
+    // Every open tab, not just the bound one: the user may carry the flow into
+    // a tab they opened earlier (docs, admin console, a second account).
+    for (const open of context.pages()) this.armDemoPage(open)
     if (this.demoPageHandler === null) {
       this.demoPageHandler = (opened: Page) => {
         if (this.demoPage === null) return
-        this.watchDemoNavigation(opened)
-        void opened.evaluate(`(() => { ${DEMO_RECORDER_SOURCE} })()`).catch(() => undefined)
+        this.armDemoPage(opened)
       }
       context.on('page', this.demoPageHandler)
     }
   }
 
+  /** Tab id plus the redacted URL of a page, for tagging a step. */
+  private demoSite(page: Page): DemoStepSite {
+    let raw = ''
+    try {
+      raw = page.url()
+    } catch {
+      raw = ''
+    }
+    return {
+      tabId: this.tabIdFor(page),
+      ...(/^https?:\/\//i.test(raw) ? { tabUrl: redactUrl(raw) } : {}),
+    }
+  }
+
   /**
-   * Record top-level http(s) navigations of the pages the demo touches and
-   * re-arm the recorder on the new document (the old one dies with the page).
+   * Wire one tab for recording: a navigation watcher (attached once per page)
+   * plus the page-side recorder, which is re-injected every call so a second
+   * demonstration in the same browser does not silently record nothing.
    */
-  private watchDemoNavigation(page: Page): void {
-    if (this.demoTrackedPages.has(page)) return
-    this.demoTrackedPages.add(page)
-    page.on('framenavigated', frame => {
-      if (this.demoPage === null || frame !== page.mainFrame()) return
-      const url = frame.url()
-      if (!/^https?:\/\//i.test(url)) return
-      this.demoNavSteps.push({ kind: 'navigate', at: Date.now(), url: redactUrl(url) })
-      void frame.page().evaluate(`(() => { ${DEMO_RECORDER_SOURCE} })()`).catch(() => undefined)
-    })
+  private armDemoPage(page: Page): void {
+    if (!this.demoTrackedPages.has(page)) {
+      this.demoTrackedPages.add(page)
+      page.on('framenavigated', frame => {
+        if (this.demoPage === null || frame !== page.mainFrame()) return
+        const url = frame.url()
+        if (!/^https?:\/\//i.test(url)) return
+        const safe = redactUrl(url)
+        this.demoNavSteps.push({
+          kind: 'navigate',
+          at: Date.now(),
+          url: safe,
+          tabId: this.tabIdFor(page),
+          tabUrl: safe,
+        })
+        void frame.page().evaluate(demoRecorderScript()).catch(() => undefined)
+      })
+    }
+    void page.evaluate(demoRecorderScript()).catch(() => undefined)
   }
 
   /** Stop recording and return the flow, secrets masked, repeats dropped. */
@@ -971,6 +1001,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => {
     setTimeout(resolve, ms)
   })
+}
+
+/** Evaluate expression that installs the page-side demonstration recorder. */
+function demoRecorderScript(): string {
+  return `(() => { ${DEMO_RECORDER_SOURCE} })()`
 }
 
 function clipText(text: string, max: number): string {

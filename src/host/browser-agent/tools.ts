@@ -9,7 +9,7 @@ import type { SnapshotBody } from './protocol.ts'
 import type { BrowserSessionState } from './session-state.ts'
 import type { TabScopeStore } from './tab-scope.ts'
 import type { Diagnosis } from './diagnose.ts'
-import { summarizeDemoSteps } from './demo.ts'
+import { demoTabLegend, summarizeDemoSteps } from './demo.ts'
 
 type ToolExec = {
   readonly signal: AbortSignal
@@ -1259,7 +1259,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   disposers.push(ctx.tools.register(textTool(
     'browser_demonstrate',
-    'Ask the user to show you a flow in the dedicated browser window (they click and type, you watch), blocking until they press Continue. Records clicks, filled fields, Enter presses and top-level navigations; password / OTP / token fields are masked as ***. Use it when you cannot work out how a flow works. Returns numbered steps to replay with browser_snapshot then browser_click / browser_type by name (refs change between runs). Requires the Demonstrate switch in Settings → 智能体增强 → 浏览器 Agent.',
+    'Ask the user to show you a flow in the dedicated browser window (they click and type, you watch), blocking until they press Continue. Records clicks, filled fields, Enter presses and top-level navigations in every tab of that browser; each step is tagged with the tab it happened in. Password / OTP / token fields are masked as ***. Use it when you cannot work out how a flow works. Returns numbered steps to replay with browser_snapshot then browser_click / browser_type by name (refs change between runs). Requires the Demonstrate switch in Settings → 智能体增强 → 浏览器 Agent.',
     {
       message: {
         type: 'string',
@@ -1308,21 +1308,24 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       options.sessions.record({
         sessionId,
         tool: 'browser_demonstrate',
-        summary: `Demonstrated ${summary.shown} step(s)`,
+        summary: `Demonstrated ${summary.shown} step(s)${summary.multiTab ? ` across ${summary.tabs.length} tabs` : ''}`,
         outcome: 'ok',
       })
       if (summary.shown === 0) {
         return [
           'demonstrated steps: 0',
-          'Nothing was recorded — the user may have pressed Continue without acting, or the flow happened in another tab.',
+          'Nothing was recorded — the user may have pressed Continue without acting.',
           'Action: call browser_ask_user to check, or browser_snapshot and continue on your own.',
         ].join('\n')
       }
       return [
         `demonstrated steps: ${summary.shown}${steps.length > summary.shown ? ` (of ${steps.length})` : ''}`,
         ...(summary.masked > 0 ? [`masked fields: ${summary.masked} (secret values are never shown)`] : []),
+        ...demoTabLegend(summary),
         ...summary.lines,
-        'Action: replay with browser_snapshot, then browser_click / browser_type by the role+name shown here. Refs change between runs; never invent selectors.',
+        summary.multiTab
+          ? 'Action: the flow crossed tabs. browser_list_tabs, then browser_follow_tab for each tab N before acting in it (match by URL; ids are stable while this browser stays open). In each tab: browser_snapshot, then browser_click / browser_type by the role+name shown here. Refs change between runs; never invent selectors.'
+          : 'Action: replay with browser_snapshot, then browser_click / browser_type by the role+name shown here. Refs change between runs; never invent selectors.',
       ].join('\n')
     },
     HUMAN_WAIT_TIMEOUT_MS,

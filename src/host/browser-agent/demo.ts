@@ -7,7 +7,15 @@
  * values are otherwise kept — the agent can already read the page.
  */
 
-export type DemoStep =
+/** Where a step happened. Filled in on the Node side; the page cannot know the tab id. */
+export interface DemoStepSite {
+  /** Registry tab id (stable while the dedicated browser runs). */
+  readonly tabId?: number
+  /** Redacted page URL at the moment of the step. */
+  readonly tabUrl?: string
+}
+
+type DemoStepPayload =
   | { readonly kind: 'navigate'; readonly at: number; readonly url: string }
   | {
     readonly kind: 'click'
@@ -30,6 +38,18 @@ export type DemoStep =
   }
   | { readonly kind: 'press'; readonly at: number; readonly key: string; readonly selector: string }
 
+export type DemoStep = DemoStepSite & DemoStepPayload
+
+/** Tag a page-side step with the tab the user did it in. */
+export function attachDemoTab(step: DemoStep, site: DemoStepSite): DemoStep {
+  if (site.tabId === undefined) return step
+  return {
+    ...step,
+    tabId: site.tabId,
+    ...(site.tabUrl === undefined ? {} : { tabUrl: site.tabUrl }),
+  }
+}
+
 const SECRET_FIELD = /pass(word)?|\bpw\b|\bpwd\b|otp|one[-_]?time|code|pin|cvv|cvc|secret|token|card[-_]?number|iban/i
 
 /** Field identity that must never be recorded verbatim. */
@@ -43,7 +63,8 @@ export function isSensitiveFieldName(...parts: readonly (string | undefined | nu
  */
 export function pushDemoStep(steps: DemoStep[], step: DemoStep, windowMs = 1_500): void {
   const last = steps[steps.length - 1]
-  if (last !== undefined && step.at - last.at <= windowMs) {
+  // Fold only within one tab: the same selector in two tabs is two steps.
+  if (last !== undefined && last.tabId === step.tabId && step.at - last.at <= windowMs) {
     // Typing the same field: keep only the final value.
     if (last.kind === 'fill' && step.kind === 'fill' && last.selector === step.selector) {
       steps[steps.length - 1] = step
@@ -75,6 +96,7 @@ export function mergeDemoSteps(
 }
 
 function sameStep(a: DemoStep, b: DemoStep): boolean {
+  if (a.tabId !== b.tabId) return false
   if (a.kind !== b.kind) return false
   if (a.kind === 'navigate' && b.kind === 'navigate') return a.url === b.url
   if (a.kind === 'click' && b.kind === 'click') return a.selector === b.selector
@@ -92,27 +114,42 @@ export function sanitizeDemoSteps(steps: readonly DemoStep[]): DemoStep[] {
   })
 }
 
-/** One line per step, capped, plus what a replay needs to know. */
-export function summarizeDemoSteps(steps: readonly DemoStep[], max = 40): {
+/** One tab the flow touched, in first-seen order. */
+export interface DemoTabRef {
+  readonly tabId: number
+  readonly url?: string
+}
+
+export interface DemoStepSummary {
   readonly lines: readonly string[]
   readonly shown: number
   readonly masked: number
-} {
+  /** Tabs the shown steps happened in. */
+  readonly tabs: readonly DemoTabRef[]
+  /** True when the flow crossed tabs, so every line is tagged. */
+  readonly multiTab: boolean
+}
+
+/** One line per step, capped, plus what a replay needs to know. */
+export function summarizeDemoSteps(steps: readonly DemoStep[], max = 40): DemoStepSummary {
   const shown = steps.slice(0, Math.max(1, max))
+  const tabs = collectTabs(shown)
+  const multiTab = tabs.length > 1
   const lines = shown.map((step, index) => {
     const n = index + 1
+    const tag = multiTab && step.tabId !== undefined ? `[tab ${step.tabId}] ` : ''
     switch (step.kind) {
       case 'navigate':
-        return `${n}. navigate -> ${step.url}`
+        return `${n}. ${tag}navigate -> ${step.url}`
       case 'click':
-        return `${n}. click ${step.role} ${JSON.stringify(step.name)}${step.href === undefined ? '' : ` (href ${step.href})`} [selector ${step.selector}]`
+        return `${n}. ${tag}click ${step.role} ${JSON.stringify(step.name)}${step.href === undefined ? '' : ` (href ${step.href})`} [selector ${step.selector}]`
       case 'fill': {
         const value = step.masked ? '***' : JSON.stringify(step.value)
         const checked = step.checked === undefined ? '' : ` checked=${String(step.checked)}`
-        return `${n}. fill ${step.role} ${JSON.stringify(step.name)} = ${value}${checked} [selector ${step.selector}]`
+        return `${n}. ${tag}fill ${step.role} ${JSON.stringify(step.name)} = ${value}${checked} [selector ${step.selector}]`
       }
       case 'press':
-        return `${n}. press ${step.key} [selector ${step.selector}]`
+        return `${n}. ${tag}press ${step.key} [selector ${step.selector}]`
       default: {
         const exhaustive: never = step
         return `${n}. ${JSON.stringify(exhaustive)}`
@@ -123,7 +160,30 @@ export function summarizeDemoSteps(steps: readonly DemoStep[], max = 40): {
     lines,
     shown: shown.length,
     masked: shown.filter(step => step.kind === 'fill' && step.masked).length,
+    tabs,
+    multiTab,
   }
+}
+
+function collectTabs(steps: readonly DemoStep[]): DemoTabRef[] {
+  const seen = new Map<number, DemoTabRef>()
+  for (const step of steps) {
+    if (step.tabId === undefined || seen.has(step.tabId)) continue
+    seen.set(step.tabId, { tabId: step.tabId, ...(step.tabUrl === undefined ? {} : { url: step.tabUrl }) })
+  }
+  return [...seen.values()]
+}
+
+/**
+ * Legend that makes `[tab N]` tags readable on their own. Empty for a
+ * single-tab flow, where the tags are not printed either.
+ */
+export function demoTabLegend(summary: DemoStepSummary): readonly string[] {
+  if (!summary.multiTab) return []
+  return [
+    `tabs: ${summary.tabs.length} (each step is tagged with the tab it happened in)`,
+    ...summary.tabs.map(tab => `tab ${tab.tabId}: ${tab.url ?? '(url unknown)'}`),
+  ]
 }
 
 const DEMO_SYMBOL = "Symbol.for('dsh-demo')"
