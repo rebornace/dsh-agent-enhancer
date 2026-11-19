@@ -46,6 +46,8 @@ Do **not** reintroduce in-plugin self-update (About → check/apply via `dsh plu
 
 When adding or restyling client UI that peers an official Desktop surface, read the matching `@deepseek-ai/dsh-client-ui-*` package (`lib/client.js` + CSS) and reuse primitives (`FileTypeIcon`, guide artwork, folder icons, tokens). Do not invent parallel chrome. See `.cursor/rules/dsh-ui-style.mdc`.
 
+**Only reference design tokens the theme defines.** A `var(--dsw-…)` with an unknown name is dropped, so the declaration silently never applies: that is how the browser approval banner lost its background and rendered see-through over the page (`--dsw-alias-bg-elevated` was never a token). `tests/client-design-tokens.test.ts` fails if `styles.module.css` mentions a token missing from `tests/fixtures/dsh-theme-tokens.txt`; refresh that fixture from `@deepseek-ai/dsh-client-ui-theme` when the Desktop host moves.
+
 ## No orphan features — every capability needs a settings toggle
 
 User-facing capabilities **must** appear under **设置 → 智能体增强 → 功能** with an on/off switch in the **same change set** (`MODULES` + Config + `SETTINGS_FEATURE_GROUPS` + locales + runtime gate). Do not ship always-on surfaces with no switch. See `.cursor/rules/no-orphan-features.mdc`.

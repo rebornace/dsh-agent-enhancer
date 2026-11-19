@@ -16,7 +16,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--dsw-alias-label-secondary);
-  font: var(--dsw-font-sm-12, var(--dsw-font-sm-14));
+  font: var(--dsw-font-xxs-12, var(--dsw-font-s-14));
 }
 
 /* Mirror dsh-client-ui-settings-plugins PluginsSettingsSection + general DeveloperToolsRow */
@@ -222,9 +222,9 @@
   max-width: 140px;
   margin: 0;
   padding: 4px 8px;
-  border: 1px solid var(--dsw-alias-stroke-secondary, transparent);
+  border: 1px solid var(--dsw-alias-border-l2, transparent);
   border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-interactive-bg, transparent);
+  background: var(--dsw-alias-interactive-bg-active, transparent);
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 13px;
@@ -257,7 +257,7 @@
 .settingsConfigure {
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-layer-2);
-  box-shadow: 0 0 0 1px var(--dsw-alias-border-primary);
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-l2);
 }
 
 .settingsConfigure:hover:not(:disabled) {
@@ -343,7 +343,7 @@
   max-width: none;
   padding: 8px 12px;
   color: var(--dsw-alias-label-secondary);
-  font: var(--dsw-font-sm-14);
+  font: var(--dsw-font-s-14);
   white-space: pre-wrap;
   pointer-events: none;
   user-select: none;
@@ -375,7 +375,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font: var(--dsw-font-sm-14);
+  font: var(--dsw-font-s-14);
 }
 
 .historyResults {
@@ -419,7 +419,7 @@
   gap: 12px;
   padding: 8px 12px;
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-sm-14);
+  font: var(--dsw-font-s-14);
   background: var(--dsw-alias-bg-layer-2);
   border-radius: var(--dsw-radius-sm);
 }
@@ -446,7 +446,7 @@
   max-width: 72ch;
   padding: 16px;
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-sm-14);
+  font: var(--dsw-font-s-14);
 }
 
 .rollbackSummaryRow {
@@ -469,7 +469,7 @@
   color: var(--dsw-alias-label-primary);
   font: inherit;
   line-height: 1.45;
-  background: var(--dsw-alias-fill-secondary, color-mix(in srgb, var(--dsw-alias-label-secondary) 12%, transparent));
+  background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, var(--dsw-alias-label-secondary) 12%, transparent));
   border-radius: 6px;
 }
 
@@ -497,7 +497,7 @@
   overflow: auto;
   padding: 12px 14px 20px;
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-sm-14);
+  font: var(--dsw-font-s-14);
 }
 
 .timelinePanel {
@@ -1121,7 +1121,7 @@
   gap: 12px;
   padding: 12px 14px 14px;
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-sm-13);
+  font: var(--dsw-font-xs-13);
 }
 
 .contextRightHeader {
@@ -1140,7 +1140,7 @@
 
 .contextRightTitle {
   margin: 0;
-  font: var(--dsw-font-sm-14);
+  font: var(--dsw-font-s-14);
   font-weight: 600;
 }
 
@@ -1180,7 +1180,7 @@
 .contextRightSegmentActive {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
-  box-shadow: 0 0 0 1px var(--dsw-alias-border-primary);
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-l2);
 }
 
 .contextRightStatus {
@@ -1232,7 +1232,7 @@
   height: 12px;
   border-radius: 999px;
   overflow: hidden;
-  background: var(--dsw-alias-border-primary);
+  background: var(--dsw-alias-border-l2);
 }
 
 .contextStackSegment,
@@ -1267,7 +1267,7 @@
   padding: 5px 8px;
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1);
-  box-shadow: 0 0 0 1px var(--dsw-alias-border-primary);
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-l2);
   color: var(--dsw-alias-label-primary);
   font-size: 12px;
   line-height: 16px;
@@ -1355,7 +1355,7 @@
 .contextChartLegendTrack {
   height: 3px;
   border-radius: 999px;
-  background: var(--dsw-alias-border-primary);
+  background: var(--dsw-alias-border-l2);
   overflow: hidden;
 }
 
@@ -1369,7 +1369,7 @@
   display: grid;
   gap: 4px;
   padding-top: 2px;
-  border-top: 1px solid var(--dsw-alias-border-primary);
+  border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
 .contextHeadroomMeta {
@@ -1388,7 +1388,7 @@
 .contextHeadroomTrack {
   height: 5px;
   border-radius: 999px;
-  background: var(--dsw-alias-border-primary);
+  background: var(--dsw-alias-border-l2);
   overflow: hidden;
 }
 
@@ -1604,7 +1604,7 @@
 .contextRightBarTrack {
   height: 2px;
   border-radius: 999px;
-  background: var(--dsw-alias-border-primary);
+  background: var(--dsw-alias-border-l2);
   overflow: hidden;
 }
 
@@ -1669,7 +1669,7 @@
   flex-direction: column;
   padding: 0;
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-sm-13);
+  font: var(--dsw-font-xs-13);
   background:
     linear-gradient(
       180deg,
@@ -1730,7 +1730,7 @@
 }
 
 .usageHeroTotalValue {
-  font: var(--dsw-font-sm-16, var(--dsw-font-sm-14));
+  font: var(--dsw-font-base-16, var(--dsw-font-s-14));
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -1804,7 +1804,7 @@
 }
 
 .usageTitle {
-  font: var(--dsw-font-sm-14);
+  font: var(--dsw-font-s-14);
   font-weight: 650;
   letter-spacing: -0.01em;
 }
@@ -1948,14 +1948,14 @@
 
 .usageBucketValue {
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-sm-14);
+  font: var(--dsw-font-s-14);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
 
 .usageSectionTitle {
   margin: 0;
-  font: var(--dsw-font-sm-13);
+  font: var(--dsw-font-xs-13);
   font-weight: 650;
   color: var(--dsw-alias-label-primary);
 }
@@ -2241,7 +2241,7 @@
   margin: 0;
   padding: 10px 0;
   border: 0;
-  border-top: 1px solid var(--dsw-alias-border-subtle, var(--dsw-alias-bg-layer-2));
+  border-top: 1px solid var(--dsw-alias-border-l1, var(--dsw-alias-bg-layer-2));
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
@@ -2266,7 +2266,7 @@
 }
 
 .usageRecentItem + .usageRecentItem {
-  border-top: 1px solid var(--dsw-alias-border-subtle, var(--dsw-alias-bg-layer-2));
+  border-top: 1px solid var(--dsw-alias-border-l1, var(--dsw-alias-bg-layer-2));
 }
 
 .usageRecentMain {
@@ -2400,10 +2400,16 @@
   z-index: 40;
   max-width: min(420px, calc(100vw - 32px));
   padding: 12px 14px;
-  border-radius: var(--dsw-radius-m, 8px);
-  background: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-primary));
+  /* Floating card: same surface recipe as the official action cards
+     (dsh-client-ui-action-cards Card.module.css) and floating overlays
+     (HoverCard/Toast). `--dsw-alias-bg-layer-1` is not a theme token, so the
+     old declaration was dropped and the card painted nothing over the page. */
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+  box-shadow: var(--dsw-shadow-lv3);
+  font-family: var(--dsw-font-family);
 }
 
 .browserAgentHeader {
@@ -2426,7 +2432,7 @@
   margin: -4px -6px 0 0;
   padding: 0 6px;
   border: 0;
-  border-radius: var(--dsw-radius-s, 6px);
+  border-radius: var(--dsw-radius-sm, 6px);
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   font-size: 18px;
@@ -2457,7 +2463,7 @@
 .browserAgentButton,
 .browserAgentButtonDanger {
   border: 0;
-  border-radius: var(--dsw-radius-s, 6px);
+  border-radius: var(--dsw-radius-sm, 6px);
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
@@ -2466,7 +2472,7 @@
 }
 
 .browserAgentButtonDanger {
-  color: var(--dsw-alias-label-danger, #c44);
+  color: var(--dsw-alias-state-error-primary, #c44);
 }
 
 .browserAgentAudit {
@@ -2511,7 +2517,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--dsw-alias-border-subtle, rgb(127 127 127 / 16%));
+  border-bottom: 1px solid var(--dsw-alias-border-l1, rgb(127 127 127 / 16%));
 }
 
 .browserAgentPaneTitle {
@@ -2646,7 +2652,7 @@
   flex-shrink: 0;
   margin: 0 0 2px auto;
   padding: 2px 6px;
-  border: 1px solid var(--dsw-alias-border-secondary);
+  border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 6px;
   background: transparent;
   font-size: 11px;
@@ -2687,9 +2693,9 @@
   resize: vertical;
   min-height: 48px;
   padding: 6px 8px;
-  border-radius: var(--dsw-radius-s, 6px);
-  border: 1px solid var(--dsw-alias-border-primary, rgb(127 127 127 / 28%));
-  background: var(--dsw-alias-bg-primary);
+  border-radius: var(--dsw-radius-sm, 6px);
+  border: 1px solid var(--dsw-alias-border-l2, rgb(127 127 127 / 28%));
+  background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 12px;
@@ -2725,7 +2731,7 @@
 }
 
 .fileEditAction:hover {
-  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.12));
+  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.12));
 }
 
 .fileEditRoot {
@@ -3351,7 +3357,7 @@
   margin: 0;
   padding: 10px 12px 20px;
   overflow: auto;
-  font-family: var(--dsw-font, inherit);
+  font-family: var(--dsw-font-family, inherit);
   white-space: normal;
   color: var(--dsw-alias-label-primary);
 }
@@ -4304,7 +4310,7 @@
   min-width: 0;
   min-height: 0;
   padding: 0;
-  background: var(--dsw-alias-surface-default, #fff);
+  background: var(--dsw-alias-bg-layer-1, #fff);
 }
 
 .webChatBridgeGuestError {
@@ -4333,12 +4339,12 @@
   width: 100%;
   height: 100%;
   border: none;
-  background: var(--dsw-alias-surface-default, transparent);
+  background: var(--dsw-alias-bg-layer-1, transparent);
 }
 
 .webChatChooserIntro {
   margin: 0 0 12px;
-  color: var(--dsw-alias-text-secondary);
+  color: var(--dsw-alias-label-secondary);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -4379,7 +4385,7 @@
 }
 
 .webChatChooserOptionDesc {
-  color: var(--dsw-alias-text-secondary);
+  color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -4438,7 +4444,7 @@
 
 .webChatPreviewSource {
   margin: 0;
-  color: var(--dsw-alias-text-secondary);
+  color: var(--dsw-alias-label-secondary);
   font-size: 12px;
 }
 
@@ -4447,14 +4453,14 @@
   padding: 8px 10px;
   border-radius: var(--dsw-radius-sm, 6px);
   background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-text-primary);
+  color: var(--dsw-alias-label-primary);
   font-size: 12px;
   line-height: 1.45;
 }
 
 .webChatPreviewTurnCount {
   margin: 12px 0 8px;
-  color: var(--dsw-alias-text-secondary);
+  color: var(--dsw-alias-label-secondary);
   font-size: 12px;
 }
 
@@ -4479,7 +4485,7 @@
 }
 
 .webChatPreviewTurnRole {
-  color: var(--dsw-alias-text-secondary);
+  color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -4496,6 +4502,6 @@
 
 .webChatPreviewError {
   margin: 12px 0 0;
-  color: var(--dsw-alias-text-error, #c62828);
+  color: var(--dsw-alias-state-error-primary, #c62828);
   font-size: 12px;
 }
