@@ -269,6 +269,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
     tool: string,
     summary: string,
     url: string | undefined,
+    targetRef?: number,
   ) => {
     const sessionId = sessionIdOf(exec)
     // Prefer a real http(s) URL so allow-origin can stick for the session.
@@ -279,12 +280,19 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
     } else {
       options.sessions.rememberHttpUrl(sessionId, effectiveUrl)
     }
+    // Show what the card is about: a small crop of the control being acted on.
+    // Older/fake drivers may not implement thumbnail(); treat that as "no preview".
+    const thumbDriver = driverOf(options)
+    const thumbnail = targetRef === undefined || typeof thumbDriver.thumbnail !== 'function'
+      ? null
+      : await thumbDriver.thumbnail(targetRef).catch(() => null)
     const decision = await options.approval.requestApproval({
       sessionId,
       tool,
       summary,
       url: effectiveUrl,
       signal: exec.signal,
+      ...(thumbnail === null ? {} : { thumbnail }),
     })
     if (decision === 'deny') {
       options.sessions.record({
@@ -719,7 +727,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         )
       }
       const snapshotHref = options.sessions.hrefOfRef(sessionId, ref)
-      await requireMutation(exec, 'browser_click', `Click ref ${ref}`, url)
+      await requireMutation(exec, 'browser_click', `Click ref ${ref}`, url, ref)
       try {
         const beforeUrl = typeof url === 'string' ? url : ''
         let result = await runBridge(() => driverOf(options).click(ref))
@@ -859,7 +867,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         url = undefined
       }
       requireFreshRef(sessionId, ref, 'browser_type')
-      await requireMutation(exec, 'browser_type', `Type into ref ${ref}: ${maskTypeSummary(text)}`, url)
+      await requireMutation(exec, 'browser_type', `Type into ref ${ref}: ${maskTypeSummary(text)}`, url, ref)
       try {
         const result = await runBridge(() => driverOf(options).type(ref, text))
         await rememberTab(sessionId, (result as { tabId?: number }).tabId)

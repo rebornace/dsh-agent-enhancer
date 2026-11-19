@@ -92,6 +92,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentConnectHint' | 'browserAgentApproveTitle' |
       'browserAgentAllowOnce' | 'browserAgentAllowOrigin' | 'browserAgentDeny' |
       'browserAgentApproveKeys' |
+      'browserAgentApproveThumbAlt' |
       'browserAgentLaunch' | 'browserAgentLaunchHint' | 'browserAgentLaunchStarted' |
       'browserAgentLaunchFailed' | 'browserAgentWebkitMissing' |
       'browserAgentClose' |
@@ -531,6 +532,7 @@ export const agentLocales = {
     browserAgentAllowOrigin: '允许本站本次会话',
     browserAgentDeny: '拒绝',
     browserAgentApproveKeys: 'Enter 允许本次 · Esc 拒绝',
+    browserAgentApproveThumbAlt: '待批准操作的目标控件预览',
     browserAgentTabConflictTitle: '浏览器标签不一致',
     browserAgentTabConflictBody: '智能体绑定的标签是 {bound}，你切到了 {active}。跟过去继续，还是留在原标签？',
     browserAgentTabFollow: '跟过去',
@@ -1204,6 +1206,7 @@ export const agentLocales = {
     browserAgentAllowOrigin: 'Allow this site for this session',
     browserAgentDeny: 'Deny',
     browserAgentApproveKeys: 'Enter allows once · Esc denies',
+    browserAgentApproveThumbAlt: 'Preview of the control this approval targets',
     browserAgentTabConflictTitle: 'Browser tab mismatch',
     browserAgentTabConflictBody: 'The agent is bound to tab {bound}, but you focused tab {active}. Follow the new tab, or stay on the bound one?',
     browserAgentTabFollow: 'Follow',

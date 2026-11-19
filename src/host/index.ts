@@ -240,6 +240,8 @@ import type {
   BrowserAgentSetTabReadOnlyResult,
   BrowserAgentDemoRequest,
   BrowserAgentDemoResult,
+  BrowserAgentThumbnailRequest,
+  BrowserAgentThumbnailResult,
   BrowserAgentLaunchBrowserResult,
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
@@ -423,6 +425,7 @@ export class AgentEnhancerService extends TypertRemoteService {
         summary: pending.summary,
         ...(pending.url === undefined ? {} : { url: pending.url }),
         ...(pending.origin === undefined ? {} : { origin: pending.origin }),
+        hasThumbnail: pending.thumbnail !== undefined,
       },
       demo: {
         enabled: settings.demonstrate,
@@ -1328,6 +1331,15 @@ export class AgentEnhancerService extends TypertRemoteService {
       ...(result?.error === undefined ? {} : { error: result.error }),
       snapshot: await this.browserSnapshotNow(),
     }
+  }
+
+  async browserAgentThumbnail(
+    request: BrowserAgentThumbnailRequest,
+  ): Promise<BrowserAgentThumbnailResult> {
+    this.assertOwner()
+    const thumb = this.browserAgent?.approval.thumbnailFor(request.id) ?? null
+    if (thumb === null) return { ok: false, error: 'no preview for this approval' }
+    return { ok: true, mime: thumb.mime, base64: thumb.base64 }
   }
 
   async browserAgentDemo(

@@ -8,6 +8,7 @@ import {
   agentEnhancerBrowserAgentResolve,
   agentEnhancerBrowserAgentResolveTabConflict,
   agentEnhancerBrowserAgentSnapshot,
+  agentEnhancerBrowserAgentThumbnail,
 } from '../remote.ts'
 import styles from '../styles.module.css'
 
@@ -34,6 +35,7 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
   const [busy, setBusy] = useState(false)
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
   const [rightInset, setRightInset] = useState(BANNER_GAP)
+  const [thumb, setThumb] = useState<{ readonly mime: string; readonly base64: string } | null>(null)
   const humanContinueRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   const bodyId = useId()
@@ -70,6 +72,29 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
       clearInterval(timer)
     }
   }, [])
+
+  useEffect(() => {
+    // One fetch per approval: the crop lives on the host and is dropped when the
+    // request resolves, so it never rides along in the 800 ms snapshot poll.
+    const id = snapshot?.pending?.id ?? null
+    if (id === null || snapshot?.pending?.hasThumbnail !== true) {
+      setThumb(null)
+      return
+    }
+    let cancelled = false
+    setThumb(null)
+    void agentEnhancerBrowserAgentThumbnail.invoke(props.getRemote(), { id }).then(result => {
+      if (cancelled) return
+      setThumb(result.ok && result.base64 !== undefined && result.base64 !== ''
+        ? { mime: result.mime ?? 'image/jpeg', base64: result.base64 }
+        : null)
+    }).catch(() => {
+      if (!cancelled) setThumb(null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [snapshot?.pending?.id, snapshot?.pending?.hasThumbnail, props.getRemote])
 
   if (snapshot === null || !snapshot.enabled) return null
 
@@ -157,6 +182,13 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
           onDeny={() => { void resolve('deny') }}
         />
         {header(props.t('browserAgentApproveTitle'))}
+        {thumb === null ? null : (
+          <img
+            className={styles.browserAgentThumb}
+            src={`data:${thumb.mime};base64,${thumb.base64}`}
+            alt={props.t('browserAgentApproveThumbAlt')}
+          />
+        )}
         <p className={styles.browserAgentBody}>{pending.summary}</p>
         {pending.url !== undefined && pending.url.trim() !== '' ? (
           <p className={styles.browserAgentMeta}>{pending.url}</p>

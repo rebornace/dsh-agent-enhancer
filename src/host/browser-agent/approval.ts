@@ -9,6 +9,8 @@ export interface BrowserApprovalRequest {
   readonly summary: string
   readonly url?: string
   readonly origin?: string
+  /** JPEG crop of the control under discussion, for the card to show. */
+  readonly thumbnail?: { readonly mime: string; readonly base64: string }
 }
 
 type Pending = {
@@ -66,6 +68,11 @@ export class BrowserApprovalGate {
     return first?.request ?? null
   }
 
+  /** Crop for one pending approval, or null when it is gone or had none. */
+  thumbnailFor(id: string): { readonly mime: string; readonly base64: string } | null {
+    return this.pending.get(id)?.request.thumbnail ?? null
+  }
+
   /**
    * Returns true when the action may proceed without prompting.
    * Read-only tools should skip this gate entirely.
@@ -84,6 +91,8 @@ export class BrowserApprovalGate {
     readonly signal: AbortSignal
     /** When true, skip session-origin short-circuit (e.g. Alt+click while disconnected). */
     readonly forcePrompt?: boolean
+    /** Crop of the control, captured before the card appears. */
+    readonly thumbnail?: { readonly mime: string; readonly base64: string }
   }): Promise<'allow' | 'deny'> {
     if (!input.forcePrompt && this.isPreauthorized(input.sessionId, input.url)) return 'allow'
     if (input.signal.aborted) return 'deny'
@@ -98,6 +107,7 @@ export class BrowserApprovalGate {
       summary: input.summary,
       ...(input.url === undefined ? {} : { url: input.url }),
       ...(origin === undefined ? {} : { origin }),
+      ...(input.thumbnail === undefined ? {} : { thumbnail: input.thumbnail }),
     }
 
     const decision = await new Promise<BrowserApprovalDecision>((resolve, reject) => {

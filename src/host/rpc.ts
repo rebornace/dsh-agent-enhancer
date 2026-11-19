@@ -643,6 +643,8 @@ export const browserAgentPendingSchema = z.strictObject({
   summary: z.string().min(1),
   url: z.string().optional(),
   origin: z.string().optional(),
+  /** A crop of the target control exists; fetch it with browserAgentThumbnail. */
+  hasThumbnail: z.boolean().optional(),
 })
 export type BrowserAgentPendingWire = z.infer<typeof browserAgentPendingSchema>
 
@@ -759,6 +761,27 @@ export type BrowserAgentDemoResult = z.infer<typeof browserAgentDemoResultSchema
 const browserAgentDemoResultCodec = codec(
   'dsh-agent-enhancer#BrowserAgentDemoResult',
   browserAgentDemoResultSchema,
+)
+
+export const browserAgentThumbnailRequestSchema = z.strictObject({
+  id: z.string().min(1),
+})
+export type BrowserAgentThumbnailRequest = z.infer<typeof browserAgentThumbnailRequestSchema>
+const browserAgentThumbnailRequestCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentThumbnailRequest',
+  browserAgentThumbnailRequestSchema,
+)
+
+export const browserAgentThumbnailResultSchema = z.strictObject({
+  ok: z.boolean(),
+  mime: z.string().optional(),
+  base64: z.string().optional(),
+  error: z.string().optional(),
+})
+export type BrowserAgentThumbnailResult = z.infer<typeof browserAgentThumbnailResultSchema>
+const browserAgentThumbnailResultCodec = codec(
+  'dsh-agent-enhancer#BrowserAgentThumbnailResult',
+  browserAgentThumbnailResultSchema,
 )
 
 
@@ -1734,6 +1757,18 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: browserAgentSelectTabRequestCodec,
       }],
       result: browserAgentSelectTabResultCodec,
+    },
+    'agentEnhancer/browserAgentThumbnail': {
+      service: 'agentEnhancer',
+      implementation: 'browserAgentThumbnail',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: browserAgentThumbnailRequestCodec,
+        strictCodec: browserAgentThumbnailRequestCodec,
+      }],
+      result: browserAgentThumbnailResultCodec,
     },
     'agentEnhancer/browserAgentDemo': {
       service: 'agentEnhancer',

@@ -76,6 +76,8 @@ export interface BrowserDriver {
     readonly tabId?: number
   }>
   screenshot(): Promise<{ readonly mime: string; readonly base64: string; readonly tabId?: number }>
+  /** Crop of the control a pending approval asks about; null when unavailable. */
+  thumbnail(ref: number): Promise<{ readonly mime: string; readonly base64: string } | null>
   listTabs(): Promise<TabListBody>
   /**
    * Close tabs nobody used for `idleMs`. Never closes `keep` ids, the active

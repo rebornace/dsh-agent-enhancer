@@ -2,6 +2,38 @@ import { describe, expect, it } from 'vitest'
 import { BrowserApprovalGate } from '../src/host/browser-agent/approval.ts'
 
 describe('BrowserApprovalGate', () => {
+  it('keeps the target preview only while the request is pending', async () => {
+    const gate = new BrowserApprovalGate()
+    const request = gate.requestApproval({
+      sessionId: 's1',
+      tool: 'browser_click',
+      summary: 'Click ref 3',
+      url: 'https://example.com/a',
+      signal: new AbortController().signal,
+      thumbnail: { mime: 'image/jpeg', base64: 'abc123' },
+    })
+    const id = gate.current()!.id
+    expect(gate.current()?.thumbnail).toEqual({ mime: 'image/jpeg', base64: 'abc123' })
+    gate.resolve(id, 'deny')
+    await expect(request).resolves.toBe('deny')
+    expect(gate.thumbnailFor(id)).toBeNull()
+  })
+
+  it('reports no preview when the request had none', async () => {
+    const gate = new BrowserApprovalGate()
+    const request = gate.requestApproval({
+      sessionId: 's1',
+      tool: 'browser_navigate',
+      summary: 'Navigate',
+      url: 'https://example.com/',
+      signal: new AbortController().signal,
+    })
+    const id = gate.current()!.id
+    expect(gate.thumbnailFor(id)).toBeNull()
+    gate.resolve(id, 'allow-once')
+    await request
+  })
+
   it('holds mutating actions until allow-once', async () => {
     const gate = new BrowserApprovalGate()
     const controller = new AbortController()

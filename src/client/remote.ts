@@ -37,6 +37,8 @@ import type {
   BrowserAgentSetTabReadOnlyResult,
   BrowserAgentDemoRequest,
   BrowserAgentDemoResult,
+  BrowserAgentThumbnailRequest,
+  BrowserAgentThumbnailResult,
   BrowserAgentSnapshot,
   RpcPayload,
   ShowOsNotificationRequest,
@@ -442,6 +444,20 @@ export const clientRemoteInfo = {
       codec: codec('dsh-agent-enhancer#BrowserAgentDemoRequest'),
     }],
     result: codec('dsh-agent-enhancer#BrowserAgentDemoResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/browserAgentThumbnail',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'browserAgentThumbnail',
+    implementation: 'browserAgentThumbnail',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#BrowserAgentThumbnailRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#BrowserAgentThumbnailResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/browserAgentSetTabReadOnly',
     service: 'agentEnhancer',
@@ -1089,6 +1105,9 @@ type BrowserAgentQuotePageCall = (
 type BrowserAgentDemoCall = (
   request: BrowserAgentDemoRequest,
 ) => Promise<RemoteResult<BrowserAgentDemoResult>>
+type BrowserAgentThumbnailCall = (
+  request: BrowserAgentThumbnailRequest,
+) => Promise<RemoteResult<BrowserAgentThumbnailResult>>
 type BrowserAgentSetTabReadOnlyCall = (
   request: BrowserAgentSetTabReadOnlyRequest,
 ) => Promise<RemoteResult<BrowserAgentSetTabReadOnlyResult>>
@@ -1427,7 +1446,43 @@ export const agentEnhancerBrowserAgentDemo = {
           ? (result as { error: { message: string } }).error.message
           : 'Demonstration RPC failed'
         return empty(message)
-      }      return result.value
+      }
+      return result.value
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty(error instanceof Error ? error.message : String(error))
+    }
+  },
+}
+
+export const agentEnhancerBrowserAgentThumbnail = {
+  async invoke(
+    remote: unknown,
+    request: BrowserAgentThumbnailRequest,
+    signal?: AbortSignal,
+  ): Promise<BrowserAgentThumbnailResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty = (error: string): BrowserAgentThumbnailResult => ({ ok: false, error })
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return empty('Host remote unavailable')
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') {
+      return empty('agentEnhancer remote missing (reload the plugin)')
+    }
+    const call = Reflect.get(namespace, 'browserAgentThumbnail') as BrowserAgentThumbnailCall | undefined
+    if (typeof call !== 'function') {
+      return empty('browserAgentThumbnail missing (reload Desktop / reinstall the plugin)')
+    }
+    try {
+      const result = await call.apply(namespace, [request])
+      if (!result.ok) {
+        const message = typeof (result as { error?: { message?: string } }).error?.message === 'string'
+          ? (result as { error: { message: string } }).error.message
+          : 'Thumbnail RPC failed'
+        return empty(message)
+      }
+      return result.value
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
       return empty(error instanceof Error ? error.message : String(error))

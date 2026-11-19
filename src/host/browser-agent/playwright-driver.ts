@@ -46,6 +46,7 @@ import {
 import { CaptureBuffer, redactText, redactUrl, type CaptureEntry, type CaptureKind } from './capture.ts'
 import { pathsDiffer } from './auto-nav.ts'
 import { TabRegistry } from './tab-registry.ts'
+import { clampThumbnailClip, keepThumbnail } from './approval-thumbnail.ts'
 
 type PlaywrightModule = typeof import('playwright-core')
 
@@ -672,6 +673,29 @@ export class PlaywrightDriver implements BrowserDriver {
       base64: buf.toString('base64'),
       tabId: this.tabIdFor(page),
     }
+  }
+
+  /** Small crop around the control a pending approval is about. */
+  async thumbnail(ref: number): Promise<{ readonly mime: string; readonly base64: string } | null> {
+    const page = await this.requirePage()
+    const tabId = this.tabIdFor(page)
+    if (this.tabs.ref(tabId, ref) === undefined) return null
+    const locator = page.locator(`[${PLAYWRIGHT_REF_ATTR}="${ref}"]`).first()
+    const box = await locator.boundingBox().catch(() => null)
+    if (box === null) return null
+    const viewport = page.viewportSize() ?? { width: 1280, height: 800 }
+    const clip = clampThumbnailClip(box, viewport)
+    if (clip === null) return null
+    const buffer = await page.screenshot({
+      clip,
+      type: 'jpeg',
+      quality: 60,
+      scale: 'css',
+      timeout: 5_000,
+    }).catch(() => null)
+    if (buffer === null) return null
+    const base64 = buffer.toString('base64')
+    return keepThumbnail(base64) ? { mime: 'image/jpeg', base64 } : null
   }
 
   async listTabs(): Promise<TabListBody> {

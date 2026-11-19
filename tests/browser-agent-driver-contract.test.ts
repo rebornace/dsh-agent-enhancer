@@ -61,6 +61,7 @@ function fakePlaywrightDriver(overrides: Partial<{
     })),
     wait: vi.fn(async () => ({ url: 'https://example.com/', title: 'Example', matched: true })),
     screenshot: vi.fn(async () => ({ mime: 'image/png', base64: 'aa' })),
+    thumbnail: vi.fn(async () => null),
     listTabs: vi.fn(async () => ({ tabs: [], boundTabId: null })),
     startCapture: vi.fn(),
     stopCapture: vi.fn(),
