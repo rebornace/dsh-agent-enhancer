@@ -124,6 +124,13 @@ describe('sanitizeDemoSteps', () => {
     const [step] = sanitizeDemoSteps([fill('#q', 'q', 'coffee', 1)])
     expect(step).toMatchObject({ value: 'coffee', masked: false })
   })
+
+  it('redacts secret query parameters on recorded navigations', () => {
+    const [step] = sanitizeDemoSteps([
+      { kind: 'navigate', at: 1, url: 'https://example.com/cb?token=abc123&page=2' },
+    ])
+    expect(step).toMatchObject({ url: 'https://example.com/cb?token=***&page=2' })
+  })
 })
 
 describe('summarizeDemoSteps', () => {

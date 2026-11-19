@@ -7,6 +7,8 @@
  * values are otherwise kept — the agent can already read the page.
  */
 
+import { redactUrl } from './capture.ts'
+
 /** Where a step happened. Filled in on the Node side; the page cannot know the tab id. */
 export interface DemoStepSite {
   /** Registry tab id (stable while the dedicated browser runs). */
@@ -108,10 +110,35 @@ function sameStep(a: DemoStep, b: DemoStep): boolean {
 /** Belt-and-braces masking for steps that reached us with a raw value. */
 export function sanitizeDemoSteps(steps: readonly DemoStep[]): DemoStep[] {
   return steps.map(step => {
+    if (step.kind === 'navigate') {
+      const url = redactUrl(step.url)
+      return url === step.url ? step : { ...step, url }
+    }
     if (step.kind !== 'fill') return step
     if (step.masked || !isSensitiveFieldName(step.field, step.name, step.selector)) return step
     return { ...step, value: '***', masked: true }
   })
+}
+
+/** Action text for one step, without numbering (shared by summary and replay). */
+export function describeDemoStep(step: DemoStep): string {
+  switch (step.kind) {
+    case 'navigate':
+      return `navigate -> ${step.url}`
+    case 'click':
+      return `click ${step.role} ${JSON.stringify(step.name)}${step.href === undefined ? '' : ` (href ${step.href})`} [selector ${step.selector}]`
+    case 'fill': {
+      const value = step.masked ? '***' : JSON.stringify(step.value)
+      const checked = step.checked === undefined ? '' : ` checked=${String(step.checked)}`
+      return `fill ${step.role} ${JSON.stringify(step.name)} = ${value}${checked} [selector ${step.selector}]`
+    }
+    case 'press':
+      return `press ${step.key} [selector ${step.selector}]`
+    default: {
+      const exhaustive: never = step
+      return JSON.stringify(exhaustive)
+    }
+  }
 }
 
 /** One tab the flow touched, in first-seen order. */
@@ -138,23 +165,7 @@ export function summarizeDemoSteps(steps: readonly DemoStep[], max = 40): DemoSt
   const lines = shown.map((step, index) => {
     const n = index + 1
     const tag = multiTab && step.tabId !== undefined ? `[tab ${step.tabId}] ` : ''
-    switch (step.kind) {
-      case 'navigate':
-        return `${n}. ${tag}navigate -> ${step.url}`
-      case 'click':
-        return `${n}. ${tag}click ${step.role} ${JSON.stringify(step.name)}${step.href === undefined ? '' : ` (href ${step.href})`} [selector ${step.selector}]`
-      case 'fill': {
-        const value = step.masked ? '***' : JSON.stringify(step.value)
-        const checked = step.checked === undefined ? '' : ` checked=${String(step.checked)}`
-        return `${n}. ${tag}fill ${step.role} ${JSON.stringify(step.name)} = ${value}${checked} [selector ${step.selector}]`
-      }
-      case 'press':
-        return `${n}. ${tag}press ${step.key} [selector ${step.selector}]`
-      default: {
-        const exhaustive: never = step
-        return `${n}. ${JSON.stringify(exhaustive)}`
-      }
-    }
+    return `${n}. ${tag}${describeDemoStep(step)}`
   })
   return {
     lines,
@@ -254,6 +265,33 @@ function on(target, type, handler, capture) {
   target.addEventListener(type, handler, capture === true);
   OFF.push(function () { target.removeEventListener(type, handler, capture === true); });
 }
+// Single-page apps change the URL without loading a document, so the driver's
+// framenavigated never fires. Patch the history API and listen for the events
+// the browser dispatches for back/forward and hash routes.
+var lastUrl = String(location.href || "");
+function routeStep() {
+  var url = String(location.href || "");
+  if (url === lastUrl) return;
+  lastUrl = url;
+  if (!/^https?:\\/\\//i.test(url)) return;
+  push({ kind: "navigate", url: url });
+}
+function wrapHistory(name) {
+  var original = history[name];
+  if (typeof original !== "function") return;
+  try {
+    history[name] = function () {
+      var result = original.apply(this, arguments);
+      try { setTimeout(routeStep, 0); } catch (e) { }
+      return result;
+    };
+    OFF.push(function () { try { history[name] = original; } catch (e) { } });
+  } catch (e) { }
+}
+wrapHistory("pushState");
+wrapHistory("replaceState");
+on(window, "popstate", routeStep);
+on(window, "hashchange", routeStep);
 on(document, "click", function (event) {
   var el = event.target && event.target.closest ? event.target.closest("a,button,input,select,textarea,[role],[contenteditable='true']") : null;
   if (!el) return;

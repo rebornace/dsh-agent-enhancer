@@ -614,8 +614,19 @@ export class PlaywrightDriver implements BrowserDriver {
     }
   }
 
-  async scroll(dy: number): Promise<BrowserActResult> {
+  async press(key: string): Promise<BrowserActResult> {
     const page = await this.requirePage()
+    await page.keyboard.press(key)
+    await sleep(120)
+    return {
+      url: page.url(),
+      title: await page.title().catch(() => ''),
+      changed: false,
+      tabId: this.tabIdFor(page),
+    }
+  }
+
+  async scroll(dy: number): Promise<BrowserActResult> {    const page = await this.requirePage()
     await page.mouse.wheel(0, dy)
     await sleep(80)
     return {

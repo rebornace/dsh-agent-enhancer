@@ -63,6 +63,8 @@ export interface BrowserDriver {
   extract(input?: { readonly focus?: string; readonly maxChars?: number }): Promise<ExtractBody>
   click(ref: number): Promise<BrowserActResult>
   type(ref: number, text: string): Promise<BrowserActResult>
+  /** Keyboard press in the bound tab (replaying a recorded Enter). */
+  press(key: string): Promise<BrowserActResult>
   scroll(dy: number): Promise<BrowserActResult>
   wait(input?: {
     readonly timeoutMs?: number

@@ -20,6 +20,7 @@ const steps: DemoStep[] = [
 
 function harness(demonstrate: boolean, recorded: readonly DemoStep[] = steps) {
   const tools = new Map<string, RegisteredTool>()
+  const calls = { clicks: [] as number[], types: [] as Array<[number, string]>, presses: [] as string[] }
   const ctx = {
     tools: {
       register(tool: RegisteredTool) {
@@ -36,6 +37,29 @@ function harness(demonstrate: boolean, recorded: readonly DemoStep[] = steps) {
     pageStatus: async () => ({ connected: true, url: 'https://example.com/login', title: 'Login', tabId: 1, bound: true }),
     bind: async (tabId: number) => ({ tabId, url: 'https://example.com/login', title: 'Login' }),
     followTab: async (tabId: number) => ({ tabId, url: 'https://example.com/login', title: 'Login' }),
+    navigate: async (url: string) => ({ url, title: 'Login', tabId: 1 }),
+    snapshot: async () => ({
+      url: 'https://example.com/login',
+      title: 'Login',
+      nodes: [
+        { ref: 1, role: 'textbox', name: 'Email' },
+        { ref: 2, role: 'button', name: 'Sign in' },
+      ],
+      refs: [],
+      text: '',
+    }),
+    click: async (ref: number) => {
+      calls.clicks.push(ref)
+      return { url: 'https://example.com/login', title: 'Login', tabId: 1 }
+    },
+    type: async (ref: number, text: string) => {
+      calls.types.push([ref, text])
+      return { url: 'https://example.com/login', title: 'Login', tabId: 1 }
+    },
+    press: async (key: string) => {
+      calls.presses.push(key)
+      return { url: 'https://example.com/login', title: 'Login', tabId: 1 }
+    },
     startDemonstration: vi.fn(async () => undefined),
     stopDemonstration: vi.fn(async () => recorded),
   } as unknown as BrowserDriver
@@ -58,6 +82,7 @@ function harness(demonstrate: boolean, recorded: readonly DemoStep[] = steps) {
   const exec = { agent: { session: { id: 's1' } }, signal: new AbortController().signal }
   return {
     driver,
+    calls,
     run: (args: Record<string, unknown>) => {
       const tool = tools.get('browser_demonstrate')
       if (tool === undefined) throw new Error('browser_demonstrate not registered')
@@ -116,5 +141,28 @@ describe('browser_demonstrate', () => {
     const out = await h.run({ message: 'show me how you sign in' }) as string
     expect(out).not.toContain('[tab ')
     expect(out).not.toContain('browser_follow_tab')
+  })
+
+  it('replays the recorded flow when asked and reports each step', async () => {
+    const clean: DemoStep[] = [steps[0]!, steps[1]!, steps[3]!]
+    const h = harness(true, clean)
+    const out = await h.run({ message: 'show me how you sign in', replay: true }) as string
+    expect(out).toContain('replayed 3/3')
+    expect(out).toContain('1. ok   navigate -> https://example.com/login')
+    expect(out).toContain('2. ok   fill textbox "Email" = "me@example.com"')
+    expect(out).toContain('3. ok   click button "Sign in"')
+    expect(h.calls.types).toEqual([[1, 'me@example.com']])
+    expect(h.calls.clicks).toEqual([2])
+  })
+
+  it('stops the replay at a masked secret instead of pretending', async () => {
+    const h = harness(true)
+    const out = await h.run({ message: 'show me how you sign in', replay: true }) as string
+    // Steps 1-2 are the navigation and the email; the password stops it.
+    expect(out).toContain('replayed 2/4')
+    expect(out).toContain('stopped at step 3')
+    expect(out).toContain('secret field "Password" was masked')
+    expect(out).toContain('3. todo fill textbox "Password" = ***')
+    expect(out).toContain('Do not claim the flow finished')
   })
 })

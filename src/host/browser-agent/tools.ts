@@ -9,7 +9,8 @@ import type { SnapshotBody } from './protocol.ts'
 import type { BrowserSessionState } from './session-state.ts'
 import type { TabScopeStore } from './tab-scope.ts'
 import type { Diagnosis } from './diagnose.ts'
-import { demoTabLegend, summarizeDemoSteps } from './demo.ts'
+import { demoTabLegend, describeDemoStep, summarizeDemoSteps } from './demo.ts'
+import { replayDemoSteps } from './demo-replay.ts'
 
 type ToolExec = {
   readonly signal: AbortSignal
@@ -1259,7 +1260,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   disposers.push(ctx.tools.register(textTool(
     'browser_demonstrate',
-    'Ask the user to show you a flow in the dedicated browser window (they click and type, you watch), blocking until they press Continue. Records clicks, filled fields, Enter presses and top-level navigations in every tab of that browser; each step is tagged with the tab it happened in. Password / OTP / token fields are masked as ***. Use it when you cannot work out how a flow works. Returns numbered steps to replay with browser_snapshot then browser_click / browser_type by name (refs change between runs). Requires the Demonstrate switch in Settings → 智能体增强 → 浏览器 Agent.',
+    'Ask the user to show you a flow in the dedicated browser window (they click and type, you watch), blocking until they press Continue. Records clicks, filled fields, Enter presses, top-level navigations and single-page-app route changes in every tab of that browser; each step is tagged with the tab it happened in. Password / OTP / token fields are masked as ***. Use it when you cannot work out how a flow works. Returns numbered steps to replay with browser_snapshot then browser_click / browser_type by name (refs change between runs), or pass replay: true to run the recorded flow immediately. Requires the Demonstrate switch in Settings → 智能体增强 → 浏览器 Agent.',
     {
       message: {
         type: 'string',
@@ -1269,6 +1270,10 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       timeoutMs: {
         type: 'number',
         description: 'How long to wait for the user, in ms (default 300000).',
+      },
+      replay: {
+        type: 'boolean',
+        description: 'Run the recorded flow once right after the user finishes (default false). Replay is by role + name against a fresh snapshot; a masked secret, a <select>, or a control that is gone stops it at that step and returns what is left.',
       },
     },
     async (args, exec) => {
@@ -1318,9 +1323,53 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
           'Action: call browser_ask_user to check, or browser_snapshot and continue on your own.',
         ].join('\n')
       }
+      const heading = `demonstrated steps: ${summary.shown}${steps.length > summary.shown ? ` (of ${steps.length})` : ''}`
+      const maskedLine = summary.masked > 0
+        ? [`masked fields: ${summary.masked} (secret values are never shown)`]
+        : []
+      if (args.replay === true) {
+        const replay = await replayDemoSteps(driver, steps).catch((error: unknown) => ({
+          status: 'blocked' as const,
+          performed: 0,
+          total: steps.length,
+          lines: [] as string[],
+          reason: error instanceof Error ? error.message : String(error),
+          pending: steps,
+        }))
+        options.sessions.record({
+          sessionId,
+          tool: 'browser_demonstrate',
+          summary: `Replayed ${replay.performed}/${replay.total} demonstrated step(s)`,
+          outcome: replay.status === 'done' ? 'ok' : 'error',
+        })
+        if (replay.status === 'done') {
+          return [
+            `${heading} — replayed ${replay.performed}/${replay.total}`,
+            ...maskedLine,
+            ...demoTabLegend(summary),
+            ...replay.lines,
+            `url: ${replay.url}`,
+            'Action: the recorded flow ran to the end. Report what changed on screen; call browser_snapshot if you need the new page.',
+          ].join('\n')
+        }
+        const pendingLines = replay.pending.map((step, offset) => {
+          const n = replay.performed + offset + 1
+          const tag = summary.multiTab && step.tabId !== undefined ? `[tab ${step.tabId}] ` : ''
+          return `${n}. todo ${tag}${describeDemoStep(step)}`
+        })
+        return [
+          `${heading} — replayed ${replay.performed}/${replay.total}`,
+          ...maskedLine,
+          ...demoTabLegend(summary),
+          ...replay.lines,
+          `stopped at step ${replay.performed + 1}: ${replay.reason}`,
+          ...pendingLines,
+          'Action: the replay stopped, so the page is whatever the last ok step left behind. Do the remaining steps yourself with browser_snapshot then browser_click / browser_type (role+name), or browser_ask_user if a secret or an unusual control is in the way. Do not claim the flow finished.',
+        ].join('\n')
+      }
       return [
-        `demonstrated steps: ${summary.shown}${steps.length > summary.shown ? ` (of ${steps.length})` : ''}`,
-        ...(summary.masked > 0 ? [`masked fields: ${summary.masked} (secret values are never shown)`] : []),
+        heading,
+        ...maskedLine,
         ...demoTabLegend(summary),
         ...summary.lines,
         summary.multiTab

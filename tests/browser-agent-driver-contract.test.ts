@@ -47,6 +47,12 @@ function fakePlaywrightDriver(overrides: Partial<{
       changed: false,
       tabId: 1,
     })),
+    press: vi.fn(async () => ({
+      url: 'https://example.com/',
+      title: 'Example',
+      changed: false,
+      tabId: 1,
+    })),
     scroll: vi.fn(async () => ({
       url: 'https://example.com/',
       title: 'Example',
