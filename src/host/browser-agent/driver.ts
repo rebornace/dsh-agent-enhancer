@@ -63,6 +63,10 @@ export interface BrowserDriver {
   extract(input?: { readonly focus?: string; readonly maxChars?: number }): Promise<ExtractBody>
   click(ref: number): Promise<BrowserActResult>
   type(ref: number, text: string): Promise<BrowserActResult>
+  /** Choose an option in a <select> by label or value (replaying a recorded change). */
+  select(ref: number, value: string): Promise<BrowserActResult>
+  /** Set a checkbox/radio to `checked` (clicking only when it differs). */
+  check(ref: number, checked: boolean): Promise<BrowserActResult>
   /** Keyboard press in the bound tab (replaying a recorded Enter). */
   press(key: string): Promise<BrowserActResult>
   scroll(dy: number): Promise<BrowserActResult>

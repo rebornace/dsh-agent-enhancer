@@ -615,8 +615,46 @@ export class PlaywrightDriver implements BrowserDriver {
     }
   }
 
-  async press(key: string): Promise<BrowserActResult> {
+  async select(ref: number, value: string): Promise<BrowserActResult> {
     const page = await this.requirePage()
+    const locator = page.locator(`[${PLAYWRIGHT_REF_ATTR}="${ref}"]`).first()
+    if (await locator.count().catch(() => 0) === 0) {
+      throw new Error(`Ref ${ref} is not stamped in the DOM; call browser_snapshot again`)
+    }
+    await locator.selectOption({ label: value }, { timeout: 5_000 }).catch(async () => {
+      await locator.selectOption(value, { timeout: 5_000 })
+    })
+    return {
+      url: page.url(),
+      title: await page.title().catch(() => ''),
+      changed: false,
+      tabId: this.tabIdFor(page),
+    }
+  }
+
+  async check(ref: number, checked: boolean): Promise<BrowserActResult> {
+    const page = await this.requirePage()
+    const locator = page.locator(`[${PLAYWRIGHT_REF_ATTR}="${ref}"]`).first()
+    if (await locator.count().catch(() => 0) === 0) {
+      throw new Error(`Ref ${ref} is not stamped in the DOM; call browser_snapshot again`)
+    }
+    const tag = await locator.evaluate(el => el.tagName.toLowerCase()).catch(() => '')
+    if (tag === 'input' && checked) await locator.check({ timeout: 3_000 }).catch(() => locator.click({ timeout: 3_000 }))
+    else if (tag === 'input') await locator.uncheck({ timeout: 3_000 }).catch(() => locator.click({ timeout: 3_000 }))
+    else {
+      // Custom checkbox: only click when the readable state differs.
+      const state = await locator.getAttribute('aria-checked').catch(() => null)
+      if (state === null || (state === 'true') !== checked) await locator.click({ timeout: 3_000 })
+    }
+    return {
+      url: page.url(),
+      title: await page.title().catch(() => ''),
+      changed: false,
+      tabId: this.tabIdFor(page),
+    }
+  }
+
+  async press(key: string): Promise<BrowserActResult> {    const page = await this.requirePage()
     await page.keyboard.press(key)
     await sleep(120)
     return {

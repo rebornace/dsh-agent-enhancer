@@ -28,6 +28,10 @@ export interface DemoReplayDriver {
   }>
   click(ref: number): Promise<{ readonly url: string }>
   type(ref: number, text: string): Promise<{ readonly url: string }>
+  /** Choose a <select> option by label or value. */
+  select(ref: number, value: string): Promise<{ readonly url: string }>
+  /** Set a checkbox/radio to a state. */
+  check(ref: number, checked: boolean): Promise<{ readonly url: string }>
   /** Keyboard press in the bound tab (used for recorded Enter presses). */
   press(key: string): Promise<{ readonly url: string }>
   navigate(url: string): Promise<{ readonly url: string }>
@@ -100,10 +104,6 @@ type StepOutcome =
 function replayObstacle(step: DemoStep): string | null {
   if (step.kind !== 'fill') return null
   if (step.masked) return `secret field ${JSON.stringify(step.name)} was masked; type it yourself`
-  if (step.role === 'combobox') return `select ${JSON.stringify(step.name)} cannot be replayed by name`
-  if (step.role === 'checkbox' || step.role === 'radio') {
-    return `${step.role} ${JSON.stringify(step.name)} cannot be replayed by name (click it, then continue)`
-  }
   return null
 }
 
@@ -135,6 +135,14 @@ async function performStep(driver: DemoReplayDriver, step: DemoStep): Promise<St
           ok: false,
           reason: `no field matching ${step.role} ${JSON.stringify(step.name)} on ${snapshot.url}`,
         }
+      }
+      if (step.role === 'combobox') {
+        const result = await driver.select(node.ref, step.value)
+        return { ok: true, url: result.url }
+      }
+      if (step.role === 'checkbox' || step.role === 'radio') {
+        const result = await driver.check(node.ref, step.checked ?? step.value === 'on')
+        return { ok: true, url: result.url }
       }
       const result = await driver.type(node.ref, step.value)
       return { ok: true, url: result.url }

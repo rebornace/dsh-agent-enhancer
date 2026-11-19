@@ -31,6 +31,8 @@ const fill = (name: string, value: string, at = 2, masked = false): DemoStep => 
 interface Calls {
   clicks: number[]
   types: Array<[number, string]>
+  selects: Array<[number, string]>
+  checks: Array<[number, boolean]>
   presses: string[]
   navigates: string[]
   follows: number[]
@@ -42,7 +44,7 @@ function fakeDriver(input: {
   readonly followFails?: boolean
   readonly tabs?: ReadonlyArray<{ readonly tabId: number; readonly url: string }>
 } = {}): { driver: DemoReplayDriver; calls: Calls } {
-  const calls: Calls = { clicks: [], types: [], presses: [], navigates: [], follows: [] }
+  const calls: Calls = { clicks: [], types: [], selects: [], checks: [], presses: [], navigates: [], follows: [] }
   let url = input.url ?? 'https://example.com/'
   const driver: DemoReplayDriver = {
     snapshot: vi.fn(async () => ({ url, nodes: input.nodes ?? nodes })),
@@ -53,6 +55,14 @@ function fakeDriver(input: {
     }),
     type: vi.fn(async (ref: number, text: string) => {
       calls.types.push([ref, text])
+      return { url }
+    }),
+    select: vi.fn(async (ref: number, value: string) => {
+      calls.selects.push([ref, value])
+      return { url }
+    }),
+    check: vi.fn(async (ref: number, checked: boolean) => {
+      calls.checks.push([ref, checked])
       return { url }
     }),
     press: vi.fn(async (key: string) => {
@@ -149,15 +159,29 @@ describe('replayDemoSteps', () => {
     expect(result.performed).toBe(0)
   })
 
-  it('refuses selects and checkboxes instead of guessing', async () => {
+  it('picks the recorded select option', async () => {
+    const { driver, calls } = fakeDriver({
+      nodes: [
+        { ref: 5, role: 'combobox', name: '月份' },
+        { ref: 6, role: 'checkbox', name: '记住我' },
+      ],
+    })
+    const steps: DemoStep[] = [
+      { kind: 'fill', at: 1, role: 'combobox', name: '月份', selector: '#m', field: 'm', value: '11', masked: false },
+      { kind: 'fill', at: 2, role: 'checkbox', name: '记住我', selector: '#r', field: 'r', value: 'on', masked: false, checked: true },
+    ]
+    const result = await replayDemoSteps(driver, steps)
+    expect(result.status).toBe('done')
+    expect(calls.selects).toEqual([[5, '11']])
+    expect(calls.checks).toEqual([[6, true]])
+  })
+
+  it('still stops at a masked secret', async () => {
     const { driver } = fakeDriver()
-    const selectStep: DemoStep = {
-      kind: 'fill', at: 1, role: 'combobox', name: '月份', selector: '#m', field: 'm', value: '11', masked: false,
-    }
-    const result = await replayDemoSteps(driver, [selectStep])
+    const result = await replayDemoSteps(driver, [fill('密码', '***', 2, true)])
     expect(result.status).toBe('blocked')
     if (result.status !== 'blocked') throw new Error('expected blocked')
-    expect(result.reason).toContain('select')
+    expect(result.reason).toContain('secret field')
   })
 
   it('reopens the recorded start page when the current tab is elsewhere', async () => {

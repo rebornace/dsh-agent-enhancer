@@ -10,6 +10,7 @@ import type { BrowserSessionState } from './session-state.ts'
 import type { TabScopeStore } from './tab-scope.ts'
 import type { Diagnosis } from './diagnose.ts'
 import { demoTabLegend, describeDemoStep, summarizeDemoSteps, type DemoStep } from './demo.ts'
+import type { DemoRecipeStore } from './demo-recipes.ts'
 import { replayDemoSteps } from './demo-replay.ts'
 
 type ToolExec = {
@@ -157,6 +158,8 @@ export interface BrowserToolsOptions {
   readonly demonstrate?: () => boolean
   /** Last completed recording, whoever stopped it (agent or sidebar). */
   readonly onDemonstration?: (steps: readonly DemoStep[]) => void
+  /** Saved demonstration flows (see demo-recipes.ts). */
+  readonly recipes?: DemoRecipeStore
   /** What is wrong (if anything) and the concrete next step. */
   readonly diagnosis?: () => Diagnosis
   readonly enabled: () => boolean
@@ -1389,6 +1392,90 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       ].join('\n')
     },
     HUMAN_WAIT_TIMEOUT_MS,
+  )))
+
+  disposers.push(ctx.tools.register(textTool(
+    'browser_demo_recipes',
+    'List or run a flow the user saved from a demonstration (right sidebar → 演示录制 → 保存为流程). Use it when the user names a saved flow ("跑一下「周报导出」流程") or asks which flows exist. Running replays the recorded steps in the dedicated browser; it asks for approval once and stops at a masked secret or a control that is gone, exactly like browser_demonstrate replay.',
+    {
+      action: {
+        type: 'string',
+        required: true,
+        description: '"list" to show saved flows, "run" to replay one.',
+      },
+      name: {
+        type: 'string',
+        description: 'Flow name for action=run. Case-insensitive; a unique part of the name is enough.',
+      },
+    },
+    async (args, exec) => {
+      guardEnabled()
+      requireDemonstrate()
+      const store = options.recipes
+      if (store === undefined) throw new Error('recipe store unavailable')
+      const action = String(args.action ?? '').trim().toLowerCase()
+      const rows = store.list()
+      if (action === 'list') {
+        if (rows.length === 0) {
+          return 'saved flows: 0\nAction: none yet — the user can record a demonstration and save it in the sidebar, then retry.'
+        }
+        return [
+          `saved flows: ${rows.length}`,
+          ...rows.map(row => `- ${row.name} (${row.steps} step(s))`),
+          'Action: run one with browser_demo_recipes { action: "run", name: "<name>" }.',
+        ].join('\n')
+      }
+      if (action !== 'run') throw new Error('action must be "list" or "run"')
+      const wanted = String(args.name ?? '').trim()
+      if (wanted === '') throw new Error('name is required for action=run')
+      const exact = rows.find(row => row.name.toLowerCase() === wanted.toLowerCase())
+      const partial = rows.filter(row => row.name.toLowerCase().includes(wanted.toLowerCase()))
+      const meta = exact ?? (partial.length === 1 ? partial[0] : undefined)
+      if (meta === undefined) {
+        throw new Error(rows.length === 0
+          ? 'No saved flows yet; the user can save one from the sidebar demonstration panel.'
+          : `No unique saved flow matching "${wanted}"; saved: ${rows.map(row => row.name).join(', ')}`)
+      }
+      const recipe = store.get(meta.id)
+      if (recipe === undefined) throw new Error('The saved flow disappeared; list again.')
+      const sessionId = sessionIdOf(exec)
+      await ensureConnected()
+      await ensureSessionTab(sessionId)
+      const firstUrl = recipe.steps.find(step => step.tabUrl !== undefined)?.tabUrl
+      await requireMutation(
+        exec,
+        'browser_demo_recipes',
+        `运行已保存流程「${recipe.name}」（${recipe.steps.length} 步）`,
+        firstUrl,
+      )
+      const outcome = await replayDemoSteps(driverOf(options), recipe.steps)
+      const ranAll = outcome.status === 'done'
+      options.sessions.record({
+        sessionId,
+        tool: 'browser_demo_recipes',
+        summary: `Ran saved flow "${recipe.name}" (${outcome.performed}/${outcome.total}${ranAll ? '' : ', stopped'})`,
+        outcome: ranAll ? 'ok' : 'error',
+      })
+      if (ranAll) {
+        return [
+          `saved flow: ${recipe.name} — replayed ${outcome.performed}/${outcome.total}`,
+          ...outcome.lines,
+          `url: ${outcome.url}`,
+          'Action: the flow ran to the end. Report what changed on screen; browser_snapshot if you need the new page.',
+        ].join('\n')
+      }
+      const pending = outcome.pending.map((step, offset) => {
+        const n = outcome.performed + offset + 1
+        return `${n}. todo ${describeDemoStep(step)}`
+      })
+      return [
+        `saved flow: ${recipe.name} — replayed ${outcome.performed}/${outcome.total}`,
+        ...outcome.lines,
+        `stopped at step ${outcome.performed + 1}: ${outcome.reason}`,
+        ...pending,
+        'Action: the replay stopped; the page is whatever the last ok step left behind. Continue with browser_snapshot + click/type, or browser_ask_user for a secret. Do not claim the flow finished.',
+      ].join('\n')
+    },
   )))
 
   disposers.push(ctx.tools.register(textTool(

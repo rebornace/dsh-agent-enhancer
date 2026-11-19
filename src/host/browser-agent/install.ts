@@ -300,6 +300,7 @@ export function installBrowserAgent(
         debugTools: () => options.debugTools?.() === true,
         demonstrate: () => options.demonstrate?.() === true,
         onDemonstration: steps => { lastDemoSteps = steps },
+        ...(recipes === undefined ? {} : { recipes }),
         diagnosis: diagnoseNow,
         // Gate on settings only — `active` flips false during driver align and
         // must not make browser_* look "disabled" mid-turn.
