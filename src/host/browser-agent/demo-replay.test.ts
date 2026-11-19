@@ -43,11 +43,19 @@ function fakeDriver(input: {
   readonly url?: string
   readonly followFails?: boolean
   readonly tabs?: ReadonlyArray<{ readonly tabId: number; readonly url: string }>
+  readonly snapshots?: ReadonlyArray<{ readonly url?: string; readonly nodes: readonly DemoReplayNode[] }>
+  readonly resolveRef?: (selector: string) => number | null
 } = {}): { driver: DemoReplayDriver; calls: Calls } {
   const calls: Calls = { clicks: [], types: [], selects: [], checks: [], presses: [], navigates: [], follows: [] }
   let url = input.url ?? 'https://example.com/'
+  const queue = [...(input.snapshots ?? [])]
   const driver: DemoReplayDriver = {
-    snapshot: vi.fn(async () => ({ url, nodes: input.nodes ?? nodes })),
+    snapshot: vi.fn(async () => {
+      const next = queue.shift()
+      if (next?.url !== undefined) url = next.url
+      return { url, nodes: next?.nodes ?? input.nodes ?? nodes }
+    }),
+    resolveRefBySelector: vi.fn(async (selector: string) => input.resolveRef?.(selector) ?? null),
     listTabs: vi.fn(async () => ({ tabs: input.tabs ?? [] })),
     click: vi.fn(async (ref: number) => {
       calls.clicks.push(ref)
@@ -150,9 +158,50 @@ describe('replayDemoSteps', () => {
     expect(calls.clicks).toEqual([3])
   })
 
+  it('uses the recorded selector to pick between same-named controls', async () => {
+    const { driver, calls } = fakeDriver({
+      nodes: [
+        { ref: 5, role: 'button', name: '删除' },
+        { ref: 6, role: 'button', name: '删除' },
+      ],
+      resolveRef: selector => (selector === '#row2 .del' ? 6 : null),
+    })
+    const result = await replayDemoSteps(driver, [
+      { kind: 'click', at: 1, role: 'button', name: '删除', selector: '#row2 .del' },
+    ])
+    expect(result.status).toBe('done')
+    expect(calls.clicks).toEqual([6])
+  })
+
+  it('refuses to guess when same-named controls cannot be told apart', async () => {
+    const { driver, calls } = fakeDriver({
+      nodes: [
+        { ref: 5, role: 'button', name: '删除' },
+        { ref: 6, role: 'button', name: '删除' },
+      ],
+    })
+    const result = await replayDemoSteps(driver, [
+      { kind: 'click', at: 1, role: 'button', name: '删除', selector: '#gone' },
+    ])
+    expect(result.status).toBe('blocked')
+    expect(calls.clicks).toEqual([])
+    if (result.status !== 'blocked') throw new Error('expected blocked')
+    expect(result.reason).toContain('2 controls match')
+  })
+
+  it('waits for a control that renders late', async () => {
+    const { driver, calls } = fakeDriver({
+      nodes,
+      snapshots: [{ nodes: [] }, { nodes }],
+    })
+    const result = await replayDemoSteps(driver, [click('导出报表')], { retryDelayMs: 0 })
+    expect(result.status).toBe('done')
+    expect(calls.clicks).toEqual([3])
+  })
+
   it('stops when the control is not on the page', async () => {
     const { driver } = fakeDriver()
-    const result = await replayDemoSteps(driver, [click('不存在的按钮')])
+    const result = await replayDemoSteps(driver, [click('不存在的按钮')], { retryDelayMs: 0 })
     expect(result.status).toBe('blocked')
     if (result.status !== 'blocked') throw new Error('expected blocked')
     expect(result.reason).toContain('no control matching button "不存在的按钮"')

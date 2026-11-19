@@ -654,6 +654,22 @@ export class PlaywrightDriver implements BrowserDriver {
     }
   }
 
+  async resolveRefBySelector(selector: string): Promise<number | null> {
+    const page = await this.requirePage()
+    const raw = await page.evaluate(({ sel, attr }) => {
+      try {
+        const el = document.querySelector(sel)
+        if (el === null) return null
+        return el.getAttribute(attr)
+      } catch {
+        return null
+      }
+    }, { sel: selector, attr: PLAYWRIGHT_REF_ATTR }).catch(() => null)
+    if (raw === null) return null
+    const ref = Number(raw)
+    return Number.isFinite(ref) ? ref : null
+  }
+
   async press(key: string): Promise<BrowserActResult> {    const page = await this.requirePage()
     await page.keyboard.press(key)
     await sleep(120)

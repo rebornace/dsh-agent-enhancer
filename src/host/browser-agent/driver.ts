@@ -69,6 +69,8 @@ export interface BrowserDriver {
   check(ref: number, checked: boolean): Promise<BrowserActResult>
   /** Keyboard press in the bound tab (replaying a recorded Enter). */
   press(key: string): Promise<BrowserActResult>
+  /** Ref of the stamped element the recorded selector points at, if any. */
+  resolveRefBySelector(selector: string): Promise<number | null>
   scroll(dy: number): Promise<BrowserActResult>
   wait(input?: {
     readonly timeoutMs?: number

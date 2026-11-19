@@ -38,6 +38,8 @@ export interface DemoReplayDriver {
   followTab(tabId: number): Promise<{ readonly url: string }>
   /** Live tabs, used to re-map recorded tab ids by URL (ids do not outlive a run). */
   listTabs?(): Promise<{ readonly tabs: ReadonlyArray<{ readonly tabId: number; readonly url: string }> }>
+  /** Ref of the element the recorded selector points at; used to disambiguate. */
+  resolveRefBySelector?(selector: string): Promise<number | null>
 }
 
 export interface DemoReplayDone {
@@ -73,6 +75,29 @@ export function normalizeControlName(raw: string): string {
 }
 
 /**
+ * All controls a recorded step could mean: exact role+name first, then the same
+ * name under another role, then partial names (a shortened label must still
+ * match). Callers decide how to disambiguate when more than one comes back.
+ */
+export function matchDemoControls(
+  nodes: readonly DemoReplayNode[],
+  role: string,
+  name: string,
+): DemoReplayNode[] {
+  const wanted = normalizeControlName(name)
+  if (wanted === '') return []
+  const sameRole = nodes.filter(node => node.role === role)
+  const exact = sameRole.filter(node => normalizeControlName(node.name) === wanted)
+  if (exact.length > 0) return exact
+  const exactAnyRole = nodes.filter(node => normalizeControlName(node.name) === wanted)
+  if (exactAnyRole.length > 0) return exactAnyRole
+  return sameRole.filter(node => {
+    const candidate = normalizeControlName(node.name)
+    return candidate.includes(wanted) || wanted.includes(candidate)
+  })
+}
+
+/**
  * Find the control a recorded step refers to. Exact role+name first, then the
  * same name under another role, then a unique partial name — a demo recorded
  * against "导出" must still find "导出报表" if the label was shortened.
@@ -82,18 +107,55 @@ export function matchDemoControl(
   role: string,
   name: string,
 ): DemoReplayNode | undefined {
-  const wanted = normalizeControlName(name)
-  if (wanted === '') return undefined
-  const sameRole = nodes.filter(node => node.role === role)
-  const exact = sameRole.find(node => normalizeControlName(node.name) === wanted)
-  if (exact !== undefined) return exact
-  const exactAnyRole = nodes.find(node => normalizeControlName(node.name) === wanted)
-  if (exactAnyRole !== undefined) return exactAnyRole
-  const partial = sameRole.filter(node => {
-    const candidate = normalizeControlName(node.name)
-    return candidate.includes(wanted) || wanted.includes(candidate)
-  })
-  return partial.length === 1 ? partial[0] : undefined
+  const candidates = matchDemoControls(nodes, role, name)
+  return candidates.length === 1 ? candidates[0] : undefined
+}
+
+/** SPA hydration: give the page a moment before giving up on a control. */
+const CONTROL_ATTEMPTS = 3
+const CONTROL_RETRY_MS = 600
+export interface DemoReplayOptions {
+  /** Delay between control lookups; tests pass 0. */
+  readonly retryDelayMs?: number
+}
+const pause = (ms: number): Promise<void> => new Promise(resolve => { setTimeout(resolve, ms) })
+
+interface Located {
+  readonly node?: DemoReplayNode
+  readonly reason?: string
+}
+
+/**
+ * Locate a step's control, retrying briefly for late-rendered pages. With
+ * several same-named controls, the recorded selector must identify one; a
+ * guess would click the wrong row, so ambiguity stops the replay instead.
+ */
+async function locateControl(
+  driver: DemoReplayDriver,
+  selector: string | undefined,
+  role: string,
+  name: string,
+  retryDelayMs: number,
+): Promise<Located> {
+  let lastUrl = ''
+  for (let attempt = 0; attempt < CONTROL_ATTEMPTS; attempt += 1) {
+    const snapshot = await driver.snapshot()
+    lastUrl = snapshot.url
+    const candidates = matchDemoControls(snapshot.nodes, role, name)
+    if (candidates.length === 1) return { node: candidates[0] }
+    if (candidates.length > 1) {
+      const ref = typeof driver.resolveRefBySelector === 'function' && (selector ?? '').trim() !== ''
+        ? await driver.resolveRefBySelector(selector!).catch(() => null)
+        : null
+      const hit = ref === null ? undefined : candidates.find(node => node.ref === ref)
+      if (hit !== undefined) return { node: hit }
+      return {
+        reason: `${candidates.length} controls match ${role} ${JSON.stringify(name)} on ${snapshot.url}; the recorded selector does not identify one`,
+      }
+    }
+    if (attempt < CONTROL_ATTEMPTS - 1) await pause(retryDelayMs)
+  }
+  return { reason: `no control matching ${role} ${JSON.stringify(name)} on ${lastUrl}` }
 }
 
 type StepOutcome =
@@ -107,7 +169,11 @@ function replayObstacle(step: DemoStep): string | null {
   return null
 }
 
-async function performStep(driver: DemoReplayDriver, step: DemoStep): Promise<StepOutcome> {
+async function performStep(
+  driver: DemoReplayDriver,
+  step: DemoStep,
+  retryDelayMs: number = CONTROL_RETRY_MS,
+): Promise<StepOutcome> {
   switch (step.kind) {
     case 'navigate': {
       const current = (await driver.snapshot()).url
@@ -116,26 +182,19 @@ async function performStep(driver: DemoReplayDriver, step: DemoStep): Promise<St
       return { ok: true, url: result.url }
     }
     case 'click': {
-      const snapshot = await driver.snapshot()
-      const node = matchDemoControl(snapshot.nodes, step.role, step.name)
-      if (node === undefined) {
-        return {
-          ok: false,
-          reason: `no control matching ${step.role} ${JSON.stringify(step.name)} on ${snapshot.url}`,
-        }
+      const located = await locateControl(driver, step.selector, step.role, step.name, retryDelayMs)
+      if (located.node === undefined) {
+        return { ok: false, reason: located.reason ?? 'control not found' }
       }
-      const result = await driver.click(node.ref)
+      const result = await driver.click(located.node.ref)
       return { ok: true, url: result.url }
     }
     case 'fill': {
-      const snapshot = await driver.snapshot()
-      const node = matchDemoControl(snapshot.nodes, step.role, step.name)
-      if (node === undefined) {
-        return {
-          ok: false,
-          reason: `no field matching ${step.role} ${JSON.stringify(step.name)} on ${snapshot.url}`,
-        }
+      const located = await locateControl(driver, step.selector, step.role, step.name, retryDelayMs)
+      if (located.node === undefined) {
+        return { ok: false, reason: located.reason ?? 'field not found' }
       }
+      const node = located.node
       if (step.role === 'combobox') {
         const result = await driver.select(node.ref, step.value)
         return { ok: true, url: result.url }
@@ -177,7 +236,9 @@ export function samePage(a: string, b: string): boolean {
 export async function replayDemoSteps(
   driver: DemoReplayDriver,
   steps: readonly DemoStep[],
+  options: DemoReplayOptions = {},
 ): Promise<DemoReplayResult> {
+  const retryDelayMs = options.retryDelayMs ?? CONTROL_RETRY_MS
   const lines: string[] = []
   let currentTab: number | undefined
   let url: string | undefined
@@ -266,7 +327,7 @@ export async function replayDemoSteps(
         ...(url === undefined ? {} : { url }),
       }
     }
-    const outcome = await performStep(driver, step).catch((error: unknown) => ({
+    const outcome = await performStep(driver, step, retryDelayMs).catch((error: unknown) => ({
       ok: false as const,
       reason: error instanceof Error ? error.message : String(error),
     }))
