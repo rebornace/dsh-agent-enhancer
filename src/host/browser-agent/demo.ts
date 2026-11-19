@@ -302,10 +302,51 @@ on(document, "keydown", function (event) {
   if (!el || !el.tagName) return;
   push({ kind: "press", key: "Enter", selector: selectorOf(el) });
 }, true);
+// Visible "recording" marker. Styles are set through CSSOM (not a <style> tag)
+// so a strict style-src CSP cannot hide it; the host is pointer-events:none and
+// aria-hidden, so it can never eat a click or show up in a snapshot.
+function mountBadge() {
+  try {
+    var stale = document.querySelector("[data-dsh-demo-badge]");
+    if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+    var host = document.createElement("div");
+    host.setAttribute("data-dsh-demo-badge", "");
+    host.setAttribute("aria-hidden", "true");
+    host.style.cssText = "position:fixed;right:18px;bottom:18px;z-index:2147483647;pointer-events:none;";
+    var root = host.attachShadow ? host.attachShadow({ mode: "open" }) : host;
+    var zh = /^zh/i.test(navigator.language || "");
+    var bar = document.createElement("div");
+    bar.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;"
+      + "background:rgba(17,24,39,.92);color:#fff;box-shadow:0 6px 20px rgba(0,0,0,.28);"
+      + "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;";
+    var dot = document.createElement("span");
+    dot.style.cssText = "width:9px;height:9px;border-radius:50%;background:#ef4444;flex:0 0 auto;"
+      + "box-shadow:0 0 0 3px rgba(239,68,68,.22);";
+    var text = document.createElement("span");
+    text.style.cssText = "display:flex;flex-direction:column;gap:1px;font-size:12px;line-height:1.35;";
+    var title = document.createElement("span");
+    title.textContent = zh ? "演示录制中" : "Recording";
+    var hint = document.createElement("span");
+    hint.textContent = zh ? "完成后回到 Desktop 结束录制" : "Return to Desktop to stop";
+    hint.style.cssText = "font-size:11px;opacity:.72;";
+    text.appendChild(title);
+    text.appendChild(hint);
+    bar.appendChild(dot);
+    bar.appendChild(text);
+    root.appendChild(bar);
+    (document.body || document.documentElement).appendChild(host);
+    return host;
+  } catch (e) {
+    return null;
+  }
+}
+var badge = mountBadge();
 var recorder = {
   stop: function () {
     for (var i = 0; i < OFF.length; i++) { try { OFF[i](); } catch (e) { } }
     OFF.length = 0;
+    try { if (badge && badge.parentNode) badge.parentNode.removeChild(badge); } catch (e) { }
+    badge = null;
     delete window[KEY];
   },
 };
