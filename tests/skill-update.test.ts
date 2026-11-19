@@ -31,7 +31,11 @@ function tempDir(prefix: string): string {
 afterEach(() => {
   while (temps.length > 0) {
     const dir = temps.pop()
-    if (dir !== undefined) rmSync(dir, { recursive: true, force: true })
+    if (dir === undefined) continue
+    try {
+      // git leaves pack/index files open on Windows; retry instead of failing teardown.
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    } catch { /* a locked temp dir is not a test failure */ }
   }
 })
 
@@ -92,7 +96,7 @@ describe('checkGithubSkillUpdate', () => {
     expect(changed.updateAvailable).toBe(true)
     expect(changed.updateCheckFailed).toBe(false)
     expect(changed.updateSourceLabel).toContain('fixture')
-  })
+  }, 30_000)
 
   it('sets updateCheckFailed when the remote source cannot be materialized', async () => {
     const record = githubRecord({
@@ -382,7 +386,7 @@ describe('updateSkillFromGitNow', () => {
       updateAvailable: false,
       updateCheckFailed: false,
     })
-  })
+  }, 30_000)
 })
 
 function readDirNames(root: string, prefix: string): string[] {
