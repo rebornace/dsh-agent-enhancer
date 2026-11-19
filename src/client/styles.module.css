@@ -2460,6 +2460,18 @@
   gap: 8px;
 }
 
+.browserAgentKeyHint {
+  margin: 8px 0 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.browserAgentButton:focus-visible,
+.browserAgentClose:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: 2px;
+}
+
 .browserAgentButton,
 .browserAgentButtonDanger {
   border: 0;

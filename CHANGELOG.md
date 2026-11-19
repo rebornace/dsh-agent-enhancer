@@ -7,11 +7,13 @@
 - **浏览器 Agent · 演示录制支持多标签：** 录制不再只跟随会话绑定的那个标签，专用浏览器里**所有已打开的标签**以及录制期间新开的标签都会被记录，每个步骤带上它发生在哪个标签（`[tab N]`）与该标签的地址，重放时用 `browser_list_tabs` + `browser_follow_tab` 按标签切换。侧栏步骤、复制与「发给智能体」同样带标签信息。
 - **浏览器 Agent · 录制角标：** 录制期间每个被录的标签右下角显示「演示录制中 / 完成后回到 Desktop 结束录制」（跟随页面语言），结束后自动消失；角标不拦截点击、不进无障碍树，也不受站点 CSP 影响。
 - **浏览器 Agent · 演示一键重放：** `browser_demonstrate` 新增 `replay: true`：你说「我做一遍，然后你来」时，录完立刻由浏览器驱动按 role+name 自己跑一遍，不用先等模型读步骤。跑到不能如实复现的步骤（密码等被掩码的字段、`<select>`、找不到的控件）就停下，报告停在哪一步、还剩哪些，绝不假装跑完。
+- **浏览器批准弹窗支持键盘：** 弹窗出现后 `Enter` = 允许本次、`Esc` = 拒绝，焦点环用官方 `--dsw-focus-ring-*`。在输入框里打字时不会被误触发；焦点在某个按钮上时 `Enter` 仍归那个按钮。
 - **浏览器 Agent · SPA 路由也入步骤：** 单页应用用 `pushState` / `replaceState` / `popstate` / hash 换路由时不再漏记，录制里会多出一条 `navigate ->` 步骤（URL 里的 token 参数照旧脱敏）。
 
 ### Fixed
 
 - **浏览器批准弹窗看不清：** 弹窗背景写成 `var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-primary))`，而这两个名字主题里都不存在，整条 `background` 被浏览器丢弃，于是弹窗透明地盖在网页上、文字互相叠。现改为官方卡片配方（`--dsw-alias-bg-layer-1` + `--dsw-alias-border-l2` 发丝边 + `--dsw-shadow-lv3` + `--dsw-radius-md`），亮/暗主题都不透明。
+- **浏览器批准弹窗不再压住右侧栏：** 弹窗是视口固定元素，右侧栏一展开就被盖住。现在读 `[data-sidebar-right-open]` 的实际宽度，把卡片整体左移（并给自己留 320px），侧栏全屏也不会把卡片挤出屏幕。
 - **客户端样式里的无效设计 token：** 同一类问题在别处还有 23 个不存在的 token 名（`--dsw-alias-text-primary`、`--dsw-alias-border-primary`、`--dsw-font-sm-14`、`--dsw-radius-s` 等），对应声明全部静默失效（边框、字号、圆角因此丢过）。已全部换成主题真实 token，并加 `tests/client-design-tokens.test.ts`：CSS 里出现主题未定义的 token 即失败。
 
 ## 0.3.16 - 2026-11-19

@@ -1,5 +1,7 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { useEffect, useId, useRef, useState } from 'react'
+import { approvalKeyDecision } from './approval-keys.ts'
+import { BANNER_GAP, bannerRightInset } from './banner-geometry.ts'
 import type { BrowserAgentSnapshot } from '../../host/rpc.ts'
 import {
   agentEnhancerBrowserAgentAcknowledgeHuman,
@@ -31,6 +33,7 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
   const [snapshot, setSnapshot] = useState<BrowserAgentSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
+  const [rightInset, setRightInset] = useState(BANNER_GAP)
   const humanContinueRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   const bodyId = useId()
@@ -52,6 +55,21 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
       clearInterval(timer)
     }
   }, [props.getRemote])
+
+  useEffect(() => {
+    // Keep the card clear of the right sidebar: it is a layout column, so a
+    // viewport-fixed card would otherwise sit on top of it.
+    const measure = () => {
+      const panel = document.querySelector('[data-sidebar-right-open]')
+      const width = panel instanceof HTMLElement ? panel.getBoundingClientRect().width : 0
+      setRightInset(bannerRightInset(width, window.innerWidth))
+    }
+    measure()
+    const timer = setInterval(measure, 500)
+    return () => {
+      clearInterval(timer)
+    }
+  }, [])
 
   if (snapshot === null || !snapshot.enabled) return null
 
@@ -91,7 +109,7 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
       }
     }
     return (
-      <div className={styles.browserAgentBanner} role="status" aria-live="polite">
+      <div className={styles.browserAgentBanner} role="status" aria-live="polite" style={{ right: rightInset }}>
         {header(props.t('browserAgentTabConflictTitle'))}
         <p className={styles.browserAgentBody}>
           {props.t('browserAgentTabConflictBody')
@@ -124,8 +142,20 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
         setBusy(false)
       }
     }
+    // Keyboard: Enter allows this once, Esc denies — without stealing focus
+    // from the composer (guarded against typing targets below).
     return (
-      <div className={styles.browserAgentBanner} role="status" aria-live="polite">
+      <div
+        className={styles.browserAgentBanner}
+        role="status"
+        aria-live="polite"
+        style={{ right: rightInset }}
+      >
+        <ApprovalKeys
+          busy={busy}
+          onAllow={() => { void resolve('allow-once') }}
+          onDeny={() => { void resolve('deny') }}
+        />
         {header(props.t('browserAgentApproveTitle'))}
         <p className={styles.browserAgentBody}>{pending.summary}</p>
         {pending.url !== undefined && pending.url.trim() !== '' ? (
@@ -142,6 +172,7 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
             {props.t('browserAgentDeny')}
           </button>
         </div>
+        <p className={styles.browserAgentKeyHint}>{props.t('browserAgentApproveKeys')}</p>
       </div>
     )
   }
@@ -165,6 +196,7 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
     return (
       <NeedsHumanBanner
         titleId={titleId}
+        rightInset={rightInset}
         bodyId={bodyId}
         title={asksHuman ? props.t('browserAgentNeedsHumanTitle') : props.t('browserAgentAskTitle')}
         body={asksHuman ? props.t('browserAgentNeedsHumanBody') : needsHuman.detail}
@@ -184,8 +216,45 @@ export function BrowserAgentOverlay(props: BrowserAgentOverlayProps) {
   return null
 }
 
+/**
+ * Global Enter/Esc for the approval card. Deliberately a child component so the
+ * window listener lives exactly as long as the card: the parent cannot call a
+ * hook inside its `pending !== null` branch.
+ */
+function ApprovalKeys(props: {
+  readonly busy: boolean
+  readonly onAllow: () => void
+  readonly onDeny: () => void
+}) {
+  const handlers = useRef(props)
+  handlers.current = props
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const decision = approvalKeyDecision({
+        key: event.key,
+        ...(target?.tagName === undefined ? {} : { tagName: target.tagName }),
+        ...(target?.isContentEditable === true ? { contentEditable: true } : {}),
+        busy: handlers.current.busy,
+        defaultPrevented: event.defaultPrevented,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+      })
+      if (decision === null) return
+      event.preventDefault()
+      if (decision === 'deny') handlers.current.onDeny()
+      else handlers.current.onAllow()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey) }
+  }, [])
+  return null
+}
+
 function NeedsHumanBanner(props: {
   readonly titleId: string
+  readonly rightInset: number
   readonly bodyId: string
   readonly title: string
   readonly body: string
@@ -206,6 +275,7 @@ function NeedsHumanBanner(props: {
       className={styles.browserAgentBanner}
       role="alertdialog"
       aria-modal="true"
+      style={{ right: props.rightInset }}
       aria-labelledby={props.titleId}
       aria-describedby={props.bodyId}
       aria-live="assertive"
