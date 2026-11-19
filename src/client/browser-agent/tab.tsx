@@ -452,7 +452,12 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                   </button>
                 )}
             </div>
-            {demoSteps !== null && demoSteps.length > 0 ? (
+            {demoSteps === null && snapshot.demo.lastSteps > 0 ? (
+              <p className={styles.browserAgentPaneNote}>
+                {t('browserAgentDemoLastSteps').replace('{n}', String(snapshot.demo.lastSteps))}
+              </p>
+            ) : null}
+            {(demoSteps !== null && demoSteps.length > 0) || snapshot.demo.lastSteps > 0 ? (
               <div className={styles.browserAgentDemoSave}>
                 <input
                   className={styles.browserAgentDemoName}

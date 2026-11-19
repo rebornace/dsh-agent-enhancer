@@ -433,6 +433,7 @@ export class AgentEnhancerService extends TypertRemoteService {
       demo: {
         enabled: settings.demonstrate,
         recording: this.browserAgent?.demoActive() === true,
+        lastSteps: this.browserAgent?.lastDemonstrationSteps() ?? 0,
       },
       diagnosis: diag ?? {
         code: settings.enabled ? 'idle' : 'disabled',

@@ -83,7 +83,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentDemoRecordingAgent' | 'browserAgentDemoEmpty' | 'browserAgentDemoCopy' |
       'browserAgentDemoCopied' | 'browserAgentDemoCopyFailed' | 'browserAgentDemoFailed' |
       'browserAgentDemoSend' | 'browserAgentDemoSendLead' | 'browserAgentDemoSent' |
-      'browserAgentDemoSendFailed' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' |
+      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' |
       'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
       'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
       'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
@@ -499,6 +499,7 @@ export const agentLocales = {
     browserAgentDemoSendLead: '我刚刚在浏览器里演示了一遍流程，请按这些步骤完成同样的操作（先 browser_snapshot，再按 role/name 点击或输入）：',
     browserAgentDemoSent: '已插入输入框，确认后发送',
     browserAgentDemoSendFailed: '插入失败：先在聊天里发一条消息建立会话，再试一次',
+    browserAgentDemoLastSteps: '上次录制：{n} 步，可以保存为流程',
     browserAgentDemoRecipeName: '流程名',
     browserAgentDemoRecipeSave: '保存为流程',
     browserAgentDemoRecipeSaved: '已保存「{name}」',
@@ -1184,6 +1185,7 @@ export const agentLocales = {
     browserAgentDemoSendLead: 'I just demonstrated this flow in the browser. Please repeat it using these steps (browser_snapshot first, then click or type by role/name):',
     browserAgentDemoSent: 'Inserted into the composer; send it when ready',
     browserAgentDemoSendFailed: 'Could not insert: send one message in the chat first, then retry',
+    browserAgentDemoLastSteps: 'Last recording: {n} steps — save it as a flow',
     browserAgentDemoRecipeName: 'Flow name',
     browserAgentDemoRecipeSave: 'Save as flow',
     browserAgentDemoRecipeSaved: 'Saved "{name}"',

@@ -20,6 +20,7 @@ const steps: DemoStep[] = [
 
 function harness(demonstrate: boolean, recorded: readonly DemoStep[] = steps) {
   const tools = new Map<string, RegisteredTool>()
+  const demonstrations: Array<readonly DemoStep[]> = []
   const calls = { clicks: [] as number[], types: [] as Array<[number, string]>, presses: [] as string[] }
   const ctx = {
     tools: {
@@ -76,6 +77,7 @@ function harness(demonstrate: boolean, recorded: readonly DemoStep[] = steps) {
     human: gate,
     sessions,
     demonstrate: () => demonstrate,
+    onDemonstration: captured => { demonstrations.push(captured) },
     enabled: () => true,
   })
 
@@ -83,6 +85,7 @@ function harness(demonstrate: boolean, recorded: readonly DemoStep[] = steps) {
   return {
     driver,
     calls,
+    demonstrations,
     run: (args: Record<string, unknown>) => {
       const tool = tools.get('browser_demonstrate')
       if (tool === undefined) throw new Error('browser_demonstrate not registered')
@@ -134,6 +137,13 @@ describe('browser_demonstrate', () => {
     expect(out).toContain('2. [tab 1] click link "Reports"')
     expect(out).toContain('4. [tab 2] click button "Export"')
     expect(out).toContain('browser_follow_tab')
+  })
+
+  it('hands the finished recording to the host so the sidebar can save it', async () => {
+    const h = harness(true)
+    await h.run({ message: 'show me how you sign in' })
+    expect(h.demonstrations).toHaveLength(1)
+    expect(h.demonstrations[0]).toHaveLength(steps.length)
   })
 
   it('keeps the single-tab output free of tab tags', async () => {

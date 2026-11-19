@@ -1140,7 +1140,7 @@ function emptyBrowserAgentSnapshot(): BrowserAgentSnapshot {
     allowedOrigins: [],
     bridge: { listening: false, extensionConnected: false, port: 0, lastError: null },
     pending: null,
-    demo: { enabled: false, recording: false },
+    demo: { enabled: false, recording: false, lastSteps: 0 },
     diagnosis: {
       code: 'disabled',
       nextStep: 'Browser agent is off. Enable it in 设置 → 智能体增强 → 功能.',

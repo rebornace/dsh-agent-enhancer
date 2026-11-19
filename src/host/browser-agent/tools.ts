@@ -9,7 +9,7 @@ import type { SnapshotBody } from './protocol.ts'
 import type { BrowserSessionState } from './session-state.ts'
 import type { TabScopeStore } from './tab-scope.ts'
 import type { Diagnosis } from './diagnose.ts'
-import { demoTabLegend, describeDemoStep, summarizeDemoSteps } from './demo.ts'
+import { demoTabLegend, describeDemoStep, summarizeDemoSteps, type DemoStep } from './demo.ts'
 import { replayDemoSteps } from './demo-replay.ts'
 
 type ToolExec = {
@@ -155,6 +155,8 @@ export interface BrowserToolsOptions {
   readonly debugTools?: () => boolean
   /** "Show me" recorder switch (browser_demonstrate). */
   readonly demonstrate?: () => boolean
+  /** Last completed recording, whoever stopped it (agent or sidebar). */
+  readonly onDemonstration?: (steps: readonly DemoStep[]) => void
   /** What is wrong (if anything) and the concrete next step. */
   readonly diagnosis?: () => Diagnosis
   readonly enabled: () => boolean
@@ -1317,6 +1319,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       if (status === 'cancelled') {
         return 'user_ack: cancelled\nAction: the demonstration was cancelled. Ask what they want next.'
       }
+      if (steps.length > 0) options.onDemonstration?.(steps)
       const summary = summarizeDemoSteps(steps)
       options.sessions.record({
         sessionId,

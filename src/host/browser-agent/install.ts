@@ -64,6 +64,8 @@ export interface BrowserAgentRuntime {
   demoStart(): Promise<{ readonly ok: boolean; readonly error?: string }>
   demoStop(): Promise<{ readonly ok: boolean; readonly steps?: readonly string[]; readonly error?: string }>
   demoActive(): boolean
+  /** Steps from the last completed recording (agent- or sidebar-started). */
+  lastDemonstrationSteps(): number
   /**
    * Saved demonstrations (cross-session): list, save the last recording, run one
    * back, or delete it. Steps are stored sanitized; secrets stay `***`.
@@ -297,6 +299,7 @@ export function installBrowserAgent(
         tabScope,
         debugTools: () => options.debugTools?.() === true,
         demonstrate: () => options.demonstrate?.() === true,
+        onDemonstration: steps => { lastDemoSteps = steps },
         diagnosis: diagnoseNow,
         // Gate on settings only — `active` flips false during driver align and
         // must not make browser_* look "disabled" mid-turn.
@@ -549,6 +552,9 @@ export function installBrowserAgent(
     },
     demoActive() {
       return activeDriver?.demonstrationActive() === true
+    },
+    lastDemonstrationSteps() {
+      return lastDemoSteps.length
     },
     async demoRecipes(input) {
       if (!options.enabled()) return { ok: false, error: 'Browser agent disabled' }

@@ -725,6 +725,8 @@ export const browserAgentSnapshotSchema = z.strictObject({
   demo: z.strictObject({
     enabled: z.boolean(),
     recording: z.boolean(),
+    /** Steps from the last finished recording, whoever stopped it. */
+    lastSteps: z.number().int(),
   }),
   tabConflict: browserAgentTabConflictSchema.nullable(),
   needsHuman: browserAgentNeedsHumanSchema.nullable(),
