@@ -193,6 +193,10 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
   const [recipes, setRecipes] = useState<readonly DemoRecipeMetaWire[]>([])
   const [recipeName, setRecipeName] = useState('')
   const [recipeBusy, setRecipeBusy] = useState(false)
+  const [openRecipeId, setOpenRecipeId] = useState<string | null>(null)
+  const [recipeStepLines, setRecipeStepLines] = useState<readonly string[]>([])
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const loadRecipes = async () => {
     const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'list' })
@@ -254,6 +258,48 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
       const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'delete', id: recipe.id })
       if (result.recipes !== undefined) setRecipes(result.recipes)
       if (!result.ok) setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
+    } finally {
+      setRecipeBusy(false)
+    }
+  }
+
+
+  const toggleRecipeSteps = async (recipe: DemoRecipeMetaWire) => {
+    if (openRecipeId === recipe.id) {
+      setOpenRecipeId(null)
+      return
+    }
+    const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'steps', id: recipe.id })
+    if (!result.ok) {
+      setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
+      return
+    }
+    setRecipeStepLines(result.lines ?? [])
+    setOpenRecipeId(recipe.id)
+  }
+
+  const startRename = (recipe: DemoRecipeMetaWire) => {
+    setRenamingId(recipe.id)
+    setRenameValue(recipe.name)
+  }
+
+  const submitRename = async (recipe: DemoRecipeMetaWire) => {
+    const name = renameValue.trim()
+    if (name === '') {
+      setHint(t('browserAgentDemoRecipeNameRequired'))
+      return
+    }
+    setRecipeBusy(true)
+    setHint(null)
+    try {
+      const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'rename', id: recipe.id, name })
+      if (result.recipes !== undefined) setRecipes(result.recipes)
+      if (!result.ok) {
+        setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
+        return
+      }
+      setRenamingId(null)
+      setHint(t('browserAgentDemoRecipeRenamed').replace('{name}', result.recipe?.name ?? name))
     } finally {
       setRecipeBusy(false)
     }
@@ -482,27 +528,80 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                 <p className={styles.browserAgentPaneNote}>{t('browserAgentDemoRecipesTitle')}</p>
                 <ul className={styles.browserAgentRecipeList}>
                   {recipes.map(recipe => (
-                    <li key={recipe.id} className={styles.browserAgentRecipeRow}>
-                      <span className={styles.browserAgentRecipeName}>{recipe.name}</span>
-                      <span className={styles.browserAgentRecipeSteps}>
-                        {t('browserAgentDemoRecipeStepCount').replace('{n}', String(recipe.steps))}
-                      </span>
-                      <button
-                        type="button"
-                        className={styles.browserAgentButton}
-                        disabled={recipeBusy}
-                        onClick={() => { void runRecipe(recipe) }}
-                      >
-                        {t('browserAgentDemoRecipeRun')}
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.browserAgentButton}
-                        disabled={recipeBusy}
-                        onClick={() => { void deleteRecipe(recipe) }}
-                      >
-                        {t('browserAgentDemoRecipeDelete')}
-                      </button>
+                    <li key={recipe.id} className={styles.browserAgentRecipeItem}>
+                      <div className={styles.browserAgentRecipeRow}>
+                        {renamingId === recipe.id ? (
+                          <>
+                            <input
+                              className={styles.browserAgentDemoName}
+                              value={renameValue}
+                              aria-label={t('browserAgentDemoRecipeRename')}
+                              disabled={recipeBusy}
+                              onChange={event => { setRenameValue(event.target.value) }}
+                            />
+                            <button
+                              type="button"
+                              className={styles.browserAgentButton}
+                              disabled={recipeBusy}
+                              onClick={() => { void submitRename(recipe) }}
+                            >
+                              {t('browserAgentDemoRecipeRenameSave')}
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.browserAgentButton}
+                              disabled={recipeBusy}
+                              onClick={() => { setRenamingId(null) }}
+                            >
+                              {t('browserAgentDemoRecipeCancel')}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className={styles.browserAgentRecipeName}
+                              aria-expanded={openRecipeId === recipe.id}
+                              title={t('browserAgentDemoRecipeSteps')}
+                              onClick={() => { void toggleRecipeSteps(recipe) }}
+                            >
+                              {recipe.name}
+                            </button>
+                            <span className={styles.browserAgentRecipeSteps}>
+                              {t('browserAgentDemoRecipeStepCount').replace('{n}', String(recipe.steps))}
+                            </span>
+                            <button
+                              type="button"
+                              className={styles.browserAgentButton}
+                              disabled={recipeBusy}
+                              onClick={() => { void runRecipe(recipe) }}
+                            >
+                              {t('browserAgentDemoRecipeRun')}
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.browserAgentButton}
+                              disabled={recipeBusy}
+                              onClick={() => { startRename(recipe) }}
+                            >
+                              {t('browserAgentDemoRecipeRename')}
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.browserAgentButton}
+                              disabled={recipeBusy}
+                              onClick={() => { void deleteRecipe(recipe) }}
+                            >
+                              {t('browserAgentDemoRecipeDelete')}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      {openRecipeId === recipe.id ? (
+                        <pre className={styles.browserAgentDemoSteps}>
+                          {recipeStepLines.length === 0 ? t('browserAgentDemoEmpty') : recipeStepLines.join('\n')}
+                        </pre>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

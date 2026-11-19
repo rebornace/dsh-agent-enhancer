@@ -83,7 +83,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentDemoRecordingAgent' | 'browserAgentDemoEmpty' | 'browserAgentDemoCopy' |
       'browserAgentDemoCopied' | 'browserAgentDemoCopyFailed' | 'browserAgentDemoFailed' |
       'browserAgentDemoSend' | 'browserAgentDemoSendLead' | 'browserAgentDemoSent' |
-      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' |
+      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' | 'browserAgentDemoRecipeRename' | 'browserAgentDemoRecipeRenameSave' | 'browserAgentDemoRecipeCancel' | 'browserAgentDemoRecipeSteps' | 'browserAgentDemoRecipeRenamed' |
       'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
       'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
       'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
@@ -511,6 +511,11 @@ export const agentLocales = {
     browserAgentDemoRecipeStepCount: '{n} 步',
     browserAgentDemoRecipeRun: '运行',
     browserAgentDemoRecipeDelete: '删除',
+    browserAgentDemoRecipeRename: '重命名',
+    browserAgentDemoRecipeRenameSave: '保存',
+    browserAgentDemoRecipeCancel: '取消',
+    browserAgentDemoRecipeSteps: '查看步骤',
+    browserAgentDemoRecipeRenamed: '已重命名为「{name}」',
     browserAgentDemoCopied: '已复制步骤',
     browserAgentDemoCopyFailed: '复制失败，请手动选中文本复制',
     browserAgentDemoFailed: '演示录制失败',
@@ -1197,6 +1202,11 @@ export const agentLocales = {
     browserAgentDemoRecipeStepCount: '{n} steps',
     browserAgentDemoRecipeRun: 'Run',
     browserAgentDemoRecipeDelete: 'Delete',
+    browserAgentDemoRecipeRename: 'Rename',
+    browserAgentDemoRecipeRenameSave: 'Save',
+    browserAgentDemoRecipeCancel: 'Cancel',
+    browserAgentDemoRecipeSteps: 'View steps',
+    browserAgentDemoRecipeRenamed: 'Renamed to "{name}"',
     browserAgentDemoCopied: 'Steps copied',
     browserAgentDemoCopyFailed: 'Could not copy; select the text manually',
     browserAgentDemoFailed: 'Demonstration recording failed',

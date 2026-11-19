@@ -63,6 +63,25 @@ describe('DemoRecipeStore', () => {
     expect(store.list()).toEqual([])
   })
 
+  it('renames a flow without touching its steps', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '旧名字', steps: [click('a'), click('b')], now: 1000 })
+    if (!saved.ok) throw new Error('expected ok')
+    const renamed = store.rename({ id: saved.recipe.id, name: '  新名字 ', now: 2000 })
+    expect(renamed.ok).toBe(true)
+    if (!renamed.ok) throw new Error('expected ok')
+    expect(renamed.recipe).toMatchObject({ name: '新名字', steps: 2, createdAt: 1000, updatedAt: 2000 })
+  })
+
+  it('refuses a rename that collides with another flow', () => {
+    const { store } = tempStore()
+    store.save({ name: 'a', steps: [click('a')] })
+    const second = store.save({ name: 'b', steps: [click('b')] })
+    if (!second.ok) throw new Error('expected ok')
+    expect(store.rename({ id: second.recipe.id, name: 'A' })).toMatchObject({ ok: false })
+    expect(store.rename({ id: 'missing', name: 'c' })).toMatchObject({ ok: false })
+  })
+
   it('caps the number of saved flows', () => {
     const { store } = tempStore()
     for (let i = 0; i < MAX_RECIPES; i += 1) {

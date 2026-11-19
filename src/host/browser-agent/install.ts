@@ -20,7 +20,7 @@ import { registerBrowserAgentPrompt } from './prompt.ts'
 import { BrowserSessionState } from './session-state.ts'
 import { TabScopeStore } from './tab-scope.ts'
 import { diagnose, type BrowserAvailability, type Diagnosis } from './diagnose.ts'
-import { demoTabLegend, summarizeDemoSteps, type DemoStep } from './demo.ts'
+import { demoTabLegend, describeDemoStep, summarizeDemoSteps, type DemoStep } from './demo.ts'
 import { replayDemoSteps } from './demo-replay.ts'
 import type { DemoRecipeMeta, DemoRecipeStore } from './demo-recipes.ts'
 import { registerBrowserTools } from './tools.ts'
@@ -71,7 +71,7 @@ export interface BrowserAgentRuntime {
    * back, or delete it. Steps are stored sanitized; secrets stay `***`.
    */
   demoRecipes(input: {
-    readonly action: 'list' | 'save' | 'run' | 'delete'
+    readonly action: 'list' | 'save' | 'run' | 'delete' | 'steps' | 'rename'
     readonly name?: string
     readonly id?: string
   }): Promise<{
@@ -574,22 +574,25 @@ export function installBrowserAgent(
         })
         return removed ? { ok: true, recipes: recipes.list() } : { ok: false, error: '流程不存在', recipes: recipes.list() }
       }
-      if (input.action === 'save') {
-        if (options.demonstrate?.() !== true) {
-          return { ok: false, error: '演示录制未开启：设置 → 功能 → 浏览器 Agent' }
+      if (input.action === 'steps') {
+        const recipe = recipes.get(input.id ?? '')
+        if (recipe === undefined) return { ok: false, error: '流程不存在', recipes: recipes.list() }
+        return {
+          ok: true,
+          recipes: recipes.list(),
+          lines: recipe.steps.map((step, index) => `${index + 1}. ${describeDemoStep(step)}`),
         }
-        if (lastDemoSteps.length === 0) {
-          return { ok: false, error: '先录制一次，再保存为流程', recipes: recipes.list() }
-        }
-        const saved = recipes.save({ name: input.name ?? '', steps: lastDemoSteps })
-        if (!saved.ok) return { ok: false, error: saved.error, recipes: recipes.list() }
+      }
+      if (input.action === 'rename') {
+        const renamed = recipes.rename({ id: input.id ?? '', name: input.name ?? '' })
+        if (!renamed.ok) return { ok: false, error: renamed.error, recipes: recipes.list() }
         sessions.record({
           sessionId: 'sidebar',
           tool: 'browser_demo_recipe',
-          summary: `Saved demonstration recipe "${saved.recipe.name}" (${saved.recipe.steps} step(s))`,
+          summary: `Renamed demonstration recipe to "${renamed.recipe.name}"`,
           outcome: 'ok',
         })
-        return { ok: true, recipe: saved.recipe, recipes: recipes.list() }
+        return { ok: true, recipe: renamed.recipe, recipes: recipes.list() }
       }
       // run
       const recipe = recipes.get(input.id ?? '')

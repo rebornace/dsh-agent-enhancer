@@ -800,6 +800,8 @@ export const browserAgentDemoRecipesRequestSchema = z.discriminatedUnion('action
   z.strictObject({ action: z.literal('save'), name: z.string() }),
   z.strictObject({ action: z.literal('run'), id: z.string().min(1) }),
   z.strictObject({ action: z.literal('delete'), id: z.string().min(1) }),
+  z.strictObject({ action: z.literal('steps'), id: z.string().min(1) }),
+  z.strictObject({ action: z.literal('rename'), id: z.string().min(1), name: z.string() }),
 ])
 export type BrowserAgentDemoRecipesRequest = z.infer<typeof browserAgentDemoRecipesRequestSchema>
 const browserAgentDemoRecipesRequestCodec = codec(

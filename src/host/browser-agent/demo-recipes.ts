@@ -117,6 +117,21 @@ export class DemoRecipeStore {
     return true
   }
 
+  /** Rename without touching the steps; the new name must stay unique. */
+  rename(input: { readonly id: string; readonly name: string; readonly now?: number }): SaveResult {
+    const name = input.name.replace(/\s+/gu, ' ').trim()
+    if (name === '') return { ok: false, error: '流程名不能为空' }
+    if (name.length > MAX_RECIPE_NAME) return { ok: false, error: `流程名最长 ${MAX_RECIPE_NAME} 个字符` }
+    const recipes = this.read()
+    const current = recipes.find(recipe => recipe.id === input.id)
+    if (current === undefined) return { ok: false, error: '流程不存在' }
+    const clash = recipes.find(recipe => recipe.id !== current.id && recipe.name.toLowerCase() === name.toLowerCase())
+    if (clash !== undefined) return { ok: false, error: `已经有叫「${clash.name}」的流程` }
+    const renamed: DemoRecipe = { ...current, name, updatedAt: input.now ?? Date.now() }
+    this.write(recipes.map(recipe => (recipe.id === current.id ? renamed : recipe)))
+    return { ok: true, recipe: metaOf(renamed) }
+  }
+
   private read(): DemoRecipe[] {
     if (this.filePath === null) return this.memory
     try {

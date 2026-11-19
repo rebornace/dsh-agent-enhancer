@@ -2746,6 +2746,13 @@
   list-style: none;
 }
 
+.browserAgentRecipeItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .browserAgentRecipeRow {
   display: flex;
   align-items: center;
@@ -2760,10 +2767,24 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xxs-12);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.browserAgentRecipeName:hover {
+  text-decoration: underline;
+}
+
+.browserAgentRecipeName:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: 1px;
 }
 
 .browserAgentRecipeSteps {
