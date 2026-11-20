@@ -86,4 +86,6 @@ Publish only what stays true: `README` (what the plugin does and does not do), `
 
 ## Host version policy
 
+We stay on `0.x` while the host is pre-stable. The plugin is an extension of DeepSeek Desktop, so it must not claim more stability than the platform it extends: no `1.0.0` until the Desktop host leaves pre-release. A milestone version (`0.4.0`) is still the right way to close a batch and put the patch noise behind one number.
+
 Desktop ships its own `@deepseek-ai/*` packages, so the plugin has two version lines: `devDependencies` pin the newest candidate we build and test against (currently `0.2.2-rc.5`), while `peerDependencies` accept `>=0.2.2-rc.2 <0.3.0-0` so a Desktop that has not taken the latest candidate still loads the plugin. `tests/package.test.ts` enforces that shape (peer mirrors dev exactly, or the range; dev is always a concrete version). When a new candidate lands, check its real source diff — the GitHub compare API caps at 300 files, so pull both tag tarballs and hash-compare the trees instead — then bump devDeps only.
