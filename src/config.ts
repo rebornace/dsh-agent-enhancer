@@ -138,6 +138,8 @@ export type EnhancerSettings = Readonly<Record<`${ModuleName}Enabled`, boolean>>
   readonly browserAgentDebugTools: boolean
   /** "Show me" recorder: watch the user demonstrate a flow. Default off. */
   readonly browserAgentDemonstrate: boolean
+  /** Let a saved flow keep a repair by itself (locator only, same site). Default off. */
+  readonly browserAgentAutoHeal: boolean
   /** Close agent tabs nobody used for this long; `never` disables the sweep. */
   readonly browserAgentIdleClose: BrowserAgentIdleClose
   readonly optimizeProvider: string
@@ -187,6 +189,7 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   browserAgentBrowser: 'auto',
   browserAgentDebugTools: false,
   browserAgentDemonstrate: false,
+  browserAgentAutoHeal: false,
   browserAgentIdleClose: '10m',
   webChatBridgeEnabled: true,
   instructionsSkillsEnabled: true,
@@ -237,6 +240,7 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     browserAgentBrowser: resolveBrowserAgentBrowser(value?.browserAgentBrowser),
     browserAgentDebugTools: value?.browserAgentDebugTools === true,
     browserAgentDemonstrate: value?.browserAgentDemonstrate === true,
+    browserAgentAutoHeal: value?.browserAgentAutoHeal === true,
     browserAgentIdleClose: resolveBrowserAgentIdleClose(value?.browserAgentIdleClose),
     webChatBridgeEnabled: value?.webChatBridgeEnabled ?? true,
     instructionsSkillsEnabled: value?.instructionsSkillsEnabled ?? true,

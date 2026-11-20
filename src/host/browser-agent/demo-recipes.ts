@@ -12,10 +12,15 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { sanitizeDemoSteps, type DemoStep } from './demo.ts'
 import { applyHealProposal, type DemoHealProposal } from './demo-heal.ts'
+import { isDateVariable, resolveVariableValue } from './demo-values.ts'
 
-/** A placeholder inside a flow: stored steps carry a `${name}` token instead of a literal. */
+/**
+ * A placeholder inside a flow. `name` is the token id (`${v1}`) and stays
+ * machine-readable; `label` is what the user sees ("开始日期") and may be Chinese.
+ */
 export interface RecipeVariable {
   readonly name: string
+  readonly label: string
   readonly default: string
 }
 
@@ -39,6 +44,8 @@ export interface DemoRecipe {
   readonly rev: number
   /** Most recent past states, newest last (bounded). */
   readonly history: readonly DemoRecipeVersion[]
+  /** When repairs were kept automatically (budget for the auto-adapt switch). */
+  readonly autoHeals: readonly number[]
   /** A repair waiting for the user to accept it. */
   readonly pendingHeal?: DemoHealProposal
 }
@@ -53,6 +60,8 @@ export interface DemoRecipeMeta {
   readonly variables: readonly RecipeVariable[]
   readonly rev: number
   readonly history: number
+  /** How many times this flow kept a repair by itself. */
+  readonly autoHeals: number
   readonly pendingHeal?: DemoHealProposal
 }
 
@@ -61,6 +70,9 @@ export const MAX_RECIPE_NAME = 60
 export const MAX_RECIPE_STEPS = 200
 /** Enough to walk back a bad heal or two, without turning the file into a log. */
 export const MAX_HISTORY = 5
+export const MAX_VARIABLE_LABEL = 60
+/** Auto-adapt budget: a flow may learn by itself this often per day, no more. */
+export const MAX_AUTO_HEALS = 3
 const FILE_VERSION = 2
 
 interface FileShape {
@@ -82,6 +94,7 @@ function metaOf(recipe: DemoRecipe): DemoRecipeMeta {
     variables: recipe.variables,
     rev: recipe.rev,
     history: recipe.history.length,
+    autoHeals: recipe.autoHeals.length,
     ...(recipe.pendingHeal === undefined ? {} : { pendingHeal: recipe.pendingHeal }),
   }
 }
@@ -120,6 +133,71 @@ export function applyRecipeVars(
   })
 }
 
+/**
+ * Map free-form keys (label or id, case-insensitive) onto variable ids. The
+ * agent may pass \`{ "开始日期": "2026-11-01" }\` while an old script still sends
+ * \`{ from: ... }\`.
+ */
+export function matchRecipeVarValues(
+  recipe: { readonly variables: readonly RecipeVariable[] },
+  provided: Readonly<Record<string, string>>,
+): { readonly values: Record<string, string>; readonly unknown: string[] } {
+  const byKey = new Map<string, RecipeVariable>()
+  for (const variable of recipe.variables) {
+    byKey.set(variable.name.trim().toLowerCase(), variable)
+    byKey.set(variable.label.trim().toLowerCase(), variable)
+  }
+  const values: Record<string, string> = {}
+  const unknown: string[] = []
+  for (const [key, raw] of Object.entries(provided)) {
+    const variable = byKey.get(key.trim().toLowerCase())
+    if (variable === undefined) {
+      unknown.push(key)
+      continue
+    }
+    values[variable.name] = raw
+  }
+  return { values, unknown }
+}
+
+export interface PreparedRecipeValues {
+  /** Values keyed by variable id, ready for applyRecipeVars. */
+  readonly values: Record<string, string>
+  /** Variables still without a value, in flow order. */
+  readonly missing: readonly RecipeVariable[]
+  /** Phrases that were turned into dates ("上周" → 2026-11-09). */
+  readonly resolved: readonly { readonly label: string; readonly from: string; readonly to: string }[]
+  /** Provided keys that match no variable (typos stay visible instead of silent). */
+  readonly unknown: readonly string[]
+}
+
+/**
+ * Defaults + supplied values + relative dates, in one place so the tool and the
+ * sidebar cannot disagree about what will be typed into the page.
+ */
+export function prepareRecipeValues(
+  recipe: { readonly variables: readonly RecipeVariable[] },
+  provided: Readonly<Record<string, string>>,
+  now: Date = new Date(),
+): PreparedRecipeValues {
+  const matched = matchRecipeVarValues(recipe, provided)
+  const values: Record<string, string> = {}
+  for (const variable of recipe.variables) values[variable.name] = variable.default
+  Object.assign(values, matched.values)
+  const resolved: Array<{ label: string; from: string; to: string }> = []
+  for (const variable of recipe.variables) {
+    const raw = values[variable.name] ?? ''
+    if (raw.trim() === '') continue
+    if (!isDateVariable(variable)) continue
+    const result = resolveVariableValue(raw, true, now)
+    if (result.resolvedFrom === undefined) continue
+    values[variable.name] = result.value
+    resolved.push({ label: variable.label, from: result.resolvedFrom, to: result.value })
+  }
+  const missing = recipe.variables.filter(variable => (values[variable.name] ?? '').trim() === '')
+  return { values, missing, resolved, unknown: matched.unknown }
+}
+
 /** Variable names a flow still needs a value for (empty means ready to run). */
 export function missingRecipeVars(
   recipe: { readonly variables: readonly RecipeVariable[] },
@@ -138,7 +216,14 @@ function sanitizeVariables(raw: unknown): RecipeVariable[] {
       const name = (value as { name?: unknown }).name
       return typeof name === 'string' && VAR_NAME.test(name)
     })
-    .map(variable => ({ name: variable.name, default: String(variable.default ?? '').slice(0, 500) }))
+    .map(variable => ({
+      name: variable.name,
+      // Files written before labels existed fall back to the id.
+      label: typeof variable.label === 'string' && variable.label.trim() !== ''
+        ? variable.label.trim().slice(0, MAX_VARIABLE_LABEL)
+        : variable.name,
+      default: String(variable.default ?? '').slice(0, 500),
+    }))
 }
 
 /** Old versions are read back leniently; a broken entry is dropped, not fatal. */
@@ -163,6 +248,14 @@ function sanitizeHistory(raw: unknown): DemoRecipeVersion[] {
   return versions.slice(-MAX_HISTORY)
 }
 
+/** Timestamps are only budget bookkeeping; drop anything malformed. */
+function sanitizeTimestamps(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0)
+    .slice(-MAX_AUTO_HEALS * 4)
+}
+
 /** A stored repair must still point at a real step of a real flow. */
 function sanitizeProposal(raw: unknown): DemoHealProposal | undefined {
   if (raw === null || typeof raw !== 'object') return undefined
@@ -180,6 +273,15 @@ function sanitizeProposal(raw: unknown): DemoHealProposal | undefined {
     inserted: sanitizeRecipeSteps(entry.inserted ?? []),
     replacement,
   }
+}
+
+/** `v1`, `v2`… never reused, so stored tokens stay meaningful. */
+function nextVariableName(variables: readonly RecipeVariable[]): string {
+  for (let index = 1; index <= 99; index += 1) {
+    const candidate = `v${index}`
+    if (!variables.some(variable => variable.name === candidate)) return candidate
+  }
+  return `v${Date.now().toString(36)}`
 }
 
 function isStep(value: unknown): value is DemoStep {
@@ -246,6 +348,7 @@ export class DemoRecipeStore {
         variables: [],
         rev: 1,
         history: [],
+        autoHeals: [],
       }
     }
     const next = existing === undefined
@@ -285,13 +388,12 @@ export class DemoRecipeStore {
   parameterize(input: {
     readonly id: string
     readonly index: number
-    readonly name: string
+    /** Token id; generated (`v1`, `v2`…) when omitted. */
+    readonly name?: string
+    /** What the user sees; defaults to the page's own label. */
+    readonly label?: string
     readonly now?: number
   }): SaveResult {
-    const name = input.name.trim()
-    if (!VAR_NAME.test(name)) {
-      return { ok: false, error: '变量名只能用字母、数字、下划线，且不能以数字开头' }
-    }
     const recipes = this.read()
     const current = recipes.find(recipe => recipe.id === input.id)
     if (current === undefined) return { ok: false, error: '流程不存在' }
@@ -302,14 +404,21 @@ export class DemoRecipeStore {
     if (new RegExp(VAR_TOKEN.source).test(step.value)) {
       return { ok: false, error: '这一步已经是变量了' }
     }
-    if (current.variables.some(variable => variable.name === name)) {
+    const explicitName = (input.name ?? '').trim()
+    if (explicitName !== '' && !VAR_NAME.test(explicitName)) {
+      return { ok: false, error: '变量名只能用字母、数字、下划线，且不能以数字开头' }
+    }
+    if (explicitName !== '' && current.variables.some(variable => variable.name === explicitName)) {
       return { ok: false, error: '变量名已存在' }
     }
+    const name = explicitName !== '' ? explicitName : nextVariableName(current.variables)
+    const label = (input.label ?? step.name ?? '').trim().slice(0, MAX_VARIABLE_LABEL)
+      || `变量 ${current.variables.length + 1}`
     const token = '$' + '{' + name + '}'
     const steps = current.steps.map((entry, index) =>
       index === input.index && entry.kind === 'fill' ? { ...entry, value: token } : entry,
     )
-    const variables = [...current.variables, { name, default: step.value.slice(0, 500) }]
+    const variables = [...current.variables, { name, label, default: step.value.slice(0, 500) }]
     const now = input.now ?? Date.now()
     const { pendingHeal: _stale, ...rest } = current
     const next: DemoRecipe = {
@@ -341,6 +450,8 @@ export class DemoRecipeStore {
   resolveHeal(input: {
     readonly id: string
     readonly accept: boolean
+    /** Applied by the auto-adapt switch, not by a click; counts against its budget. */
+    readonly auto?: boolean
     readonly now?: number
   }): SaveResult {
     const now = input.now ?? Date.now()
@@ -361,6 +472,9 @@ export class DemoRecipeStore {
       updatedAt: now,
       rev: current.rev + 1,
       history: nextVersion(current, 'heal', now),
+      autoHeals: input.auto === true
+        ? [...current.autoHeals, now].slice(-MAX_AUTO_HEALS)
+        : current.autoHeals,
     }
     this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
     return { ok: true, recipe: metaOf(next) }
@@ -416,6 +530,7 @@ export class DemoRecipeStore {
             variables: sanitizeVariables(recipe.variables),
             rev: Number.isFinite(recipe.rev) && recipe.rev > 0 ? recipe.rev : 1,
             history: sanitizeHistory(recipe.history),
+            autoHeals: sanitizeTimestamps(recipe.autoHeals),
             ...(proposal === undefined ? {} : { pendingHeal: proposal }),
           }
         })

@@ -120,9 +120,41 @@ export function sanitizeDemoSteps(steps: readonly DemoStep[]): DemoStep[] {
   })
 }
 
-/** Action text for one step, without numbering (shared by summary and replay). */
-export function describeDemoStep(step: DemoStep): string {
+/**
+ * The same step in the user's words, for the sidebar. Variables show their
+ * label, not the `${v1}` token, and selectors never appear.
+ */
+export function describeDemoStepHuman(
+  step: DemoStep,
+  variables: readonly { readonly name: string; readonly label: string }[] = [],
+): string {
+  const withLabels = (text: string): string => text.replace(
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/gu,
+    (match, name: string) => {
+      const variable = variables.find(item => item.name === name)
+      return variable === undefined ? match : `「${variable.label}」`
+    },
+  )
+  const short = (text: string): string => (text.length > 60 ? `${text.slice(0, 60)}…` : text)
   switch (step.kind) {
+    case 'navigate':
+      return `打开 ${short(step.url)}`
+    case 'click':
+      return `点击「${step.name}」`
+    case 'fill':
+      if (step.masked) return `在「${step.name}」填密码（每次问你）`
+      return `在「${step.name}」填 ${short(withLabels(step.value))}`
+    case 'press':
+      return `按 ${step.key}`
+    default: {
+      const exhaustive: never = step
+      return JSON.stringify(exhaustive)
+    }
+  }
+}
+
+/** Action text for one step, without numbering (shared by summary and replay). */
+export function describeDemoStep(step: DemoStep): string {  switch (step.kind) {
     case 'navigate':
       return `navigate -> ${step.url}`
     case 'click':

@@ -10,7 +10,7 @@ import type { BrowserSessionState } from './session-state.ts'
 import type { TabScopeStore } from './tab-scope.ts'
 import type { Diagnosis } from './diagnose.ts'
 import { demoTabLegend, describeDemoStep, summarizeDemoSteps, type DemoStep } from './demo.ts'
-import { applyRecipeVars, missingRecipeVars, type DemoRecipeStore } from './demo-recipes.ts'
+import { applyRecipeVars, prepareRecipeValues, type DemoRecipeStore } from './demo-recipes.ts'
 import { replayDemoSteps } from './demo-replay.ts'
 import type { BrowserRepairHooks, DemoObservedAction } from './demo-heal.ts'
 
@@ -1461,7 +1461,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   disposers.push(ctx.tools.register(textTool(
     'browser_demo_recipes',
-    'List, run, or repair a flow the user saved from a demonstration (right sidebar → 演示录制 → 保存为流程). Use it when the user names a saved flow ("跑一下「周报导出」流程") or asks which flows exist. Running replays the recorded steps in the dedicated browser; it asks for approval once and stops at a masked secret or a control that is gone, exactly like browser_demonstrate replay. When it stops because a control changed, finish the remaining steps yourself, then call action=heal so the user can keep the fix.',
+    'List, run, or repair a flow the user saved from a demonstration (right sidebar → 演示录制 → 保存为流程). Use it when the user names a saved flow ("跑一下「周报导出」流程") or asks which flows exist. Running replays the recorded steps in the dedicated browser; it asks for approval once and stops at a masked secret or a control that is gone, exactly like browser_demonstrate replay. When it stops because a control changed, finish the remaining steps yourself, then call action=heal so the user can keep the fix. A flow that still needs a value says which ones by their label: ask the user one short question ("这次开始日期用哪天？") and run again with vars. Do not ask for values the recording already fixed.',
     {
       action: {
         type: 'string',
@@ -1483,7 +1483,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       vars: {
         type: 'object',
         additionalProperties: true,
-        description: 'Values for the flow\'s variables, e.g. {"from":"2026-11-01"}. Saved defaults are used for anything omitted.',
+        description: 'Values for the flow\'s variables, keyed by the label the user sees (\'{"开始日期":"2026-11-01"}\') or by id. Dates may be relative: 今天 / 上周 / 上月 / 上季度 / 2026-11-01. Saved defaults are used for anything omitted.',
       },
     },
     async (args, exec) => {
@@ -1506,7 +1506,8 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
           ...afterCommit.map(row => {
             const vars = row.variables.length === 0 ? '' : `; vars: ${row.variables.map(variable => variable.name).join(', ')}`
             const heal = row.pendingHeal === undefined ? '' : `; repair waiting: step ${row.pendingHeal.failedAt}`
-            return `- ${row.name} (${row.steps} step(s)${vars}${heal})`
+            const auto = row.autoHeals === 0 ? '' : `; auto-adapted ${row.autoHeals}x`
+            return `- ${row.name} (${row.steps} step(s)${vars}${heal}${auto})`
           }),
           'Action: run one with browser_demo_recipes { action: "run", name: "<name>" }.',
         ].join('\n')
@@ -1516,6 +1517,19 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         const id = String(args.id ?? committed?.recipeId ?? '').trim()
         if (id === '') {
           return 'nothing to remember: no saved flow stopped recently, so there is no repair to store.'
+        }
+        if (committed?.autoApplied === true) {
+          options.sessions.record({
+            sessionId: sessionIdOf(exec),
+            tool: 'browser_demo_recipe',
+            summary: `Auto-adapted saved flow "${committed.recipeName}"`,
+            outcome: 'ok',
+          })
+          return [
+            `saved flow: ${committed.recipeName} — repair applied automatically (自动适应 is on)`,
+            ...committed.lines.map(line => `- ${line}`),
+            'Action: tell the user the flow was updated without asking, and that 撤销上次修改 in the sidebar restores the previous version.',
+          ].join('\n')
         }
         // "heal" alone only offers the fix; only an explicit accept rewrites the flow.
         if (args.accept !== true) {
@@ -1572,14 +1586,21 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
           .filter(([, value]) => typeof value === 'string')
           .map(([key, value]) => [key, String(value)]))
         : {}
-      const defaults: Record<string, string> = {}
-      for (const variable of recipe.variables) defaults[variable.name] = variable.default
-      const values = { ...defaults, ...provided }
-      const missing = missingRecipeVars(recipe, values)
-      if (missing.length > 0) {
-        throw new Error(`Flow "${recipe.name}" still needs: ${missing.join(', ')}. Pass vars, or save defaults in the sidebar.`)
+      const prepared = prepareRecipeValues(recipe, provided)
+      if (prepared.missing.length > 0) {
+        // Ask in the user's words, not in variable ids: the model repeats this
+        // back to the user, so it has to read like a question.
+        const wanted = prepared.missing.map(variable => variable.label).join('、')
+        const example = JSON.stringify(Object.fromEntries(prepared.missing.map(variable => [variable.label, '…'])))
+        throw new Error(
+          `Flow "${recipe.name}" still needs ${wanted}. Ask the user for ${prepared.missing.length === 1 ? 'it' : 'them'} in one short question, `
+          + `then run again with vars: ${example}. Dates may be relative: 今天 / 上周 / 本月 / 上季度 / 2026-11-01.`,
+        )
       }
-      const replaySteps = applyRecipeVars(recipe.steps, values)
+      const replaySteps = applyRecipeVars(recipe.steps, prepared.values)
+      const resolvedNote = prepared.resolved.length === 0
+        ? []
+        : [`resolved: ${prepared.resolved.map(item => `${item.label} ${item.from} → ${item.to}`).join('; ')}`]
       const sessionId = sessionIdOf(exec)
       await ensureConnected()
       await ensureSessionTab(sessionId)
@@ -1620,6 +1641,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       if (ranAll) {
         return [
           `saved flow: ${recipe.name} — replayed ${outcome.performed}/${outcome.total}`,
+          ...resolvedNote,
           ...outcome.lines,
           `url: ${outcome.url}`,
           'Action: the flow ran to the end. Report what changed on screen; browser_snapshot if you need the new page.',
@@ -1631,6 +1653,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       })
       return [
         `saved flow: ${recipe.name} — replayed ${outcome.performed}/${outcome.total}`,
+        ...resolvedNote,
         ...outcome.lines,
         `stopped at step ${outcome.performed + 1}: ${outcome.reason}`,
         ...pending,

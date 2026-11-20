@@ -175,10 +175,21 @@ describe('recipe parameters', () => {
     const result = store.parameterize({ id: saved.recipe.id, index: 1, name: 'from', now: 2000 })
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error('expected ok')
-    expect(result.recipe.variables).toEqual([{ name: 'from', default: '2026-11-01' }])
+    expect(result.recipe.variables).toEqual([{ name: 'from', label: '开始日期', default: '2026-11-01' }])
     const steps = store.get(saved.recipe.id)?.steps ?? []
     expect(steps[1]).toMatchObject({ kind: 'fill', value: '${from}' })
     expect(steps[0]).toMatchObject({ kind: 'navigate', url: 'https://example.com/reports?from=2026-11-01' })
+  })
+
+  it('generates a token id and labels the variable from the page', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '周报', steps: [fill('开始日期', '2026-11-01')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    const result = store.parameterize({ id: saved.recipe.id, index: 0, now: 2_000 })
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.recipe.variables).toEqual([{ name: 'v1', label: '开始日期', default: '2026-11-01' }])
+    expect(store.get(saved.recipe.id)?.steps[0]).toMatchObject({ value: '${v1}' })
   })
 
   it('refuses bad names, repeats, secrets and non-fill steps', () => {
@@ -217,9 +228,9 @@ describe('recipe parameters', () => {
   })
 
   it('reports variables that still need a value', () => {
-    expect(missingRecipeVars({ variables: [{ name: 'a', default: '' }, { name: 'b', default: 'd' }] }, { a: '1' }))
+    expect(missingRecipeVars({ variables: [{ name: 'a', label: 'a', default: '' }, { name: 'b', label: 'b', default: 'd' }] }, { a: '1' }))
       .toEqual(['b'])
-    expect(missingRecipeVars({ variables: [{ name: 'a', default: 'x' }] }, {})).toEqual(['a'])
+    expect(missingRecipeVars({ variables: [{ name: 'a', label: 'a', default: 'x' }] }, {})).toEqual(['a'])
     expect(missingRecipeVars({ variables: [] }, {})).toEqual([])
   })
 
@@ -233,7 +244,7 @@ describe('recipe parameters', () => {
         variables: [{ name: 'ok', default: 'v' }, { name: '1bad', default: 'x' }, null],
       }],
     }), 'utf8')
-    expect(store.list()[0]?.variables).toEqual([{ name: 'ok', default: 'v' }])
+    expect(store.list()[0]?.variables).toEqual([{ name: 'ok', label: 'ok', default: 'v' }])
   })
 })
 

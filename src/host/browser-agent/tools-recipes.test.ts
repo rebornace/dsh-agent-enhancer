@@ -198,10 +198,49 @@ describe('browser_demo_recipes', () => {
       recipes: [{ name: '搜索导出', steps: withFill }],
       variables: [{ index: 0, name: 'term' }],
     })
-    await expect(h.run({ action: 'run', name: '搜索导出', vars: { term: '' } })).rejects.toThrow(/still needs: term/)
+    await expect(h.run({ action: 'run', name: '搜索导出', vars: { term: '' } }))
+      .rejects.toThrow(/still needs 关键词/)
     const supplied = await h.run({ action: 'run', name: '搜索导出', vars: { term: '新值' } }) as string
     expect(supplied).toContain('replayed 2/2')
     expect(h.types).toContain('新值')
+  })
+})
+
+describe('browser_demo_recipes values', () => {
+  const dated: DemoStep[] = [
+    { kind: 'fill', at: 1, role: 'textbox', name: '开始日期', selector: '#from', field: 'from', value: '2026-11-01', masked: false },
+    { kind: 'click', at: 2, role: 'button', name: '导出报表', selector: '#export' },
+  ]
+
+  it('asks for a missing value by its label, in words', async () => {
+    const h = harness({ recipes: [{ name: '周报', steps: dated }], variables: [{ index: 0, name: 'from' }] })
+    await expect(h.run({ action: 'run', name: '周报', vars: { 开始日期: '' } }))
+      .rejects.toThrow(/still needs 开始日期\. Ask the user/)
+  })
+
+  it('accepts a value under its label and resolves a relative date', async () => {
+    const h = harness({
+      recipes: [{ name: '周报', steps: dated }],
+      variables: [{ index: 0, name: 'from' }],
+      nodes: [
+        { ref: 5, role: 'textbox', name: '开始日期' },
+        { ref: 6, role: 'button', name: '导出报表' },
+      ],
+    })
+    const out = await h.run({ action: 'run', name: '周报', vars: { 开始日期: '上周' } }) as string
+    expect(out).toContain('resolved: 开始日期 上周 →')
+    expect(h.types).toHaveLength(1)
+    expect(h.types[0]).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('leaves a non-date value alone', async () => {
+    const search: DemoStep[] = [
+      { kind: 'fill', at: 1, role: 'textbox', name: '关键词', selector: '#q', field: 'q', value: '旧值', masked: false },
+      { kind: 'click', at: 2, role: 'button', name: '导出报表', selector: '#export' },
+    ]
+    const h = harness({ recipes: [{ name: '搜索', steps: search }], variables: [{ index: 0, name: 'term' }] })
+    await h.run({ action: 'run', name: '搜索', vars: { 关键词: '上周' } })
+    expect(h.types).toEqual(['上周'])
   })
 })
 

@@ -49,6 +49,7 @@ vi.mock('./tools.ts', () => ({
 }))
 
 import { installBrowserAgent } from './install.ts'
+import { DemoRecipeStore } from './demo-recipes.ts'
 
 function mockCtx(): Context {
   return {
@@ -83,6 +84,24 @@ describe('installBrowserAgent refresh', () => {
     })
     expect(disposeCalls.length).toBeGreaterThanOrEqual(2)
     void runtime.dispose()
+  })
+
+  it('routes action=save instead of falling through to run', async () => {
+    const profileRoot = mkdtempSync(join(tmpdir(), 'ba-save-'))
+    const runtime = installBrowserAgent(mockCtx(), {
+      enabled: () => true,
+      browserPreference: () => 'chrome',
+      profileRoot,
+      softPause: softPauseStub(),
+      softPauseEnabled: () => false,
+      demonstrate: () => true,
+      recipes: new DemoRecipeStore(null),
+    })
+    const result = await runtime.demoRecipes({ action: 'save', name: '周报' })
+    // Nothing recorded yet: the save branch must say so, not treat "save" as run.
+    expect(result.ok).toBe(false)
+    expect(result.error ?? '').toMatch(/先录制一次/)
+    await runtime.dispose()
   })
 
   it('remounts tools after disable→enable even if teardown is async', async () => {

@@ -789,8 +789,20 @@ const browserAgentThumbnailResultCodec = codec(
 )
 
 export const demoRecipeVariableSchema = z.strictObject({
+  /** Token id, e.g. `v1`; not shown to the user. */
   name: z.string().min(1),
+  /** What the panel shows: 「开始日期」. */
+  label: z.string().min(1),
   default: z.string(),
+  /** Render a date picker for date-shaped values. */
+  kind: z.enum(['text', 'date']),
+})
+
+/** A recorded value worth turning into a variable, offered after saving. */
+export const demoRecipeSuggestionSchema = z.strictObject({
+  index: z.number().int(),
+  label: z.string(),
+  value: z.string(),
 })
 
 export const demoRecipeHealSchema = z.strictObject({
@@ -840,7 +852,14 @@ export const browserAgentDemoRecipesRequestSchema = z.discriminatedUnion('action
   z.strictObject({ action: z.literal('delete'), id: z.string().min(1) }),
   z.strictObject({ action: z.literal('steps'), id: z.string().min(1) }),
   z.strictObject({ action: z.literal('rename'), id: z.string().min(1), name: z.string() }),
-  z.strictObject({ action: z.literal('parameterize'), id: z.string().min(1), index: z.number().int().min(0), name: z.string() }),
+  z.strictObject({
+    action: z.literal('parameterize'),
+    id: z.string().min(1),
+    index: z.number().int().min(0),
+    /** Display name; the token id is generated when omitted. */
+    label: z.string().optional(),
+    name: z.string().optional(),
+  }),
   z.strictObject({ action: z.literal('heal'), id: z.string().min(1), accept: z.boolean() }),
   z.strictObject({ action: z.literal('rollback'), id: z.string().min(1) }),
 ])
@@ -860,6 +879,8 @@ export const browserAgentDemoRecipesResultSchema = z.strictObject({
   steps: z.array(demoRecipeStepSchema).optional(),
   /** True when a repair was applied (action=heal with accept). */
   healed: z.boolean().optional(),
+  /** Values worth turning into variables (action=save). */
+  suggestions: z.array(demoRecipeSuggestionSchema).optional(),
   /** 1-based step where a replay stopped. */
   stoppedAt: z.number().int().optional(),
   reason: z.string().optional(),

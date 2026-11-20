@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import type { PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { GuideArtworkBrowser } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -70,7 +70,7 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
     const tick = async () => {
       try {
         const next = await agentEnhancerBrowserAgentSnapshot.invoke(remote())
-        // Do NOT setPick(next.browser) here — a 1s poll was resetting the user's
+        // Do NOT setPick(next.browser) here 鈥?a 1s poll was resetting the user's
         // browser choice back to the previous host value before Launch.
         if (!cancelled) setSnapshot(next)
       } catch {
@@ -200,8 +200,11 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
     readonly label: string
     readonly canParameterize: boolean
   }[]>([])
-  const [paramTarget, setParamTarget] = useState<{ readonly recipeId: string; readonly index: number } | null>(null)
-  const [paramName, setParamName] = useState('')
+  const [paramBusyIndex, setParamBusyIndex] = useState<number | null>(null)
+  const [suggestions, setSuggestions] = useState<{
+    readonly recipeId: string
+    readonly items: readonly { readonly index: number; readonly label: string; readonly value: string }[]
+  } | null>(null)
   const [varsFor, setVarsFor] = useState<string | null>(null)
   const [varsValues, setVarsValues] = useState<Record<string, string>>({})
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -240,6 +243,10 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
         return
       }
       setRecipeName('')
+      const items = result.suggestions ?? []
+      setSuggestions(result.recipe !== undefined && items.length > 0
+        ? { recipeId: result.recipe.id, items }
+        : null)
       setHint(t('browserAgentDemoRecipeSaved').replace('{name}', result.recipe?.name ?? name))
     } finally {
       setRecipeBusy(false)
@@ -296,16 +303,12 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
       return
     }
     setRecipeStepRows(result.steps ?? [])
-    setParamTarget(null)
     setOpenRecipeId(recipe.id)
   }
 
-  const submitParameter = async (recipe: DemoRecipeMetaWire, index: number) => {
-    const name = paramName.trim()
-    if (name === '') {
-      setHint(t('browserAgentDemoRecipeVarNameRequired'))
-      return
-    }
+  /** Turn one recorded value into a variable. The label comes from the page. */
+  const parameterizeStep = async (recipe: DemoRecipeMetaWire, index: number, label?: string) => {
+    setParamBusyIndex(index)
     setRecipeBusy(true)
     setHint(null)
     try {
@@ -313,19 +316,22 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
         action: 'parameterize',
         id: recipe.id,
         index,
-        name,
+        ...(label === undefined ? {} : { label }),
       })
       if (result.recipes !== undefined) setRecipes(result.recipes)
       if (!result.ok) {
         setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
         return
       }
-      setParamTarget(null)
-      setParamName('')
+      const applied = result.recipe?.variables[result.recipe.variables.length - 1]
       const refreshed = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'steps', id: recipe.id })
       if (refreshed.steps !== undefined) setRecipeStepRows(refreshed.steps)
-      setHint(t('browserAgentDemoRecipeParameterized').replace('{name}', name))
+      setSuggestions(previous => previous === null
+        ? null
+        : { ...previous, items: previous.items.filter(item => item.index !== index) })
+      setHint(t('browserAgentDemoRecipeParameterized').replace('{name}', applied?.label ?? ''))
     } finally {
+      setParamBusyIndex(null)
       setRecipeBusy(false)
     }
   }
@@ -630,6 +636,41 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                 </button>
               </div>
             ) : null}
+            {suggestions === null ? null : (
+              <div className={styles.browserAgentHeal}>
+                <p className={styles.browserAgentHealText}>{t('browserAgentDemoSuggestTitle')}</p>
+                {suggestions.items.map(item => {
+                  const recipe = recipes.find(candidate => candidate.id === suggestions.recipeId)
+                  return (
+                    <div key={`${item.index}-${item.value}`} className={styles.browserAgentRecipeStepRow}>
+                      <span className={styles.browserAgentRecipeStepText}>
+                        {t('browserAgentDemoSuggestRow')
+                          .replace('{value}', item.value)
+                          .replace('{label}', item.label)}
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.browserAgentButton}
+                        disabled={recipeBusy || recipe === undefined}
+                        onClick={() => {
+                          if (recipe !== undefined) void parameterizeStep(recipe, item.index, item.label)
+                        }}
+                      >
+                        {t('browserAgentDemoSuggestMake')}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.browserAgentButton}
+                        disabled={recipeBusy}
+                        onClick={() => { setSuggestions(null) }}
+                      >
+                        {t('browserAgentDemoSuggestKeep')}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
             {recipes.length > 0 ? (
               <div className={styles.browserAgentTabListSection}>
                 <p className={styles.browserAgentPaneNote}>{t('browserAgentDemoRecipesTitle')}</p>
@@ -679,7 +720,7 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                             </span>
                             {recipe.variables.length === 0 ? null : (
                               <span className={styles.browserAgentRecipeVarsBadge}>
-                                {recipe.variables.map(variable => variable.name).join(', ')}
+                                {recipe.variables.map(variable => variable.label).join('、')}
                               </span>
                             )}
                             <button
@@ -745,11 +786,13 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                         <div className={styles.browserAgentRecipeVars}>
                           {recipe.variables.map(variable => (
                             <label key={variable.name} className={styles.browserAgentRecipeVarRow}>
-                              <span className={styles.browserAgentRecipeVarName}>{variable.name}</span>
+                              <span className={styles.browserAgentRecipeVarName}>{variable.label}</span>
                               <input
                                 className={styles.browserAgentDemoName}
+                                type={variable.kind === 'date' ? 'date' : 'text'}
+                                placeholder={t('browserAgentDemoRecipeVarHint')}
                                 value={varsValues[variable.name] ?? ''}
-                                aria-label={variable.name}
+                                aria-label={variable.label}
                                 disabled={recipeBusy}
                                 onChange={event => {
                                   const next = event.target.value
@@ -791,46 +834,16 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                                 {row.index + 1}. {row.label}
                               </span>
                               {row.canParameterize ? (
-                                paramTarget?.recipeId === recipe.id && paramTarget.index === row.index ? (
-                                  <span className={styles.browserAgentRecipeParam}>
-                                    <input
-                                      className={styles.browserAgentDemoName}
-                                      value={paramName}
-                                      placeholder={t('browserAgentDemoRecipeVarName')}
-                                      aria-label={t('browserAgentDemoRecipeVarName')}
-                                      disabled={recipeBusy}
-                                      onChange={event => { setParamName(event.target.value) }}
-                                    />
-                                    <button
-                                      type="button"
-                                      className={styles.browserAgentButton}
-                                      disabled={recipeBusy}
-                                      onClick={() => { void submitParameter(recipe, row.index) }}
-                                    >
-                                      {t('browserAgentDemoRecipeVarConfirm')}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={styles.browserAgentButton}
-                                      disabled={recipeBusy}
-                                      onClick={() => { setParamTarget(null) }}
-                                    >
-                                      {t('browserAgentDemoRecipeCancel')}
-                                    </button>
-                                  </span>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className={styles.browserAgentButton}
-                                    disabled={recipeBusy}
-                                    onClick={() => {
-                                      setParamTarget({ recipeId: recipe.id, index: row.index })
-                                      setParamName('')
-                                    }}
-                                  >
-                                    {t('browserAgentDemoRecipeSetVar')}
-                                  </button>
-                                )
+                                <button
+                                  type="button"
+                                  className={styles.browserAgentButton}
+                                  disabled={recipeBusy}
+                                  onClick={() => { void parameterizeStep(recipe, row.index) }}
+                                >
+                                  {paramBusyIndex === row.index
+                                    ? t('browserAgentDemoRecipeVarWorking')
+                                    : t('browserAgentDemoRecipeSetVar')}
+                                </button>
                               ) : null}
                             </div>
                           ))}
@@ -905,3 +918,4 @@ export function BrowserAgentTabTitle(props: PropsRuntime<'sidebar.right.pane.tab
     </>
   )
 }
+

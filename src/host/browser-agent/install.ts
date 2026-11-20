@@ -20,9 +20,16 @@ import { registerBrowserAgentPrompt } from './prompt.ts'
 import { BrowserSessionState } from './session-state.ts'
 import { TabScopeStore } from './tab-scope.ts'
 import { diagnose, type BrowserAvailability, type Diagnosis } from './diagnose.ts'
-import { demoTabLegend, describeDemoStep, summarizeDemoSteps, type DemoStep } from './demo.ts'
+import {
+  demoTabLegend,
+  describeDemoStep,
+  describeDemoStepHuman,
+  summarizeDemoSteps,
+  type DemoStep,
+} from './demo.ts'
+import { suggestRecipeVariables } from './demo-values.ts'
 import { replayDemoSteps } from './demo-replay.ts'
-import { applyRecipeVars, missingRecipeVars, type DemoRecipeMeta, type DemoRecipeStore } from './demo-recipes.ts'
+import { applyRecipeVars, prepareRecipeValues, type DemoRecipeMeta, type DemoRecipeStore } from './demo-recipes.ts'
 import { registerBrowserTools } from './tools.ts'
 import { DemoRepairTracker, createRepairHooks } from './demo-heal.ts'
 
@@ -77,6 +84,7 @@ export interface BrowserAgentRuntime {
     readonly id?: string
     readonly index?: number
     readonly accept?: boolean
+    readonly label?: string
     readonly vars?: Readonly<Record<string, string>>
   }): Promise<{
     readonly ok: boolean
@@ -84,6 +92,12 @@ export interface BrowserAgentRuntime {
     readonly recipe?: DemoRecipeMeta
     readonly lines?: readonly string[]
     readonly healed?: boolean
+    /** Values worth turning into variables (action=save). */
+    readonly suggestions?: readonly {
+      readonly index: number
+      readonly label: string
+      readonly value: string
+    }[]
     readonly steps?: readonly {
       readonly index: number
       readonly kind: 'navigate' | 'click' | 'fill' | 'press'
@@ -143,6 +157,8 @@ export function installBrowserAgent(
     readonly debugTools?: () => boolean
     /** Demonstration recorder switch: gates browser_demonstrate. */
     readonly demonstrate?: () => boolean
+    /** Keep a repair by itself (locator only, same site). Off unless the user says so. */
+    readonly autoHeal?: () => boolean
     /** Close agent tabs nobody used for a while (never bound / active / last tab). */
     readonly idleClose?: () => BrowserAgentIdleClose
     /** Saved demonstrations; omitted in tests that do not care. */
@@ -169,6 +185,7 @@ export function installBrowserAgent(
   const repairHooks = createRepairHooks({
     tracker: repairTracker,
     ...(recipes === undefined ? {} : { store: recipes }),
+    ...(options.autoHeal === undefined ? {} : { autoApply: options.autoHeal }),
   })
 
   /**
@@ -589,6 +606,29 @@ export function installBrowserAgent(
       if (input.action === 'list') {
         return { ok: true, recipes: recipes.list() }
       }
+      if (input.action === 'save') {
+        if (options.demonstrate?.() !== true) {
+          return { ok: false, error: '演示录制未开启：设置 → 功能 → 浏览器 Agent' }
+        }
+        if (lastDemoSteps.length === 0) {
+          return { ok: false, error: '先录制一次，再保存为流程', recipes: recipes.list() }
+        }
+        const saved = recipes.save({ name: input.name ?? '', steps: lastDemoSteps })
+        if (!saved.ok) return { ok: false, error: saved.error, recipes: recipes.list() }
+        sessions.record({
+          sessionId: 'sidebar',
+          tool: 'browser_demo_recipe',
+          summary: `Saved demonstration recipe "${saved.recipe.name}" (${saved.recipe.steps} step(s))`,
+          outcome: 'ok',
+        })
+        return {
+          ok: true,
+          recipe: saved.recipe,
+          recipes: recipes.list(),
+          // Offered, never applied: the user decides what becomes a variable.
+          suggestions: suggestRecipeVariables(lastDemoSteps),
+        }
+      }
       if (input.action === 'delete') {
         const id = input.id ?? ''
         const removed = recipes.remove(id)
@@ -610,7 +650,7 @@ export function installBrowserAgent(
           steps: recipe.steps.map((step, index) => ({
             index,
             kind: step.kind,
-            label: describeDemoStep(step),
+            label: describeDemoStepHuman(step, recipe.variables),
             canParameterize: step.kind === 'fill'
               && !step.masked
               && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(step.value),
@@ -621,7 +661,8 @@ export function installBrowserAgent(
         const result = recipes.parameterize({
           id: input.id ?? '',
           index: input.index ?? -1,
-          name: input.name ?? '',
+          ...(input.name === undefined ? {} : { name: input.name }),
+          ...(input.label === undefined ? {} : { label: input.label }),
         })
         if (!result.ok) return { ok: false, error: result.error, recipes: recipes.list() }
         sessions.record({
@@ -675,18 +716,15 @@ export function installBrowserAgent(
       if (recipe === undefined) return { ok: false, error: '流程不存在', recipes: recipes.list() }
       // A new run closes whatever the last one left waiting for a decision.
       repairHooks.commit()
-      const defaults: Record<string, string> = {}
-      for (const variable of recipe.variables) defaults[variable.name] = variable.default
-      const values = { ...defaults, ...(input.vars ?? {}) }
-      const missing = missingRecipeVars(recipe, values)
-      if (missing.length > 0) {
+      const prepared = prepareRecipeValues(recipe, input.vars ?? {})
+      if (prepared.missing.length > 0) {
         return {
           ok: false,
-          error: `缺少变量：${missing.join('、')}`,
+          error: `还缺少：${prepared.missing.map(variable => variable.label).join('、')}`,
           recipes: recipes.list(),
         }
       }
-      const steps = applyRecipeVars(recipe.steps, values)
+      const steps = applyRecipeVars(recipe.steps, prepared.values)
       const driver = activeDriver
       if (driver === null) return { ok: false, error: 'Browser agent is not running', recipes: recipes.list() }
       const aligned = await alignToPreference().catch(() => ({ ok: true as const, error: undefined }))
@@ -705,12 +743,14 @@ export function installBrowserAgent(
         const isSecret = /masked|secret field/i.test(outcome.reason)
           || (failedStep !== undefined && failedStep.kind === 'fill' && failedStep.masked)
         if (!isSecret && failedStep !== undefined) {
+          const stopUrl = 'url' in outcome ? outcome.url : undefined
           repairTracker.begin({
             recipeId: recipe.id,
             recipeName: recipe.name,
             index: outcome.performed,
             step: failedStep,
             reason: outcome.reason,
+            ...(stopUrl === undefined ? {} : { tabUrl: stopUrl }),
           })
         }
       }
@@ -723,7 +763,12 @@ export function installBrowserAgent(
       return {
         ok: true,
         recipes: recipes.list(),
-        lines: [...outcome.lines],
+        lines: [
+          ...(prepared.resolved.length === 0
+            ? []
+            : [`resolved: ${prepared.resolved.map(item => `${item.label} ${item.from} → ${item.to}`).join('; ')}`]),
+          ...outcome.lines,
+        ],
         ...(ranAll ? {} : { stoppedAt: outcome.performed + 1 }),
         ...(ranAll ? {} : { reason: outcome.reason }),
       }
