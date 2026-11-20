@@ -72,6 +72,10 @@ Any new feature that writes per-session data under `plugin-data` (or elsewhere k
 
 See: `docs/architecture/session-delete.md` (local-only).
 
+## Publishing needs an explicit ask
+
+Shipping is a separate decision from building. **Never run `pnpm publish`, push a `v*` tag, or create a GitHub release unless the user asked for a release in that turn.** Finish the change, run `pnpm check`, and report the version you *would* publish (plus what changed); wait for a go-ahead. Batch related work into one release unless the user asks for separate ones — ten patch releases in two days is a process failure, not shipping speed, and published versions cannot be taken back cleanly.
+
 ## Docs policy
 
 Publish only what stays true: `README` (what the plugin does and does not do), `CHANGELOG` (what shipped), `AGENTS.md` (invariants), tests. Keep plans and decision logs local under `docs/` (ignored by git) — an AI-written roadmap in a public repo reads as a promise and rots fastest. Do not add `docs/roadmap.md` or `docs/architecture/` to git without an explicit decision to publish them.
