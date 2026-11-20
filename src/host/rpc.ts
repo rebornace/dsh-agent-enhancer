@@ -786,22 +786,41 @@ const browserAgentThumbnailResultCodec = codec(
   browserAgentThumbnailResultSchema,
 )
 
+export const demoRecipeVariableSchema = z.strictObject({
+  name: z.string().min(1),
+  default: z.string(),
+})
+
 export const demoRecipeMetaSchema = z.strictObject({
   id: z.string().min(1),
   name: z.string().min(1),
   createdAt: z.number(),
   updatedAt: z.number(),
   steps: z.number().int(),
+  variables: z.array(demoRecipeVariableSchema),
+})
+
+export const demoRecipeStepSchema = z.strictObject({
+  index: z.number().int(),
+  kind: z.enum(['navigate', 'click', 'fill', 'press']),
+  label: z.string(),
+  /** A fill step that can become a `${name}` placeholder. */
+  canParameterize: z.boolean(),
 })
 export type DemoRecipeMetaWire = z.infer<typeof demoRecipeMetaSchema>
 
 export const browserAgentDemoRecipesRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('list') }),
   z.strictObject({ action: z.literal('save'), name: z.string() }),
-  z.strictObject({ action: z.literal('run'), id: z.string().min(1) }),
+  z.strictObject({
+    action: z.literal('run'),
+    id: z.string().min(1),
+    vars: z.record(z.string(), z.string()).optional(),
+  }),
   z.strictObject({ action: z.literal('delete'), id: z.string().min(1) }),
   z.strictObject({ action: z.literal('steps'), id: z.string().min(1) }),
   z.strictObject({ action: z.literal('rename'), id: z.string().min(1), name: z.string() }),
+  z.strictObject({ action: z.literal('parameterize'), id: z.string().min(1), index: z.number().int().min(0), name: z.string() }),
 ])
 export type BrowserAgentDemoRecipesRequest = z.infer<typeof browserAgentDemoRecipesRequestSchema>
 const browserAgentDemoRecipesRequestCodec = codec(
@@ -815,6 +834,8 @@ export const browserAgentDemoRecipesResultSchema = z.strictObject({
   recipe: demoRecipeMetaSchema.optional(),
   /** Replay lines when running a recipe (`1. ok …`). */
   lines: z.array(z.string()).optional(),
+  /** Step metadata for action=steps (index + what the row can do). */
+  steps: z.array(demoRecipeStepSchema).optional(),
   /** 1-based step where a replay stopped. */
   stoppedAt: z.number().int().optional(),
   reason: z.string().optional(),

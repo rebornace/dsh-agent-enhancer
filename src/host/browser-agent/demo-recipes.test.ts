@@ -3,8 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DemoStep } from './demo.ts'
-import { DemoRecipeStore, MAX_RECIPE_STEPS, MAX_RECIPES, sanitizeRecipeSteps } from './demo-recipes.ts'
-
+import { DemoRecipeStore, MAX_RECIPE_STEPS, MAX_RECIPES, applyRecipeVars, missingRecipeVars, sanitizeRecipeSteps } from './demo-recipes.ts'
 const click = (name: string, at = 1): DemoStep => ({ kind: 'click', at, role: 'button', name, selector: '#x' })
 const fill = (name: string, value: string, at = 2, masked = false): DemoStep => ({
   kind: 'fill', at, role: 'textbox', name, selector: '#f', field: 'q', value, masked,
@@ -25,8 +24,7 @@ afterEach(() => {
   }
 })
 
-describe('DemoRecipeStore', () => {
-  it('saves, lists and reloads a flow', () => {
+describe('DemoRecipeStore', () => {  it('saves, lists and reloads a flow', () => {
     const { store, file } = tempStore()
     const result = store.save({ name: '导出报表', steps: [click('导出'), fill('日期', '2026-11-01')], now: 1000 })
     expect(result.ok).toBe(true)
@@ -159,5 +157,81 @@ describe('DemoRecipeStore', () => {
     expect(store.save({ name: 'a', steps: [click('a')] }).ok).toBe(true)
     expect(store.list()).toHaveLength(1)
     expect(store.list()[0]).toMatchObject({ name: 'a', steps: 1 })
+  })
+})
+
+describe('recipe parameters', () => {
+  const withDate = (): DemoStep[] => [
+    { kind: 'navigate', at: 1, url: 'https://example.com/reports?from=2026-11-01' },
+    fill('开始日期', '2026-11-01', 2),
+    click('导出', 3),
+  ]
+
+  it('turns a fill step into a token and remembers the old value', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '周报', steps: withDate(), now: 1000 })
+    if (!saved.ok) throw new Error('expected ok')
+    const result = store.parameterize({ id: saved.recipe.id, index: 1, name: 'from', now: 2000 })
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.recipe.variables).toEqual([{ name: 'from', default: '2026-11-01' }])
+    const steps = store.get(saved.recipe.id)?.steps ?? []
+    expect(steps[1]).toMatchObject({ kind: 'fill', value: '${from}' })
+    expect(steps[0]).toMatchObject({ kind: 'navigate', url: 'https://example.com/reports?from=2026-11-01' })
+  })
+
+  it('refuses bad names, repeats, secrets and non-fill steps', () => {
+    const { store } = tempStore()
+    const saved = store.save({
+      name: 'x',
+      steps: [click('a'), fill('密码', '***', 2, true), fill('q', 'coffee', 3)],
+    }, )
+    if (!saved.ok) throw new Error('expected ok')
+    const id = saved.recipe.id
+    expect(store.parameterize({ id, index: 2, name: '1bad' })).toMatchObject({ ok: false })
+    expect(store.parameterize({ id, index: 0, name: 'ok' })).toMatchObject({ ok: false })
+    expect(store.parameterize({ id, index: 1, name: 'pw' })).toMatchObject({ ok: false })
+    expect(store.parameterize({ id, index: 2, name: 'term' }).ok).toBe(true)
+    expect(store.parameterize({ id, index: 2, name: 'term' })).toMatchObject({ ok: false })
+    expect(store.parameterize({ id, index: 2, name: 'other' })).toMatchObject({ ok: false })
+  })
+
+  it('substitutes values into fills and navigations', () => {
+    const steps = applyRecipeVars(
+      [
+        { kind: 'navigate', at: 1, url: 'https://example.com/r?from=${from}' },
+        { kind: 'fill', at: 2, role: 'textbox', name: 'q', selector: '#q', field: 'q', value: '${term}', masked: false },
+        click('导出', 3),
+      ],
+      { from: '2026-10-01', term: '季报' },
+    )
+    expect(steps[0]).toMatchObject({ url: 'https://example.com/r?from=2026-10-01' })
+    expect(steps[1]).toMatchObject({ value: '季报' })
+    expect(steps[2]).toMatchObject({ name: '导出' })
+  })
+
+  it('leaves an unknown token alone', () => {
+    const steps = applyRecipeVars([fill('q', 'x ${missing}', 1)], {})
+    expect(steps[0]).toMatchObject({ value: 'x ${missing}' })
+  })
+
+  it('reports variables that still need a value', () => {
+    expect(missingRecipeVars({ variables: [{ name: 'a', default: '' }, { name: 'b', default: 'd' }] }, { a: '1' }))
+      .toEqual(['b'])
+    expect(missingRecipeVars({ variables: [{ name: 'a', default: 'x' }] }, {})).toEqual(['a'])
+    expect(missingRecipeVars({ variables: [] }, {})).toEqual([])
+  })
+
+  it('drops malformed variables from an old file', () => {
+    const { store, file } = tempStore()
+    writeFileSync(file, JSON.stringify({
+      version: 1,
+      recipes: [{
+        id: 'r1', name: 'x', createdAt: 1, updatedAt: 1,
+        steps: [click('a')],
+        variables: [{ name: 'ok', default: 'v' }, { name: '1bad', default: 'x' }, null],
+      }],
+    }), 'utf8')
+    expect(store.list()[0]?.variables).toEqual([{ name: 'ok', default: 'v' }])
   })
 })

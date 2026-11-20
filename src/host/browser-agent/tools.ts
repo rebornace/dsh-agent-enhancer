@@ -10,7 +10,7 @@ import type { BrowserSessionState } from './session-state.ts'
 import type { TabScopeStore } from './tab-scope.ts'
 import type { Diagnosis } from './diagnose.ts'
 import { demoTabLegend, describeDemoStep, summarizeDemoSteps, type DemoStep } from './demo.ts'
-import type { DemoRecipeStore } from './demo-recipes.ts'
+import { applyRecipeVars, missingRecipeVars, type DemoRecipeStore } from './demo-recipes.ts'
 import { replayDemoSteps } from './demo-replay.ts'
 
 type ToolExec = {
@@ -1407,6 +1407,11 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         type: 'string',
         description: 'Flow name for action=run. Case-insensitive; a unique part of the name is enough.',
       },
+      vars: {
+        type: 'object',
+        additionalProperties: true,
+        description: 'Values for the flow\'s variables, e.g. {"from":"2026-11-01"}. Saved defaults are used for anything omitted.',
+      },
     },
     async (args, exec) => {
       guardEnabled()
@@ -1421,7 +1426,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         }
         return [
           `saved flows: ${rows.length}`,
-          ...rows.map(row => `- ${row.name} (${row.steps} step(s))`),
+          ...rows.map(row => `- ${row.name} (${row.steps} step(s)${row.variables.length === 0 ? '' : `; vars: ${row.variables.map(variable => variable.name).join(', ')}`})`),
           'Action: run one with browser_demo_recipes { action: "run", name: "<name>" }.',
         ].join('\n')
       }
@@ -1438,6 +1443,19 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       }
       const recipe = store.get(meta.id)
       if (recipe === undefined) throw new Error('The saved flow disappeared; list again.')
+      const provided = args.vars !== null && typeof args.vars === 'object'
+        ? Object.fromEntries(Object.entries(args.vars as Record<string, unknown>)
+          .filter(([, value]) => typeof value === 'string')
+          .map(([key, value]) => [key, String(value)]))
+        : {}
+      const defaults: Record<string, string> = {}
+      for (const variable of recipe.variables) defaults[variable.name] = variable.default
+      const values = { ...defaults, ...provided }
+      const missing = missingRecipeVars(recipe, values)
+      if (missing.length > 0) {
+        throw new Error(`Flow "${recipe.name}" still needs: ${missing.join(', ')}. Pass vars, or save defaults in the sidebar.`)
+      }
+      const replaySteps = applyRecipeVars(recipe.steps, values)
       const sessionId = sessionIdOf(exec)
       await ensureConnected()
       await ensureSessionTab(sessionId)
@@ -1448,7 +1466,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         `运行已保存流程「${recipe.name}」（${recipe.steps.length} 步）`,
         firstUrl,
       )
-      const outcome = await replayDemoSteps(driverOf(options), recipe.steps)
+      const outcome = await replayDemoSteps(driverOf(options), replaySteps)
       const ranAll = outcome.status === 'done'
       options.sessions.record({
         sessionId,

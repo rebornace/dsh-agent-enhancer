@@ -12,12 +12,19 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { sanitizeDemoSteps, type DemoStep } from './demo.ts'
 
+/** A placeholder inside a flow: stored steps carry a `${name}` token instead of a literal. */
+export interface RecipeVariable {
+  readonly name: string
+  readonly default: string
+}
+
 export interface DemoRecipe {
   readonly id: string
   readonly name: string
   readonly createdAt: number
   readonly updatedAt: number
   readonly steps: readonly DemoStep[]
+  readonly variables: readonly RecipeVariable[]
 }
 
 /** List entry: steps are counted, never sent, so the panel stays light. */
@@ -27,6 +34,7 @@ export interface DemoRecipeMeta {
   readonly createdAt: number
   readonly updatedAt: number
   readonly steps: number
+  readonly variables: readonly RecipeVariable[]
 }
 
 export const MAX_RECIPES = 20
@@ -50,7 +58,51 @@ function metaOf(recipe: DemoRecipe): DemoRecipeMeta {
     createdAt: recipe.createdAt,
     updatedAt: recipe.updatedAt,
     steps: recipe.steps.length,
+    variables: recipe.variables,
   }
+}
+
+const VAR_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
+const VAR_TOKEN = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g
+
+/** Replace a variable token in fill values and navigate URLs; unknown names stay literal. */
+export function applyRecipeVars(
+  steps: readonly DemoStep[],
+  values: Readonly<Record<string, string>>,
+): DemoStep[] {
+  const fill = (text: string): string => text.replace(VAR_TOKEN, (match, name: string) => values[name] ?? match)
+  return steps.map(step => {
+    if (step.kind === 'navigate') {
+      const url = fill(step.url)
+      return url === step.url ? step : { ...step, url }
+    }
+    if (step.kind === 'fill') {
+      const value = fill(step.value)
+      return value === step.value ? step : { ...step, value }
+    }
+    return step
+  })
+}
+
+/** Variable names a flow still needs a value for (empty means ready to run). */
+export function missingRecipeVars(
+  recipe: { readonly variables: readonly RecipeVariable[] },
+  values: Readonly<Record<string, string>>,
+): string[] {
+  return recipe.variables
+    .filter(variable => (values[variable.name] ?? '').trim() === '')
+    .map(variable => variable.name)
+}
+
+function sanitizeVariables(raw: unknown): RecipeVariable[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((value): value is RecipeVariable => {
+      if (value === null || typeof value !== 'object') return false
+      const name = (value as { name?: unknown }).name
+      return typeof name === 'string' && VAR_NAME.test(name)
+    })
+    .map(variable => ({ name: variable.name, default: String(variable.default ?? '').slice(0, 500) }))
 }
 
 function isStep(value: unknown): value is DemoStep {
@@ -100,7 +152,14 @@ export class DemoRecipeStore {
       if (recipes.length >= MAX_RECIPES) {
         return { ok: false, error: `最多保存 ${MAX_RECIPES} 个流程，先删掉一个` }
       }
-      saved = { id: `r-${now.toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name, createdAt: now, updatedAt: now, steps }
+      saved = {
+        id: `r-${now.toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+        name,
+        createdAt: now,
+        updatedAt: now,
+        steps,
+        variables: [],
+      }
     }
     const next = existing === undefined
       ? [...recipes, saved]
@@ -132,6 +191,43 @@ export class DemoRecipeStore {
     return { ok: true, recipe: metaOf(renamed) }
   }
 
+  /**
+   * Turn one fill step's literal into a `${name}` token, remembering the old
+   * value as the default so the flow still runs unchanged.
+   */
+  parameterize(input: {
+    readonly id: string
+    readonly index: number
+    readonly name: string
+    readonly now?: number
+  }): SaveResult {
+    const name = input.name.trim()
+    if (!VAR_NAME.test(name)) {
+      return { ok: false, error: '变量名只能用字母、数字、下划线，且不能以数字开头' }
+    }
+    const recipes = this.read()
+    const current = recipes.find(recipe => recipe.id === input.id)
+    if (current === undefined) return { ok: false, error: '流程不存在' }
+    const step = current.steps[input.index]
+    if (step === undefined) return { ok: false, error: '步骤不存在' }
+    if (step.kind !== 'fill') return { ok: false, error: '只有填写类步骤可以变成变量' }
+    if (step.masked) return { ok: false, error: '密码类字段不能变成变量' }
+    if (new RegExp(VAR_TOKEN.source).test(step.value)) {
+      return { ok: false, error: '这一步已经是变量了' }
+    }
+    if (current.variables.some(variable => variable.name === name)) {
+      return { ok: false, error: '变量名已存在' }
+    }
+    const token = '$' + '{' + name + '}'
+    const steps = current.steps.map((entry, index) =>
+      index === input.index && entry.kind === 'fill' ? { ...entry, value: token } : entry,
+    )
+    const variables = [...current.variables, { name, default: step.value.slice(0, 500) }]
+    const next: DemoRecipe = { ...current, steps, variables, updatedAt: input.now ?? Date.now() }
+    this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
+    return { ok: true, recipe: metaOf(next) }
+  }
+
   private read(): DemoRecipe[] {
     if (this.filePath === null) return this.memory
     try {
@@ -143,7 +239,11 @@ export class DemoRecipeStore {
           if (typeof recipe.id !== 'string' || typeof recipe.name !== 'string') return false
           return typeof recipe.createdAt === 'number' && typeof recipe.updatedAt === 'number'
         })
-        .map(recipe => ({ ...recipe, steps: sanitizeRecipeSteps(recipe.steps) }))
+        .map(recipe => ({
+          ...recipe,
+          steps: sanitizeRecipeSteps(recipe.steps),
+          variables: sanitizeVariables(recipe.variables),
+        }))
         .filter(recipe => recipe.steps.length > 0)
         .slice(0, MAX_RECIPES)
     } catch {

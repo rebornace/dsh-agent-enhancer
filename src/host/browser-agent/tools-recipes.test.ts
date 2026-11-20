@@ -20,12 +20,23 @@ const steps: DemoStep[] = [
 function harness(input: {
   readonly recipes?: readonly { name: string; steps: readonly DemoStep[] }[]
   readonly demonstrate?: boolean
+  readonly variables?: readonly { readonly index: number; readonly name: string }[]
 } = {}) {
   const tools = new Map<string, RegisteredTool>()
   const approvals: string[] = []
   const clicks: number[] = []
+  const types: string[] = []
   const store = new DemoRecipeStore(null)
-  for (const recipe of input.recipes ?? []) store.save({ name: recipe.name, steps: recipe.steps })
+  let firstId: string | undefined
+  for (const recipe of input.recipes ?? []) {
+    const saved = store.save({ name: recipe.name, steps: recipe.steps })
+    if (saved.ok && firstId === undefined) firstId = saved.recipe.id
+  }
+  for (const variable of input.variables ?? []) {
+    if (firstId === undefined) throw new Error('no recipe to parameterize')
+    const result = store.parameterize({ id: firstId, index: variable.index, name: variable.name })
+    if (!result.ok) throw new Error(result.error)
+  }
 
   const ctx = {
     tools: {
@@ -50,6 +61,7 @@ function harness(input: {
       nodes: [
         { ref: 3, role: 'button', name: '导出报表' },
         { ref: 4, role: 'button', name: '取消' },
+        { ref: 5, role: 'textbox', name: '关键词' },
       ],
       refs: [],
       text: '',
@@ -58,7 +70,10 @@ function harness(input: {
       clicks.push(ref)
       return { url: 'https://example.com/admin', title: 'Admin', tabId: 1 }
     },
-    type: async () => ({ url: 'https://example.com/admin', title: 'Admin', tabId: 1 }),
+    type: async (_ref: number, text: string) => {
+      types.push(text)
+      return { url: 'https://example.com/admin', title: 'Admin', tabId: 1 }
+    },
     select: async () => ({ url: 'https://example.com/admin', title: 'Admin', tabId: 1 }),
     check: async () => ({ url: 'https://example.com/admin', title: 'Admin', tabId: 1 }),
     press: async () => ({ url: 'https://example.com/admin', title: 'Admin', tabId: 1 }),
@@ -84,6 +99,7 @@ function harness(input: {
   return {
     approvals,
     clicks,
+    types,
     run: (args: Record<string, unknown>) => {
       const tool = tools.get('browser_demo_recipes')
       if (tool === undefined) throw new Error('browser_demo_recipes not registered')
@@ -140,5 +156,34 @@ describe('browser_demo_recipes', () => {
   it('is gated by the demonstration switch', async () => {
     const h = harness({ recipes: [{ name: '周报导出', steps }], demonstrate: false })
     await expect(h.run({ action: 'list' })).rejects.toThrow(/演示录制/)
+  })
+
+  it('fills variables defaulting to the saved value', async () => {
+    const withFill: DemoStep[] = [
+      { kind: 'fill', at: 1, role: 'textbox', name: '关键词', selector: '#q', field: 'q', value: '旧值', masked: false },
+      { kind: 'click', at: 2, role: 'button', name: '导出报表', selector: '#export' },
+    ]
+    const h = harness({
+      recipes: [{ name: '搜索导出', steps: withFill }],
+      variables: [{ index: 0, name: 'term' }],
+    })
+    const out = await h.run({ action: 'run', name: '搜索导出' }) as string
+    expect(out).toContain('replayed 2/2')
+    expect(h.types).toEqual(['旧值'])
+  })
+
+  it('takes supplied variables and refuses an explicitly empty one', async () => {
+    const withFill: DemoStep[] = [
+      { kind: 'fill', at: 1, role: 'textbox', name: '关键词', selector: '#q', field: 'q', value: '旧值', masked: false },
+      { kind: 'click', at: 2, role: 'button', name: '导出报表', selector: '#export' },
+    ]
+    const h = harness({
+      recipes: [{ name: '搜索导出', steps: withFill }],
+      variables: [{ index: 0, name: 'term' }],
+    })
+    await expect(h.run({ action: 'run', name: '搜索导出', vars: { term: '' } })).rejects.toThrow(/still needs: term/)
+    const supplied = await h.run({ action: 'run', name: '搜索导出', vars: { term: '新值' } }) as string
+    expect(supplied).toContain('replayed 2/2')
+    expect(h.types).toContain('新值')
   })
 })

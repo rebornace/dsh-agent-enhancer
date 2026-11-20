@@ -22,7 +22,7 @@ import { TabScopeStore } from './tab-scope.ts'
 import { diagnose, type BrowserAvailability, type Diagnosis } from './diagnose.ts'
 import { demoTabLegend, describeDemoStep, summarizeDemoSteps, type DemoStep } from './demo.ts'
 import { replayDemoSteps } from './demo-replay.ts'
-import type { DemoRecipeMeta, DemoRecipeStore } from './demo-recipes.ts'
+import { applyRecipeVars, missingRecipeVars, type DemoRecipeMeta, type DemoRecipeStore } from './demo-recipes.ts'
 import { registerBrowserTools } from './tools.ts'
 
 /** Idle sweep cadence; the tab age comes from browserAgentIdleClose. */
@@ -71,14 +71,22 @@ export interface BrowserAgentRuntime {
    * back, or delete it. Steps are stored sanitized; secrets stay `***`.
    */
   demoRecipes(input: {
-    readonly action: 'list' | 'save' | 'run' | 'delete' | 'steps' | 'rename'
+    readonly action: 'list' | 'save' | 'run' | 'delete' | 'steps' | 'rename' | 'parameterize'
     readonly name?: string
     readonly id?: string
+    readonly index?: number
+    readonly vars?: Readonly<Record<string, string>>
   }): Promise<{
     readonly ok: boolean
     readonly recipes?: readonly DemoRecipeMeta[]
     readonly recipe?: DemoRecipeMeta
     readonly lines?: readonly string[]
+    readonly steps?: readonly {
+      readonly index: number
+      readonly kind: 'navigate' | 'click' | 'fill' | 'press'
+      readonly label: string
+      readonly canParameterize: boolean
+    }[]
     readonly stoppedAt?: number
     readonly reason?: string
     readonly error?: string
@@ -581,7 +589,30 @@ export function installBrowserAgent(
           ok: true,
           recipes: recipes.list(),
           lines: recipe.steps.map((step, index) => `${index + 1}. ${describeDemoStep(step)}`),
+          steps: recipe.steps.map((step, index) => ({
+            index,
+            kind: step.kind,
+            label: describeDemoStep(step),
+            canParameterize: step.kind === 'fill'
+              && !step.masked
+              && !/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(step.value),
+          })),
         }
+      }
+      if (input.action === 'parameterize') {
+        const result = recipes.parameterize({
+          id: input.id ?? '',
+          index: input.index ?? -1,
+          name: input.name ?? '',
+        })
+        if (!result.ok) return { ok: false, error: result.error, recipes: recipes.list() }
+        sessions.record({
+          sessionId: 'sidebar',
+          tool: 'browser_demo_recipe',
+          summary: `Parameterized demonstration recipe "${result.recipe.name}"`,
+          outcome: 'ok',
+        })
+        return { ok: true, recipe: result.recipe, recipes: recipes.list() }
       }
       if (input.action === 'rename') {
         const renamed = recipes.rename({ id: input.id ?? '', name: input.name ?? '' })
@@ -597,17 +628,29 @@ export function installBrowserAgent(
       // run
       const recipe = recipes.get(input.id ?? '')
       if (recipe === undefined) return { ok: false, error: '流程不存在', recipes: recipes.list() }
+      const defaults: Record<string, string> = {}
+      for (const variable of recipe.variables) defaults[variable.name] = variable.default
+      const values = { ...defaults, ...(input.vars ?? {}) }
+      const missing = missingRecipeVars(recipe, values)
+      if (missing.length > 0) {
+        return {
+          ok: false,
+          error: `缺少变量：${missing.join('、')}`,
+          recipes: recipes.list(),
+        }
+      }
+      const steps = applyRecipeVars(recipe.steps, values)
       const driver = activeDriver
       if (driver === null) return { ok: false, error: 'Browser agent is not running', recipes: recipes.list() }
       const aligned = await alignToPreference().catch(() => ({ ok: true as const, error: undefined }))
       if (!aligned.ok) return { ok: false, error: aligned.error ?? 'Browser agent failed to start', recipes: recipes.list() }
-      const outcome = await replayDemoSteps(driver, recipe.steps).catch(error => ({
+      const outcome = await replayDemoSteps(driver, steps).catch(error => ({
         status: 'blocked' as const,
         performed: 0,
-        total: recipe.steps.length,
+        total: steps.length,
         lines: [] as string[],
         reason: error instanceof Error ? error.message : String(error),
-        pending: [...recipe.steps],
+        pending: [...steps],
       }))
       const ranAll = outcome.status === 'done'
       sessions.record({

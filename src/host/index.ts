@@ -1356,12 +1356,19 @@ export class AgentEnhancerService extends TypertRemoteService {
       action: request.action,
       ...('name' in request ? { name: request.name } : {}),
       ...('id' in request ? { id: request.id } : {}),
+      ...('index' in request ? { index: request.index } : {}),
+      ...('vars' in request && request.vars !== undefined ? { vars: request.vars } : {}),
+    })
+    const meta = (recipe: { readonly id: string; readonly name: string; readonly createdAt: number; readonly updatedAt: number; readonly steps: number; readonly variables: readonly { readonly name: string; readonly default: string }[] }) => ({
+      ...recipe,
+      variables: recipe.variables.map(variable => ({ ...variable })),
     })
     return {
       ok: result.ok,
-      ...(result.recipes === undefined ? {} : { recipes: result.recipes.map(recipe => ({ ...recipe })) }),
-      ...(result.recipe === undefined ? {} : { recipe: { ...result.recipe } }),
+      ...(result.recipes === undefined ? {} : { recipes: result.recipes.map(meta) }),
+      ...(result.recipe === undefined ? {} : { recipe: meta(result.recipe) }),
       ...(result.lines === undefined ? {} : { lines: [...result.lines] }),
+      ...(result.steps === undefined ? {} : { steps: result.steps.map(step => ({ ...step })) }),
       ...(result.stoppedAt === undefined ? {} : { stoppedAt: result.stoppedAt }),
       ...(result.reason === undefined ? {} : { reason: result.reason }),
       ...(result.error === undefined ? {} : { error: result.error }),
