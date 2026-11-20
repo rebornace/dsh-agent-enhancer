@@ -1688,18 +1688,8 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       if (wantedSite !== '' && meta.site !== undefined && meta.site !== wantedSite) {
         throw new Error(`site ${JSON.stringify(wantedSite)} does not match flow "${meta.name}" (${meta.site}). Pass the site exactly as action=list shows it.`)
       }
-      // The user opted this flow into unattended runs: cover the run and the
-      // repairs it needs with one time/action-bounded grant on the same site.
       const sessionId = sessionIdOf(exec)
       const unattended = recipe.unattended && meta.site !== undefined
-      if (unattended) {
-        options.approval.grantOrigin({
-          sessionId,
-          url: meta.site!,
-          ttlMs: 20 * 60_000,
-          actions: 30,
-        })
-      }
       // A new run closes whatever the last one left waiting for a decision.
       options.repair?.commit()
       const provided = args.vars !== null && typeof args.vars === 'object'
@@ -1725,12 +1715,26 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       await ensureConnected()
       await ensureSessionTab(sessionId)
       const firstUrl = recipe.steps.find(step => step.tabUrl !== undefined)?.tabUrl
-      await requireMutation(
-        exec,
-        'browser_demo_recipes',
-        `运行已保存流程「${recipe.name}」（${recipe.steps.length} 步）`,
-        firstUrl,
-      )
+      // The user opted this flow into unattended runs: grant the site just
+      // before its approval, so the run and the repairs it needs share one
+      // bounded decision.
+      const grantedSite = unattended && meta.site !== undefined
+        ? options.approval.grantOrigin({ sessionId, url: meta.site, ttlMs: 20 * 60_000, actions: 30 })
+          ? meta.site
+          : undefined
+        : undefined
+      try {
+        await requireMutation(
+          exec,
+          'browser_demo_recipes',
+          `运行已保存流程「${recipe.name}」（${recipe.steps.length} 步）`,
+          firstUrl,
+        )
+      } catch (error) {
+        // Denied or aborted: do not leave the site open for the next 20 minutes.
+        if (grantedSite !== undefined) options.approval.revokeOrigin({ sessionId, url: grantedSite })
+        throw error
+      }
       const outcome = await replayDemoSteps(driverOf(options), replaySteps).catch((error: unknown) => {
         store.recordRun({
           id: recipe.id,

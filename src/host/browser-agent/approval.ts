@@ -74,6 +74,13 @@ export class BrowserApprovalGate {
     return true
   }
 
+  /** Drop the grant for one origin, e.g. because its run was denied. */
+  revokeOrigin(input: { readonly sessionId: string; readonly url: string }): boolean {
+    const origin = originOfUrl(input.url)
+    if (origin === undefined) return false
+    return this.grants.delete(this.grantKey(input.sessionId, origin))
+  }
+
   /** Active grants, for the panel and for tests. */
   activeGrants(): readonly BrowserOriginGrant[] {
     this.pruneGrants()

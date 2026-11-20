@@ -26,12 +26,15 @@ function harness(input: {
   readonly nodes?: ReadonlyArray<{ readonly ref: number; readonly role: string; readonly name: string }>
   /** Where a click lands; a different URL keeps browser_click from seeing a no-op. */
   readonly clickThen?: string
+  /** Permission preset the harness reports for the session. */
+  readonly permission?: 'full' | 'ask' | 'read-only'
   /** Extra evidence for refs the "agent" clicks during a repair. */
   readonly refInfo?: Readonly<Record<number, { readonly role: string; readonly name: string; readonly selector: string }>>
 } = {}) {
   const tools = new Map<string, RegisteredTool>()
   const approvals: string[] = []
   const granted: string[] = []
+  const revoked: string[] = []
   const originOf = (url: string | undefined): string | undefined => {
     if (url === undefined) return undefined
     try {
@@ -102,7 +105,14 @@ function harness(input: {
   registerBrowserTools(ctx, {
     driver,
     approval: {
-      grantOrigin: (input: { url: string }) => { granted.push(input.url) },
+      grantOrigin: (input: { url: string }) => {
+        granted.push(input.url)
+        return true
+      },
+      revokeOrigin: (input: { url: string }) => {
+        revoked.push(input.url)
+        return true
+      },
       isPreauthorized: (_sessionId: string, url: string | undefined) => originOf(url) !== undefined
         && granted.includes(originOf(url)!),
       requestApproval: async (request: { summary: string; url?: string }) => {
@@ -116,6 +126,7 @@ function harness(input: {
     } as never,
     human: new BrowserHumanGate(),
     sessions: new BrowserSessionState(),
+    ...(input.permission === undefined ? {} : { permission: () => input.permission }),
     demonstrate: () => input.demonstrate !== false,
     recipes: store,
     repair,
@@ -126,6 +137,7 @@ function harness(input: {
   return {
     approvals,
     granted,
+    revoked,
     clicks,
     types,
     store,
@@ -319,6 +331,18 @@ describe('unattended flows', () => {
     expect(out).toContain('unattended: https://example.com is authorized')
     expect(h.approvals).toEqual([])
     expect(h.granted).toEqual(['https://example.com'])
+  })
+
+  it('revokes the grant when the run is refused', async () => {
+    const probe = harness({ recipes: [{ name: '周报', steps, unattended: true }] })
+    console.log('PROBE', JSON.stringify(probe.store.list()))
+
+    const h = harness({ recipes: [{ name: '周报', steps, unattended: true }], permission: 'read-only' })
+    await expect(h.run({ action: 'run', name: '周报', site: 'https://example.com' })).rejects.toThrow(/仅可查看/)
+    expect(h.granted).toEqual(['https://example.com'])
+    expect(h.revoked).toEqual(['https://example.com'])
+    // Nothing ran, so nothing was recorded either.
+    expect(h.store.list()[0]?.lastRun).toBeUndefined()
   })
 
   it('still asks for a flow that was not marked', async () => {

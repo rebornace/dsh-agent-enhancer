@@ -33,6 +33,16 @@ describe('origin grants', () => {
     expect(gate.activeGrants()).toHaveLength(0)
   })
 
+  it('revokes one origin without touching the others', () => {
+    const gate = new BrowserApprovalGate()
+    gate.grantOrigin({ sessionId: 's1', url: 'https://a.example', ttlMs: 60_000, actions: 5 })
+    gate.grantOrigin({ sessionId: 's1', url: 'https://b.example', ttlMs: 60_000, actions: 5 })
+    expect(gate.revokeOrigin({ sessionId: 's1', url: 'https://a.example/path' })).toBe(true)
+    expect(gate.isPreauthorized('s1', 'https://a.example/x')).toBe(false)
+    expect(gate.isPreauthorized('s1', 'https://b.example/x')).toBe(true)
+    expect(gate.revokeOrigin({ sessionId: 's1', url: 'https://missing.example' })).toBe(false)
+  })
+
   it('drops grants with the session and refuses non-http targets', () => {
     const gate = new BrowserApprovalGate()
     gate.grantOrigin({ sessionId: 's1', url: 'https://example.com', ttlMs: 60_000, actions: 5 })
