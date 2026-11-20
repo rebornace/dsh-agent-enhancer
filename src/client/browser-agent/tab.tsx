@@ -379,6 +379,22 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
     }
   }
 
+  const setUnattended = async (recipe: DemoRecipeMetaWire, unattended: boolean) => {
+    setRecipeBusy(true)
+    setHint(null)
+    try {
+      const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), {
+        action: 'unattended',
+        id: recipe.id,
+        unattended,
+      })
+      if (result.recipes !== undefined) setRecipes(result.recipes)
+      if (!result.ok) setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
+    } finally {
+      setRecipeBusy(false)
+    }
+  }
+
   /** Accept the repair the agent worked out, or drop it and keep the flow as is. */
   const resolveHeal = async (recipe: DemoRecipeMetaWire, accept: boolean) => {
     setRecipeBusy(true)
@@ -948,6 +964,25 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                               ) : null}
                             </div>
                           ))}
+                          <div className={styles.browserAgentRecipeHistory}>
+                            <span className={styles.browserAgentPaneNote}>
+                              {recipe.unattended
+                                ? t('browserAgentDemoUnattendedOn').replace('{site}', recipe.site ?? '')
+                                : t('browserAgentDemoUnattendedHint')}
+                            </span>
+                            <button
+                              type="button"
+                              className={styles.browserAgentButton}
+                              aria-pressed={recipe.unattended}
+                              disabled={recipeBusy || recipe.site === undefined}
+                              title={recipe.site === undefined ? t('browserAgentDemoUnattendedNoSite') : undefined}
+                              onClick={() => { void setUnattended(recipe, !recipe.unattended) }}
+                            >
+                              {recipe.unattended
+                                ? t('browserAgentDemoUnattendedDisable')
+                                : t('browserAgentDemoUnattendedEnable')}
+                            </button>
+                          </div>
                           {recipe.history > 0 ? (
                             <div className={styles.browserAgentRecipeHistory}>
                               <span className={styles.browserAgentPaneNote}>

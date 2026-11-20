@@ -1366,6 +1366,7 @@ export class AgentEnhancerService extends TypertRemoteService {
       ...('default' in request && request.default !== undefined ? { default: request.default } : {}),
       ...('ask' in request && request.ask !== undefined ? { ask: request.ask } : {}),
       ...('accept' in request && request.accept !== undefined ? { accept: request.accept } : {}),
+      ...('unattended' in request && request.unattended !== undefined ? { unattended: request.unattended } : {}),
       ...('vars' in request && request.vars !== undefined ? { vars: request.vars } : {}),
     })
     const meta = (recipe: DemoRecipeMeta) => ({
@@ -1383,6 +1384,8 @@ export class AgentEnhancerService extends TypertRemoteService {
       })),
       rev: recipe.rev,
       history: recipe.history,
+      unattended: recipe.unattended,
+      ...(recipe.site === undefined ? {} : { site: recipe.site }),
       ...(recipe.pendingHeal === undefined
         ? {}
         : {

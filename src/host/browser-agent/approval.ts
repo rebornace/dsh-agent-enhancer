@@ -13,6 +13,15 @@ export interface BrowserApprovalRequest {
   readonly thumbnail?: { readonly mime: string; readonly base64: string }
 }
 
+/** A time- and action-bounded grant for one session+origin (unattended flow runs). */
+export interface BrowserOriginGrant {
+  readonly sessionId: string
+  readonly origin: string
+  readonly expiresAt: number
+  /** How many mutating calls it still covers. */
+  remaining: number
+}
+
 type Pending = {
   readonly request: BrowserApprovalRequest
   readonly resolve: (decision: BrowserApprovalDecision) => void
@@ -24,6 +33,7 @@ type Pending = {
 export class BrowserApprovalGate {
   private readonly pending = new Map<string, Pending>()
   private readonly allowedOrigins = new Map<string, Set<string>>()
+  private readonly grants = new Map<string, BrowserOriginGrant>()
   private seq = 0
   private listener: ((request: BrowserApprovalRequest | null) => void) | undefined
 
@@ -42,8 +52,39 @@ export class BrowserApprovalGate {
     return [...all]
   }
 
+  /**
+   * Allow mutations on one origin for a while, without a card. Used when the
+   * user marked a saved flow "允许无人值守运行": the grant covers that run and
+   * the repairs it needs, then expires on time or after N actions.
+   */
+  grantOrigin(input: {
+    readonly sessionId: string
+    readonly url: string
+    readonly ttlMs: number
+    readonly actions: number
+  }): boolean {
+    const origin = originOfUrl(input.url)
+    if (origin === undefined || input.actions <= 0 || input.ttlMs <= 0) return false
+    this.grants.set(this.grantKey(input.sessionId, origin), {
+      sessionId: input.sessionId,
+      origin,
+      expiresAt: Date.now() + input.ttlMs,
+      remaining: input.actions,
+    })
+    return true
+  }
+
+  /** Active grants, for the panel and for tests. */
+  activeGrants(): readonly BrowserOriginGrant[] {
+    this.pruneGrants()
+    return [...this.grants.values()]
+  }
+
   clearSession(sessionId: string): void {
     this.allowedOrigins.delete(sessionId)
+    for (const [key, grant] of [...this.grants]) {
+      if (grant.sessionId === sessionId) this.grants.delete(key)
+    }
     for (const [id, entry] of [...this.pending]) {
       if (entry.request.sessionId !== sessionId) continue
       this.pending.delete(id)
@@ -80,7 +121,28 @@ export class BrowserApprovalGate {
   isPreauthorized(sessionId: string, url: string | undefined): boolean {
     const origin = url === undefined ? undefined : originOfUrl(url)
     if (origin === undefined) return false
-    return this.allowedOrigins.get(sessionId)?.has(origin) === true
+    if (this.allowedOrigins.get(sessionId)?.has(origin) === true) return true
+    const key = this.grantKey(sessionId, origin)
+    const grant = this.grants.get(key)
+    if (grant === undefined) return false
+    if (grant.expiresAt <= Date.now() || grant.remaining <= 0) {
+      this.grants.delete(key)
+      return false
+    }
+    grant.remaining -= 1
+    if (grant.remaining <= 0) this.grants.delete(key)
+    return true
+  }
+
+  private grantKey(sessionId: string, origin: string): string {
+    return sessionId + '\u0000' + origin
+  }
+
+  private pruneGrants(): void {
+    const now = Date.now()
+    for (const [key, grant] of [...this.grants]) {
+      if (grant.expiresAt <= now || grant.remaining <= 0) this.grants.delete(key)
+    }
   }
 
   async requestApproval(input: {

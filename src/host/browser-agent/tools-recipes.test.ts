@@ -19,7 +19,7 @@ const steps: DemoStep[] = [
 ]
 
 function harness(input: {
-  readonly recipes?: readonly { name: string; steps: readonly DemoStep[] }[]
+  readonly recipes?: readonly { name: string; steps: readonly DemoStep[]; unattended?: boolean }[]
   readonly demonstrate?: boolean
   readonly variables?: readonly { readonly index: number; readonly name: string }[]
   /** Snapshot the page shows (default: the recorded controls). */
@@ -31,6 +31,15 @@ function harness(input: {
 } = {}) {
   const tools = new Map<string, RegisteredTool>()
   const approvals: string[] = []
+  const granted: string[] = []
+  const originOf = (url: string | undefined): string | undefined => {
+    if (url === undefined) return undefined
+    try {
+      return new URL(url).origin
+    } catch {
+      return undefined
+    }
+  }
   const clicks: number[] = []
   const types: string[] = []
   const store = new DemoRecipeStore(null)
@@ -39,6 +48,7 @@ function harness(input: {
   for (const recipe of input.recipes ?? []) {
     const saved = store.save({ name: recipe.name, steps: recipe.steps })
     if (saved.ok && firstId === undefined) firstId = saved.recipe.id
+    if (saved.ok && recipe.unattended === true) store.setUnattended({ id: saved.recipe.id, unattended: true })
   }
   for (const variable of input.variables ?? []) {
     if (firstId === undefined) throw new Error('no recipe to parameterize')
@@ -92,7 +102,13 @@ function harness(input: {
   registerBrowserTools(ctx, {
     driver,
     approval: {
-      requestApproval: async (request: { summary: string }) => {
+      grantOrigin: (input: { url: string }) => { granted.push(input.url) },
+      isPreauthorized: (_sessionId: string, url: string | undefined) => originOf(url) !== undefined
+        && granted.includes(originOf(url)!),
+      requestApproval: async (request: { summary: string; url?: string }) => {
+        // Mirrors the real gate: a preauthorized origin never reaches the card.
+        const origin = originOf(request.url)
+        if (origin !== undefined && granted.includes(origin)) return 'allow'
         approvals.push(request.summary)
         return 'allow'
       },
@@ -109,6 +125,7 @@ function harness(input: {
   const exec = { agent: { session: { id: 's1' } }, signal: new AbortController().signal }
   return {
     approvals,
+    granted,
     clicks,
     types,
     store,
@@ -273,6 +290,34 @@ describe('browser_demo_recipes ask mode', () => {
     const out = await h.run({ action: 'run', name: '周报', vars: { 开始日期: '2026-10-01' } }) as string
     expect(out).toContain('replayed 1/1')
     expect(h.types).toEqual(['2026-10-01'])
+  })
+})
+
+describe('unattended flows', () => {
+  const steps: DemoStep[] = [
+    { kind: 'click', at: 1, role: 'button', name: '导出报表', selector: '#export', tabUrl: 'https://example.com/admin' },
+  ]
+
+  it('runs a marked flow without a card and grants its site', async () => {
+    const h = harness({ recipes: [{ name: '周报', steps, unattended: true }] })
+    const out = await h.run({ action: 'run', name: '周报', site: 'https://example.com' }) as string
+    expect(out).toContain('replayed 1/1')
+    expect(out).toContain('unattended: https://example.com is authorized')
+    expect(h.approvals).toEqual([])
+    expect(h.granted).toEqual(['https://example.com'])
+  })
+
+  it('still asks for a flow that was not marked', async () => {
+    const h = harness({ recipes: [{ name: '周报', steps }] })
+    await h.run({ action: 'run', name: '周报', site: 'https://example.com' })
+    expect(h.approvals).toHaveLength(1)
+    expect(h.granted).toEqual([])
+  })
+
+  it('lists the flag so the agent can see it', async () => {
+    const h = harness({ recipes: [{ name: '周报', steps, unattended: true }] })
+    const listed = await h.run({ action: 'list' }) as string
+    expect(listed).toContain('unattended: yes')
   })
 })
 

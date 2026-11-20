@@ -51,6 +51,8 @@ export interface DemoRecipe {
   readonly autoHeals: readonly number[]
   /** A repair waiting for the user to accept it. */
   readonly pendingHeal?: DemoHealProposal
+  /** The user allowed this flow to run without per-action cards (same site). */
+  readonly unattended: boolean
 }
 
 /** List entry: steps are counted, never sent, so the panel stays light. */
@@ -65,6 +67,8 @@ export interface DemoRecipeMeta {
   readonly history: number
   /** How many times this flow kept a repair by itself. */
   readonly autoHeals: number
+  /** Runs without per-action approval (the user opted in per flow). */
+  readonly unattended: boolean
   /** Origin the flow was recorded on (for review and for the agent's own check). */
   readonly site?: string
   readonly pendingHeal?: DemoHealProposal
@@ -101,6 +105,7 @@ function metaOf(recipe: DemoRecipe): DemoRecipeMeta {
     rev: recipe.rev,
     history: recipe.history.length,
     autoHeals: recipe.autoHeals.length,
+    unattended: recipe.unattended,
     ...(site === undefined ? {} : { site }),
     ...(recipe.pendingHeal === undefined ? {} : { pendingHeal: recipe.pendingHeal }),
   }
@@ -369,6 +374,7 @@ export class DemoRecipeStore {
         rev: 1,
         history: [],
         autoHeals: [],
+        unattended: false,
       }
     }
     const next = existing === undefined
@@ -567,6 +573,24 @@ export class DemoRecipeStore {
     return { ok: true, recipe: metaOf(next) }
   }
 
+  /**
+   * Allow (or stop allowing) this flow to run without per-action cards. Kept
+   * out of `rev`: it is a policy flag, not flow content.
+   */
+  setUnattended(input: {
+    readonly id: string
+    readonly unattended: boolean
+    readonly now?: number
+  }): SaveResult {
+    const now = input.now ?? Date.now()
+    const recipes = this.read()
+    const current = recipes.find(recipe => recipe.id === input.id)
+    if (current === undefined) return { ok: false, error: '流程不存在' }
+    const next: DemoRecipe = { ...current, unattended: input.unattended, updatedAt: now }
+    this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
+    return { ok: true, recipe: metaOf(next) }
+  }
+
   /** Restore the newest past version; the safety net for a wrong repair. */
   rollback(input: { readonly id: string; readonly now?: number }): SaveResult {
     const now = input.now ?? Date.now()
@@ -618,6 +642,7 @@ export class DemoRecipeStore {
             rev: Number.isFinite(recipe.rev) && recipe.rev > 0 ? recipe.rev : 1,
             history: sanitizeHistory(recipe.history),
             autoHeals: sanitizeTimestamps(recipe.autoHeals),
+            unattended: recipe.unattended === true,
             ...(proposal === undefined ? {} : { pendingHeal: proposal }),
           }
         })

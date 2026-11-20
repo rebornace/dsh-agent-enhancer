@@ -414,6 +414,22 @@ describe('variable management', () => {
     expect(prepareRecipeValues(recipe, { 开始日期: '上周' }, new Date(2026, 10, 20)).values.v1).toBe('2026-11-09')
   })
 
+  it('keeps the unattended flag off until the user turns it on', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '周报', steps: [click('导出')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    expect(saved.recipe.unattended).toBe(false)
+
+    const on = store.setUnattended({ id: saved.recipe.id, unattended: true, now: 2_000 })
+    expect(on.ok && on.recipe.unattended).toBe(true)
+    // A policy flag, not flow content: the revision does not move.
+    expect(store.list()[0]?.rev).toBe(1)
+
+    const off = store.setUnattended({ id: saved.recipe.id, unattended: false })
+    expect(off.ok && off.recipe.unattended).toBe(false)
+    expect(store.setUnattended({ id: 'missing', unattended: true })).toMatchObject({ ok: false })
+  })
+
   it('rejects a blank label', () => {
     const { store } = tempStore()
     const saved = store.save({ name: '周报', steps: [fill('开始日期', '2026-11-01')], now: 1_000 })

@@ -830,6 +830,10 @@ export const demoRecipeMetaSchema = z.strictObject({
   rev: z.number().int(),
   /** How many previous versions can be restored. */
   history: z.number().int(),
+  /** The user allowed this flow to run without per-action cards. */
+  unattended: z.boolean(),
+  /** Origin the flow was recorded on. */
+  site: z.string().optional(),
   /** A repair worked out by the agent, waiting for the user. */
   pendingHeal: demoRecipeHealSchema.optional(),
 })
@@ -863,6 +867,7 @@ export const browserAgentDemoRecipesRequestSchema = z.discriminatedUnion('action
     ask: z.boolean().optional(),
   }),
   z.strictObject({ action: z.literal('unvariable'), id: z.string().min(1), name: z.string().min(1) }),
+  z.strictObject({ action: z.literal('unattended'), id: z.string().min(1), unattended: z.boolean() }),
   z.strictObject({
     action: z.literal('parameterize'),
     id: z.string().min(1),

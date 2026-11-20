@@ -1625,7 +1625,8 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
             const heal = row.pendingHeal === undefined ? '' : `; repair waiting: step ${row.pendingHeal.failedAt}`
             const auto = row.autoHeals === 0 ? '' : `; auto-adapted ${row.autoHeals}x`
             const site = row.site === undefined ? '' : `; site: ${row.site}`
-            return `- ${row.name} (${row.steps} step(s)${vars}${heal}${auto}${site})`
+            const unattended = row.unattended ? '; unattended: yes' : ''
+            return `- ${row.name} (${row.steps} step(s)${vars}${heal}${auto}${site}${unattended})`
           }),
           'Action: run one with browser_demo_recipes { action: "run", name: "<name>" }.',
         ].join('\n')
@@ -1701,6 +1702,18 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       if (wantedSite !== '' && meta.site !== undefined && meta.site !== wantedSite) {
         throw new Error(`site ${JSON.stringify(wantedSite)} does not match flow "${meta.name}" (${meta.site}). Pass the site exactly as action=list shows it.`)
       }
+      // The user opted this flow into unattended runs: cover the run and the
+      // repairs it needs with one time/action-bounded grant on the same site.
+      const sessionId = sessionIdOf(exec)
+      const unattended = recipe.unattended && meta.site !== undefined
+      if (unattended) {
+        options.approval.grantOrigin({
+          sessionId,
+          url: meta.site!,
+          ttlMs: 20 * 60_000,
+          actions: 30,
+        })
+      }
       // A new run closes whatever the last one left waiting for a decision.
       options.repair?.commit()
       const provided = args.vars !== null && typeof args.vars === 'object'
@@ -1723,7 +1736,6 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       const resolvedNote = prepared.resolved.length === 0
         ? []
         : [`resolved: ${prepared.resolved.map(item => `${item.label} ${item.from} → ${item.to}`).join('; ')}`]
-      const sessionId = sessionIdOf(exec)
       await ensureConnected()
       await ensureSessionTab(sessionId)
       const firstUrl = recipe.steps.find(step => step.tabUrl !== undefined)?.tabUrl
@@ -1763,6 +1775,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       if (ranAll) {
         return [
           `saved flow: ${recipe.name} — replayed ${outcome.performed}/${outcome.total}`,
+          ...(unattended ? [`unattended: ${meta.site} is authorized for 20 min / 30 actions in this session`] : []),
           ...resolvedNote,
           ...outcome.lines,
           `url: ${outcome.url}`,
@@ -1775,6 +1788,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       })
       return [
         `saved flow: ${recipe.name} — replayed ${outcome.performed}/${outcome.total}`,
+        ...(unattended ? [`unattended: ${meta.site} is authorized for 20 min / 30 actions in this session`] : []),
         ...resolvedNote,
         ...outcome.lines,
         `stopped at step ${outcome.performed + 1}: ${outcome.reason}`,

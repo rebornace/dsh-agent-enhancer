@@ -79,7 +79,7 @@ export interface BrowserAgentRuntime {
    * back, or delete it. Steps are stored sanitized; secrets stay `***`.
    */
   demoRecipes(input: {
-    readonly action: 'list' | 'save' | 'run' | 'delete' | 'steps' | 'rename' | 'parameterize' | 'variable' | 'unvariable' | 'heal' | 'rollback'
+    readonly action: 'list' | 'save' | 'run' | 'delete' | 'steps' | 'rename' | 'parameterize' | 'variable' | 'unvariable' | 'unattended' | 'heal' | 'rollback'
     readonly name?: string
     readonly id?: string
     readonly index?: number
@@ -87,6 +87,7 @@ export interface BrowserAgentRuntime {
     readonly label?: string
     readonly default?: string
     readonly ask?: boolean
+    readonly unattended?: boolean
     readonly vars?: Readonly<Record<string, string>>
   }): Promise<{
     readonly ok: boolean
@@ -733,6 +734,20 @@ export function installBrowserAgent(
           sessionId: 'sidebar',
           tool: 'browser_demo_recipe',
           summary: 'Updated a flow variable on "' + updated.recipe.name + '"',
+          outcome: 'ok',
+        })
+        return { ok: true, recipe: updated.recipe, recipes: recipes.list() }
+      }
+      if (input.action === 'unattended') {
+        const updated = recipes.setUnattended({
+          id: input.id ?? '',
+          unattended: input.unattended === true,
+        })
+        if (!updated.ok) return { ok: false, error: updated.error, recipes: recipes.list() }
+        sessions.record({
+          sessionId: 'sidebar',
+          tool: 'browser_demo_recipe',
+          summary: (updated.recipe.unattended ? 'Allowed' : 'Stopped') + ' unattended runs for "' + updated.recipe.name + '"',
           outcome: 'ok',
         })
         return { ok: true, recipe: updated.recipe, recipes: recipes.list() }

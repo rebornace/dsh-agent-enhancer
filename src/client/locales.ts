@@ -83,7 +83,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentDemoRecordingAgent' | 'browserAgentDemoEmpty' | 'browserAgentDemoCopy' |
       'browserAgentDemoCopied' | 'browserAgentDemoCopyFailed' | 'browserAgentDemoFailed' |
       'browserAgentDemoSend' | 'browserAgentDemoSendLead' | 'browserAgentDemoSent' |
-      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' | 'browserAgentDemoRecipeRename' | 'browserAgentDemoRecipeRenameSave' | 'browserAgentDemoRecipeCancel' | 'browserAgentDemoRecipeSteps' | 'browserAgentDemoRecipeRenamed' | 'browserAgentDemoRecipeSetVar' | 'browserAgentDemoSuggestTitle' | 'browserAgentDemoSuggestRow' | 'browserAgentDemoSuggestMake' | 'browserAgentDemoSuggestKeep' | 'browserAgentDemoRecipeVarHint' | 'browserAgentDemoVarsTitle' | 'browserAgentDemoVarLabel' | 'browserAgentDemoVarAskOn' | 'browserAgentDemoVarAskOff' | 'browserAgentDemoVarAskPlaceholder' | 'browserAgentDemoVarRevert' | 'browserAgentDemoVarReverted' | 'browserAgentDemoRecipeVarWorking' | 'browserAgentDemoRecipeParameterized' | 'browserAgentDemoHealText' | 'browserAgentDemoHealInserted' | 'browserAgentDemoHealKeep' | 'browserAgentDemoHealSkip' | 'browserAgentDemoHealKept' | 'browserAgentDemoHealSkipped' | 'browserAgentDemoRecipeUndo' | 'browserAgentDemoRecipeRestored' | 'browserAgentDemoRecipeVersion' |
+      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' | 'browserAgentDemoRecipeRename' | 'browserAgentDemoRecipeRenameSave' | 'browserAgentDemoRecipeCancel' | 'browserAgentDemoRecipeSteps' | 'browserAgentDemoRecipeRenamed' | 'browserAgentDemoRecipeSetVar' | 'browserAgentDemoSuggestTitle' | 'browserAgentDemoSuggestRow' | 'browserAgentDemoSuggestMake' | 'browserAgentDemoSuggestKeep' | 'browserAgentDemoRecipeVarHint' | 'browserAgentDemoVarsTitle' | 'browserAgentDemoUnattendedHint' | 'browserAgentDemoUnattendedOn' | 'browserAgentDemoUnattendedEnable' | 'browserAgentDemoUnattendedDisable' | 'browserAgentDemoUnattendedNoSite' | 'browserAgentDemoVarLabel' | 'browserAgentDemoVarAskOn' | 'browserAgentDemoVarAskOff' | 'browserAgentDemoVarAskPlaceholder' | 'browserAgentDemoVarRevert' | 'browserAgentDemoVarReverted' | 'browserAgentDemoRecipeVarWorking' | 'browserAgentDemoRecipeParameterized' | 'browserAgentDemoHealText' | 'browserAgentDemoHealInserted' | 'browserAgentDemoHealKeep' | 'browserAgentDemoHealSkip' | 'browserAgentDemoHealKept' | 'browserAgentDemoHealSkipped' | 'browserAgentDemoRecipeUndo' | 'browserAgentDemoRecipeRestored' | 'browserAgentDemoRecipeVersion' |
       'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
       'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
       'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
@@ -525,6 +525,11 @@ export const agentLocales = {
     browserAgentDemoSuggestKeep: '保持固定',
     browserAgentDemoRecipeVarHint: '2026-11-01 或 上周',
     browserAgentDemoVarsTitle: '可改的值',
+    browserAgentDemoUnattendedHint: '允许无人值守运行：定时任务里不再逐次确认（仅本站点，20 分钟 / 30 个动作；密码仍需人工）',
+    browserAgentDemoUnattendedOn: '已允许无人值守：只在 {site}，20 分钟内不再询问',
+    browserAgentDemoUnattendedEnable: '允许无人值守',
+    browserAgentDemoUnattendedDisable: '关闭无人值守',
+    browserAgentDemoUnattendedNoSite: '这个流程没有记录站点，无法开启',
     browserAgentDemoVarLabel: '改名字',
     browserAgentDemoVarAskOn: '每次问我',
     browserAgentDemoVarAskOff: '已固定',
@@ -1242,6 +1247,11 @@ export const agentLocales = {
     browserAgentDemoSuggestKeep: 'Keep fixed',
     browserAgentDemoRecipeVarHint: '2026-11-01 or last week',
     browserAgentDemoVarsTitle: 'Values you can change',
+    browserAgentDemoUnattendedHint: 'Run without per-action approval: scheduled tasks stop asking (this site only, 20 minutes / 30 actions; secrets still need a human)',
+    browserAgentDemoUnattendedOn: 'Unattended allowed: {site} only, no cards for 20 minutes',
+    browserAgentDemoUnattendedEnable: 'Allow unattended',
+    browserAgentDemoUnattendedDisable: 'Stop unattended',
+    browserAgentDemoUnattendedNoSite: 'This flow has no recorded site',
     browserAgentDemoVarLabel: 'Rename',
     browserAgentDemoVarAskOn: 'Ask me',
     browserAgentDemoVarAskOff: 'Fixed',
