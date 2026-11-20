@@ -201,6 +201,8 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
     readonly canParameterize: boolean
   }[]>([])
   const [paramBusyIndex, setParamBusyIndex] = useState<number | null>(null)
+  const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<{
     readonly recipeId: string
     readonly items: readonly { readonly index: number; readonly label: string; readonly value: string }[]
@@ -303,6 +305,7 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
       return
     }
     setRecipeStepRows(result.steps ?? [])
+    setMenuFor(null)
     setOpenRecipeId(recipe.id)
   }
 
@@ -769,22 +772,28 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                               type="button"
                               className={styles.browserAgentRecipeName}
                               aria-expanded={openRecipeId === recipe.id}
-                              title={t('browserAgentDemoRecipeSteps')}
+                              title={t('browserAgentDemoRecipeDetails')}
                               onClick={() => { void toggleRecipeSteps(recipe) }}
                             >
+                              {openRecipeId === recipe.id ? '▾ ' : '▸ '}
                               {recipe.name}
                             </button>
                             <span className={styles.browserAgentRecipeSteps}>
                               {t('browserAgentDemoRecipeStepCount').replace('{n}', String(recipe.steps))}
                             </span>
-                            {recipe.variables.length === 0 ? null : (
-                              <span className={styles.browserAgentRecipeVarsBadge}>
-                                {recipe.variables.map(variable => variable.label).join('、')}
+                            {recipe.pendingHeal === undefined ? null : (
+                              <span className={styles.browserAgentRecipeBadge}>
+                                {t('browserAgentDemoRecipeHealBadge')}
                               </span>
                             )}
+                            {recipe.unattended ? (
+                              <span className={styles.browserAgentRecipeBadge}>
+                                {t('browserAgentDemoRecipeUnattendedBadge')}
+                              </span>
+                            ) : null}
                             <button
                               type="button"
-                              className={styles.browserAgentButton}
+                              className={styles.browserAgentButtonPrimary}
                               disabled={recipeBusy}
                               onClick={() => { beginRun(recipe) }}
                             >
@@ -792,23 +801,66 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                             </button>
                             <button
                               type="button"
-                              className={styles.browserAgentButton}
+                              className={styles.browserAgentRecipeMore}
+                              aria-expanded={menuFor === recipe.id}
+                              aria-label={t('browserAgentDemoRecipeMore')}
+                              title={t('browserAgentDemoRecipeMore')}
                               disabled={recipeBusy}
-                              onClick={() => { startRename(recipe) }}
+                              onClick={() => {
+                                setMenuFor(menuFor === recipe.id ? null : recipe.id)
+                                setConfirmDeleteId(null)
+                              }}
                             >
-                              {t('browserAgentDemoRecipeRename')}
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.browserAgentButton}
-                              disabled={recipeBusy}
-                              onClick={() => { void deleteRecipe(recipe) }}
-                            >
-                              {t('browserAgentDemoRecipeDelete')}
+                              ⋯
                             </button>
                           </>
                         )}
                       </div>
+                      {menuFor === recipe.id && renamingId !== recipe.id ? (
+                        <div className={styles.browserAgentRecipeMenu} role="group" aria-label={t('browserAgentDemoRecipeMore')}>
+                          <button
+                            type="button"
+                            className={styles.browserAgentRecipeMenuButton}
+                            disabled={recipeBusy}
+                            onClick={() => { setMenuFor(null); startRename(recipe) }}
+                          >
+                            {t('browserAgentDemoRecipeRename')}
+                          </button>
+                          {confirmDeleteId === recipe.id ? (
+                            <>
+                              <button
+                                type="button"
+                                className={styles.browserAgentRecipeMenuButton}
+                                disabled={recipeBusy}
+                                onClick={() => {
+                                  setMenuFor(null)
+                                  setConfirmDeleteId(null)
+                                  void deleteRecipe(recipe)
+                                }}
+                              >
+                                {t('browserAgentDemoRecipeConfirmDelete')}
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.browserAgentRecipeMenuButton}
+                                disabled={recipeBusy}
+                                onClick={() => { setConfirmDeleteId(null) }}
+                              >
+                                {t('browserAgentDemoRecipeCancel')}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              className={styles.browserAgentRecipeMenuButton}
+                              disabled={recipeBusy}
+                              onClick={() => { setConfirmDeleteId(recipe.id) }}
+                            >
+                              {t('browserAgentDemoRecipeDelete')}
+                            </button>
+                          )}
+                        </div>
+                      ) : null}
                       {recipe.pendingHeal === undefined ? null : (
                         <div className={styles.browserAgentHeal}>
                           <p className={styles.browserAgentHealText}>
@@ -884,8 +936,9 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                         </div>
                       ) : null}
                       {openRecipeId === recipe.id && recipe.variables.length > 0 ? (
-                        <div className={styles.browserAgentRecipeVars}>
-                          <span className={styles.browserAgentPaneNote}>{t('browserAgentDemoVarsTitle')}</span>
+                        <section className={styles.browserAgentRecipeSection}>
+                          <span className={styles.browserAgentRecipeSectionTitle}>{t('browserAgentDemoVarsTitle')}</span>
+                          <div className={styles.browserAgentRecipeVars}>
                           {recipe.variables.map(variable => (
                             <div
                               key={`${variable.name}:${variable.default}:${variable.ask ? 'ask' : 'fixed'}`}
@@ -920,18 +973,20 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                                   }
                                 }}
                               />
+                              <label className={styles.browserAgentRecipeVarAsk}>
+                                <input
+                                  type="checkbox"
+                                  checked={variable.ask}
+                                  disabled={recipeBusy}
+                                  onChange={event => {
+                                    void updateVariable(recipe, variable.name, { ask: event.target.checked })
+                                  }}
+                                />
+                                <span>{t('browserAgentDemoVarAskToggle')}</span>
+                              </label>
                               <button
                                 type="button"
-                                className={styles.browserAgentButton}
-                                aria-pressed={variable.ask}
-                                disabled={recipeBusy}
-                                onClick={() => { void updateVariable(recipe, variable.name, { ask: !variable.ask }) }}
-                              >
-                                {variable.ask ? t('browserAgentDemoVarAskOn') : t('browserAgentDemoVarAskOff')}
-                              </button>
-                              <button
-                                type="button"
-                                className={styles.browserAgentButton}
+                                className={styles.browserAgentRecipeLink}
                                 disabled={recipeBusy}
                                 onClick={() => { void removeVariable(recipe, variable.name) }}
                               >
@@ -939,66 +994,79 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                               </button>
                             </div>
                           ))}
-                        </div>
+                          </div>
+                        </section>
                       ) : null}
                       {openRecipeId === recipe.id ? (
-                        <div className={styles.browserAgentRecipeStepList}>
-                          {recipeStepRows.length === 0 ? (
-                            <span className={styles.browserAgentPaneNote}>{t('browserAgentDemoEmpty')}</span>
-                          ) : recipeStepRows.map(row => (
-                            <div key={row.index} className={styles.browserAgentRecipeStepRow}>
-                              <span className={styles.browserAgentRecipeStepText}>
-                                {row.index + 1}. {row.label}
-                              </span>
-                              {row.canParameterize ? (
-                                <button
-                                  type="button"
-                                  className={styles.browserAgentButton}
-                                  disabled={recipeBusy}
-                                  onClick={() => { void parameterizeStep(recipe, row.index) }}
-                                >
-                                  {paramBusyIndex === row.index
-                                    ? t('browserAgentDemoRecipeVarWorking')
-                                    : t('browserAgentDemoRecipeSetVar')}
-                                </button>
-                              ) : null}
-                            </div>
-                          ))}
-                          <div className={styles.browserAgentRecipeHistory}>
-                            <span className={styles.browserAgentPaneNote}>
-                              {recipe.unattended
-                                ? t('browserAgentDemoUnattendedOn').replace('{site}', recipe.site ?? '')
-                                : t('browserAgentDemoUnattendedHint')}
-                            </span>
-                            <button
-                              type="button"
-                              className={styles.browserAgentButton}
-                              aria-pressed={recipe.unattended}
-                              disabled={recipeBusy || recipe.site === undefined}
-                              title={recipe.site === undefined ? t('browserAgentDemoUnattendedNoSite') : undefined}
-                              onClick={() => { void setUnattended(recipe, !recipe.unattended) }}
-                            >
-                              {recipe.unattended
-                                ? t('browserAgentDemoUnattendedDisable')
-                                : t('browserAgentDemoUnattendedEnable')}
-                            </button>
-                          </div>
-                          {recipe.history > 0 ? (
+                        <>
+                          <section className={styles.browserAgentRecipeSection}>
+                            <span className={styles.browserAgentRecipeSectionTitle}>{t('browserAgentDemoRunOptions')}</span>
                             <div className={styles.browserAgentRecipeHistory}>
                               <span className={styles.browserAgentPaneNote}>
-                                {t('browserAgentDemoRecipeVersion').replace('{n}', String(recipe.rev))}
+                                {recipe.unattended
+                                  ? t('browserAgentDemoUnattendedOn').replace('{site}', recipe.site ?? '')
+                                  : t('browserAgentDemoUnattendedHint')}
                               </span>
                               <button
                                 type="button"
                                 className={styles.browserAgentButton}
-                                disabled={recipeBusy}
-                                onClick={() => { void rollbackRecipe(recipe) }}
+                                aria-pressed={recipe.unattended}
+                                disabled={recipeBusy || recipe.site === undefined}
+                                title={recipe.site === undefined ? t('browserAgentDemoUnattendedNoSite') : undefined}
+                                onClick={() => { void setUnattended(recipe, !recipe.unattended) }}
                               >
-                                {t('browserAgentDemoRecipeUndo')}
+                                {recipe.unattended
+                                  ? t('browserAgentDemoUnattendedDisable')
+                                  : t('browserAgentDemoUnattendedEnable')}
                               </button>
                             </div>
-                          ) : null}
-                        </div>
+                            {recipe.history > 0 ? (
+                              <div className={styles.browserAgentRecipeHistory}>
+                                <span className={styles.browserAgentPaneNote}>
+                                  {t('browserAgentDemoRecipeVersion').replace('{n}', String(recipe.rev))}
+                                </span>
+                                <button
+                                  type="button"
+                                  className={styles.browserAgentRecipeLink}
+                                  disabled={recipeBusy}
+                                  onClick={() => { void rollbackRecipe(recipe) }}
+                                >
+                                  {t('browserAgentDemoRecipeUndo')}
+                                </button>
+                              </div>
+                            ) : null}
+                          </section>
+                          <section className={styles.browserAgentRecipeSection}>
+                            <details className={styles.browserAgentRecipeStepsBox}>
+                              <summary className={styles.browserAgentRecipeStepsSummary}>
+                                {t('browserAgentDemoStepsShow').replace('{n}', String(recipe.steps))}
+                              </summary>
+                              <div className={styles.browserAgentRecipeStepList}>
+                                {recipeStepRows.length === 0 ? (
+                                  <span className={styles.browserAgentPaneNote}>{t('browserAgentDemoEmpty')}</span>
+                                ) : recipeStepRows.map(row => (
+                                  <div key={row.index} className={styles.browserAgentRecipeStepRow}>
+                                    <span className={styles.browserAgentRecipeStepText}>
+                                      {row.index + 1}. {row.label}
+                                    </span>
+                                    {row.canParameterize ? (
+                                      <button
+                                        type="button"
+                                        className={styles.browserAgentButton}
+                                        disabled={recipeBusy}
+                                        onClick={() => { void parameterizeStep(recipe, row.index) }}
+                                      >
+                                        {paramBusyIndex === row.index
+                                          ? t('browserAgentDemoRecipeVarWorking')
+                                          : t('browserAgentDemoRecipeSetVar')}
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          </section>
+                        </>
                       ) : null}
                     </li>
                   ))}

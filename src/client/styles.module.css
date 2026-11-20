@@ -2796,6 +2796,160 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+.browserAgentButtonPrimary {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-label-on-color, #fff);
+  font: var(--dsw-font-xxs-12);
+  cursor: pointer;
+}
+
+.browserAgentButtonPrimary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.browserAgentButtonPrimary:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: 2px;
+}
+
+/* Status pills: state, not actions. */
+.browserAgentRecipeBadge {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+/* Overflow trigger: one small button instead of three inline ones. */
+.browserAgentRecipeMore {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.browserAgentRecipeMore:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.browserAgentRecipeMore:focus-visible,
+.browserAgentRecipeLink:focus-visible,
+.browserAgentRecipeMenuButton:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: 1px;
+}
+
+.browserAgentRecipeMore:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Actions merged into one quiet strip; never a floating menu in a scroller. */
+.browserAgentRecipeMenu {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  padding: 2px 6px 4px;
+}
+
+.browserAgentRecipeMenuButton {
+  padding: 2px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  cursor: pointer;
+}
+
+.browserAgentRecipeMenuButton:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  text-decoration: underline;
+}
+
+.browserAgentRecipeMenuButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.browserAgentRecipeLink {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.browserAgentRecipeLink:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+}
+
+.browserAgentRecipeLink:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Grouped details: each section has a label, so the wall of rows reads. */
+.browserAgentRecipeSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 6px;
+}
+
+.browserAgentRecipeSectionTitle {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.browserAgentRecipeStepsBox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.browserAgentRecipeStepsSummary {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  cursor: pointer;
+  list-style: none;
+}
+
+.browserAgentRecipeStepsSummary::-webkit-details-marker {
+  display: none;
+}
+
+.browserAgentRecipeStepsSummary::before {
+  content: '▸ ';
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.browserAgentRecipeStepsBox[open] .browserAgentRecipeStepsSummary::before {
+  content: '▾ ';
+}
+
 .browserAgentRecipeName {
   flex: 1;
   min-width: 0;
@@ -2827,16 +2981,6 @@
 }
 
 /* Parameterised flow: variable list on the row, per-step "make a variable". */
-.browserAgentRecipeVarsBadge {
-  flex: 0 0 auto;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-tertiary);
-  font: var(--dsw-font-xxs-12);
-}
-
 .browserAgentRecipeVars {
   display: flex;
   flex-direction: column;
@@ -2885,6 +3029,17 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+}
+
+.browserAgentRecipeVarAsk {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 .browserAgentRecipeVarName {
