@@ -12,6 +12,7 @@ import type { Diagnosis } from './diagnose.ts'
 import { demoTabLegend, describeDemoStep, summarizeDemoSteps, type DemoStep } from './demo.ts'
 import { applyRecipeVars, missingRecipeVars, type DemoRecipeStore } from './demo-recipes.ts'
 import { replayDemoSteps } from './demo-replay.ts'
+import type { BrowserRepairHooks, DemoObservedAction } from './demo-heal.ts'
 
 type ToolExec = {
   readonly signal: AbortSignal
@@ -160,6 +161,12 @@ export interface BrowserToolsOptions {
   readonly onDemonstration?: (steps: readonly DemoStep[]) => void
   /** Saved demonstration flows (see demo-recipes.ts). */
   readonly recipes?: DemoRecipeStore
+  /**
+   * Repair tracking: started when a saved flow stops, closed by the next flow
+   * run or an explicit `heal`. Without it the agent still finishes by hand, the
+   * flow just never learns.
+   */
+  readonly repair?: BrowserRepairHooks
   /** What is wrong (if anything) and the concrete next step. */
   readonly diagnosis?: () => Diagnosis
   readonly enabled: () => boolean
@@ -173,6 +180,40 @@ export interface BrowserToolsOptions {
 function driverOf(options: BrowserToolsOptions): BrowserDriver {
   const value = options.driver
   return typeof value === 'function' ? value() : value
+}
+
+/**
+ * How the snapshot describes a ref, captured before the action mutates the page.
+ * Free when no repair is watching, which is almost always.
+ */
+async function captureRefEvidence(
+  options: BrowserToolsOptions,
+  ref: number,
+): Promise<{ readonly role: string; readonly name: string; readonly selector: string } | null> {
+  if (options.repair?.active() !== true) return null
+  const driver = driverOf(options)
+  if (typeof driver.refInfo !== 'function') return null
+  const info = await driver.refInfo(ref).catch(() => null)
+  if (info === null) return null
+  return { role: info.role, name: info.name, selector: info.selector }
+}
+
+function recordRepair(
+  options: BrowserToolsOptions,
+  evidence: { readonly role: string; readonly name: string; readonly selector: string } | null,
+  kind: DemoObservedAction['kind'],
+  extra: { readonly value?: string; readonly url?: string; readonly tabId?: number } = {},
+): void {
+  if (options.repair?.active() !== true) return
+  options.repair.observe({
+    kind,
+    at: Date.now(),
+    ...(evidence === null ? {} : evidence),
+    ...(evidence === null || kind !== 'fill' ? {} : { field: evidence.name }),
+    ...(extra.value === undefined ? {} : { value: extra.value }),
+    ...(extra.url === undefined ? {} : { url: extra.url }),
+    ...(extra.tabId === undefined ? {} : { tabId: extra.tabId }),
+  })
 }
 
 /** Narrow a string arg to a known enum, or throw with the allowed values. */
@@ -679,6 +720,15 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
           outcome: 'ok',
         })
         options.onMutation?.({ sessionId, tool: 'browser_navigate', url: result.url })
+        if (options.repair?.active() === true) {
+          const tabId = options.sessions.tabOf(sessionId)
+          options.repair.observe({
+            kind: 'navigate',
+            at: Date.now(),
+            url: result.url,
+            ...(tabId === undefined ? {} : { tabId }),
+          })
+        }
         return [
           newTab ? 'opened_new_tab' : 'navigated',
           `url: ${result.url}`,
@@ -725,6 +775,9 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         url = undefined
       }
       requireFreshRef(sessionId, ref, 'browser_click')
+      // Read the control's identity before the click: after a navigation the
+      // snapshot that owned this ref is gone.
+      const repairEvidence = await captureRefEvidence(options, ref)
       if (options.sessions.isDeadClickRef(sessionId, ref)) {
         throw new Error(
           `click_blocked: ref ${ref} already failed with no navigation. `
@@ -785,6 +838,12 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
           }
         }
 
+        // Evidence goes in before the no-op check: an export button often starts a
+        // download without changing the URL, and that click is still the repair.
+        recordRepair(options, repairEvidence, 'click', {
+          url: result.url,
+          tabId: options.sessions.tabOf(sessionId),
+        })
         options.sessions.clearLastRefs(sessionId)
         if (!navigated) {
           options.sessions.markDeadClickRef(sessionId, ref)
@@ -872,6 +931,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         url = undefined
       }
       requireFreshRef(sessionId, ref, 'browser_type')
+      const repairEvidence = await captureRefEvidence(options, ref)
       await requireMutation(exec, 'browser_type', `Type into ref ${ref}: ${maskTypeSummary(text)}`, url, ref)
       try {
         const result = await runBridge(() => driverOf(options).type(ref, text))
@@ -885,6 +945,11 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
           outcome: 'ok',
         })
         options.onMutation?.({ sessionId, tool: 'browser_type', url: result.url })
+        recordRepair(options, repairEvidence, 'fill', {
+          value: text,
+          url: result.url,
+          tabId: options.sessions.tabOf(sessionId),
+        })
         return `typed into ref ${ref}\nurl: ${result.url}\ntitle: ${result.title}\nAction: call browser_snapshot for fresh refs before the next click/type.`
       } catch (error) {
         noteHuman(sessionId, {}, error)
@@ -1396,16 +1461,24 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   disposers.push(ctx.tools.register(textTool(
     'browser_demo_recipes',
-    'List or run a flow the user saved from a demonstration (right sidebar → 演示录制 → 保存为流程). Use it when the user names a saved flow ("跑一下「周报导出」流程") or asks which flows exist. Running replays the recorded steps in the dedicated browser; it asks for approval once and stops at a masked secret or a control that is gone, exactly like browser_demonstrate replay.',
+    'List, run, or repair a flow the user saved from a demonstration (right sidebar → 演示录制 → 保存为流程). Use it when the user names a saved flow ("跑一下「周报导出」流程") or asks which flows exist. Running replays the recorded steps in the dedicated browser; it asks for approval once and stops at a masked secret or a control that is gone, exactly like browser_demonstrate replay. When it stops because a control changed, finish the remaining steps yourself, then call action=heal so the user can keep the fix.',
     {
       action: {
         type: 'string',
         required: true,
-        description: '"list" to show saved flows, "run" to replay one.',
+        description: '"list" to show saved flows, "run" to replay one, "heal" to offer the fix you just worked out.',
       },
       name: {
         type: 'string',
         description: 'Flow name for action=run. Case-insensitive; a unique part of the name is enough.',
+      },
+      id: {
+        type: 'string',
+        description: 'Flow id for action=heal; omit to use the flow that just stopped.',
+      },
+      accept: {
+        type: 'boolean',
+        description: 'action=heal: apply the repair to the saved flow now (the user asked to remember it). Default false: offer it in the sidebar.',
       },
       vars: {
         type: 'object',
@@ -1421,16 +1494,65 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       const action = String(args.action ?? '').trim().toLowerCase()
       const rows = store.list()
       if (action === 'list') {
-        if (rows.length === 0) {
+        // Close a repair the agent finished but never asked about, so the panel
+        // can offer it instead of losing it.
+        options.repair?.commit()
+        const afterCommit = store.list()
+        if (afterCommit.length === 0) {
           return 'saved flows: 0\nAction: none yet — the user can record a demonstration and save it in the sidebar, then retry.'
         }
         return [
-          `saved flows: ${rows.length}`,
-          ...rows.map(row => `- ${row.name} (${row.steps} step(s)${row.variables.length === 0 ? '' : `; vars: ${row.variables.map(variable => variable.name).join(', ')}`})`),
+          `saved flows: ${afterCommit.length}`,
+          ...afterCommit.map(row => {
+            const vars = row.variables.length === 0 ? '' : `; vars: ${row.variables.map(variable => variable.name).join(', ')}`
+            const heal = row.pendingHeal === undefined ? '' : `; repair waiting: step ${row.pendingHeal.failedAt}`
+            return `- ${row.name} (${row.steps} step(s)${vars}${heal})`
+          }),
           'Action: run one with browser_demo_recipes { action: "run", name: "<name>" }.',
         ].join('\n')
       }
-      if (action !== 'run') throw new Error('action must be "list" or "run"')
+      if (action === 'heal') {
+        const committed = options.repair?.commit() ?? null
+        const id = String(args.id ?? committed?.recipeId ?? '').trim()
+        if (id === '') {
+          return 'nothing to remember: no saved flow stopped recently, so there is no repair to store.'
+        }
+        // "heal" alone only offers the fix; only an explicit accept rewrites the flow.
+        if (args.accept !== true) {
+          const row = store.list().find(candidate => candidate.id === id)
+          const proposal = row?.pendingHeal
+          if (committed === null && proposal === undefined) {
+            return `nothing to remember: no repair for "${row?.name ?? id}" — the flow either ran clean or the difference was not a moved control.`
+          }
+          options.sessions.record({
+            sessionId: sessionIdOf(exec),
+            tool: 'browser_demo_recipe',
+            summary: `Offered a repair for saved flow "${row?.name ?? id}"`,
+            outcome: 'ok',
+          })
+          return [
+            `saved flow: ${row?.name ?? id} — repair offered`,
+            ...(committed === null ? [] : committed.lines.map(line => `- ${line}`)),
+            'Action: tell the user you worked around a changed control and that they can accept the fix in the sidebar (演示录制 → this flow). Do not claim the flow itself was updated.',
+          ].join('\n')
+        }
+        const resolved = store.resolveHeal({ id, accept: true })
+        if (!resolved.ok) {
+          return `nothing to remember: ${resolved.error}`
+        }
+        options.sessions.record({
+          sessionId: sessionIdOf(exec),
+          tool: 'browser_demo_recipe',
+          summary: `Applied a repair for saved flow "${resolved.recipe.name}"`,
+          outcome: 'ok',
+        })
+        return [
+          `saved flow: ${resolved.recipe.name} — repair applied`,
+          ...(committed === null ? [] : committed.lines.map(line => `- ${line}`)),
+          'Action: the flow now uses the control you found. Tell the user it should work next time, and that the previous version can be restored in the sidebar.',
+        ].join('\n')
+      }
+      if (action !== 'run') throw new Error('action must be "list", "run" or "heal"')
       const wanted = String(args.name ?? '').trim()
       if (wanted === '') throw new Error('name is required for action=run')
       const exact = rows.find(row => row.name.toLowerCase() === wanted.toLowerCase())
@@ -1443,6 +1565,8 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       }
       const recipe = store.get(meta.id)
       if (recipe === undefined) throw new Error('The saved flow disappeared; list again.')
+      // A new run closes whatever the last one left waiting for a decision.
+      options.repair?.commit()
       const provided = args.vars !== null && typeof args.vars === 'object'
         ? Object.fromEntries(Object.entries(args.vars as Record<string, unknown>)
           .filter(([, value]) => typeof value === 'string')
@@ -1468,6 +1592,25 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       )
       const outcome = await replayDemoSteps(driverOf(options), replaySteps)
       const ranAll = outcome.status === 'done'
+      if (!ranAll) {
+        // A secret is a pause for the user, not a page change; everything else
+        // is worth watching, because the agent is about to solve it by hand.
+        const failedStep = recipe.steps[outcome.performed]
+        const isSecret = /masked|secret field/i.test(outcome.reason)
+          || (failedStep !== undefined && failedStep.kind === 'fill' && failedStep.masked)
+        if (!isSecret && failedStep !== undefined && options.repair !== undefined) {
+          const tabId = options.sessions.tabOf(sessionId)
+          options.repair.begin({
+            recipeId: recipe.id,
+            recipeName: recipe.name,
+            index: outcome.performed,
+            step: failedStep,
+            reason: outcome.reason,
+            ...(tabId === undefined ? {} : { tabId }),
+            ...(outcome.url === undefined ? {} : { tabUrl: outcome.url }),
+          })
+        }
+      }
       options.sessions.record({
         sessionId,
         tool: 'browser_demo_recipes',
@@ -1491,7 +1634,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         ...outcome.lines,
         `stopped at step ${outcome.performed + 1}: ${outcome.reason}`,
         ...pending,
-        'Action: the replay stopped; the page is whatever the last ok step left behind. Continue with browser_snapshot + click/type, or browser_ask_user for a secret. Do not claim the flow finished.',
+        'Action: the replay stopped; the page is whatever the last ok step left behind. Continue with browser_snapshot + click/type, or browser_ask_user for a secret. Do not claim the flow finished. If a control had moved and you worked around it, finish the job and then call browser_demo_recipes { action: "heal" } so the user can keep that fix.',
       ].join('\n')
     },
   )))

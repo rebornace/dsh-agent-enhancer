@@ -3,6 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { BrowserDriver } from './driver.ts'
 import type { DemoStep } from './demo.ts'
 import { DemoRecipeStore } from './demo-recipes.ts'
+import { DemoRepairTracker, createRepairHooks } from './demo-heal.ts'
 import { BrowserHumanGate } from './human-gate.ts'
 import { BrowserSessionState } from './session-state.ts'
 import { registerBrowserTools } from './tools.ts'
@@ -21,12 +22,19 @@ function harness(input: {
   readonly recipes?: readonly { name: string; steps: readonly DemoStep[] }[]
   readonly demonstrate?: boolean
   readonly variables?: readonly { readonly index: number; readonly name: string }[]
+  /** Snapshot the page shows (default: the recorded controls). */
+  readonly nodes?: ReadonlyArray<{ readonly ref: number; readonly role: string; readonly name: string }>
+  /** Where a click lands; a different URL keeps browser_click from seeing a no-op. */
+  readonly clickThen?: string
+  /** Extra evidence for refs the "agent" clicks during a repair. */
+  readonly refInfo?: Readonly<Record<number, { readonly role: string; readonly name: string; readonly selector: string }>>
 } = {}) {
   const tools = new Map<string, RegisteredTool>()
   const approvals: string[] = []
   const clicks: number[] = []
   const types: string[] = []
   const store = new DemoRecipeStore(null)
+  const repair = createRepairHooks({ tracker: new DemoRepairTracker(), store })
   let firstId: string | undefined
   for (const recipe of input.recipes ?? []) {
     const saved = store.save({ name: recipe.name, steps: recipe.steps })
@@ -58,18 +66,20 @@ function harness(input: {
     snapshot: async () => ({
       url: 'https://example.com/admin',
       title: 'Admin',
-      nodes: [
+      nodes: input.nodes ?? [
         { ref: 3, role: 'button', name: '导出报表' },
         { ref: 4, role: 'button', name: '取消' },
         { ref: 5, role: 'textbox', name: '关键词' },
       ],
       refs: [],
       text: '',
+      textPreview: '',
     }),
     click: async (ref: number) => {
       clicks.push(ref)
-      return { url: 'https://example.com/admin', title: 'Admin', tabId: 1 }
+      return { url: input.clickThen ?? 'https://example.com/admin', title: 'Admin', tabId: 1 }
     },
+    refInfo: async (ref: number) => input.refInfo?.[ref] ?? null,
     type: async (_ref: number, text: string) => {
       types.push(text)
       return { url: 'https://example.com/admin', title: 'Admin', tabId: 1 }
@@ -92,6 +102,7 @@ function harness(input: {
     sessions: new BrowserSessionState(),
     demonstrate: () => input.demonstrate !== false,
     recipes: store,
+    repair,
     enabled: () => true,
   })
 
@@ -100,6 +111,12 @@ function harness(input: {
     approvals,
     clicks,
     types,
+    store,
+    tool: (name: string) => {
+      const found = tools.get(name)
+      if (found === undefined) throw new Error(`${name} not registered`)
+      return (args: Record<string, unknown>) => found.execute(args, exec)
+    },
     run: (args: Record<string, unknown>) => {
       const tool = tools.get('browser_demo_recipes')
       if (tool === undefined) throw new Error('browser_demo_recipes not registered')
@@ -185,5 +202,53 @@ describe('browser_demo_recipes', () => {
     const supplied = await h.run({ action: 'run', name: '搜索导出', vars: { term: '新值' } }) as string
     expect(supplied).toContain('replayed 2/2')
     expect(h.types).toContain('新值')
+  })
+})
+
+describe('browser_demo_recipes repair', () => {
+  const moved: DemoStep[] = [
+    { kind: 'click', at: 1, role: 'button', name: '导出报表', selector: '#export', tabUrl: 'https://example.com/admin' },
+  ]
+
+  it('turns the agent\'s workaround into a repair the user can accept', async () => {
+    const h = harness({
+      recipes: [{ name: '周报导出', steps: moved }],
+      nodes: [
+        { ref: 7, role: 'button', name: '下载明细' },
+        { ref: 4, role: 'button', name: '取消' },
+      ],
+      clickThen: 'https://example.com/export-report',
+      refInfo: { 7: { role: 'button', name: '下载明细', selector: '#export-new' } },
+    })
+    const blocked = await h.run({ action: 'run', name: '周报导出' }) as string
+    expect(blocked).toContain('stopped at step 1')
+    expect(blocked).toContain('action: "heal"')
+
+    // The agent looks at the page, finds the control, and clicks it.
+    await h.tool('browser_snapshot')({})
+    await h.tool('browser_click')({ ref: 7 })
+
+    const offered = await h.run({ action: 'heal' }) as string
+    expect(offered).toContain('repair offered')
+    expect(h.store.list()[0]?.pendingHeal).toMatchObject({ failedAt: 1 })
+    expect(h.store.list()[0]?.pendingHeal?.replacement).toMatchObject({ name: '下载明细' })
+
+    const id = h.store.list()[0]!.id
+    const applied = await h.run({ action: 'heal', id, accept: true }) as string
+    expect(applied).toContain('repair applied')
+    expect(h.store.list()[0]?.pendingHeal).toBeUndefined()
+    expect(h.store.get(id)?.steps[0]).toMatchObject({ name: '下载明细', selector: '#export-new' })
+    expect(h.store.list()[0]?.rev).toBe(2)
+  })
+
+  it('offers nothing after a masked secret', async () => {
+    const secret: DemoStep[] = [
+      { kind: 'fill', at: 1, role: 'textbox', name: 'Password', selector: '#pw', field: 'password', value: '***', masked: true },
+    ]
+    const h = harness({ recipes: [{ name: '登录', steps: secret }] })
+    await h.run({ action: 'run', name: '登录' })
+    const out = await h.run({ action: 'heal' }) as string
+    expect(out).toContain('nothing to remember')
+    expect(h.store.list()[0]?.pendingHeal).toBeUndefined()
   })
 })

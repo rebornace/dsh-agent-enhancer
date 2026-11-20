@@ -670,6 +670,66 @@ export class PlaywrightDriver implements BrowserDriver {
     return Number.isFinite(ref) ? ref : null
   }
 
+  /**
+   * Role, accessible name and a readable CSS path for a ref, so a repair can
+   * record how the control was found this time. Best-effort: a stale ref or a
+   * detached node yields an empty selector rather than failing the tool call.
+   */
+  async refInfo(ref: number): Promise<{
+    readonly role: string
+    readonly name: string
+    readonly selector: string
+    readonly href: string
+  } | null> {
+    const page = this.page
+    if (page === null || page.isClosed()) return null
+    const record = this.tabs.ref(this.tabIdFor(page), ref)
+    if (record === undefined) return null
+    const selector = await page.evaluate(({ wanted, attr }) => {
+      const element = document.querySelector(`[${attr}="${wanted}"]`)
+      if (element === null) return ''
+      const escaped = (value: string): string => (
+        typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+          ? CSS.escape(value)
+          : value.replace(/[^a-zA-Z0-9_-]/gu, '\\$&')
+      )
+      const quote = (value: string): string => `"${value.replace(/"/gu, '\\"')}"`
+      if (element.id !== '') return `#${escaped(element.id)}`
+      const parts: string[] = []
+      let cursor: Element | null = element
+      for (let depth = 0; depth < 6 && cursor !== null; depth += 1) {
+        const node: Element = cursor
+        const tag = node.tagName.toLowerCase()
+        const testId = node.getAttribute('data-testid')
+        if (testId !== null && testId !== '') {
+          parts.unshift(`${tag}[data-testid=${quote(testId)}]`)
+          break
+        }
+        const name = node.getAttribute('name')
+        if (name !== null && name !== '' && /^(input|select|textarea|button|form)$/u.test(tag)) {
+          parts.unshift(`${tag}[name=${quote(name)}]`)
+          break
+        }
+        let part = tag
+        const parent = node.parentElement
+        if (parent !== null) {
+          const sameTag = Array.from(parent.children).filter(child => child.tagName === node.tagName)
+          if (sameTag.length > 1) part += `:nth-of-type(${sameTag.indexOf(node) + 1})`
+        }
+        parts.unshift(part)
+        if (node === document.body) break
+        cursor = parent
+      }
+      return parts.join(' > ').slice(0, 240)
+    }, { wanted: String(ref), attr: PLAYWRIGHT_REF_ATTR }).catch(() => '')
+    return {
+      role: record.role,
+      name: record.name,
+      selector,
+      href: record.href,
+    }
+  }
+
   async press(key: string): Promise<BrowserActResult> {    const page = await this.requirePage()
     await page.keyboard.press(key)
     await sleep(120)

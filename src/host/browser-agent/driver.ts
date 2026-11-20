@@ -71,6 +71,16 @@ export interface BrowserDriver {
   press(key: string): Promise<BrowserActResult>
   /** Ref of the stamped element the recorded selector points at, if any. */
   resolveRefBySelector(selector: string): Promise<number | null>
+  /**
+   * How the snapshot describes a ref (role, accessible name, CSS path). Used as
+   * evidence when a saved flow stopped and the agent found the control itself.
+   */
+  refInfo?(ref: number): Promise<{
+    readonly role: string
+    readonly name: string
+    readonly selector: string
+    readonly href: string
+  } | null>
   scroll(dy: number): Promise<BrowserActResult>
   wait(input?: {
     readonly timeoutMs?: number

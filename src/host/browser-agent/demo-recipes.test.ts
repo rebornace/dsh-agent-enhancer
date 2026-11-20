@@ -24,7 +24,8 @@ afterEach(() => {
   }
 })
 
-describe('DemoRecipeStore', () => {  it('saves, lists and reloads a flow', () => {
+describe('DemoRecipeStore', () => {
+  it('saves, lists and reloads a flow', () => {
     const { store, file } = tempStore()
     const result = store.save({ name: '导出报表', steps: [click('导出'), fill('日期', '2026-11-01')], now: 1000 })
     expect(result.ok).toBe(true)
@@ -233,5 +234,123 @@ describe('recipe parameters', () => {
       }],
     }), 'utf8')
     expect(store.list()[0]?.variables).toEqual([{ name: 'ok', default: 'v' }])
+  })
+})
+
+describe('repairs and versions', () => {
+  const proposal = {
+    id: 'h-1',
+    at: 5_000,
+    failedAt: 2,
+    reason: 'no control matching button "导出报表"',
+    inserted: [click('同意', 3)],
+    replacement: { kind: 'click', at: 2, role: 'button', name: '导出报表（新）', selector: '#new' } as DemoStep,
+  }
+
+  it('stores a repair without touching the steps', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '导出', steps: [click('打开'), click('导出报表')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    const recorded = store.recordHeal({ id: saved.recipe.id, proposal })
+    expect(recorded.ok).toBe(true)
+    if (!recorded.ok) throw new Error('expected ok')
+    expect(recorded.recipe.pendingHeal).toMatchObject({ failedAt: 2 })
+    expect(recorded.recipe.steps).toBe(2)
+    expect(recorded.recipe.rev).toBe(1)
+    expect(store.get(saved.recipe.id)?.steps).toHaveLength(2)
+  })
+
+  it('drops a repair without changing the flow', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '导出', steps: [click('打开'), click('导出报表')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    store.recordHeal({ id: saved.recipe.id, proposal })
+    const dropped = store.resolveHeal({ id: saved.recipe.id, accept: false, now: 2_000 })
+    expect(dropped.ok).toBe(true)
+    if (!dropped.ok) throw new Error('expected ok')
+    expect(dropped.recipe.pendingHeal).toBeUndefined()
+    expect(dropped.recipe.steps).toBe(2)
+    expect(dropped.recipe.rev).toBe(1)
+    expect(dropped.recipe.history).toBe(0)
+  })
+
+  it('accepts a repair: new steps, revision + 1, old version kept', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '导出', steps: [click('打开'), click('导出报表'), click('下载')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    store.recordHeal({ id: saved.recipe.id, proposal })
+    const applied = store.resolveHeal({ id: saved.recipe.id, accept: true, now: 2_000 })
+    expect(applied.ok).toBe(true)
+    if (!applied.ok) throw new Error('expected ok')
+    expect(applied.recipe.steps).toBe(4)
+    expect(applied.recipe.rev).toBe(2)
+    expect(applied.recipe.history).toBe(1)
+    const steps = store.get(saved.recipe.id)?.steps ?? []
+    expect(steps.map(step => ('name' in step ? step.name : step.kind)))
+      .toEqual(['打开', '同意', '导出报表（新）', '下载'])
+  })
+
+  it('rolls back the last change and consumes that version', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '导出', steps: [click('打开'), click('导出报表')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    store.recordHeal({ id: saved.recipe.id, proposal })
+    store.resolveHeal({ id: saved.recipe.id, accept: true, now: 2_000 })
+    const restored = store.rollback({ id: saved.recipe.id, now: 3_000 })
+    expect(restored.ok).toBe(true)
+    if (!restored.ok) throw new Error('expected ok')
+    expect(restored.recipe.steps).toBe(2)
+    expect(restored.recipe.history).toBe(0)
+    expect(restored.recipe.pendingHeal).toBeUndefined()
+    const steps = store.get(saved.recipe.id)?.steps ?? []
+    expect(steps.map(step => ('name' in step ? step.name : step.kind))).toEqual(['打开', '导出报表'])
+    expect(store.rollback({ id: saved.recipe.id })).toMatchObject({ ok: false })
+  })
+
+  it('keeps a version when a recording overwrites an existing flow', () => {
+    const { store } = tempStore()
+    const first = store.save({ name: '导出', steps: [click('a')], now: 1_000 })
+    if (!first.ok) throw new Error('expected ok')
+    const second = store.save({ name: '导出', steps: [click('a'), click('b')], now: 2_000 })
+    if (!second.ok) throw new Error('expected ok')
+    expect(second.recipe.rev).toBe(2)
+    expect(second.recipe.history).toBe(1)
+    const rolled = store.rollback({ id: first.recipe.id })
+    expect(rolled.ok && rolled.recipe.steps).toBe(1)
+  })
+
+  it('keeps versions when a step is parameterised', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '周报', steps: [click('打开'), fill('日期', '2026-11-01')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    const parameterized = store.parameterize({ id: saved.recipe.id, index: 1, name: 'from', now: 2_000 })
+    expect(parameterized.ok && parameterized.recipe.rev).toBe(2)
+    expect(parameterized.ok && parameterized.recipe.history).toBe(1)
+  })
+
+  it('reads a v1 file (no revisions) without losing the flow', () => {
+    const { store, file } = tempStore()
+    writeFileSync(file, JSON.stringify({
+      version: 1,
+      recipes: [{
+        id: 'r1', name: '旧流程', createdAt: 1, updatedAt: 1,
+        steps: [click('a')],
+        variables: [],
+      }],
+    }), 'utf8')
+    const list = store.list()
+    expect(list).toHaveLength(1)
+    expect(list[0]).toMatchObject({ name: '旧流程', rev: 1, history: 0 })
+    expect(list[0]?.pendingHeal).toBeUndefined()
+  })
+
+  it('survives a re-read with the repair intact', () => {
+    const { store, file } = tempStore()
+    const saved = store.save({ name: '导出', steps: [click('打开'), click('导出报表')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    store.recordHeal({ id: saved.recipe.id, proposal })
+    const reloaded = new DemoRecipeStore(file).list()
+    expect(reloaded[0]?.pendingHeal).toMatchObject({ id: 'h-1', failedAt: 2 })
+    expect(reloaded[0]?.pendingHeal?.replacement).toMatchObject({ name: '导出报表（新）' })
   })
 })

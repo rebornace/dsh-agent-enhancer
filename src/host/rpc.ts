@@ -727,6 +727,8 @@ export const browserAgentSnapshotSchema = z.strictObject({
     recording: z.boolean(),
     /** Steps from the last finished recording, whoever stopped it. */
     lastSteps: z.number().int(),
+    /** Bumped when a saved flow changes; the panel re-reads the list on change. */
+    recipesVersion: z.number().int(),
   }),
   tabConflict: browserAgentTabConflictSchema.nullable(),
   needsHuman: browserAgentNeedsHumanSchema.nullable(),
@@ -791,6 +793,18 @@ export const demoRecipeVariableSchema = z.strictObject({
   default: z.string(),
 })
 
+export const demoRecipeHealSchema = z.strictObject({
+  id: z.string().min(1),
+  /** 1-based step the replay stopped at. */
+  failedAt: z.number().int().min(1),
+  kind: z.enum(['navigate', 'click', 'fill', 'press']),
+  /** The control's name (URL for navigate, key for press). */
+  label: z.string(),
+  /** Steps the agent had to add before it (a cookie banner…). */
+  inserted: z.number().int().min(0),
+  reason: z.string(),
+})
+
 export const demoRecipeMetaSchema = z.strictObject({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -798,6 +812,12 @@ export const demoRecipeMetaSchema = z.strictObject({
   updatedAt: z.number(),
   steps: z.number().int(),
   variables: z.array(demoRecipeVariableSchema),
+  /** Content revision; grows with every accepted change. */
+  rev: z.number().int(),
+  /** How many previous versions can be restored. */
+  history: z.number().int(),
+  /** A repair worked out by the agent, waiting for the user. */
+  pendingHeal: demoRecipeHealSchema.optional(),
 })
 
 export const demoRecipeStepSchema = z.strictObject({
@@ -821,6 +841,8 @@ export const browserAgentDemoRecipesRequestSchema = z.discriminatedUnion('action
   z.strictObject({ action: z.literal('steps'), id: z.string().min(1) }),
   z.strictObject({ action: z.literal('rename'), id: z.string().min(1), name: z.string() }),
   z.strictObject({ action: z.literal('parameterize'), id: z.string().min(1), index: z.number().int().min(0), name: z.string() }),
+  z.strictObject({ action: z.literal('heal'), id: z.string().min(1), accept: z.boolean() }),
+  z.strictObject({ action: z.literal('rollback'), id: z.string().min(1) }),
 ])
 export type BrowserAgentDemoRecipesRequest = z.infer<typeof browserAgentDemoRecipesRequestSchema>
 const browserAgentDemoRecipesRequestCodec = codec(
@@ -836,6 +858,8 @@ export const browserAgentDemoRecipesResultSchema = z.strictObject({
   lines: z.array(z.string()).optional(),
   /** Step metadata for action=steps (index + what the row can do). */
   steps: z.array(demoRecipeStepSchema).optional(),
+  /** True when a repair was applied (action=heal with accept). */
+  healed: z.boolean().optional(),
   /** 1-based step where a replay stopped. */
   stoppedAt: z.number().int().optional(),
   reason: z.string().optional(),

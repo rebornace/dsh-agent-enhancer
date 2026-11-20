@@ -2853,6 +2853,33 @@
   flex: 0 0 auto;
 }
 
+/* A repair the agent worked out: a quiet card, not a modal. */
+.browserAgentHeal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 2px;
+  padding: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.browserAgentHealText {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  overflow-wrap: anywhere;
+}
+
+.browserAgentRecipeHistory {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-top: 4px;
+}
+
 .settingsTextarea {
   width: 100%;
   resize: vertical;

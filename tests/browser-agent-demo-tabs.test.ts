@@ -119,4 +119,29 @@ describe('demonstration across tabs', () => {
       await driver.dispose()
     }
   }, 120_000)
+
+  it.skipIf(!hasSystemChromium)('describes a ref well enough to repair a flow later', async () => {
+    const { server, base } = await startServer()
+    servers.push(server)
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-pw-ref-'))
+    dirs.push(dir)
+    const driver = new PlaywrightDriver({ profileDir: dir, headless: true })
+    try {
+      await driver.ensureReady()
+      await driver.navigate(base + '/a')
+      const snap = await driver.snapshot()
+      const node = snap.nodes.find(entry => entry.name.includes('Mark A'))
+      expect(node, 'button should be in the snapshot').toBeTruthy()
+      const info = await driver.refInfo(node!.ref)
+      expect(info, 'refInfo should describe the ref').not.toBeNull()
+      expect(info!.role).toBe('button')
+      expect(info!.name).toContain('Mark A')
+      expect(info!.selector).not.toBe('')
+      // The recorded selector has to point back at the same element, otherwise a
+      // repaired flow cannot disambiguate two same-named controls.
+      expect(await driver.resolveRefBySelector(info!.selector)).toBe(node!.ref)
+    } finally {
+      await driver.dispose()
+    }
+  }, 120_000)
 })

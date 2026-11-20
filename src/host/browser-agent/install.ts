@@ -24,6 +24,7 @@ import { demoTabLegend, describeDemoStep, summarizeDemoSteps, type DemoStep } fr
 import { replayDemoSteps } from './demo-replay.ts'
 import { applyRecipeVars, missingRecipeVars, type DemoRecipeMeta, type DemoRecipeStore } from './demo-recipes.ts'
 import { registerBrowserTools } from './tools.ts'
+import { DemoRepairTracker, createRepairHooks } from './demo-heal.ts'
 
 /** Idle sweep cadence; the tab age comes from browserAgentIdleClose. */
 const IDLE_TICK_MS = 60_000
@@ -71,16 +72,18 @@ export interface BrowserAgentRuntime {
    * back, or delete it. Steps are stored sanitized; secrets stay `***`.
    */
   demoRecipes(input: {
-    readonly action: 'list' | 'save' | 'run' | 'delete' | 'steps' | 'rename' | 'parameterize'
+    readonly action: 'list' | 'save' | 'run' | 'delete' | 'steps' | 'rename' | 'parameterize' | 'heal' | 'rollback'
     readonly name?: string
     readonly id?: string
     readonly index?: number
+    readonly accept?: boolean
     readonly vars?: Readonly<Record<string, string>>
   }): Promise<{
     readonly ok: boolean
     readonly recipes?: readonly DemoRecipeMeta[]
     readonly recipe?: DemoRecipeMeta
     readonly lines?: readonly string[]
+    readonly healed?: boolean
     readonly steps?: readonly {
       readonly index: number
       readonly kind: 'navigate' | 'click' | 'fill' | 'press'
@@ -91,6 +94,8 @@ export interface BrowserAgentRuntime {
     readonly reason?: string
     readonly error?: string
   }>
+  /** Bumped when a saved flow changes; the sidebar re-reads the list on change. */
+  recipesRevision(): number
   /**
    * Focus a tab for Agent ops; optionally bind it to a chat session.
    * Used by the right-sidebar multi-tab picker.
@@ -159,6 +164,12 @@ export function installBrowserAgent(
   const recipes = options.recipes
   /** Steps from the last sidebar demonstration, until the next one starts. */
   let lastDemoSteps: readonly DemoStep[] = []
+  /** Watches a stopped flow so the agent's own fix can become a proposal. */
+  const repairTracker = new DemoRepairTracker()
+  const repairHooks = createRepairHooks({
+    tracker: repairTracker,
+    ...(recipes === undefined ? {} : { store: recipes }),
+  })
 
   /**
    * Browser probe, cached until settings change. resolveBrowserExecutable spawns
@@ -309,6 +320,7 @@ export function installBrowserAgent(
         demonstrate: () => options.demonstrate?.() === true,
         onDemonstration: steps => { lastDemoSteps = steps },
         ...(recipes === undefined ? {} : { recipes }),
+        repair: repairHooks,
         diagnosis: diagnoseNow,
         // Gate on settings only — `active` flips false during driver align and
         // must not make browser_* look "disabled" mid-turn.
@@ -565,9 +577,15 @@ export function installBrowserAgent(
     lastDemonstrationSteps() {
       return lastDemoSteps.length
     },
+    recipesRevision() {
+      return recipes?.revision() ?? 0
+    },
     async demoRecipes(input) {
       if (!options.enabled()) return { ok: false, error: 'Browser agent disabled' }
       if (recipes === undefined) return { ok: false, error: 'recipe store unavailable' }
+      // A repair the agent finished but never reported becomes a proposal here,
+      // so opening the panel cannot lose it.
+      repairHooks.commit()
       if (input.action === 'list') {
         return { ok: true, recipes: recipes.list() }
       }
@@ -625,9 +643,38 @@ export function installBrowserAgent(
         })
         return { ok: true, recipe: renamed.recipe, recipes: recipes.list() }
       }
+      if (input.action === 'heal') {
+        const resolved = recipes.resolveHeal({ id: input.id ?? '', accept: input.accept === true })
+        if (!resolved.ok) return { ok: false, error: resolved.error, recipes: recipes.list() }
+        sessions.record({
+          sessionId: 'sidebar',
+          tool: 'browser_demo_recipe',
+          summary: `${input.accept === true ? 'Applied' : 'Dismissed'} a repair for "${resolved.recipe.name}"`,
+          outcome: 'ok',
+        })
+        return {
+          ok: true,
+          healed: input.accept === true,
+          recipe: resolved.recipe,
+          recipes: recipes.list(),
+        }
+      }
+      if (input.action === 'rollback') {
+        const restored = recipes.rollback({ id: input.id ?? '' })
+        if (!restored.ok) return { ok: false, error: restored.error, recipes: recipes.list() }
+        sessions.record({
+          sessionId: 'sidebar',
+          tool: 'browser_demo_recipe',
+          summary: `Restored the previous version of "${restored.recipe.name}"`,
+          outcome: 'ok',
+        })
+        return { ok: true, recipe: restored.recipe, recipes: recipes.list() }
+      }
       // run
       const recipe = recipes.get(input.id ?? '')
       if (recipe === undefined) return { ok: false, error: '流程不存在', recipes: recipes.list() }
+      // A new run closes whatever the last one left waiting for a decision.
+      repairHooks.commit()
       const defaults: Record<string, string> = {}
       for (const variable of recipe.variables) defaults[variable.name] = variable.default
       const values = { ...defaults, ...(input.vars ?? {}) }
@@ -653,6 +700,20 @@ export function installBrowserAgent(
         pending: [...steps],
       }))
       const ranAll = outcome.status === 'done'
+      if (!ranAll) {
+        const failedStep = recipe.steps[outcome.performed]
+        const isSecret = /masked|secret field/i.test(outcome.reason)
+          || (failedStep !== undefined && failedStep.kind === 'fill' && failedStep.masked)
+        if (!isSecret && failedStep !== undefined) {
+          repairTracker.begin({
+            recipeId: recipe.id,
+            recipeName: recipe.name,
+            index: outcome.performed,
+            step: failedStep,
+            reason: outcome.reason,
+          })
+        }
+      }
       sessions.record({
         sessionId: 'sidebar',
         tool: 'browser_demo_recipe',

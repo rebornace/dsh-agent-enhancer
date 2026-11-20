@@ -83,7 +83,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentDemoRecordingAgent' | 'browserAgentDemoEmpty' | 'browserAgentDemoCopy' |
       'browserAgentDemoCopied' | 'browserAgentDemoCopyFailed' | 'browserAgentDemoFailed' |
       'browserAgentDemoSend' | 'browserAgentDemoSendLead' | 'browserAgentDemoSent' |
-      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' | 'browserAgentDemoRecipeRename' | 'browserAgentDemoRecipeRenameSave' | 'browserAgentDemoRecipeCancel' | 'browserAgentDemoRecipeSteps' | 'browserAgentDemoRecipeRenamed' | 'browserAgentDemoRecipeSetVar' | 'browserAgentDemoRecipeVarName' | 'browserAgentDemoRecipeVarConfirm' | 'browserAgentDemoRecipeVarNameRequired' | 'browserAgentDemoRecipeParameterized' |
+      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' | 'browserAgentDemoRecipeRename' | 'browserAgentDemoRecipeRenameSave' | 'browserAgentDemoRecipeCancel' | 'browserAgentDemoRecipeSteps' | 'browserAgentDemoRecipeRenamed' | 'browserAgentDemoRecipeSetVar' | 'browserAgentDemoRecipeVarName' | 'browserAgentDemoRecipeVarConfirm' | 'browserAgentDemoRecipeVarNameRequired' | 'browserAgentDemoRecipeParameterized' | 'browserAgentDemoHealText' | 'browserAgentDemoHealInserted' | 'browserAgentDemoHealKeep' | 'browserAgentDemoHealSkip' | 'browserAgentDemoHealKept' | 'browserAgentDemoHealSkipped' | 'browserAgentDemoRecipeUndo' | 'browserAgentDemoRecipeRestored' | 'browserAgentDemoRecipeVersion' |
       'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
       'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
       'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
@@ -521,6 +521,15 @@ export const agentLocales = {
     browserAgentDemoRecipeVarConfirm: '确定',
     browserAgentDemoRecipeVarNameRequired: '先给变量起个名字',
     browserAgentDemoRecipeParameterized: '已把这一步变成变量「{name}」',
+    browserAgentDemoHealText: '第 {n} 步的控件变了，现在改用「{label}」。要记住这次的做法吗？',
+    browserAgentDemoHealInserted: '另外补了 {n} 步（弹窗、引导之类）。',
+    browserAgentDemoHealKeep: '记住',
+    browserAgentDemoHealSkip: '只这一次',
+    browserAgentDemoHealKept: '已更新流程，下次会直接用新位置',
+    browserAgentDemoHealSkipped: '没有改流程，下次还会按原样尝试',
+    browserAgentDemoRecipeUndo: '撤销上次修改',
+    browserAgentDemoRecipeRestored: '已回到上一个版本',
+    browserAgentDemoRecipeVersion: '第 {n} 版',
     browserAgentDemoCopied: '已复制步骤',
     browserAgentDemoCopyFailed: '复制失败，请手动选中文本复制',
     browserAgentDemoFailed: '演示录制失败',
@@ -1217,6 +1226,15 @@ export const agentLocales = {
     browserAgentDemoRecipeVarConfirm: 'OK',
     browserAgentDemoRecipeVarNameRequired: 'Name the variable first',
     browserAgentDemoRecipeParameterized: 'Step now uses the variable "{name}"',
+    browserAgentDemoHealText: 'Step {n} moved: the flow will use "{label}" instead. Remember this?',
+    browserAgentDemoHealInserted: 'Plus {n} extra step(s) (a banner or a prompt).',
+    browserAgentDemoHealKeep: 'Remember',
+    browserAgentDemoHealSkip: 'Just this once',
+    browserAgentDemoHealKept: 'Flow updated; next run uses the new control',
+    browserAgentDemoHealSkipped: 'Flow unchanged; the next run tries it the old way',
+    browserAgentDemoRecipeUndo: 'Undo last change',
+    browserAgentDemoRecipeRestored: 'Restored the previous version',
+    browserAgentDemoRecipeVersion: 'version {n}',
     browserAgentDemoCopied: 'Steps copied',
     browserAgentDemoCopyFailed: 'Could not copy; select the text manually',
     browserAgentDemoFailed: 'Demonstration recording failed',

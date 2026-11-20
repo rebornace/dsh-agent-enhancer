@@ -216,6 +216,14 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
     if (snapshot?.demo.enabled === true) void loadRecipes()
   }, [snapshot?.demo.enabled])
 
+  // The host bumps this whenever a flow changes (a repair offered by the agent,
+  // an accepted fix, a rollback). Polling the list itself would be wasteful.
+  const recipesVersion = snapshot?.demo.recipesVersion ?? 0
+  useEffect(() => {
+    if (snapshot?.demo.enabled !== true) return
+    void loadRecipes()
+  }, [recipesVersion])
+
   const saveRecipe = async () => {
     const name = recipeName.trim()
     if (name === '') {
@@ -317,6 +325,49 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
       const refreshed = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'steps', id: recipe.id })
       if (refreshed.steps !== undefined) setRecipeStepRows(refreshed.steps)
       setHint(t('browserAgentDemoRecipeParameterized').replace('{name}', name))
+    } finally {
+      setRecipeBusy(false)
+    }
+  }
+
+  /** Accept the repair the agent worked out, or drop it and keep the flow as is. */
+  const resolveHeal = async (recipe: DemoRecipeMetaWire, accept: boolean) => {
+    setRecipeBusy(true)
+    setHint(null)
+    try {
+      const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), {
+        action: 'heal',
+        id: recipe.id,
+        accept,
+      })
+      if (result.recipes !== undefined) setRecipes(result.recipes)
+      if (!result.ok) {
+        setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
+        return
+      }
+      if (accept && openRecipeId === recipe.id) {
+        const refreshed = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'steps', id: recipe.id })
+        if (refreshed.steps !== undefined) setRecipeStepRows(refreshed.steps)
+      }
+      setHint(accept ? t('browserAgentDemoHealKept') : t('browserAgentDemoHealSkipped'))
+    } finally {
+      setRecipeBusy(false)
+    }
+  }
+
+  const rollbackRecipe = async (recipe: DemoRecipeMetaWire) => {
+    setRecipeBusy(true)
+    setHint(null)
+    try {
+      const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'rollback', id: recipe.id })
+      if (result.recipes !== undefined) setRecipes(result.recipes)
+      if (!result.ok) {
+        setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
+        return
+      }
+      const refreshed = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'steps', id: recipe.id })
+      if (refreshed.steps !== undefined) setRecipeStepRows(refreshed.steps)
+      setHint(t('browserAgentDemoRecipeRestored'))
     } finally {
       setRecipeBusy(false)
     }
@@ -658,6 +709,38 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                           </>
                         )}
                       </div>
+                      {recipe.pendingHeal === undefined ? null : (
+                        <div className={styles.browserAgentHeal}>
+                          <p className={styles.browserAgentHealText}>
+                            {t('browserAgentDemoHealText')
+                              .replace('{n}', String(recipe.pendingHeal.failedAt))
+                              .replace('{label}', recipe.pendingHeal.label)}
+                          </p>
+                          {recipe.pendingHeal.inserted === 0 ? null : (
+                            <p className={styles.browserAgentPaneNote}>
+                              {t('browserAgentDemoHealInserted').replace('{n}', String(recipe.pendingHeal.inserted))}
+                            </p>
+                          )}
+                          <div className={styles.browserAgentActions}>
+                            <button
+                              type="button"
+                              className={styles.browserAgentButton}
+                              disabled={recipeBusy}
+                              onClick={() => { void resolveHeal(recipe, true) }}
+                            >
+                              {t('browserAgentDemoHealKeep')}
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.browserAgentButton}
+                              disabled={recipeBusy}
+                              onClick={() => { void resolveHeal(recipe, false) }}
+                            >
+                              {t('browserAgentDemoHealSkip')}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       {varsFor === recipe.id ? (
                         <div className={styles.browserAgentRecipeVars}>
                           {recipe.variables.map(variable => (
@@ -751,6 +834,21 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                               ) : null}
                             </div>
                           ))}
+                          {recipe.history > 0 ? (
+                            <div className={styles.browserAgentRecipeHistory}>
+                              <span className={styles.browserAgentPaneNote}>
+                                {t('browserAgentDemoRecipeVersion').replace('{n}', String(recipe.rev))}
+                              </span>
+                              <button
+                                type="button"
+                                className={styles.browserAgentButton}
+                                disabled={recipeBusy}
+                                onClick={() => { void rollbackRecipe(recipe) }}
+                              >
+                                {t('browserAgentDemoRecipeUndo')}
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </li>

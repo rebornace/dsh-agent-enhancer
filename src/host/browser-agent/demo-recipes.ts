@@ -11,11 +11,21 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { sanitizeDemoSteps, type DemoStep } from './demo.ts'
+import { applyHealProposal, type DemoHealProposal } from './demo-heal.ts'
 
 /** A placeholder inside a flow: stored steps carry a `${name}` token instead of a literal. */
 export interface RecipeVariable {
   readonly name: string
   readonly default: string
+}
+
+/** One past state of a flow, kept so a heal or an overwrite can be undone. */
+export interface DemoRecipeVersion {
+  readonly rev: number
+  readonly at: number
+  readonly source: 'save' | 'parameterize' | 'heal' | 'rollback'
+  readonly steps: readonly DemoStep[]
+  readonly variables: readonly RecipeVariable[]
 }
 
 export interface DemoRecipe {
@@ -25,6 +35,12 @@ export interface DemoRecipe {
   readonly updatedAt: number
   readonly steps: readonly DemoStep[]
   readonly variables: readonly RecipeVariable[]
+  /** Content revision, bumped by every change; proposals never bump it. */
+  readonly rev: number
+  /** Most recent past states, newest last (bounded). */
+  readonly history: readonly DemoRecipeVersion[]
+  /** A repair waiting for the user to accept it. */
+  readonly pendingHeal?: DemoHealProposal
 }
 
 /** List entry: steps are counted, never sent, so the panel stays light. */
@@ -35,12 +51,17 @@ export interface DemoRecipeMeta {
   readonly updatedAt: number
   readonly steps: number
   readonly variables: readonly RecipeVariable[]
+  readonly rev: number
+  readonly history: number
+  readonly pendingHeal?: DemoHealProposal
 }
 
 export const MAX_RECIPES = 20
 export const MAX_RECIPE_NAME = 60
 export const MAX_RECIPE_STEPS = 200
-const FILE_VERSION = 1
+/** Enough to walk back a bad heal or two, without turning the file into a log. */
+export const MAX_HISTORY = 5
+const FILE_VERSION = 2
 
 interface FileShape {
   readonly version: number
@@ -59,7 +80,22 @@ function metaOf(recipe: DemoRecipe): DemoRecipeMeta {
     updatedAt: recipe.updatedAt,
     steps: recipe.steps.length,
     variables: recipe.variables,
+    rev: recipe.rev,
+    history: recipe.history.length,
+    ...(recipe.pendingHeal === undefined ? {} : { pendingHeal: recipe.pendingHeal }),
   }
+}
+
+/** Push the current content onto the bounded history (callers bump `rev`). */
+function nextVersion(
+  recipe: DemoRecipe,
+  source: DemoRecipeVersion['source'],
+  now: number,
+): DemoRecipeVersion[] {
+  return [
+    ...recipe.history,
+    { rev: recipe.rev, at: now, source, steps: recipe.steps, variables: recipe.variables },
+  ].slice(-MAX_HISTORY)
 }
 
 const VAR_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
@@ -105,6 +141,47 @@ function sanitizeVariables(raw: unknown): RecipeVariable[] {
     .map(variable => ({ name: variable.name, default: String(variable.default ?? '').slice(0, 500) }))
 }
 
+/** Old versions are read back leniently; a broken entry is dropped, not fatal. */
+function sanitizeHistory(raw: unknown): DemoRecipeVersion[] {
+  if (!Array.isArray(raw)) return []
+  const versions: DemoRecipeVersion[] = []
+  for (const value of raw) {
+    if (value === null || typeof value !== 'object') continue
+    const entry = value as Partial<DemoRecipeVersion>
+    const steps = sanitizeRecipeSteps(entry.steps)
+    if (steps.length === 0) continue
+    versions.push({
+      rev: Number.isFinite(entry.rev) && (entry.rev ?? 0) > 0 ? Number(entry.rev) : 1,
+      at: Number.isFinite(entry.at) ? Number(entry.at) : 0,
+      source: entry.source === 'parameterize' || entry.source === 'heal' || entry.source === 'rollback'
+        ? entry.source
+        : 'save',
+      steps,
+      variables: sanitizeVariables(entry.variables),
+    })
+  }
+  return versions.slice(-MAX_HISTORY)
+}
+
+/** A stored repair must still point at a real step of a real flow. */
+function sanitizeProposal(raw: unknown): DemoHealProposal | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined
+  const entry = raw as Partial<DemoHealProposal>
+  if (typeof entry.id !== 'string' || entry.id === '') return undefined
+  const failedAt = Number(entry.failedAt)
+  if (!Number.isInteger(failedAt) || failedAt < 1) return undefined
+  const replacement = sanitizeRecipeSteps(entry.replacement === undefined ? [] : [entry.replacement])[0]
+  if (replacement === undefined) return undefined
+  return {
+    id: entry.id,
+    at: Number.isFinite(entry.at) ? Number(entry.at) : 0,
+    failedAt,
+    reason: typeof entry.reason === 'string' ? entry.reason.slice(0, 500) : '',
+    inserted: sanitizeRecipeSteps(entry.inserted ?? []),
+    replacement,
+  }
+}
+
 function isStep(value: unknown): value is DemoStep {
   if (value === null || typeof value !== 'object') return false
   const kind = (value as { kind?: unknown }).kind
@@ -147,7 +224,15 @@ export class DemoRecipeStore {
     const existing = recipes.find(recipe => recipe.name.toLowerCase() === name.toLowerCase())
     let saved: DemoRecipe
     if (existing !== undefined) {
-      saved = { ...existing, name, steps, updatedAt: now }
+      const { pendingHeal: _answered, ...rest } = existing
+      saved = {
+        ...rest,
+        name,
+        steps,
+        updatedAt: now,
+        rev: existing.rev + 1,
+        history: nextVersion(existing, 'save', now),
+      }
     } else {
       if (recipes.length >= MAX_RECIPES) {
         return { ok: false, error: `最多保存 ${MAX_RECIPES} 个流程，先删掉一个` }
@@ -159,6 +244,8 @@ export class DemoRecipeStore {
         updatedAt: now,
         steps,
         variables: [],
+        rev: 1,
+        history: [],
       }
     }
     const next = existing === undefined
@@ -223,27 +310,115 @@ export class DemoRecipeStore {
       index === input.index && entry.kind === 'fill' ? { ...entry, value: token } : entry,
     )
     const variables = [...current.variables, { name, default: step.value.slice(0, 500) }]
-    const next: DemoRecipe = { ...current, steps, variables, updatedAt: input.now ?? Date.now() }
+    const now = input.now ?? Date.now()
+    const { pendingHeal: _stale, ...rest } = current
+    const next: DemoRecipe = {
+      ...rest,
+      steps,
+      variables,
+      updatedAt: now,
+      rev: current.rev + 1,
+      history: nextVersion(current, 'parameterize', now),
+    }
     this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
     return { ok: true, recipe: metaOf(next) }
+  }
+
+  /** Store a repair for the user to accept; it never touches the steps by itself. */
+  recordHeal(input: { readonly id: string; readonly proposal: DemoHealProposal }): SaveResult {
+    const recipes = this.read()
+    const current = recipes.find(recipe => recipe.id === input.id)
+    if (current === undefined) return { ok: false, error: '流程不存在' }
+    const next: DemoRecipe = { ...current, pendingHeal: input.proposal }
+    this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
+    return { ok: true, recipe: metaOf(next) }
+  }
+
+  /**
+   * Accept or drop a pending repair. Accepting is the only path that rewrites
+   * the flow, and it keeps the previous content one click away.
+   */
+  resolveHeal(input: {
+    readonly id: string
+    readonly accept: boolean
+    readonly now?: number
+  }): SaveResult {
+    const now = input.now ?? Date.now()
+    const recipes = this.read()
+    const current = recipes.find(recipe => recipe.id === input.id)
+    if (current === undefined) return { ok: false, error: '流程不存在' }
+    const proposal = current.pendingHeal
+    if (proposal === undefined) return { ok: false, error: '这个流程没有待确认的修复' }
+    const { pendingHeal: _resolved, ...rest } = current
+    if (!input.accept) {
+      this.write(recipes.map(recipe => (recipe.id === current.id ? rest : recipe)))
+      return { ok: true, recipe: metaOf(rest) }
+    }
+    const steps = sanitizeRecipeSteps(applyHealProposal(current.steps, proposal))
+    const next: DemoRecipe = {
+      ...rest,
+      steps,
+      updatedAt: now,
+      rev: current.rev + 1,
+      history: nextVersion(current, 'heal', now),
+    }
+    this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
+    return { ok: true, recipe: metaOf(next) }
+  }
+
+  /** Restore the newest past version; the safety net for a wrong repair. */
+  rollback(input: { readonly id: string; readonly now?: number }): SaveResult {
+    const now = input.now ?? Date.now()
+    const recipes = this.read()
+    const current = recipes.find(recipe => recipe.id === input.id)
+    if (current === undefined) return { ok: false, error: '流程不存在' }
+    const previous = current.history[current.history.length - 1]
+    if (previous === undefined) return { ok: false, error: '没有可撤销的版本' }
+    const { pendingHeal: _stale, ...rest } = current
+    const next: DemoRecipe = {
+      ...rest,
+      steps: previous.steps,
+      variables: previous.variables,
+      updatedAt: now,
+      rev: current.rev + 1,
+      history: current.history.slice(0, -1),
+    }
+    this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
+    return { ok: true, recipe: metaOf(next) }
+  }
+
+  private revisionTick = 0
+
+  /** Bumped on every write; the sidebar polls this instead of the whole list. */
+  revision(): number {
+    return this.revisionTick
   }
 
   private read(): DemoRecipe[] {
     if (this.filePath === null) return this.memory
     try {
       const parsed = JSON.parse(readFileSync(this.filePath, 'utf8')) as Partial<FileShape>
-      if (parsed.version !== FILE_VERSION || !Array.isArray(parsed.recipes)) return []
+      // v1 files predate revisions and repairs; read them instead of dropping
+      // the user's flows on upgrade.
+      if ((parsed.version !== 1 && parsed.version !== FILE_VERSION) || !Array.isArray(parsed.recipes)) return []
       return parsed.recipes
         .filter((recipe): recipe is DemoRecipe => {
           if (recipe === null || typeof recipe !== 'object') return false
           if (typeof recipe.id !== 'string' || typeof recipe.name !== 'string') return false
           return typeof recipe.createdAt === 'number' && typeof recipe.updatedAt === 'number'
         })
-        .map(recipe => ({
-          ...recipe,
-          steps: sanitizeRecipeSteps(recipe.steps),
-          variables: sanitizeVariables(recipe.variables),
-        }))
+        .map(recipe => {
+          const { pendingHeal: rawProposal, ...rest } = recipe
+          const proposal = sanitizeProposal(rawProposal)
+          return {
+            ...rest,
+            steps: sanitizeRecipeSteps(recipe.steps),
+            variables: sanitizeVariables(recipe.variables),
+            rev: Number.isFinite(recipe.rev) && recipe.rev > 0 ? recipe.rev : 1,
+            history: sanitizeHistory(recipe.history),
+            ...(proposal === undefined ? {} : { pendingHeal: proposal }),
+          }
+        })
         .filter(recipe => recipe.steps.length > 0)
         .slice(0, MAX_RECIPES)
     } catch {
@@ -253,6 +428,7 @@ export class DemoRecipeStore {
   }
 
   private write(recipes: readonly DemoRecipe[]): void {
+    this.revisionTick += 1
     if (this.filePath === null) {
       this.memory = [...recipes]
       return
