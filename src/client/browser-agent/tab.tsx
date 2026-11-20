@@ -577,7 +577,7 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
           </div>
         ) : null}
         {snapshot?.demo.enabled === true ? (
-          <div className={styles.browserAgentTabListSection}>
+          <div className={styles.browserAgentDemoSection}>
             <p className={styles.browserAgentPaneStatus}>
               {snapshot.demo.recording ? t('browserAgentDemoRecording') : t('browserAgentDemoTitle')}
             </p>
