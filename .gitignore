@@ -31,3 +31,5 @@ extensions/
 .env
 .env.*
 !.env.example
+# local scratch scripts (never commit)
+/_*.mjs
