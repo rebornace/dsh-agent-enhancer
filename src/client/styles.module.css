@@ -2551,6 +2551,12 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* One box model for the whole pane; mixed models made padded rows overflow. */
+.browserAgentPane,
+.browserAgentPane * {
+  box-sizing: border-box;
+}
+
 .browserAgentPaneHeader {
   display: flex;
   flex: 0 0 auto;
@@ -3000,6 +3006,12 @@
   min-width: 0;
 }
 
+/* Never squeeze the value to an unreadable sliver; wrap the actions instead. */
+.browserAgentRecipeVarEditorRow .browserAgentDemoName {
+  flex: 1 1 96px;
+  min-width: 96px;
+}
+
 .browserAgentRecipeVarLabel {
   flex: 0 0 76px;
   min-width: 0;
@@ -3053,16 +3065,31 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
   max-height: 220px;
   padding: 6px 8px;
   overflow: auto;
+  overscroll-behavior: contain;
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-border-l2) transparent;
+  /* Keep the bar out of the buttons' way on Windows classic scrollbars. */
+  scrollbar-gutter: stable;
+}
+
+.browserAgentRecipeStepList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.browserAgentRecipeStepList::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--dsw-alias-border-l2);
 }
 
 .browserAgentRecipeStepText {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--dsw-alias-label-secondary);
