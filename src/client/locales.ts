@@ -74,7 +74,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgent' | 'browserAgentDescription' |
       'browserAgentBrowser' | 'browserAgentBrowser_auto' |
       'browserAgentDebugTools' | 'browserAgentDebugToolsHint' |
-      'browserAgentDemonstrate' | 'browserAgentDemonstrateHint' | 'browserAgentAutoHeal' | 'browserAgentAutoHealHint' |
+      'browserAgentDemonstrate' | 'browserAgentDemonstrateHint' |
       'browserAgentIdleClose' | 'browserAgentIdleCloseHint' |
       'browserAgentIdleClose_10m' | 'browserAgentIdleClose_30m' |
       'browserAgentIdleClose_60m' | 'browserAgentIdleClose_never' |
@@ -480,8 +480,6 @@ export const agentLocales = {
     browserAgentDebugToolsHint: '一个开关同时启用：读取网络请求与控制台输出（browser_network / browser_console），以及模拟深色模式、减少动画、视口尺寸（browser_emulate）。只记录 URL、状态、耗时与 console 文本，不读请求头、Cookie、响应体。',
     browserAgentDemonstrate: '演示录制',
     browserAgentDemonstrateHint: '开启后可以在右侧栏浏览器面板点「开始演示」，演示一遍流程后点「结束并查看步骤」；智能体也能在对话里发起演示。密码 / 验证码 / token 类字段只会记录为 ***。',
-    browserAgentAutoHeal: '流程自动适应网站改版',
-    browserAgentAutoHealHint: '保存的流程卡住时，智能体补完的做法会直接写回流程，不再逐次询问。只改「怎么找到控件」，不改填写的内容；只在同一个网站内生效，每个流程每天最多 3 次。侧栏可「撤销上次修改」。',
     browserAgentIdleClose: '自动关闭闲置标签',
     browserAgentIdleCloseHint: '超过所选时长没人用的标签自动关闭，避免专用浏览器越开越多。当前绑定标签、正在看的标签和最后一个标签不会被关。',
     browserAgentIdleClose_10m: '10 分钟',
@@ -1211,8 +1209,6 @@ export const agentLocales = {
     browserAgentDebugToolsHint: 'One switch enables both: reading network requests and console output (browser_network / browser_console), and emulating dark mode, reduced motion or a viewport size (browser_emulate). Only URLs, status, timing and console text are recorded — never request headers, cookies or bodies.',
     browserAgentDemonstrate: 'Demonstration recording',
     browserAgentDemonstrateHint: 'Once on, press Start recording in the browser pane of the right sidebar, perform the flow, then press Stop and show steps. The agent can also start a demonstration from chat. Password / OTP / token fields are recorded only as ***.',
-    browserAgentAutoHeal: 'Let flows adapt to site changes',
-    browserAgentAutoHealHint: 'When a saved flow gets stuck, the fix the agent worked out is kept without asking. Only how a control is found changes, never the recorded values; it applies to the same site only, at most 3 times per flow per day. Undo lives in the sidebar.',
     browserAgentIdleClose: 'Close idle tabs',
     browserAgentIdleCloseHint: 'Closes tabs nobody used for longer than the selected time, so the dedicated browser does not pile them up. The bound tab, the tab you are looking at, and the last tab are never closed.',
     browserAgentIdleClose_10m: '10 minutes',

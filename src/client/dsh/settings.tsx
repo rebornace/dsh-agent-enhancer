@@ -252,20 +252,6 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
     }
   }
 
-  const onBrowserAgentAutoHeal = async (enabled: boolean) => {
-    setSaving('browserAgentAutoHeal')
-    setError(false)
-    setSaveDetail(null)
-    try {
-      await writeOps([{ op: 'set', path: ['browserAgentAutoHeal'], value: enabled }])
-    } catch (cause) {
-      setError(true)
-      setSaveDetail(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setSaving(null)
-    }
-  }
-
   const onBrowserAgentDemonstrate = async (enabled: boolean) => {
     setSaving('browserAgentDemonstrate')
     setError(false)
@@ -404,7 +390,6 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
           onBrowserAgentBrowser={browser => { void onBrowserAgentBrowser(browser) }}
           onBrowserAgentDebugTools={enabled => { void onBrowserAgentDebugTools(enabled) }}
           onBrowserAgentDemonstrate={enabled => { void onBrowserAgentDemonstrate(enabled) }}
-          onBrowserAgentAutoHeal={enabled => { void onBrowserAgentAutoHeal(enabled) }}
           onBrowserAgentIdleClose={value => { void onBrowserAgentIdleClose(value) }}
           onOpenModel={feature => {
             setHighlightFeature(feature)

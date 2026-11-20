@@ -285,8 +285,6 @@ export const Config = z.object({
   browserAgentDebugTools: z.boolean().default(false).volatile(),
   /** "Show me" recorder; observes user actions in the bound tab, default off. */
   browserAgentDemonstrate: z.boolean().default(false).volatile(),
-  /** Keep a repair automatically when the site changed (locator only). Default off. */
-  browserAgentAutoHeal: z.boolean().default(false).volatile(),
   /** Close idle agent tabs after ~10 min; coerced via resolveBrowserAgentIdleClose. */
   browserAgentIdleClose: z.union([z.boolean(), z.string()]).default('10m').volatile(),
   /** Default off; embeds official web chat + import to work. */
@@ -1567,7 +1565,6 @@ function readSettings(config: Config): EnhancerSettings {
     browserAgentBrowser: hostBrowserPreference(config.browserAgentBrowser.get()),
     browserAgentDebugTools: config.browserAgentDebugTools.get(),
     browserAgentDemonstrate: config.browserAgentDemonstrate.get(),
-    browserAgentAutoHeal: config.browserAgentAutoHeal.get(),
     browserAgentIdleClose: resolveBrowserAgentIdleClose(config.browserAgentIdleClose.get()),
     webChatBridgeEnabled: config.webChatBridgeEnabled.get(),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
@@ -1655,14 +1652,12 @@ export function apply(ctx: Context, config: Config): void {
     enabled: settings().browserAgentEnabled,
     browser: settings().browserAgentBrowser,
     demonstrate: settings().browserAgentDemonstrate,
-    autoHeal: settings().browserAgentAutoHeal,
   }
   const browserAgent = installBrowserAgent(ctx, {
     enabled: () => browserAgentLive.enabled,
     browserPreference: () => browserAgentLive.browser,
     debugTools: () => settings().browserAgentDebugTools,
     demonstrate: () => settings().browserAgentDemonstrate,
-    autoHeal: () => settings().browserAgentAutoHeal,
     idleClose: () => settings().browserAgentIdleClose,
     recipes: new DemoRecipeStore(join(pluginDataPackageRoot, 'demo-recipes.json')),
     profileRoot: pluginDataPackageRoot,
@@ -1732,7 +1727,6 @@ export function apply(ctx: Context, config: Config): void {
       browserAgentLive.enabled = cfg.browserAgentEnabled.get()
       browserAgentLive.browser = hostBrowserPreference(cfg.browserAgentBrowser.get())
       browserAgentLive.demonstrate = cfg.browserAgentDemonstrate.get()
-      browserAgentLive.autoHeal = cfg.browserAgentAutoHeal.get()
       // Always refresh: heals missing browser_* tools after live pack reload /
       // async teardown races. Idempotent when already mounted.
       browserAgent.refresh()

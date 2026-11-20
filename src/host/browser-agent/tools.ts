@@ -1623,10 +1623,9 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
           ...afterCommit.map(row => {
             const vars = row.variables.length === 0 ? '' : `; vars: ${row.variables.map(variable => variable.name).join(', ')}`
             const heal = row.pendingHeal === undefined ? '' : `; repair waiting: step ${row.pendingHeal.failedAt}`
-            const auto = row.autoHeals === 0 ? '' : `; auto-adapted ${row.autoHeals}x`
             const site = row.site === undefined ? '' : `; site: ${row.site}`
             const unattended = row.unattended ? '; unattended: yes' : ''
-            return `- ${row.name} (${row.steps} step(s)${vars}${heal}${auto}${site}${unattended})`
+            return `- ${row.name} (${row.steps} step(s)${vars}${heal}${site}${unattended})`
           }),
           'Action: run one with browser_demo_recipes { action: "run", name: "<name>" }.',
         ].join('\n')
@@ -1636,19 +1635,6 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         const id = String(args.id ?? committed?.recipeId ?? '').trim()
         if (id === '') {
           return 'nothing to remember: no saved flow stopped recently, so there is no repair to store.'
-        }
-        if (committed?.autoApplied === true) {
-          options.sessions.record({
-            sessionId: sessionIdOf(exec),
-            tool: 'browser_demo_recipe',
-            summary: `Auto-adapted saved flow "${committed.recipeName}"`,
-            outcome: 'ok',
-          })
-          return [
-            `saved flow: ${committed.recipeName} — repair applied automatically (自动适应 is on)`,
-            ...committed.lines.map(line => `- ${line}`),
-            'Action: tell the user the flow was updated without asking, and that 撤销上次修改 in the sidebar restores the previous version.',
-          ].join('\n')
         }
         // "heal" alone only offers the fix; only an explicit accept rewrites the flow.
         if (args.accept !== true) {

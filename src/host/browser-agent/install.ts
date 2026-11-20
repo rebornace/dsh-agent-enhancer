@@ -160,8 +160,6 @@ export function installBrowserAgent(
     readonly debugTools?: () => boolean
     /** Demonstration recorder switch: gates browser_demonstrate. */
     readonly demonstrate?: () => boolean
-    /** Keep a repair by itself (locator only, same site). Off unless the user says so. */
-    readonly autoHeal?: () => boolean
     /** Close agent tabs nobody used for a while (never bound / active / last tab). */
     readonly idleClose?: () => BrowserAgentIdleClose
     /** Saved demonstrations; omitted in tests that do not care. */
@@ -221,7 +219,6 @@ export function installBrowserAgent(
   const repairHooks = createRepairHooks({
     tracker: repairTracker,
     ...(recipes === undefined ? {} : { store: recipes }),
-    ...(options.autoHeal === undefined ? {} : { autoApply: options.autoHeal }),
   })
 
   /**

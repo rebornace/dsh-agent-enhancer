@@ -30,7 +30,6 @@ export interface SettingsFeaturesPanelProps {
   readonly onBrowserAgentBrowser?: (browser: BrowserAgentBrowser) => void
   readonly onBrowserAgentDebugTools?: (enabled: boolean) => void
   readonly onBrowserAgentDemonstrate?: (enabled: boolean) => void
-  readonly onBrowserAgentAutoHeal?: (enabled: boolean) => void
   readonly onBrowserAgentIdleClose?: (value: BrowserAgentIdleClose) => void
   readonly onOpenModel: (feature: ConfigurableAuxiliaryFeature) => void
   /** Optional per-module extra description (e.g. host capability warnings). */
@@ -85,7 +84,6 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
     onBrowserAgentBrowser,
     onBrowserAgentDebugTools,
     onBrowserAgentDemonstrate,
-    onBrowserAgentAutoHeal,
     onBrowserAgentIdleClose,
     onOpenModel,
     featureExtraDescription,
@@ -155,16 +153,6 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                         />
                       </label>
                       <p className={styles.settingDescription}>{t('browserAgentDemonstrateHint')}</p>
-                      <label className={styles.browserAgentExtraRow}>
-                        <span>{t('browserAgentAutoHeal')}</span>
-                        <Switch
-                          label={t('browserAgentAutoHeal')}
-                          checked={settings.browserAgentAutoHeal}
-                          disabled={busy || onBrowserAgentAutoHeal === undefined}
-                          onChange={checked => { onBrowserAgentAutoHeal?.(checked) }}
-                        />
-                      </label>
-                      <p className={styles.settingDescription}>{t('browserAgentAutoHealHint')}</p>
                       <label className={styles.browserAgentExtraRow}>
                         <span>{t('browserAgentIdleClose')}</span>
                         <select

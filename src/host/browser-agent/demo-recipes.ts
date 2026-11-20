@@ -57,8 +57,6 @@ export interface DemoRecipe {
   readonly rev: number
   /** Most recent past states, newest last (bounded). */
   readonly history: readonly DemoRecipeVersion[]
-  /** When repairs were kept automatically (budget for the auto-adapt switch). */
-  readonly autoHeals: readonly number[]
   /** A repair waiting for the user to accept it. */
   readonly pendingHeal?: DemoHealProposal
   /** The user allowed this flow to run without per-action cards (same site). */
@@ -77,8 +75,6 @@ export interface DemoRecipeMeta {
   readonly variables: readonly RecipeVariable[]
   readonly rev: number
   readonly history: number
-  /** How many times this flow kept a repair by itself. */
-  readonly autoHeals: number
   /** Runs without per-action approval (the user opted in per flow). */
   readonly unattended: boolean
   /** Last run outcome, if it has ever run. */
@@ -94,8 +90,6 @@ export const MAX_RECIPE_STEPS = 200
 /** Enough to walk back a bad heal or two, without turning the file into a log. */
 export const MAX_HISTORY = 5
 export const MAX_VARIABLE_LABEL = 60
-/** Auto-adapt budget: a flow may learn by itself this often per day, no more. */
-export const MAX_AUTO_HEALS = 3
 const FILE_VERSION = 2
 
 interface FileShape {
@@ -118,7 +112,6 @@ function metaOf(recipe: DemoRecipe): DemoRecipeMeta {
     variables: recipe.variables,
     rev: recipe.rev,
     history: recipe.history.length,
-    autoHeals: recipe.autoHeals.length,
     unattended: recipe.unattended,
     ...(recipe.lastRun === undefined ? {} : { lastRun: recipe.lastRun }),
     ...(site === undefined ? {} : { site }),
@@ -307,14 +300,6 @@ function sanitizeHistory(raw: unknown): DemoRecipeVersion[] {
   return versions.slice(-MAX_HISTORY)
 }
 
-/** Timestamps are only budget bookkeeping; drop anything malformed. */
-function sanitizeTimestamps(raw: unknown): number[] {
-  if (!Array.isArray(raw)) return []
-  return raw
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0)
-    .slice(-MAX_AUTO_HEALS * 4)
-}
-
 /** A stored repair must still point at a real step of a real flow. */
 function sanitizeProposal(raw: unknown): DemoHealProposal | undefined {
   if (raw === null || typeof raw !== 'object') return undefined
@@ -407,7 +392,6 @@ export class DemoRecipeStore {
         variables: [],
         rev: 1,
         history: [],
-        autoHeals: [],
         unattended: false,
       }
     }
@@ -510,8 +494,6 @@ export class DemoRecipeStore {
   resolveHeal(input: {
     readonly id: string
     readonly accept: boolean
-    /** Applied by the auto-adapt switch, not by a click; counts against its budget. */
-    readonly auto?: boolean
     readonly now?: number
   }): SaveResult {
     const now = input.now ?? Date.now()
@@ -532,9 +514,6 @@ export class DemoRecipeStore {
       updatedAt: now,
       rev: current.rev + 1,
       history: nextVersion(current, 'heal', now),
-      autoHeals: input.auto === true
-        ? [...current.autoHeals, now].slice(-MAX_AUTO_HEALS)
-        : current.autoHeals,
     }
     this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
     return { ok: true, recipe: metaOf(next) }
@@ -686,7 +665,6 @@ export class DemoRecipeStore {
             variables: sanitizeVariables(recipe.variables),
             rev: Number.isFinite(recipe.rev) && recipe.rev > 0 ? recipe.rev : 1,
             history: sanitizeHistory(recipe.history),
-            autoHeals: sanitizeTimestamps(recipe.autoHeals),
             unattended: recipe.unattended === true,
             ...(lastRun === undefined ? {} : { lastRun }),
             ...(proposal === undefined ? {} : { pendingHeal: proposal }),

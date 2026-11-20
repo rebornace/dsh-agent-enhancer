@@ -283,14 +283,12 @@ export function describeHealProposal(proposal: DemoHealProposal): string[] {
   return lines
 }
 
-/** How a repair is kept: the user clicks, the switch decides, or nothing. */
+/** A repair the panel can offer; accepting is the only write. */
 export interface RepairCommitResult {
   readonly recipeId: string
   readonly recipeName: string
   readonly failedAt: number
   readonly lines: readonly string[]
-  /** True when the auto-adapt switch kept it without asking. */
-  readonly autoApplied: boolean
 }
 
 /** What the tool layer tells the host about a stopped flow and the work after it. */
@@ -311,23 +309,9 @@ export interface BrowserRepairHooks {
   commit(): RepairCommitResult | null
 }
 
-/** Auto-adapt never exceeds this many kept repairs per flow per day. */
-const AUTO_HEAL_BUDGET = 3
-const AUTO_HEAL_WINDOW_MS = 24 * 60 * 60_000
-
-function sameOrigin(a: string | undefined, b: string | undefined): boolean {
-  if (a === undefined || b === undefined) return false
-  try {
-    return new URL(a).origin === new URL(b).origin
-  } catch {
-    return false
-  }
-}
-
 /**
  * Wire a tracker to a recipe store. Committing writes a proposal, never the
- * flow — unless the user turned on auto-adapt, and then only for the same site
- * and within the daily budget.
+ * flow; `resolveHeal({ accept: true })` is the only path that rewrites steps.
  */
 export function createRepairHooks(input: {
   readonly tracker: DemoRepairTracker
@@ -336,18 +320,9 @@ export function createRepairHooks(input: {
       readonly id: string
       readonly name: string
       readonly steps: readonly DemoStep[]
-      readonly autoHeals: readonly number[]
     } | undefined
     recordHeal(entry: { readonly id: string; readonly proposal: DemoHealProposal }): { readonly ok: boolean }
-    resolveHeal(entry: {
-      readonly id: string
-      readonly accept: boolean
-      readonly auto?: boolean
-      readonly now?: number
-    }): { readonly ok: boolean }
   }
-  /** User setting: keep repairs without asking. */
-  readonly autoApply?: () => boolean
   readonly now?: () => number
 }): BrowserRepairHooks {
   const clock = input.now ?? Date.now
@@ -375,23 +350,11 @@ export function createRepairHooks(input: {
       if (proposal === null) return null
       if (!input.store.recordHeal({ id: recipe.id, proposal }).ok) return null
 
-      // Auto-adapt is opt-in per Settings, and stays inside two fences: the same
-      // site as the recording, and a daily budget per flow.
-      let autoApplied = false
-      if (input.autoApply?.() === true) {
-        const recorded = recipe.steps.find(step => step.tabUrl !== undefined)?.tabUrl
-        const recent = recipe.autoHeals.filter(at => now - at < AUTO_HEAL_WINDOW_MS)
-        if (sameOrigin(recorded, pending.target.tabUrl) && recent.length < AUTO_HEAL_BUDGET) {
-          autoApplied = input.store.resolveHeal({ id: recipe.id, accept: true, auto: true, now }).ok
-        }
-      }
-
       return {
         recipeId: recipe.id,
         recipeName: recipe.name,
         failedAt: proposal.failedAt,
         lines: describeHealProposal(proposal),
-        autoApplied,
       }
     },
   }
