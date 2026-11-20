@@ -819,6 +819,14 @@ export const demoRecipeHealSchema = z.strictObject({
   reason: z.string(),
 })
 
+export const demoRunResultSchema = z.strictObject({
+  at: z.number(),
+  status: z.enum(['ok', 'stopped', 'failed']),
+  performed: z.number().int(),
+  total: z.number().int(),
+  reason: z.string().optional(),
+})
+
 export const demoRecipeMetaSchema = z.strictObject({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -834,6 +842,8 @@ export const demoRecipeMetaSchema = z.strictObject({
   unattended: z.boolean(),
   /** Origin the flow was recorded on. */
   site: z.string().optional(),
+  /** Last run outcome. */
+  lastRun: demoRunResultSchema.optional(),
   /** A repair worked out by the agent, waiting for the user. */
   pendingHeal: demoRecipeHealSchema.optional(),
 })

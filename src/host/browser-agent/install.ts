@@ -817,6 +817,16 @@ export function installBrowserAgent(
         pending: [...steps],
       }))
       const ranAll = outcome.status === 'done'
+      recipes.recordRun({
+        id: recipe.id,
+        result: {
+          at: Date.now(),
+          status: ranAll ? 'ok' : 'stopped',
+          performed: outcome.performed,
+          total: outcome.total,
+          ...(ranAll ? {} : { reason: outcome.reason.slice(0, 200) }),
+        },
+      })
       if (!ranAll) {
         const failedStep = recipe.steps[outcome.performed]
         const isSecret = /masked|secret field/i.test(outcome.reason)

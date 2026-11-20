@@ -161,6 +161,20 @@ describe('browser_demo_recipes', () => {
     expect(ran).toContain('replayed 2/2')
   })
 
+  it('records how the last run ended', async () => {
+    const h = harness({ recipes: [{ name: '周报导出', steps }] })
+    await h.run({ action: 'run', name: '周报导出' })
+    expect(h.store.list()[0]?.lastRun).toMatchObject({ status: 'ok', performed: 2, total: 2 })
+
+    // A different page makes step 1 fail: the flow records a stopped run.
+    const blocked = harness({
+      recipes: [{ name: '周报导出', steps }],
+      nodes: [{ ref: 4, role: 'button', name: '取消' }],
+    })
+    await blocked.run({ action: 'run', name: '周报导出' })
+    expect(blocked.store.list()[0]?.lastRun).toMatchObject({ status: 'stopped', performed: 0, total: 2 })
+  })
+
   it('says so when nothing is saved', async () => {
     const h = harness()
     const out = await h.run({ action: 'list' }) as string

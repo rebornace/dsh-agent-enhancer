@@ -1386,6 +1386,7 @@ export class AgentEnhancerService extends TypertRemoteService {
       history: recipe.history,
       unattended: recipe.unattended,
       ...(recipe.site === undefined ? {} : { site: recipe.site }),
+      ...(recipe.lastRun === undefined ? {} : { lastRun: { ...recipe.lastRun } }),
       ...(recipe.pendingHeal === undefined
         ? {}
         : {

@@ -441,6 +441,20 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
     }
   }
 
+  /** 11-20 12:03 · how it ended; no page content, just counts. */
+  const runLine = (run: NonNullable<DemoRecipeMetaWire['lastRun']>): string => {
+    const date = new Date(run.at)
+    const pad = (value: number): string => String(value).padStart(2, '0')
+    const at = pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes())
+    if (run.status === 'ok') return t('browserAgentDemoLastRunOk').replace('{at}', at)
+    if (run.status === 'stopped') {
+      return t('browserAgentDemoLastRunStopped')
+        .replace('{at}', at)
+        .replace('{n}', String(run.performed + 1))
+    }
+    return t('browserAgentDemoLastRunFailed').replace('{at}', at)
+  }
+
   const beginRun = (recipe: DemoRecipeMetaWire) => {
     if (recipe.variables.length === 0) {
       void runRecipe(recipe)
@@ -786,6 +800,11 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                                 {t('browserAgentDemoRecipeHealBadge')}
                               </span>
                             )}
+                            {recipe.lastRun !== undefined && recipe.lastRun.status !== 'ok' ? (
+                              <span className={styles.browserAgentRecipeBadge}>
+                                {t('browserAgentDemoLastRunBadge')}
+                              </span>
+                            ) : null}
                             {recipe.unattended ? (
                               <span className={styles.browserAgentRecipeBadge}>
                                 {t('browserAgentDemoRecipeUnattendedBadge')}
@@ -1001,6 +1020,11 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                         <>
                           <section className={styles.browserAgentRecipeSection}>
                             <span className={styles.browserAgentRecipeSectionTitle}>{t('browserAgentDemoRunOptions')}</span>
+                            {recipe.lastRun === undefined ? null : (
+                              <span className={styles.browserAgentPaneNote}>
+                                {runLine(recipe.lastRun)}
+                              </span>
+                            )}
                             <div className={styles.browserAgentRecipeHistory}>
                               <span className={styles.browserAgentPaneNote}>
                                 {recipe.unattended

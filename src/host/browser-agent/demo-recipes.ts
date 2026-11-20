@@ -14,6 +14,16 @@ import { sanitizeDemoSteps, type DemoStep } from './demo.ts'
 import { applyHealProposal, type DemoHealProposal } from './demo-heal.ts'
 import { isDateVariable, resolveVariableValue } from './demo-values.ts'
 
+/** How the last run of a flow ended. Small and content-free on purpose. */
+export interface DemoRunResult {
+  readonly at: number
+  readonly status: 'ok' | 'stopped' | 'failed'
+  readonly performed: number
+  readonly total: number
+  /** Why it stopped, capped; may name a control or a URL. */
+  readonly reason?: string
+}
+
 /**
  * A placeholder inside a flow. `name` is the token id (`${v1}`) and stays
  * machine-readable; `label` is what the user sees ("开始日期") and may be Chinese.
@@ -53,6 +63,8 @@ export interface DemoRecipe {
   readonly pendingHeal?: DemoHealProposal
   /** The user allowed this flow to run without per-action cards (same site). */
   readonly unattended: boolean
+  /** Last run outcome, so an unattended run is not a black box. */
+  readonly lastRun?: DemoRunResult
 }
 
 /** List entry: steps are counted, never sent, so the panel stays light. */
@@ -69,6 +81,8 @@ export interface DemoRecipeMeta {
   readonly autoHeals: number
   /** Runs without per-action approval (the user opted in per flow). */
   readonly unattended: boolean
+  /** Last run outcome, if it has ever run. */
+  readonly lastRun?: DemoRunResult
   /** Origin the flow was recorded on (for review and for the agent's own check). */
   readonly site?: string
   readonly pendingHeal?: DemoHealProposal
@@ -106,6 +120,7 @@ function metaOf(recipe: DemoRecipe): DemoRecipeMeta {
     history: recipe.history.length,
     autoHeals: recipe.autoHeals.length,
     unattended: recipe.unattended,
+    ...(recipe.lastRun === undefined ? {} : { lastRun: recipe.lastRun }),
     ...(site === undefined ? {} : { site }),
     ...(recipe.pendingHeal === undefined ? {} : { pendingHeal: recipe.pendingHeal }),
   }
@@ -229,6 +244,25 @@ export function missingRecipeVars(
   return recipe.variables
     .filter(variable => (values[variable.name] ?? '').trim() === '')
     .map(variable => variable.name)
+}
+
+function sanitizeRunResult(raw: unknown): DemoRunResult | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined
+  const entry = raw as Partial<DemoRunResult>
+  if (entry.status !== 'ok' && entry.status !== 'stopped' && entry.status !== 'failed') return undefined
+  const at = Number(entry.at)
+  const performed = Number(entry.performed)
+  const total = Number(entry.total)
+  if (!Number.isFinite(at) || !Number.isFinite(performed) || !Number.isFinite(total)) return undefined
+  return {
+    at,
+    status: entry.status,
+    performed: Math.max(0, Math.floor(performed)),
+    total: Math.max(0, Math.floor(total)),
+    ...(typeof entry.reason === 'string' && entry.reason !== ''
+      ? { reason: entry.reason.slice(0, 200) }
+      : {}),
+  }
 }
 
 function sanitizeVariables(raw: unknown): RecipeVariable[] {
@@ -573,6 +607,16 @@ export class DemoRecipeStore {
     return { ok: true, recipe: metaOf(next) }
   }
 
+  /** Record how the last run ended. Not flow content: `rev` does not move. */
+  recordRun(input: { readonly id: string; readonly result: DemoRunResult }): boolean {
+    const recipes = this.read()
+    const current = recipes.find(recipe => recipe.id === input.id)
+    if (current === undefined) return false
+    const next: DemoRecipe = { ...current, lastRun: input.result }
+    this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
+    return true
+  }
+
   /**
    * Allow (or stop allowing) this flow to run without per-action cards. Kept
    * out of `rev`: it is a policy flag, not flow content.
@@ -633,8 +677,9 @@ export class DemoRecipeStore {
           return typeof recipe.createdAt === 'number' && typeof recipe.updatedAt === 'number'
         })
         .map(recipe => {
-          const { pendingHeal: rawProposal, ...rest } = recipe
+          const { pendingHeal: rawProposal, lastRun: rawLastRun, ...rest } = recipe
           const proposal = sanitizeProposal(rawProposal)
+          const lastRun = sanitizeRunResult(rawLastRun)
           return {
             ...rest,
             steps: sanitizeRecipeSteps(recipe.steps),
@@ -643,6 +688,7 @@ export class DemoRecipeStore {
             history: sanitizeHistory(recipe.history),
             autoHeals: sanitizeTimestamps(recipe.autoHeals),
             unattended: recipe.unattended === true,
+            ...(lastRun === undefined ? {} : { lastRun }),
             ...(proposal === undefined ? {} : { pendingHeal: proposal }),
           }
         })

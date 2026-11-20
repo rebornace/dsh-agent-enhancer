@@ -83,7 +83,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentDemoRecordingAgent' | 'browserAgentDemoEmpty' | 'browserAgentDemoCopy' |
       'browserAgentDemoCopied' | 'browserAgentDemoCopyFailed' | 'browserAgentDemoFailed' |
       'browserAgentDemoSend' | 'browserAgentDemoSendLead' | 'browserAgentDemoSent' |
-      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' | 'browserAgentDemoRecipeRename' | 'browserAgentDemoRecipeRenameSave' | 'browserAgentDemoRecipeCancel' | 'browserAgentDemoRecipeRenamed' | 'browserAgentDemoRecipeSetVar' | 'browserAgentDemoSuggestTitle' | 'browserAgentDemoSuggestRow' | 'browserAgentDemoSuggestMake' | 'browserAgentDemoSuggestKeep' | 'browserAgentDemoRecipeVarHint' | 'browserAgentDemoVarsTitle' | 'browserAgentDemoRecipeHealBadge' | 'browserAgentDemoRecipeUnattendedBadge' | 'browserAgentDemoRecipeDetails' | 'browserAgentDemoRecipeMore' | 'browserAgentDemoRecipeConfirmDelete' | 'browserAgentDemoRunOptions' | 'browserAgentDemoStepsShow' | 'browserAgentDemoUnattendedHint' | 'browserAgentDemoUnattendedOn' | 'browserAgentDemoUnattendedEnable' | 'browserAgentDemoUnattendedDisable' | 'browserAgentDemoUnattendedNoSite' | 'browserAgentDemoVarLabel' | 'browserAgentDemoVarAskToggle' | 'browserAgentDemoVarAskPlaceholder' | 'browserAgentDemoVarRevert' | 'browserAgentDemoVarReverted' | 'browserAgentDemoRecipeVarWorking' | 'browserAgentDemoRecipeParameterized' | 'browserAgentDemoHealText' | 'browserAgentDemoHealInserted' | 'browserAgentDemoHealKeep' | 'browserAgentDemoHealSkip' | 'browserAgentDemoHealKept' | 'browserAgentDemoHealSkipped' | 'browserAgentDemoRecipeUndo' | 'browserAgentDemoRecipeRestored' | 'browserAgentDemoRecipeVersion' |
+      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' | 'browserAgentDemoRecipeRename' | 'browserAgentDemoRecipeRenameSave' | 'browserAgentDemoRecipeCancel' | 'browserAgentDemoRecipeRenamed' | 'browserAgentDemoRecipeSetVar' | 'browserAgentDemoSuggestTitle' | 'browserAgentDemoSuggestRow' | 'browserAgentDemoSuggestMake' | 'browserAgentDemoSuggestKeep' | 'browserAgentDemoRecipeVarHint' | 'browserAgentDemoVarsTitle' | 'browserAgentDemoRecipeHealBadge' | 'browserAgentDemoRecipeUnattendedBadge' | 'browserAgentDemoRecipeDetails' | 'browserAgentDemoRecipeMore' | 'browserAgentDemoRecipeConfirmDelete' | 'browserAgentDemoRunOptions' | 'browserAgentDemoStepsShow' | 'browserAgentDemoUnattendedHint' | 'browserAgentDemoLastRunBadge' | 'browserAgentDemoLastRunOk' | 'browserAgentDemoLastRunStopped' | 'browserAgentDemoLastRunFailed' | 'browserAgentDemoUnattendedOn' | 'browserAgentDemoUnattendedEnable' | 'browserAgentDemoUnattendedDisable' | 'browserAgentDemoUnattendedNoSite' | 'browserAgentDemoVarLabel' | 'browserAgentDemoVarAskToggle' | 'browserAgentDemoVarAskPlaceholder' | 'browserAgentDemoVarRevert' | 'browserAgentDemoVarReverted' | 'browserAgentDemoRecipeVarWorking' | 'browserAgentDemoRecipeParameterized' | 'browserAgentDemoHealText' | 'browserAgentDemoHealInserted' | 'browserAgentDemoHealKeep' | 'browserAgentDemoHealSkip' | 'browserAgentDemoHealKept' | 'browserAgentDemoHealSkipped' | 'browserAgentDemoRecipeUndo' | 'browserAgentDemoRecipeRestored' | 'browserAgentDemoRecipeVersion' |
       'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
       'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
       'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
@@ -532,6 +532,10 @@ export const agentLocales = {
     browserAgentDemoRunOptions: '运行方式',
     browserAgentDemoStepsShow: '查看 {n} 步',
     browserAgentDemoUnattendedHint: '无人值守：定时任务不再逐次确认（仅本站，20 分钟 / 30 次；密码仍需人工）',
+    browserAgentDemoLastRunBadge: '上次未完成',
+    browserAgentDemoLastRunOk: '上次 {at} · 成功',
+    browserAgentDemoLastRunStopped: '上次 {at} · 停在第 {n} 步',
+    browserAgentDemoLastRunFailed: '上次 {at} · 失败',
     browserAgentDemoUnattendedOn: '已允许无人值守：只在 {site}，20 分钟内不再询问',
     browserAgentDemoUnattendedEnable: '允许无人值守',
     browserAgentDemoUnattendedDisable: '关闭无人值守',
@@ -1259,6 +1263,10 @@ export const agentLocales = {
     browserAgentDemoRunOptions: 'How it runs',
     browserAgentDemoStepsShow: 'Show {n} steps',
     browserAgentDemoUnattendedHint: 'Run without per-action approval: scheduled tasks stop asking (this site only, 20 minutes / 30 actions; secrets still need a human)',
+    browserAgentDemoLastRunBadge: 'Last run incomplete',
+    browserAgentDemoLastRunOk: 'Last run {at} · done',
+    browserAgentDemoLastRunStopped: 'Last run {at} · stopped at step {n}',
+    browserAgentDemoLastRunFailed: 'Last run {at} · failed',
     browserAgentDemoUnattendedOn: 'Unattended allowed: {site} only, no cards for 20 minutes',
     browserAgentDemoUnattendedEnable: 'Allow unattended',
     browserAgentDemoUnattendedDisable: 'Stop unattended',

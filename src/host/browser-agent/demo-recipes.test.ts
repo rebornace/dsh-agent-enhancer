@@ -430,6 +430,27 @@ describe('variable management', () => {
     expect(store.setUnattended({ id: 'missing', unattended: true })).toMatchObject({ ok: false })
   })
 
+  it('records the last run without touching the flow content', () => {
+    const { store, file } = tempStore()
+    const saved = store.save({ name: '周报', steps: [click('导出')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    expect(saved.recipe.lastRun).toBeUndefined()
+
+    expect(store.recordRun({
+      id: saved.recipe.id,
+      result: { at: 5_000, status: 'stopped', performed: 2, total: 5, reason: 'no control matching button "导出"' },
+    })).toBe(true)
+    expect(store.list()[0]?.lastRun).toMatchObject({ status: 'stopped', performed: 2, total: 5 })
+    expect(store.list()[0]?.rev).toBe(1)
+    expect(store.recordRun({ id: 'missing', result: { at: 1, status: 'ok', performed: 0, total: 0 } })).toBe(false)
+
+    // A malformed history entry must not take the flow down.
+    const raw = JSON.parse(readFileSync(file, 'utf8'))
+    raw.recipes[0].lastRun = { at: 'soon', status: 'weird', performed: 1, total: 1 }
+    writeFileSync(file, JSON.stringify(raw), 'utf8')
+    expect(store.list()[0]?.lastRun).toBeUndefined()
+  })
+
   it('rejects a blank label', () => {
     const { store } = tempStore()
     const saved = store.save({ name: '周报', steps: [fill('开始日期', '2026-11-01')], now: 1_000 })

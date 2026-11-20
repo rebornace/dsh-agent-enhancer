@@ -1745,8 +1745,30 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         `运行已保存流程「${recipe.name}」（${recipe.steps.length} 步）`,
         firstUrl,
       )
-      const outcome = await replayDemoSteps(driverOf(options), replaySteps)
+      const outcome = await replayDemoSteps(driverOf(options), replaySteps).catch((error: unknown) => {
+        store.recordRun({
+          id: recipe.id,
+          result: {
+            at: Date.now(),
+            status: 'failed',
+            performed: 0,
+            total: replaySteps.length,
+            reason: error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200),
+          },
+        })
+        throw error
+      })
       const ranAll = outcome.status === 'done'
+      store.recordRun({
+        id: recipe.id,
+        result: {
+          at: Date.now(),
+          status: ranAll ? 'ok' : 'stopped',
+          performed: outcome.performed,
+          total: outcome.total,
+          ...(ranAll ? {} : { reason: outcome.reason.slice(0, 200) }),
+        },
+      })
       if (!ranAll) {
         // A secret is a pause for the user, not a page change; everything else
         // is worth watching, because the agent is about to solve it by hand.
