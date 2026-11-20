@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { BrowserDriver } from './driver.ts'
 import type { SnapshotBody } from './protocol.ts'
 import { BrowserSessionState } from './session-state.ts'
-import { browserPermissionFromPreset, registerBrowserTools } from './tools.ts'
+import { browserPermission, registerBrowserTools } from './tools.ts'
 import type { BrowserPermissionMode } from './tools.ts'
 
 interface RegisteredTool {
@@ -132,13 +132,18 @@ describe('official permission presets', () => {
     }
   })
 
-  it('maps preset names onto what a browser mutation needs', () => {
-    expect(browserPermissionFromPreset('danger-full-access')).toBe('full')
-    expect(browserPermissionFromPreset('auto')).toBe('full')
-    expect(browserPermissionFromPreset('read-only')).toBe('read-only')
-    expect(browserPermissionFromPreset('workspace-write')).toBe('ask')
-    expect(browserPermissionFromPreset('custom')).toBeUndefined()
-    expect(browserPermissionFromPreset(undefined)).toBeUndefined()
+  it('reads preset and approval policy together', () => {
+    expect(browserPermission({ preset: 'read-only', approval: 'never' })).toBe('read-only')
+    expect(browserPermission({ preset: 'auto', approval: 'ask' })).toBe('full')
+    expect(browserPermission({ preset: 'danger-full-access', approval: 'never' })).toBe('full')
+    expect(browserPermission({ preset: 'workspace-write', approval: 'ask' })).toBe('ask')
+    // A custom combination that never asks is full access for the browser too.
+    expect(browserPermission({ preset: 'custom', approval: 'never' })).toBe('full')
+    expect(browserPermission({ preset: 'custom', approval: 'ask' })).toBe('ask')
+    // A host with presets but no approval service still asks.
+    expect(browserPermission({ preset: 'workspace-write', approval: undefined })).toBe('ask')
+    // Nothing known at all: keep the card.
+    expect(browserPermission({ preset: undefined, approval: undefined })).toBeUndefined()
   })
 })
 

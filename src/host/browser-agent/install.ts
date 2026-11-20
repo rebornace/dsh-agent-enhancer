@@ -30,7 +30,7 @@ import {
 import { suggestRecipeVariables } from './demo-values.ts'
 import { replayDemoSteps } from './demo-replay.ts'
 import { applyRecipeVars, prepareRecipeValues, type DemoRecipeMeta, type DemoRecipeStore } from './demo-recipes.ts'
-import { browserPermissionFromPreset, registerBrowserTools, type BrowserPermissionMode } from './tools.ts'
+import { browserPermission, registerBrowserTools, type BrowserPermissionMode } from './tools.ts'
 import { DemoRepairTracker, createRepairHooks } from './demo-heal.ts'
 
 /** Idle sweep cadence; the tab age comes from browserAgentIdleClose. */
@@ -189,25 +189,30 @@ export function installBrowserAgent(
    */
   let warnedNoPermissionService = false
   const permissionMode = (session: unknown): BrowserPermissionMode | undefined => {
+    const get = (ctx as unknown as { get?: (name: string) => unknown }).get?.bind(ctx)
+    let preset: unknown
+    let approval: unknown
     try {
-      const service = (ctx as unknown as { get?: (name: string) => unknown }).get?.('permissionPresets') as
-        | { current?: (session: unknown) => unknown }
-        | undefined
-      if (service === undefined || typeof service.current !== 'function') {
-        // Older host: keep the local card, but say so once — otherwise "full
-        // access still asks" looks like a bug in the preset.
-        if (!warnedNoPermissionService) {
-          warnedNoPermissionService = true
-          ctx.logger.warn(
-            'agent-enhancer: permissionPresets service not found; browser approvals keep their own card',
-          )
-        }
-        return undefined
-      }
-      return browserPermissionFromPreset(service.current(session))
+      const presets = get?.('permissionPresets') as { current?: (session: unknown) => unknown } | undefined
+      if (presets !== undefined && typeof presets.current === 'function') preset = presets.current(session)
+      // Same service auto-review reads: the policy every ask resolves under.
+      const gate = get?.('approval') as { effectivePolicy?: (session: unknown) => unknown } | undefined
+      if (gate !== undefined && typeof gate.effectivePolicy === 'function') approval = gate.effectivePolicy(session)
     } catch {
       return undefined
     }
+    if (preset === undefined && approval === undefined) {
+      // Older host: keep the local card, but say so once — otherwise "full
+      // access still asks" looks like a bug in the preset.
+      if (!warnedNoPermissionService) {
+        warnedNoPermissionService = true
+        ctx.logger.warn(
+          'agent-enhancer: permission preset/approval services not found; browser approvals keep their own card',
+        )
+      }
+      return undefined
+    }
+    return browserPermission({ preset, approval })
   }
 
   /** Watches a stopped flow so the agent's own fix can become a proposal. */

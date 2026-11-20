@@ -180,15 +180,27 @@ function maskTypeSummary(text: string): string {
 export type BrowserPermissionMode = 'full' | 'ask' | 'read-only'
 
 /**
- * Map an official permission preset onto what a browser mutation needs.
- * `auto` means the per-call reviewer in `tools/pre-execute` already decided, so
- * asking again would duplicate it; `custom` has unknown knobs, so ask.
+ * Decide what a browser mutation needs from the official permission state.
+ *
+ * - `read-only` refuses, whatever the approval policy says;
+ * - `auto` means the per-call reviewer in `tools/pre-execute` is the gate, so
+ *   asking again would duplicate it;
+ * - approval policy `never` means this session never asks, so full access is
+ *   implied even under a custom preset combination;
+ * - otherwise the browser sits outside the workspace, so keep the local card.
+ *
+ * Undefined means the host exposed neither service: keep the card.
  */
-export function browserPermissionFromPreset(preset: unknown): BrowserPermissionMode | undefined {
-  if (preset === 'danger-full-access' || preset === 'auto') return 'full'
-  if (preset === 'read-only') return 'read-only'
-  if (preset === 'workspace-write') return 'ask'
-  return undefined
+export function browserPermission(input: {
+  readonly preset: unknown
+  readonly approval: unknown
+}): BrowserPermissionMode | undefined {
+  if (input.preset === 'read-only') return 'read-only'
+  if (input.preset === 'auto') return 'full'
+  if (input.approval === 'never') return 'full'
+  if (input.preset === 'danger-full-access') return 'full'
+  if (input.preset === undefined && input.approval === undefined) return undefined
+  return 'ask'
 }
 
 export interface BrowserToolsOptions {
