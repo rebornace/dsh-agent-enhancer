@@ -130,7 +130,18 @@ describe('browser_demo_recipes', () => {
     const h = harness({ recipes: [{ name: '周报导出', steps }] })
     const out = await h.run({ action: 'list' }) as string
     expect(out).toContain('saved flows: 1')
-    expect(out).toContain('- 周报导出 (2 step(s))')
+    expect(out).toContain('- 周报导出 (2 step(s)')
+  })
+
+  it('shows the recorded site and rejects a mismatch', async () => {
+    const h = harness({ recipes: [{ name: '周报导出', steps }] })
+    const listed = await h.run({ action: 'list' }) as string
+    expect(listed).toContain('site: https://example.com')
+
+    await expect(h.run({ action: 'run', name: '周报导出', site: 'https://elsewhere.example' }))
+      .rejects.toThrow(/does not match flow/)
+    const ran = await h.run({ action: 'run', name: '周报导出', site: 'https://example.com' }) as string
+    expect(ran).toContain('replayed 2/2')
   })
 
   it('says so when nothing is saved', async () => {
@@ -286,7 +297,7 @@ describe('browser_demo_recipes repair', () => {
 
     // The agent looks at the page, finds the control, and clicks it.
     await h.tool('browser_snapshot')({})
-    await h.tool('browser_click')({ ref: 7 })
+    await h.tool('browser_click')({ ref: 7, label: '下载明细' })
 
     const offered = await h.run({ action: 'heal' }) as string
     expect(offered).toContain('repair offered')

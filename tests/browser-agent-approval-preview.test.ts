@@ -90,7 +90,7 @@ describe('approval card preview', () => {
       })
       const exec = { agent: { session: { id: 's1' } }, signal: new AbortController().signal }
       await tools.get('browser_snapshot')!.execute({}, exec)
-      await tools.get('browser_click')!.execute({ ref: 1 }, exec)
+      await tools.get('browser_click')!.execute({ ref: 1, label: '导出报表' }, exec)
 
       expect(seen, 'one approval should have been requested').toHaveLength(1)
       const thumb = seen[0]

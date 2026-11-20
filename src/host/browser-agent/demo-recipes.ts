@@ -65,6 +65,8 @@ export interface DemoRecipeMeta {
   readonly history: number
   /** How many times this flow kept a repair by itself. */
   readonly autoHeals: number
+  /** Origin the flow was recorded on (for review and for the agent's own check). */
+  readonly site?: string
   readonly pendingHeal?: DemoHealProposal
 }
 
@@ -88,6 +90,7 @@ export type SaveResult =
   | { readonly ok: false; readonly error: string }
 
 function metaOf(recipe: DemoRecipe): DemoRecipeMeta {
+  const site = siteOf(recipe.steps)
   return {
     id: recipe.id,
     name: recipe.name,
@@ -98,7 +101,18 @@ function metaOf(recipe: DemoRecipe): DemoRecipeMeta {
     rev: recipe.rev,
     history: recipe.history.length,
     autoHeals: recipe.autoHeals.length,
+    ...(site === undefined ? {} : { site }),
     ...(recipe.pendingHeal === undefined ? {} : { pendingHeal: recipe.pendingHeal }),
+  }
+}
+
+function siteOf(steps: readonly DemoStep[]): string | undefined {
+  const url = steps.find(step => step.tabUrl !== undefined)?.tabUrl
+  if (url === undefined) return undefined
+  try {
+    return new URL(url).origin
+  } catch {
+    return undefined
   }
 }
 

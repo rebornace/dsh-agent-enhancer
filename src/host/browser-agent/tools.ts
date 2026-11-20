@@ -11,7 +11,7 @@ import type { TabScopeStore } from './tab-scope.ts'
 import type { Diagnosis } from './diagnose.ts'
 import { demoTabLegend, describeDemoStep, summarizeDemoSteps, type DemoStep } from './demo.ts'
 import { applyRecipeVars, prepareRecipeValues, type DemoRecipeStore } from './demo-recipes.ts'
-import { replayDemoSteps } from './demo-replay.ts'
+import { normalizeControlName, replayDemoSteps } from './demo-replay.ts'
 import type { BrowserRepairHooks, DemoObservedAction } from './demo-heal.ts'
 
 type ToolExec = {
@@ -86,6 +86,40 @@ function formatSnapshot(body: SnapshotBody, extra?: readonly string[]): string {
     body.textPreview.slice(0, 2_000),
   ]
   return lines.filter(line => line !== null).join('\n')
+}
+
+/**
+ * Mutating browser tools carry a `label` copied from the snapshot. It is the
+ * only thing the official permission reviewer (auto-review) can read about the
+ * action, so it must describe this ref — a paraphrase is tolerated, a different
+ * control is not.
+ */
+function requireControlLabel(input: {
+  readonly label: unknown
+  readonly ref: number
+  readonly actual: string
+  readonly tool: string
+}): string {
+  const label = typeof input.label === 'string' ? input.label.trim() : ''
+  const actual = input.actual.trim()
+  if (actual === '') return label
+  if (label === '') {
+    throw new Error(
+      `label is required for ${input.tool}: ref ${input.ref} is ${JSON.stringify(actual)}. `
+      + `Pass label: ${JSON.stringify(actual)} (copy it from the latest browser_snapshot); the permission reviewer sees only your arguments.`,
+    )
+  }
+  const wanted = normalizeControlName(actual)
+  const given = normalizeControlName(label)
+  const compatible = given === wanted
+    || (given.length >= 2 && wanted.length >= 2 && (given.includes(wanted) || wanted.includes(given)))
+  if (!compatible) {
+    throw new Error(
+      `label ${JSON.stringify(label)} does not match ref ${input.ref} (${JSON.stringify(actual)}). `
+      + 'Copy the control name from the latest browser_snapshot; a wrong label would be reviewed as a different action.',
+    )
+  }
+  return label
 }
 
 function sessionIdOf(exec: ToolExec): string {
@@ -752,12 +786,16 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   disposers.push(ctx.tools.register(textTool(
     'browser_click',
-    'Click an interactive element by ref from the latest browser_snapshot. Requires approval. If the ref is missing/stale, browser_snapshot first. Dead clicks may follow that same ref’s http(s) href only — never invent other URLs. Do NOT use this to submit passwords or solve captchas — call browser_ask_user instead. Auto-launches when disconnected.',
+    'Click an interactive element by ref from the latest browser_snapshot. Requires approval. Pass label (the control name from the snapshot) so the permission reviewer can judge what will be clicked. If the ref is missing/stale, browser_snapshot first. Dead clicks may follow that same ref’s http(s) href only — never invent other URLs. Do NOT use this to submit passwords or solve captchas — call browser_ask_user instead. Auto-launches when disconnected.',
     {
       ref: {
         type: 'number',
         required: true,
         description: 'Element ref from the latest browser_snapshot.',
+      },
+      label: {
+        type: 'string',
+        description: 'The control name exactly as browser_snapshot shows it (e.g. "导出报表"). Required whenever the control has a name; the permission reviewer sees only this.',
       },
     },
     async (args, exec) => {
@@ -775,6 +813,12 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         url = undefined
       }
       requireFreshRef(sessionId, ref, 'browser_click')
+      requireControlLabel({
+        label: args.label,
+        ref,
+        actual: options.sessions.nameOfRef(sessionId, ref) ?? '',
+        tool: 'browser_click',
+      })
       // Read the control's identity before the click: after a navigation the
       // snapshot that owned this ref is gone.
       const repairEvidence = await captureRefEvidence(options, ref)
@@ -902,12 +946,16 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
 
   disposers.push(ctx.tools.register(textTool(
     'browser_type',
-    'Type non-secret text into a ref from the latest browser_snapshot. Requires approval. NEVER type passwords, OTP/2FA codes, payment details, or captcha answers — call browser_ask_user and let the user type in the dedicated browser. Prefer textbox/input refs; refresh refs with browser_snapshot if stale. Typed values are masked in audit logs.',
+    'Type non-secret text into a ref from the latest browser_snapshot. Requires approval. Pass label (the field name from the snapshot) so the permission reviewer can judge where the text goes. NEVER type passwords, OTP/2FA codes, payment details, or captcha answers — call browser_ask_user and let the user type in the dedicated browser. Prefer textbox/input refs; refresh refs with browser_snapshot if stale. Typed values are masked in audit logs.',
     {
       ref: {
         type: 'number',
         required: true,
         description: 'Element ref from the latest browser_snapshot.',
+      },
+      label: {
+        type: 'string',
+        description: 'The field name exactly as browser_snapshot shows it (e.g. "开始日期"). Required whenever the field has a name.',
       },
       text: {
         type: 'string',
@@ -931,6 +979,12 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         url = undefined
       }
       requireFreshRef(sessionId, ref, 'browser_type')
+      requireControlLabel({
+        label: args.label,
+        ref,
+        actual: options.sessions.nameOfRef(sessionId, ref) ?? '',
+        tool: 'browser_type',
+      })
       const repairEvidence = await captureRefEvidence(options, ref)
       await requireMutation(exec, 'browser_type', `Type into ref ${ref}: ${maskTypeSummary(text)}`, url, ref)
       try {
@@ -1480,6 +1534,10 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         type: 'boolean',
         description: 'action=heal: apply the repair to the saved flow now (the user asked to remember it). Default false: offer it in the sidebar.',
       },
+      site: {
+        type: 'string',
+        description: 'action=run: the origin shown by action=list (e.g. https://example.com). Pass it so the permission reviewer can see which site the flow touches; a mismatch is rejected.',
+      },
       vars: {
         type: 'object',
         additionalProperties: true,
@@ -1507,7 +1565,8 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
             const vars = row.variables.length === 0 ? '' : `; vars: ${row.variables.map(variable => variable.name).join(', ')}`
             const heal = row.pendingHeal === undefined ? '' : `; repair waiting: step ${row.pendingHeal.failedAt}`
             const auto = row.autoHeals === 0 ? '' : `; auto-adapted ${row.autoHeals}x`
-            return `- ${row.name} (${row.steps} step(s)${vars}${heal}${auto})`
+            const site = row.site === undefined ? '' : `; site: ${row.site}`
+            return `- ${row.name} (${row.steps} step(s)${vars}${heal}${auto}${site})`
           }),
           'Action: run one with browser_demo_recipes { action: "run", name: "<name>" }.',
         ].join('\n')
@@ -1579,6 +1638,10 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       }
       const recipe = store.get(meta.id)
       if (recipe === undefined) throw new Error('The saved flow disappeared; list again.')
+      const wantedSite = String(args.site ?? '').trim()
+      if (wantedSite !== '' && meta.site !== undefined && meta.site !== wantedSite) {
+        throw new Error(`site ${JSON.stringify(wantedSite)} does not match flow "${meta.name}" (${meta.site}). Pass the site exactly as action=list shows it.`)
+      }
       // A new run closes whatever the last one left waiting for a decision.
       options.repair?.commit()
       const provided = args.vars !== null && typeof args.vars === 'object'

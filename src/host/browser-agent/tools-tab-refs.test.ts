@@ -107,7 +107,18 @@ describe('refs follow their tab', () => {
     expect(h.sessions.tabOf('s1')).toBe(2)
 
     await h.run('browser_follow_tab', { tabId: 1 })
-    await expect(h.run('browser_click', { ref: 1 })).resolves.toBeTruthy()
+    await expect(h.run('browser_click', { ref: 1, label: 'link-1' })).resolves.toBeTruthy()
+    expect(h.clicks).toEqual([1])
+  })
+
+  it('requires the control label the reviewer will see', async () => {
+    const h = harness()
+    await h.run('browser_snapshot')
+    await expect(h.run('browser_click', { ref: 1 })).rejects.toThrow(/label is required.*link-1/)
+    await expect(h.run('browser_click', { ref: 1, label: '删除' })).rejects.toThrow(/does not match ref 1/)
+
+    // A shortened label still points at the same control and is accepted.
+    await expect(h.run('browser_click', { ref: 1, label: 'link' })).resolves.toBeTruthy()
     expect(h.clicks).toEqual([1])
   })
 
