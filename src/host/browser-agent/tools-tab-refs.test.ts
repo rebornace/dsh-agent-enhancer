@@ -3,7 +3,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { BrowserDriver } from './driver.ts'
 import type { SnapshotBody } from './protocol.ts'
 import { BrowserSessionState } from './session-state.ts'
-import { registerBrowserTools } from './tools.ts'
+import { browserPermissionFromPreset, registerBrowserTools } from './tools.ts'
+import type { BrowserPermissionMode } from './tools.ts'
 
 interface RegisteredTool {
   readonly name: string
@@ -20,8 +21,9 @@ function snapshot(tabId: number, refs: readonly number[]): SnapshotBody {
   }
 }
 
-function harness() {
+function harness(options: { readonly permission?: BrowserPermissionMode } = {}) {
   const tools = new Map<string, RegisteredTool>()
+  const approvals: string[] = []
   const ctx = {
     tools: {
       register(tool: RegisteredTool) {
@@ -78,7 +80,14 @@ function harness() {
   const sessions = new BrowserSessionState()
   registerBrowserTools(ctx, {
     driver,
-    approval: { requestApproval: async () => 'allow', current: () => null } as never,
+    approval: {
+      requestApproval: async (request: { summary: string }) => {
+        approvals.push(request.summary)
+        return 'allow'
+      },
+      current: () => null,
+    } as never,
+    ...(options.permission === undefined ? {} : { permission: () => options.permission }),
     human: { current: () => null } as never,
     sessions,
     enabled: () => true,
@@ -87,6 +96,7 @@ function harness() {
   const exec = { agent: { session: { id: 's1' } }, signal: new AbortController().signal }
   return {
     clicks,
+    approvals,
     sessions,
     run: (name: string, args: Record<string, unknown> = {}) => {
       const tool = tools.get(name)
@@ -95,6 +105,42 @@ function harness() {
     },
   }
 }
+
+describe('official permission presets', () => {
+  it('does not ask again in full access', async () => {
+    const h = harness({ permission: 'full' })
+    await h.run('browser_snapshot')
+    await expect(h.run('browser_click', { ref: 1, label: 'link-1' })).resolves.toBeTruthy()
+    expect(h.approvals).toEqual([])
+    expect(h.clicks).toEqual([1])
+  })
+
+  it('refuses mutations in read-only without pretending a card would help', async () => {
+    const h = harness({ permission: 'read-only' })
+    await h.run('browser_snapshot')
+    await expect(h.run('browser_click', { ref: 1, label: 'link-1' })).rejects.toThrow(/仅可查看/)
+    expect(h.approvals).toEqual([])
+    expect(h.clicks).toEqual([])
+  })
+
+  it('keeps the local card for workspace-write and unknown hosts', async () => {
+    for (const permission of ['ask', undefined] as const) {
+      const h = harness(permission === undefined ? {} : { permission })
+      await h.run('browser_snapshot')
+      await expect(h.run('browser_click', { ref: 1, label: 'link-1' })).resolves.toBeTruthy()
+      expect(h.approvals).toHaveLength(1)
+    }
+  })
+
+  it('maps preset names onto what a browser mutation needs', () => {
+    expect(browserPermissionFromPreset('danger-full-access')).toBe('full')
+    expect(browserPermissionFromPreset('auto')).toBe('full')
+    expect(browserPermissionFromPreset('read-only')).toBe('read-only')
+    expect(browserPermissionFromPreset('workspace-write')).toBe('ask')
+    expect(browserPermissionFromPreset('custom')).toBeUndefined()
+    expect(browserPermissionFromPreset(undefined)).toBeUndefined()
+  })
+})
 
 describe('refs follow their tab', () => {
   it('clicks a ref from tab 1 after switching away and back, without a new snapshot', async () => {

@@ -170,6 +170,27 @@ function maskTypeSummary(text: string): string {
   return `${text.slice(0, 1)}…(${text.length} chars)`
 }
 
+/**
+ * How a mutating browser call is allowed:
+ * - `full`: the session preset already granted full access — do not ask;
+ * - `ask`: workspace-write / unknown — show our card (the browser sits outside
+ *   the workspace, so the preset itself has no opinion);
+ * - `read-only`: refuse, do not pretend asking would help.
+ */
+export type BrowserPermissionMode = 'full' | 'ask' | 'read-only'
+
+/**
+ * Map an official permission preset onto what a browser mutation needs.
+ * `auto` means the per-call reviewer in `tools/pre-execute` already decided, so
+ * asking again would duplicate it; `custom` has unknown knobs, so ask.
+ */
+export function browserPermissionFromPreset(preset: unknown): BrowserPermissionMode | undefined {
+  if (preset === 'danger-full-access' || preset === 'auto') return 'full'
+  if (preset === 'read-only') return 'read-only'
+  if (preset === 'workspace-write') return 'ask'
+  return undefined
+}
+
 export interface BrowserToolsOptions {
   /**
    * Live driver, or a getter. Agent tools must use a getter so browser
@@ -193,6 +214,13 @@ export interface BrowserToolsOptions {
   readonly demonstrate?: () => boolean
   /** Last completed recording, whoever stopped it (agent or sidebar). */
   readonly onDemonstration?: (steps: readonly DemoStep[]) => void
+  /**
+   * What the official permission preset says about this session. The browser is
+   * outside the workspace, so the preset cannot decide for us — but it must be
+   * honoured: full access must not be asked again, read-only must be refused.
+   * Undefined means the host has no preset service (older build): keep asking.
+   */
+  readonly permission?: (session: unknown) => BrowserPermissionMode | undefined
   /** Saved demonstration flows (see demo-recipes.ts). */
   readonly recipes?: DemoRecipeStore
   /**
@@ -352,6 +380,25 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
     targetRef?: number,
   ) => {
     const sessionId = sessionIdOf(exec)
+    const permission = options.permission?.(exec.agent?.session) ?? 'ask'
+    if (permission === 'read-only') {
+      options.sessions.record({
+        sessionId,
+        tool,
+        summary,
+        ...(url === undefined ? {} : { url }),
+        outcome: 'denied',
+      })
+      throw new Error(
+        '会话权限是「仅可查看」，浏览器变更被拒绝。'
+        + '把权限切到「工作区内修改」或「完全权限」后再试。',
+      )
+    }
+    if (permission === 'full') {
+      // The user already granted full access for this session: asking again is
+      // the bug this branch removes.
+      return
+    }
     // Prefer a real http(s) URL so allow-origin can stick for the session.
     // pageStatus may be about:blank / empty right after launch — fall back to last known.
     let effectiveUrl = typeof url === 'string' && /^https?:\/\//i.test(url) ? url : undefined

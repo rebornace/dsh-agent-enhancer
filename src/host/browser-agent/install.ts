@@ -30,7 +30,7 @@ import {
 import { suggestRecipeVariables } from './demo-values.ts'
 import { replayDemoSteps } from './demo-replay.ts'
 import { applyRecipeVars, prepareRecipeValues, type DemoRecipeMeta, type DemoRecipeStore } from './demo-recipes.ts'
-import { registerBrowserTools } from './tools.ts'
+import { browserPermissionFromPreset, registerBrowserTools, type BrowserPermissionMode } from './tools.ts'
 import { DemoRepairTracker, createRepairHooks } from './demo-heal.ts'
 
 /** Idle sweep cadence; the tab age comes from browserAgentIdleClose. */
@@ -182,6 +182,34 @@ export function installBrowserAgent(
   const recipes = options.recipes
   /** Steps from the last sidebar demonstration, until the next one starts. */
   let lastDemoSteps: readonly DemoStep[] = []
+  /**
+   * What the official Permissions selector says for a session. The service is
+   * optional (older Desktop builds have no presets); when it is missing we keep
+   * the local approval card as before.
+   */
+  let warnedNoPermissionService = false
+  const permissionMode = (session: unknown): BrowserPermissionMode | undefined => {
+    try {
+      const service = (ctx as unknown as { get?: (name: string) => unknown }).get?.('permissionPresets') as
+        | { current?: (session: unknown) => unknown }
+        | undefined
+      if (service === undefined || typeof service.current !== 'function') {
+        // Older host: keep the local card, but say so once — otherwise "full
+        // access still asks" looks like a bug in the preset.
+        if (!warnedNoPermissionService) {
+          warnedNoPermissionService = true
+          ctx.logger.warn(
+            'agent-enhancer: permissionPresets service not found; browser approvals keep their own card',
+          )
+        }
+        return undefined
+      }
+      return browserPermissionFromPreset(service.current(session))
+    } catch {
+      return undefined
+    }
+  }
+
   /** Watches a stopped flow so the agent's own fix can become a proposal. */
   const repairTracker = new DemoRepairTracker()
   const repairHooks = createRepairHooks({
@@ -338,6 +366,7 @@ export function installBrowserAgent(
         debugTools: () => options.debugTools?.() === true,
         demonstrate: () => options.demonstrate?.() === true,
         onDemonstration: steps => { lastDemoSteps = steps },
+        permission: permissionMode,
         ...(recipes === undefined ? {} : { recipes }),
         repair: repairHooks,
         diagnosis: diagnoseNow,
