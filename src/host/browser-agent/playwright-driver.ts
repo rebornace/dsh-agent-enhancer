@@ -76,8 +76,24 @@ export const AGENT_CHROMIUM_ARGS: readonly string[] = [
   '--no-first-run',
   '--no-default-browser-check',
   '--disable-default-apps',
-  '--disable-blink-features=AutomationControlled',
 ]
+
+/**
+ * Clear `navigator.webdriver` from the page instead of the `--disable-blink-features`
+ * command-line flag: Chrome paints an "unsupported command-line flag" warning bar
+ * for that flag, and the bar is worse than the problem. This runs before any page
+ * script in every frame of the dedicated context.
+ */
+export function hideWebdriver(): void {
+  try {
+    Object.defineProperty(Navigator.prototype, 'webdriver', {
+      configurable: true,
+      get: () => false,
+    })
+  } catch {
+    // A page with an exotic Navigator still loads; it just keeps the flag.
+  }
+}
 
 export interface PlaywrightDriverOptions {
   /** Static dir, or live getter so Chrome↔Edge switches pick the right profile. */
@@ -331,10 +347,12 @@ export class PlaywrightDriver implements BrowserDriver {
         'WEBKIT_MISSING: Playwright WebKit is not installed. Run: npx playwright install webkit'
       return null
     }
-    return webkit.launchPersistentContext(profileDir, {
+    const context = await webkit.launchPersistentContext(profileDir, {
       headless: this.headless,
       viewport: this.headless ? { width: 1280, height: 800 } : null,
     })
+    await context.addInitScript(hideWebdriver)
+    return context
   }
 
   private async launchChromium(
@@ -356,7 +374,7 @@ export class PlaywrightDriver implements BrowserDriver {
     }
 
     const { chromium } = await loadPlaywright()
-    return chromium.launchPersistentContext(profileDir, {
+    const context = await chromium.launchPersistentContext(profileDir, {
       executablePath: resolved!.executable,
       headless: this.headless,
       // Avoid Edge/Chrome infobar: "unsupported command-line flag: --no-sandbox".
@@ -365,6 +383,8 @@ export class PlaywrightDriver implements BrowserDriver {
       viewport: this.headless ? { width: 1280, height: 800 } : null,
       args: [...AGENT_CHROMIUM_ARGS],
     })
+    await context.addInitScript(hideWebdriver)
+    return context
   }
 
   private stopPreferenceProfiles(activeProfileDir: string): void {

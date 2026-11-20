@@ -52,6 +52,7 @@ describe('PlaywrightDriver preference getter relaunch', () => {
         newPage: async () => page,
         close: vi.fn(async () => undefined),
         on: vi.fn(),
+        addInitScript: vi.fn(async () => undefined),
         browser: () => null,
         _exe: opts.executablePath,
       }
