@@ -21,14 +21,17 @@ import { isDateVariable, resolveVariableValue } from './demo-values.ts'
 export interface RecipeVariable {
   readonly name: string
   readonly label: string
+  /** The recorded value; also what "改回固定" restores. */
   readonly default: string
+  /** Every run asks for this value instead of prefilling the default. */
+  readonly ask: boolean
 }
 
 /** One past state of a flow, kept so a heal or an overwrite can be undone. */
 export interface DemoRecipeVersion {
   readonly rev: number
   readonly at: number
-  readonly source: 'save' | 'parameterize' | 'heal' | 'rollback'
+  readonly source: 'save' | 'parameterize' | 'variable' | 'unvariable' | 'heal' | 'rollback'
   readonly steps: readonly DemoStep[]
   readonly variables: readonly RecipeVariable[]
 }
@@ -182,7 +185,8 @@ export function prepareRecipeValues(
 ): PreparedRecipeValues {
   const matched = matchRecipeVarValues(recipe, provided)
   const values: Record<string, string> = {}
-  for (const variable of recipe.variables) values[variable.name] = variable.default
+  // "每次问我" keeps the recorded value around but never prefills it.
+  for (const variable of recipe.variables) values[variable.name] = variable.ask ? '' : variable.default
   Object.assign(values, matched.values)
   const resolved: Array<{ label: string; from: string; to: string }> = []
   for (const variable of recipe.variables) {
@@ -223,6 +227,7 @@ function sanitizeVariables(raw: unknown): RecipeVariable[] {
         ? variable.label.trim().slice(0, MAX_VARIABLE_LABEL)
         : variable.name,
       default: String(variable.default ?? '').slice(0, 500),
+      ask: variable.ask === true,
     }))
 }
 
@@ -238,7 +243,8 @@ function sanitizeHistory(raw: unknown): DemoRecipeVersion[] {
     versions.push({
       rev: Number.isFinite(entry.rev) && (entry.rev ?? 0) > 0 ? Number(entry.rev) : 1,
       at: Number.isFinite(entry.at) ? Number(entry.at) : 0,
-      source: entry.source === 'parameterize' || entry.source === 'heal' || entry.source === 'rollback'
+      source: entry.source === 'parameterize' || entry.source === 'variable' || entry.source === 'unvariable'
+        || entry.source === 'heal' || entry.source === 'rollback'
         ? entry.source
         : 'save',
       steps,
@@ -418,7 +424,7 @@ export class DemoRecipeStore {
     const steps = current.steps.map((entry, index) =>
       index === input.index && entry.kind === 'fill' ? { ...entry, value: token } : entry,
     )
-    const variables = [...current.variables, { name, label, default: step.value.slice(0, 500) }]
+    const variables = [...current.variables, { name, label, default: step.value.slice(0, 500), ask: false }]
     const now = input.now ?? Date.now()
     const { pendingHeal: _stale, ...rest } = current
     const next: DemoRecipe = {
@@ -475,6 +481,73 @@ export class DemoRecipeStore {
       autoHeals: input.auto === true
         ? [...current.autoHeals, now].slice(-MAX_AUTO_HEALS)
         : current.autoHeals,
+    }
+    this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
+    return { ok: true, recipe: metaOf(next) }
+  }
+
+  /** Rename a variable's label, change its default, or make every run ask. */
+  updateVariable(input: {
+    readonly id: string
+    readonly name: string
+    readonly label?: string
+    readonly default?: string
+    readonly ask?: boolean
+    readonly now?: number
+  }): SaveResult {
+    const now = input.now ?? Date.now()
+    const recipes = this.read()
+    const current = recipes.find(recipe => recipe.id === input.id)
+    if (current === undefined) return { ok: false, error: '流程不存在' }
+    const existing = current.variables.find(variable => variable.name === input.name)
+    if (existing === undefined) return { ok: false, error: '变量不存在' }
+    const label = input.label === undefined
+      ? existing.label
+      : input.label.trim().slice(0, MAX_VARIABLE_LABEL)
+    if (label === '') return { ok: false, error: '名字不能为空' }
+    const next: DemoRecipe = {
+      ...current,
+      variables: current.variables.map(variable => (variable.name === input.name
+        ? {
+          ...variable,
+          label,
+          default: input.default === undefined ? variable.default : input.default.slice(0, 500),
+          ask: input.ask === undefined ? variable.ask : input.ask,
+        }
+        : variable)),
+      updatedAt: now,
+      rev: current.rev + 1,
+      history: nextVersion(current, 'variable', now),
+    }
+    this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
+    return { ok: true, recipe: metaOf(next) }
+  }
+
+  /**
+   * Turn the variable back into the literal it was recorded from. The label and
+   * default disappear with it, which is exactly "undo the parameterisation".
+   */
+  removeVariable(input: { readonly id: string; readonly name: string; readonly now?: number }): SaveResult {
+    const now = input.now ?? Date.now()
+    const recipes = this.read()
+    const current = recipes.find(recipe => recipe.id === input.id)
+    if (current === undefined) return { ok: false, error: '流程不存在' }
+    const variable = current.variables.find(item => item.name === input.name)
+    if (variable === undefined) return { ok: false, error: '变量不存在' }
+    const token = '$' + '{' + variable.name + '}'
+    const restore = (text: string): string => text.split(token).join(variable.default)
+    const steps = sanitizeRecipeSteps(current.steps.map(step => {
+      if (step.kind === 'fill') return { ...step, value: restore(step.value) }
+      if (step.kind === 'navigate') return { ...step, url: restore(step.url) }
+      return step
+    }))
+    const next: DemoRecipe = {
+      ...current,
+      steps,
+      variables: current.variables.filter(item => item.name !== variable.name),
+      updatedAt: now,
+      rev: current.rev + 1,
+      history: nextVersion(current, 'unvariable', now),
     }
     this.write(recipes.map(recipe => (recipe.id === current.id ? next : recipe)))
     return { ok: true, recipe: metaOf(next) }

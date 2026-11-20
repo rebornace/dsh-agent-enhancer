@@ -336,6 +336,49 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
     }
   }
 
+  const updateVariable = async (
+    recipe: DemoRecipeMetaWire,
+    name: string,
+    patch: { readonly label?: string; readonly default?: string; readonly ask?: boolean },
+  ) => {
+    setRecipeBusy(true)
+    setHint(null)
+    try {
+      const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), {
+        action: 'variable',
+        id: recipe.id,
+        name,
+        ...patch,
+      })
+      if (result.recipes !== undefined) setRecipes(result.recipes)
+      if (!result.ok) setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
+    } finally {
+      setRecipeBusy(false)
+    }
+  }
+
+  const removeVariable = async (recipe: DemoRecipeMetaWire, name: string) => {
+    setRecipeBusy(true)
+    setHint(null)
+    try {
+      const result = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), {
+        action: 'unvariable',
+        id: recipe.id,
+        name,
+      })
+      if (result.recipes !== undefined) setRecipes(result.recipes)
+      if (!result.ok) {
+        setHint(result.error ?? t('browserAgentDemoRecipeFailed'))
+        return
+      }
+      const refreshed = await agentEnhancerBrowserAgentDemoRecipes.invoke(remote(), { action: 'steps', id: recipe.id })
+      if (refreshed.steps !== undefined) setRecipeStepRows(refreshed.steps)
+      setHint(t('browserAgentDemoVarReverted'))
+    } finally {
+      setRecipeBusy(false)
+    }
+  }
+
   /** Accept the repair the agent worked out, or drop it and keep the flow as is. */
   const resolveHeal = async (recipe: DemoRecipeMetaWire, accept: boolean) => {
     setRecipeBusy(true)
@@ -385,7 +428,7 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
       return
     }
     const initial: Record<string, string> = {}
-    for (const variable of recipe.variables) initial[variable.name] = variable.default
+    for (const variable of recipe.variables) initial[variable.name] = variable.ask ? '' : variable.default
     setVarsValues(initial)
     setVarsFor(recipe.id)
     setHint(null)
@@ -822,6 +865,64 @@ export function BrowserAgentTab(props: BrowserAgentTabProps) {
                               {t('browserAgentDemoRecipeCancel')}
                             </button>
                           </div>
+                        </div>
+                      ) : null}
+                      {openRecipeId === recipe.id && recipe.variables.length > 0 ? (
+                        <div className={styles.browserAgentRecipeVars}>
+                          <span className={styles.browserAgentPaneNote}>{t('browserAgentDemoVarsTitle')}</span>
+                          {recipe.variables.map(variable => (
+                            <div
+                              key={`${variable.name}:${variable.default}:${variable.ask ? 'ask' : 'fixed'}`}
+                              className={styles.browserAgentRecipeVarEditorRow}
+                            >
+                              <input
+                                className={styles.browserAgentRecipeVarLabel}
+                                defaultValue={variable.label}
+                                aria-label={t('browserAgentDemoVarLabel')}
+                                title={t('browserAgentDemoVarLabel')}
+                                disabled={recipeBusy}
+                                onBlur={event => {
+                                  const next = event.target.value.trim()
+                                  if (next !== '' && next !== variable.label) {
+                                    void updateVariable(recipe, variable.name, { label: next })
+                                  }
+                                }}
+                              />
+                              <input
+                                className={styles.browserAgentDemoName}
+                                type={!variable.ask && variable.kind === 'date' ? 'date' : 'text'}
+                                defaultValue={variable.ask ? '' : variable.default}
+                                placeholder={variable.ask
+                                  ? t('browserAgentDemoVarAskPlaceholder')
+                                  : t('browserAgentDemoRecipeVarHint')}
+                                aria-label={variable.label}
+                                disabled={recipeBusy || variable.ask}
+                                onBlur={event => {
+                                  const next = event.target.value
+                                  if (next !== variable.default) {
+                                    void updateVariable(recipe, variable.name, { default: next })
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className={styles.browserAgentButton}
+                                aria-pressed={variable.ask}
+                                disabled={recipeBusy}
+                                onClick={() => { void updateVariable(recipe, variable.name, { ask: !variable.ask }) }}
+                              >
+                                {variable.ask ? t('browserAgentDemoVarAskOn') : t('browserAgentDemoVarAskOff')}
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.browserAgentButton}
+                                disabled={recipeBusy}
+                                onClick={() => { void removeVariable(recipe, variable.name) }}
+                              >
+                                {t('browserAgentDemoVarRevert')}
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       ) : null}
                       {openRecipeId === recipe.id ? (

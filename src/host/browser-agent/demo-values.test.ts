@@ -62,8 +62,8 @@ describe('resolveDatePhrase', () => {
 describe('values from labels or ids', () => {
   const recipe = {
     variables: [
-      { name: 'v1', label: '开始日期', default: '2026-11-01' },
-      { name: 'v2', label: '关键词', default: '周报' },
+      { name: 'v1', label: '开始日期', default: '2026-11-01', ask: false },
+      { name: 'v2', label: '关键词', default: '周报', ask: false },
     ],
   }
 

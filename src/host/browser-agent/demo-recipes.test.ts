@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DemoStep } from './demo.ts'
-import { DemoRecipeStore, MAX_RECIPE_STEPS, MAX_RECIPES, applyRecipeVars, missingRecipeVars, sanitizeRecipeSteps } from './demo-recipes.ts'
+import { DemoRecipeStore, MAX_RECIPE_STEPS, MAX_RECIPES, applyRecipeVars, missingRecipeVars, prepareRecipeValues, sanitizeRecipeSteps } from './demo-recipes.ts'
 const click = (name: string, at = 1): DemoStep => ({ kind: 'click', at, role: 'button', name, selector: '#x' })
 const fill = (name: string, value: string, at = 2, masked = false): DemoStep => ({
   kind: 'fill', at, role: 'textbox', name, selector: '#f', field: 'q', value, masked,
@@ -175,7 +175,7 @@ describe('recipe parameters', () => {
     const result = store.parameterize({ id: saved.recipe.id, index: 1, name: 'from', now: 2000 })
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error('expected ok')
-    expect(result.recipe.variables).toEqual([{ name: 'from', label: '开始日期', default: '2026-11-01' }])
+    expect(result.recipe.variables).toEqual([{ name: 'from', label: '开始日期', default: '2026-11-01', ask: false }])
     const steps = store.get(saved.recipe.id)?.steps ?? []
     expect(steps[1]).toMatchObject({ kind: 'fill', value: '${from}' })
     expect(steps[0]).toMatchObject({ kind: 'navigate', url: 'https://example.com/reports?from=2026-11-01' })
@@ -188,7 +188,7 @@ describe('recipe parameters', () => {
     const result = store.parameterize({ id: saved.recipe.id, index: 0, now: 2_000 })
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error('expected ok')
-    expect(result.recipe.variables).toEqual([{ name: 'v1', label: '开始日期', default: '2026-11-01' }])
+    expect(result.recipe.variables).toEqual([{ name: 'v1', label: '开始日期', default: '2026-11-01', ask: false }])
     expect(store.get(saved.recipe.id)?.steps[0]).toMatchObject({ value: '${v1}' })
   })
 
@@ -228,9 +228,9 @@ describe('recipe parameters', () => {
   })
 
   it('reports variables that still need a value', () => {
-    expect(missingRecipeVars({ variables: [{ name: 'a', label: 'a', default: '' }, { name: 'b', label: 'b', default: 'd' }] }, { a: '1' }))
+    expect(missingRecipeVars({ variables: [{ name: 'a', label: 'a', default: '', ask: false }, { name: 'b', label: 'b', default: 'd', ask: false }] }, { a: '1' }))
       .toEqual(['b'])
-    expect(missingRecipeVars({ variables: [{ name: 'a', label: 'a', default: 'x' }] }, {})).toEqual(['a'])
+    expect(missingRecipeVars({ variables: [{ name: 'a', label: 'a', default: 'x', ask: false }] }, {})).toEqual(['a'])
     expect(missingRecipeVars({ variables: [] }, {})).toEqual([])
   })
 
@@ -244,7 +244,7 @@ describe('recipe parameters', () => {
         variables: [{ name: 'ok', default: 'v' }, { name: '1bad', default: 'x' }, null],
       }],
     }), 'utf8')
-    expect(store.list()[0]?.variables).toEqual([{ name: 'ok', label: 'ok', default: 'v' }])
+    expect(store.list()[0]?.variables).toEqual([{ name: 'ok', label: 'ok', default: 'v', ask: false }])
   })
 })
 
@@ -363,5 +363,62 @@ describe('repairs and versions', () => {
     const reloaded = new DemoRecipeStore(file).list()
     expect(reloaded[0]?.pendingHeal).toMatchObject({ id: 'h-1', failedAt: 2 })
     expect(reloaded[0]?.pendingHeal?.replacement).toMatchObject({ name: '导出报表（新）' })
+  })
+})
+
+describe('variable management', () => {
+  it('renames, re-defaults and switches to ask-per-run', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '周报', steps: [fill('开始日期', '2026-11-01')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    store.parameterize({ id: saved.recipe.id, index: 0, name: 'v1', label: '开始日期', now: 2_000 })
+
+    const renamed = store.updateVariable({ id: saved.recipe.id, name: 'v1', label: '统计开始', now: 3_000 })
+    expect(renamed.ok).toBe(true)
+    if (!renamed.ok) throw new Error('expected ok')
+    expect(renamed.recipe.variables[0]).toMatchObject({ label: '统计开始', default: '2026-11-01', ask: false })
+    expect(renamed.recipe.rev).toBe(3)
+
+    const asked = store.updateVariable({ id: saved.recipe.id, name: 'v1', ask: true, now: 4_000 })
+    expect(asked.ok && asked.recipe.variables[0]?.ask).toBe(true)
+    expect(asked.ok && asked.recipe.rev).toBe(4)
+  })
+
+  it('turns the variable back into the recorded text', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '周报', steps: [fill('开始日期', '2026-11-01')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    store.parameterize({ id: saved.recipe.id, index: 0, name: 'v1', now: 2_000 })
+    expect(store.get(saved.recipe.id)?.steps[0]).toMatchObject({ value: '$' + '{v1}' })
+
+    const reverted = store.removeVariable({ id: saved.recipe.id, name: 'v1', now: 3_000 })
+    expect(reverted.ok).toBe(true)
+    if (!reverted.ok) throw new Error('expected ok')
+    expect(reverted.recipe.variables).toEqual([])
+    expect(store.get(saved.recipe.id)?.steps[0]).toMatchObject({ value: '2026-11-01' })
+    expect(reverted.recipe.rev).toBe(3)
+    expect(reverted.recipe.history).toBe(2)
+    expect(store.removeVariable({ id: saved.recipe.id, name: 'v1' })).toMatchObject({ ok: false })
+  })
+
+  it('an ask variable never prefills its default', () => {
+    const recipe = {
+      variables: [
+        { name: 'v1', label: '开始日期', default: '2026-11-01', ask: true },
+        { name: 'v2', label: '关键词', default: '周报', ask: false },
+      ],
+    }
+    const prepared = prepareRecipeValues(recipe, {}, new Date(2026, 10, 20))
+    expect(prepared.values).toEqual({ v1: '', v2: '周报' })
+    expect(prepared.missing.map(variable => variable.label)).toEqual(['开始日期'])
+    expect(prepareRecipeValues(recipe, { 开始日期: '上周' }, new Date(2026, 10, 20)).values.v1).toBe('2026-11-09')
+  })
+
+  it('rejects a blank label', () => {
+    const { store } = tempStore()
+    const saved = store.save({ name: '周报', steps: [fill('开始日期', '2026-11-01')], now: 1_000 })
+    if (!saved.ok) throw new Error('expected ok')
+    store.parameterize({ id: saved.recipe.id, index: 0, name: 'v1', now: 2_000 })
+    expect(store.updateVariable({ id: saved.recipe.id, name: 'v1', label: '   ' })).toMatchObject({ ok: false })
   })
 })

@@ -83,7 +83,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentDemoRecordingAgent' | 'browserAgentDemoEmpty' | 'browserAgentDemoCopy' |
       'browserAgentDemoCopied' | 'browserAgentDemoCopyFailed' | 'browserAgentDemoFailed' |
       'browserAgentDemoSend' | 'browserAgentDemoSendLead' | 'browserAgentDemoSent' |
-      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' | 'browserAgentDemoRecipeRename' | 'browserAgentDemoRecipeRenameSave' | 'browserAgentDemoRecipeCancel' | 'browserAgentDemoRecipeSteps' | 'browserAgentDemoRecipeRenamed' | 'browserAgentDemoRecipeSetVar' | 'browserAgentDemoSuggestTitle' | 'browserAgentDemoSuggestRow' | 'browserAgentDemoSuggestMake' | 'browserAgentDemoSuggestKeep' | 'browserAgentDemoRecipeVarHint' | 'browserAgentDemoRecipeVarWorking' | 'browserAgentDemoRecipeParameterized' | 'browserAgentDemoHealText' | 'browserAgentDemoHealInserted' | 'browserAgentDemoHealKeep' | 'browserAgentDemoHealSkip' | 'browserAgentDemoHealKept' | 'browserAgentDemoHealSkipped' | 'browserAgentDemoRecipeUndo' | 'browserAgentDemoRecipeRestored' | 'browserAgentDemoRecipeVersion' |
+      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' | 'browserAgentDemoRecipeRename' | 'browserAgentDemoRecipeRenameSave' | 'browserAgentDemoRecipeCancel' | 'browserAgentDemoRecipeSteps' | 'browserAgentDemoRecipeRenamed' | 'browserAgentDemoRecipeSetVar' | 'browserAgentDemoSuggestTitle' | 'browserAgentDemoSuggestRow' | 'browserAgentDemoSuggestMake' | 'browserAgentDemoSuggestKeep' | 'browserAgentDemoRecipeVarHint' | 'browserAgentDemoVarsTitle' | 'browserAgentDemoVarLabel' | 'browserAgentDemoVarAskOn' | 'browserAgentDemoVarAskOff' | 'browserAgentDemoVarAskPlaceholder' | 'browserAgentDemoVarRevert' | 'browserAgentDemoVarReverted' | 'browserAgentDemoRecipeVarWorking' | 'browserAgentDemoRecipeParameterized' | 'browserAgentDemoHealText' | 'browserAgentDemoHealInserted' | 'browserAgentDemoHealKeep' | 'browserAgentDemoHealSkip' | 'browserAgentDemoHealKept' | 'browserAgentDemoHealSkipped' | 'browserAgentDemoRecipeUndo' | 'browserAgentDemoRecipeRestored' | 'browserAgentDemoRecipeVersion' |
       'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
       'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
       'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
@@ -524,6 +524,13 @@ export const agentLocales = {
     browserAgentDemoSuggestMake: '每次问我',
     browserAgentDemoSuggestKeep: '保持固定',
     browserAgentDemoRecipeVarHint: '2026-11-01 或 上周',
+    browserAgentDemoVarsTitle: '可改的值',
+    browserAgentDemoVarLabel: '改名字',
+    browserAgentDemoVarAskOn: '每次问我',
+    browserAgentDemoVarAskOff: '已固定',
+    browserAgentDemoVarAskPlaceholder: '运行前填写',
+    browserAgentDemoVarRevert: '改回固定值',
+    browserAgentDemoVarReverted: '已改回固定值',
     browserAgentDemoRecipeVarWorking: '处理中…',
     browserAgentDemoRecipeParameterized: '已把这一步变成变量「{name}」',
     browserAgentDemoHealText: '第 {n} 步的控件变了，现在改用「{label}」。要记住这次的做法吗？',
@@ -1234,6 +1241,13 @@ export const agentLocales = {
     browserAgentDemoSuggestMake: 'Ask me',
     browserAgentDemoSuggestKeep: 'Keep fixed',
     browserAgentDemoRecipeVarHint: '2026-11-01 or last week',
+    browserAgentDemoVarsTitle: 'Values you can change',
+    browserAgentDemoVarLabel: 'Rename',
+    browserAgentDemoVarAskOn: 'Ask me',
+    browserAgentDemoVarAskOff: 'Fixed',
+    browserAgentDemoVarAskPlaceholder: 'Filled at run time',
+    browserAgentDemoVarRevert: 'Make it fixed',
+    browserAgentDemoVarReverted: 'Restored the recorded value',
     browserAgentDemoRecipeVarWorking: 'Working…',
     browserAgentDemoRecipeParameterized: 'Step now uses the variable "{name}"',
     browserAgentDemoHealText: 'Step {n} moved: the flow will use "{label}" instead. Remember this?',

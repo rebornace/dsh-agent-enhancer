@@ -244,6 +244,27 @@ describe('browser_demo_recipes values', () => {
   })
 })
 
+describe('browser_demo_recipes ask mode', () => {
+  const dated: DemoStep[] = [
+    { kind: 'fill', at: 1, role: 'textbox', name: '开始日期', selector: '#from', field: 'from', value: '2026-11-01', masked: false },
+  ]
+
+  it('asks for an ask-variable even though a default exists', async () => {
+    const h = harness({
+      recipes: [{ name: '周报', steps: dated }],
+      variables: [{ index: 0, name: 'from' }],
+      nodes: [{ ref: 5, role: 'textbox', name: '开始日期' }],
+    })
+    const id = h.store.list()[0]!.id
+    h.store.updateVariable({ id, name: 'from', label: '开始日期', ask: true })
+    await expect(h.run({ action: 'run', name: '周报' })).rejects.toThrow(/still needs 开始日期/)
+    await expect(h.run({ action: 'run', name: '周报', vars: { 开始日期: '' } })).rejects.toThrow(/still needs 开始日期/)
+    const out = await h.run({ action: 'run', name: '周报', vars: { 开始日期: '2026-10-01' } }) as string
+    expect(out).toContain('replayed 1/1')
+    expect(h.types).toEqual(['2026-10-01'])
+  })
+})
+
 describe('browser_demo_recipes repair', () => {
   const moved: DemoStep[] = [
     { kind: 'click', at: 1, role: 'button', name: '导出报表', selector: '#export', tabUrl: 'https://example.com/admin' },

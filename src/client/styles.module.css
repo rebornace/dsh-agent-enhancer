@@ -2847,6 +2847,38 @@
   background: var(--dsw-alias-bg-layer-1);
 }
 
+/* Variable editor: a name, its value, and two actions; wraps on a narrow pane. */
+.browserAgentRecipeVarEditorRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+}
+
+.browserAgentRecipeVarLabel {
+  flex: 0 0 76px;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  border: 0.5px solid transparent;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  text-overflow: ellipsis;
+}
+
+.browserAgentRecipeVarLabel:hover {
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.browserAgentRecipeVarLabel:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
 .browserAgentRecipeVarRow,
 .browserAgentRecipeStepRow {
   display: flex;

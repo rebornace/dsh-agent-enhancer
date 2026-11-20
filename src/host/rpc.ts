@@ -794,6 +794,8 @@ export const demoRecipeVariableSchema = z.strictObject({
   /** What the panel shows: 「开始日期」. */
   label: z.string().min(1),
   default: z.string(),
+  /** Every run asks for this value instead of prefilling the default. */
+  ask: z.boolean(),
   /** Render a date picker for date-shaped values. */
   kind: z.enum(['text', 'date']),
 })
@@ -852,6 +854,15 @@ export const browserAgentDemoRecipesRequestSchema = z.discriminatedUnion('action
   z.strictObject({ action: z.literal('delete'), id: z.string().min(1) }),
   z.strictObject({ action: z.literal('steps'), id: z.string().min(1) }),
   z.strictObject({ action: z.literal('rename'), id: z.string().min(1), name: z.string() }),
+  z.strictObject({
+    action: z.literal('variable'),
+    id: z.string().min(1),
+    name: z.string().min(1),
+    label: z.string().optional(),
+    default: z.string().optional(),
+    ask: z.boolean().optional(),
+  }),
+  z.strictObject({ action: z.literal('unvariable'), id: z.string().min(1), name: z.string().min(1) }),
   z.strictObject({
     action: z.literal('parameterize'),
     id: z.string().min(1),

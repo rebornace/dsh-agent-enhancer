@@ -79,12 +79,14 @@ export interface BrowserAgentRuntime {
    * back, or delete it. Steps are stored sanitized; secrets stay `***`.
    */
   demoRecipes(input: {
-    readonly action: 'list' | 'save' | 'run' | 'delete' | 'steps' | 'rename' | 'parameterize' | 'heal' | 'rollback'
+    readonly action: 'list' | 'save' | 'run' | 'delete' | 'steps' | 'rename' | 'parameterize' | 'variable' | 'unvariable' | 'heal' | 'rollback'
     readonly name?: string
     readonly id?: string
     readonly index?: number
     readonly accept?: boolean
     readonly label?: string
+    readonly default?: string
+    readonly ask?: boolean
     readonly vars?: Readonly<Record<string, string>>
   }): Promise<{
     readonly ok: boolean
@@ -683,6 +685,34 @@ export function installBrowserAgent(
           outcome: 'ok',
         })
         return { ok: true, recipe: renamed.recipe, recipes: recipes.list() }
+      }
+      if (input.action === 'variable') {
+        const updated = recipes.updateVariable({
+          id: input.id ?? '',
+          name: input.name ?? '',
+          ...(input.label === undefined ? {} : { label: input.label }),
+          ...(input.default === undefined ? {} : { default: input.default }),
+          ...(input.ask === undefined ? {} : { ask: input.ask }),
+        })
+        if (!updated.ok) return { ok: false, error: updated.error, recipes: recipes.list() }
+        sessions.record({
+          sessionId: 'sidebar',
+          tool: 'browser_demo_recipe',
+          summary: 'Updated a flow variable on "' + updated.recipe.name + '"',
+          outcome: 'ok',
+        })
+        return { ok: true, recipe: updated.recipe, recipes: recipes.list() }
+      }
+      if (input.action === 'unvariable') {
+        const reverted = recipes.removeVariable({ id: input.id ?? '', name: input.name ?? '' })
+        if (!reverted.ok) return { ok: false, error: reverted.error, recipes: recipes.list() }
+        sessions.record({
+          sessionId: 'sidebar',
+          tool: 'browser_demo_recipe',
+          summary: 'Restored a fixed value in "' + reverted.recipe.name + '"',
+          outcome: 'ok',
+        })
+        return { ok: true, recipe: reverted.recipe, recipes: recipes.list() }
       }
       if (input.action === 'heal') {
         const resolved = recipes.resolveHeal({ id: input.id ?? '', accept: input.accept === true })

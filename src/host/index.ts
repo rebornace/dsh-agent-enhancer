@@ -1363,6 +1363,8 @@ export class AgentEnhancerService extends TypertRemoteService {
       ...('id' in request ? { id: request.id } : {}),
       ...('index' in request ? { index: request.index } : {}),
       ...('label' in request && request.label !== undefined ? { label: request.label } : {}),
+      ...('default' in request && request.default !== undefined ? { default: request.default } : {}),
+      ...('ask' in request && request.ask !== undefined ? { ask: request.ask } : {}),
       ...('accept' in request && request.accept !== undefined ? { accept: request.accept } : {}),
       ...('vars' in request && request.vars !== undefined ? { vars: request.vars } : {}),
     })
@@ -1376,6 +1378,7 @@ export class AgentEnhancerService extends TypertRemoteService {
         name: variable.name,
         label: variable.label,
         default: variable.default,
+        ask: variable.ask,
         kind: isDateVariable(variable) ? 'date' as const : 'text' as const,
       })),
       rev: recipe.rev,
