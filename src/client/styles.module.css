@@ -3071,13 +3071,6 @@
   white-space: nowrap;
 }
 
-.browserAgentRecipeParam {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-}
-
 /* A repair the agent worked out: a quiet card, not a modal. */
 .browserAgentHeal {
   display: flex;

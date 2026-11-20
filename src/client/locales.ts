@@ -83,7 +83,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentDemoRecordingAgent' | 'browserAgentDemoEmpty' | 'browserAgentDemoCopy' |
       'browserAgentDemoCopied' | 'browserAgentDemoCopyFailed' | 'browserAgentDemoFailed' |
       'browserAgentDemoSend' | 'browserAgentDemoSendLead' | 'browserAgentDemoSent' |
-      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' | 'browserAgentDemoRecipeRename' | 'browserAgentDemoRecipeRenameSave' | 'browserAgentDemoRecipeCancel' | 'browserAgentDemoRecipeSteps' | 'browserAgentDemoRecipeRenamed' | 'browserAgentDemoRecipeSetVar' | 'browserAgentDemoSuggestTitle' | 'browserAgentDemoSuggestRow' | 'browserAgentDemoSuggestMake' | 'browserAgentDemoSuggestKeep' | 'browserAgentDemoRecipeVarHint' | 'browserAgentDemoVarsTitle' | 'browserAgentDemoRecipeHealBadge' | 'browserAgentDemoRecipeUnattendedBadge' | 'browserAgentDemoRecipeDetails' | 'browserAgentDemoRecipeMore' | 'browserAgentDemoRecipeConfirmDelete' | 'browserAgentDemoRunOptions' | 'browserAgentDemoStepsShow' | 'browserAgentDemoUnattendedHint' | 'browserAgentDemoUnattendedOn' | 'browserAgentDemoUnattendedEnable' | 'browserAgentDemoUnattendedDisable' | 'browserAgentDemoUnattendedNoSite' | 'browserAgentDemoVarLabel' | 'browserAgentDemoVarAskToggle' | 'browserAgentDemoVarAskPlaceholder' | 'browserAgentDemoVarRevert' | 'browserAgentDemoVarReverted' | 'browserAgentDemoRecipeVarWorking' | 'browserAgentDemoRecipeParameterized' | 'browserAgentDemoHealText' | 'browserAgentDemoHealInserted' | 'browserAgentDemoHealKeep' | 'browserAgentDemoHealSkip' | 'browserAgentDemoHealKept' | 'browserAgentDemoHealSkipped' | 'browserAgentDemoRecipeUndo' | 'browserAgentDemoRecipeRestored' | 'browserAgentDemoRecipeVersion' |
+      'browserAgentDemoSendFailed' | 'browserAgentDemoLastSteps' | 'browserAgentDemoRecipeName' | 'browserAgentDemoRecipeSave' | 'browserAgentDemoRecipeSaved' | 'browserAgentDemoRecipeFailed' | 'browserAgentDemoRecipeNameRequired' | 'browserAgentDemoRecipeRan' | 'browserAgentDemoRecipeStopped' | 'browserAgentDemoRecipesTitle' | 'browserAgentDemoRecipeStepCount' | 'browserAgentDemoRecipeRun' | 'browserAgentDemoRecipeDelete' | 'browserAgentDemoRecipeRename' | 'browserAgentDemoRecipeRenameSave' | 'browserAgentDemoRecipeCancel' | 'browserAgentDemoRecipeRenamed' | 'browserAgentDemoRecipeSetVar' | 'browserAgentDemoSuggestTitle' | 'browserAgentDemoSuggestRow' | 'browserAgentDemoSuggestMake' | 'browserAgentDemoSuggestKeep' | 'browserAgentDemoRecipeVarHint' | 'browserAgentDemoVarsTitle' | 'browserAgentDemoRecipeHealBadge' | 'browserAgentDemoRecipeUnattendedBadge' | 'browserAgentDemoRecipeDetails' | 'browserAgentDemoRecipeMore' | 'browserAgentDemoRecipeConfirmDelete' | 'browserAgentDemoRunOptions' | 'browserAgentDemoStepsShow' | 'browserAgentDemoUnattendedHint' | 'browserAgentDemoUnattendedOn' | 'browserAgentDemoUnattendedEnable' | 'browserAgentDemoUnattendedDisable' | 'browserAgentDemoUnattendedNoSite' | 'browserAgentDemoVarLabel' | 'browserAgentDemoVarAskToggle' | 'browserAgentDemoVarAskPlaceholder' | 'browserAgentDemoVarRevert' | 'browserAgentDemoVarReverted' | 'browserAgentDemoRecipeVarWorking' | 'browserAgentDemoRecipeParameterized' | 'browserAgentDemoHealText' | 'browserAgentDemoHealInserted' | 'browserAgentDemoHealKeep' | 'browserAgentDemoHealSkip' | 'browserAgentDemoHealKept' | 'browserAgentDemoHealSkipped' | 'browserAgentDemoRecipeUndo' | 'browserAgentDemoRecipeRestored' | 'browserAgentDemoRecipeVersion' |
       'browserAgentDiagnosis_idle' | 'browserAgentDiagnosis_disabled' |
       'browserAgentDiagnosis_webkit_missing' | 'browserAgentDiagnosis_browser_missing' |
       'browserAgentDiagnosis_profile_locked' | 'browserAgentDiagnosis_launch_failed' |
@@ -516,7 +516,6 @@ export const agentLocales = {
     browserAgentDemoRecipeRename: '重命名',
     browserAgentDemoRecipeRenameSave: '保存',
     browserAgentDemoRecipeCancel: '取消',
-    browserAgentDemoRecipeSteps: '查看步骤',
     browserAgentDemoRecipeRenamed: '已重命名为「{name}」',
     browserAgentDemoRecipeSetVar: '设为参数',
     browserAgentDemoSuggestTitle: '这几个值以后要换吗？',
@@ -1244,7 +1243,6 @@ export const agentLocales = {
     browserAgentDemoRecipeRename: 'Rename',
     browserAgentDemoRecipeRenameSave: 'Save',
     browserAgentDemoRecipeCancel: 'Cancel',
-    browserAgentDemoRecipeSteps: 'View steps',
     browserAgentDemoRecipeRenamed: 'Renamed to "{name}"',
     browserAgentDemoRecipeSetVar: 'Make a variable',
     browserAgentDemoSuggestTitle: 'Should these change every time?',
