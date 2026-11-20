@@ -63,6 +63,22 @@ async function loadPlaywright(): Promise<PlaywrightModule> {
   return playwrightModule
 }
 
+/**
+ * Chromium flags for the dedicated window.
+ *
+ * `--disable-blink-features=AutomationControlled` clears `navigator.webdriver`,
+ * which many login gates (Bilibili among them) read before anything else. It is
+ * the one signal we can remove honestly: the user is logging into their own
+ * account in their own dedicated browser. Do not grow this into a stealth
+ * toolkit (patched plugins, canvas noise); those break on the next Chrome.
+ */
+export const AGENT_CHROMIUM_ARGS: readonly string[] = [
+  '--no-first-run',
+  '--no-default-browser-check',
+  '--disable-default-apps',
+  '--disable-blink-features=AutomationControlled',
+]
+
 export interface PlaywrightDriverOptions {
   /** Static dir, or live getter so Chrome↔Edge switches pick the right profile. */
   readonly profileDir: string | (() => string)
@@ -347,7 +363,7 @@ export class PlaywrightDriver implements BrowserDriver {
       chromiumSandbox: true,
       ignoreDefaultArgs: ['--no-sandbox'],
       viewport: this.headless ? { width: 1280, height: 800 } : null,
-      args: ['--no-first-run', '--no-default-browser-check', '--disable-default-apps'],
+      args: [...AGENT_CHROMIUM_ARGS],
     })
   }
 
