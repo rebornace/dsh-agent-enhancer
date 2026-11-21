@@ -22,6 +22,8 @@ LEFT_BIAS = {
 # Wide short chrome (icon rows): pad to square so the whole strip stays visible.
 PAD_SQUARE = {
   'soft-pause-action.png',
+  'browser-agent-flows.png',
+  'browser-agent-settings.png',
 }
 
 
