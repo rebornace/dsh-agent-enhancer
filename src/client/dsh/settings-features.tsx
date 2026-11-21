@@ -2,12 +2,15 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { IconChevronRightOutlineRegular, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   BROWSER_AGENT_IDLE_CLOSE,
+  BROWSER_AGENT_UNATTENDED,
   browserAgentBrowsersForPlatform,
   coerceBrowserAgentBrowserForPlatform,
   detectUiPlatform,
   RUN_ALERTS_LEVELS,
   resolveBrowserAgentBrowser,
   resolveBrowserAgentIdleClose,
+  resolveBrowserAgentUnattendedActions,
+  resolveBrowserAgentUnattendedMinutes,
   resolveRunAlertsLevel,
 } from '../../config.ts'
 import type {
@@ -31,6 +34,8 @@ export interface SettingsFeaturesPanelProps {
   readonly onBrowserAgentDebugTools?: (enabled: boolean) => void
   readonly onBrowserAgentDemonstrate?: (enabled: boolean) => void
   readonly onBrowserAgentIdleClose?: (value: BrowserAgentIdleClose) => void
+  readonly onBrowserAgentUnattendedMinutes?: (value: number) => void
+  readonly onBrowserAgentUnattendedActions?: (value: number) => void
   readonly onOpenModel: (feature: ConfigurableAuxiliaryFeature) => void
   /** Optional per-module extra description (e.g. host capability warnings). */
   readonly featureExtraDescription?: (module: ModuleName) => string | undefined
@@ -85,6 +90,8 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
     onBrowserAgentDebugTools,
     onBrowserAgentDemonstrate,
     onBrowserAgentIdleClose,
+    onBrowserAgentUnattendedMinutes,
+    onBrowserAgentUnattendedActions,
     onOpenModel,
     featureExtraDescription,
   } = props
@@ -172,6 +179,65 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                         </select>
                       </label>
                       <p className={styles.settingDescription}>{t('browserAgentIdleCloseHint')}</p>
+                      <div className={styles.browserAgentUnattendedFields}>
+                        <label className={styles.browserAgentUnattendedField}>
+                          <span>{t('browserAgentUnattendedMinutes')}</span>
+                          <input
+                            key={`minutes-${settings.browserAgentUnattendedMinutes}`}
+                            className={styles.settingsSelect}
+                            type="number"
+                            inputMode="numeric"
+                            min={BROWSER_AGENT_UNATTENDED.minutes.min}
+                            max={BROWSER_AGENT_UNATTENDED.minutes.max}
+                            step={1}
+                            aria-label={t('browserAgentUnattendedMinutes')}
+                            disabled={busy || onBrowserAgentUnattendedMinutes === undefined}
+                            defaultValue={settings.browserAgentUnattendedMinutes}
+                            onBlur={event => {
+                              const raw = event.target.value.trim()
+                              const next = raw === ''
+                                ? settings.browserAgentUnattendedMinutes
+                                : resolveBrowserAgentUnattendedMinutes(raw)
+                              event.target.value = String(next)
+                              if (next !== settings.browserAgentUnattendedMinutes) {
+                                onBrowserAgentUnattendedMinutes?.(next)
+                              }
+                            }}
+                            onKeyDown={event => {
+                              if (event.key === 'Enter') event.currentTarget.blur()
+                            }}
+                          />
+                        </label>
+                        <label className={styles.browserAgentUnattendedField}>
+                          <span>{t('browserAgentUnattendedActions')}</span>
+                          <input
+                            key={`actions-${settings.browserAgentUnattendedActions}`}
+                            className={styles.settingsSelect}
+                            type="number"
+                            inputMode="numeric"
+                            min={BROWSER_AGENT_UNATTENDED.actions.min}
+                            max={BROWSER_AGENT_UNATTENDED.actions.max}
+                            step={1}
+                            aria-label={t('browserAgentUnattendedActions')}
+                            disabled={busy || onBrowserAgentUnattendedActions === undefined}
+                            defaultValue={settings.browserAgentUnattendedActions}
+                            onBlur={event => {
+                              const raw = event.target.value.trim()
+                              const next = raw === ''
+                                ? settings.browserAgentUnattendedActions
+                                : resolveBrowserAgentUnattendedActions(raw)
+                              event.target.value = String(next)
+                              if (next !== settings.browserAgentUnattendedActions) {
+                                onBrowserAgentUnattendedActions?.(next)
+                              }
+                            }}
+                            onKeyDown={event => {
+                              if (event.key === 'Enter') event.currentTarget.blur()
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <p className={styles.settingDescription}>{t('browserAgentUnattendedLimitsHint')}</p>
                     </div>
                   ) : null}
                 </div>

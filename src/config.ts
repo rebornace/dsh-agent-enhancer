@@ -63,6 +63,33 @@ export function browserAgentIdleCloseMs(value: BrowserAgentIdleClose): number | 
   }
 }
 
+/**
+ * Unattended run grant: one saved flow may act on its recorded origin for this
+ * long, and for this many actions, without a per-action card. Kept bounded on
+ * purpose — it is a security budget, not a performance knob.
+ */
+export const BROWSER_AGENT_UNATTENDED = {
+  minutes: { min: 5, max: 60, default: 20 },
+  actions: { min: 10, max: 200, default: 30 },
+} as const
+
+function clampUnattended(value: unknown, limits: { readonly min: number, readonly max: number, readonly default: number }): number {
+  if (value === undefined || value === null) return limits.default
+  const raw = typeof value === 'string' ? value.trim() : value
+  if (raw === '') return limits.default
+  const number = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(number)) return limits.default
+  return Math.min(limits.max, Math.max(limits.min, Math.round(number)))
+}
+
+export function resolveBrowserAgentUnattendedMinutes(value: unknown): number {
+  return clampUnattended(value, BROWSER_AGENT_UNATTENDED.minutes)
+}
+
+export function resolveBrowserAgentUnattendedActions(value: unknown): number {
+  return clampUnattended(value, BROWSER_AGENT_UNATTENDED.actions)
+}
+
 export function resolveBrowserAgentBrowser(value: string | undefined): BrowserAgentBrowser {
   switch (value) {
     case 'auto':
@@ -140,6 +167,10 @@ export type EnhancerSettings = Readonly<Record<`${ModuleName}Enabled`, boolean>>
   readonly browserAgentDemonstrate: boolean
   /** Close agent tabs nobody used for this long; `never` disables the sweep. */
   readonly browserAgentIdleClose: BrowserAgentIdleClose
+  /** Unattended-run grant length in minutes (bounded, see BROWSER_AGENT_UNATTENDED). */
+  readonly browserAgentUnattendedMinutes: number
+  /** Unattended-run action budget (bounded, see BROWSER_AGENT_UNATTENDED). */
+  readonly browserAgentUnattendedActions: number
   readonly optimizeProvider: string
   readonly optimizeModel: string
   readonly optimizeReasoningEffort: string
@@ -188,6 +219,8 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   browserAgentDebugTools: false,
   browserAgentDemonstrate: false,
   browserAgentIdleClose: '10m',
+  browserAgentUnattendedMinutes: BROWSER_AGENT_UNATTENDED.minutes.default,
+  browserAgentUnattendedActions: BROWSER_AGENT_UNATTENDED.actions.default,
   webChatBridgeEnabled: true,
   instructionsSkillsEnabled: true,
   mcpConnectorsEnabled: true,
@@ -238,6 +271,8 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     browserAgentDebugTools: value?.browserAgentDebugTools === true,
     browserAgentDemonstrate: value?.browserAgentDemonstrate === true,
     browserAgentIdleClose: resolveBrowserAgentIdleClose(value?.browserAgentIdleClose),
+    browserAgentUnattendedMinutes: resolveBrowserAgentUnattendedMinutes(value?.browserAgentUnattendedMinutes),
+    browserAgentUnattendedActions: resolveBrowserAgentUnattendedActions(value?.browserAgentUnattendedActions),
     webChatBridgeEnabled: value?.webChatBridgeEnabled ?? true,
     instructionsSkillsEnabled: value?.instructionsSkillsEnabled ?? true,
     mcpConnectorsEnabled: value?.mcpConnectorsEnabled ?? true,

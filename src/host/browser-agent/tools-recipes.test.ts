@@ -6,6 +6,7 @@ import { DemoRecipeStore } from './demo-recipes.ts'
 import { DemoRepairTracker, createRepairHooks } from './demo-heal.ts'
 import { BrowserHumanGate } from './human-gate.ts'
 import { BrowserSessionState } from './session-state.ts'
+import { TabScopeStore } from './tab-scope.ts'
 import { registerBrowserTools } from './tools.ts'
 
 interface RegisteredTool {
@@ -30,10 +31,15 @@ function harness(input: {
   readonly permission?: 'full' | 'ask' | 'read-only'
   /** Extra evidence for refs the "agent" clicks during a repair. */
   readonly refInfo?: Readonly<Record<number, { readonly role: string; readonly name: string; readonly selector: string }>>
+  /** Mark the bound tab (id 1) read-only, as the sidebar toggle would. */
+  readonly readOnly?: boolean
+  /** Configured unattended budget; omitted means the 20 min / 30 action default. */
+  readonly unattended?: { readonly minutes: number; readonly actions: number }
 } = {}) {
   const tools = new Map<string, RegisteredTool>()
   const approvals: string[] = []
   const granted: string[] = []
+  const grantCalls: Array<{ url: string; ttlMs: number; actions: number }> = []
   const revoked: string[] = []
   const originOf = (url: string | undefined): string | undefined => {
     if (url === undefined) return undefined
@@ -47,6 +53,12 @@ function harness(input: {
   const types: string[] = []
   const store = new DemoRecipeStore(null)
   const repair = createRepairHooks({ tracker: new DemoRepairTracker(), store })
+  const sessions = new BrowserSessionState()
+  const tabScope = new TabScopeStore()
+  if (input.readOnly === true) {
+    sessions.bind('s1', 1)
+    tabScope.setReadOnly(1, true)
+  }
   let firstId: string | undefined
   for (const recipe of input.recipes ?? []) {
     const saved = store.save({ name: recipe.name, steps: recipe.steps })
@@ -105,8 +117,9 @@ function harness(input: {
   registerBrowserTools(ctx, {
     driver,
     approval: {
-      grantOrigin: (input: { url: string }) => {
+      grantOrigin: (input: { url: string; ttlMs: number; actions: number }) => {
         granted.push(input.url)
+        grantCalls.push({ url: input.url, ttlMs: input.ttlMs, actions: input.actions })
         return true
       },
       revokeOrigin: (input: { url: string }) => {
@@ -125,8 +138,10 @@ function harness(input: {
       current: () => null,
     } as never,
     human: new BrowserHumanGate(),
-    sessions: new BrowserSessionState(),
+    sessions,
+    tabScope,
     ...(input.permission === undefined ? {} : { permission: () => input.permission }),
+    ...(input.unattended === undefined ? {} : { unattended: () => input.unattended! }),
     demonstrate: () => input.demonstrate !== false,
     recipes: store,
     repair,
@@ -137,6 +152,7 @@ function harness(input: {
   return {
     approvals,
     granted,
+    grantCalls,
     revoked,
     clicks,
     types,
@@ -201,6 +217,15 @@ describe('browser_demo_recipes', () => {
     expect(h.clicks).toEqual([3, 4])
     expect(out).toContain('replayed 2/2')
     expect(out).toContain('1. ok   click button "导出报表"')
+  })
+
+  it('refuses to replay into a tab the user marked read-only', async () => {
+    const h = harness({ recipes: [{ name: '周报导出', steps }], readOnly: true })
+    await expect(h.run({ action: 'run', name: '周报导出' })).rejects.toThrow(/tab_read_only/)
+    // Refused before any approval or page op: nothing clicked, nothing granted.
+    expect(h.approvals).toEqual([])
+    expect(h.granted).toEqual([])
+    expect(h.clicks).toEqual([])
   })
 
   it('reports an unknown flow instead of guessing', async () => {
@@ -331,6 +356,18 @@ describe('unattended flows', () => {
     expect(out).toContain('unattended: https://example.com is authorized')
     expect(h.approvals).toEqual([])
     expect(h.granted).toEqual(['https://example.com'])
+  })
+
+  it('grants the configured budget instead of the 20 / 30 default', async () => {
+    const h = harness({
+      recipes: [{ name: '周报', steps, unattended: true }],
+      unattended: { minutes: 45, actions: 120 },
+    })
+    const out = await h.run({ action: 'run', name: '周报', site: 'https://example.com' }) as string
+    expect(h.grantCalls).toEqual([
+      { url: 'https://example.com', ttlMs: 45 * 60_000, actions: 120 },
+    ])
+    expect(out).toContain('45 min / 120 actions')
   })
 
   it('revokes the grant when the run is refused', async () => {

@@ -266,6 +266,34 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
     }
   }
 
+  const onBrowserAgentUnattendedMinutes = async (value: number) => {
+    setSaving('browserAgentUnattendedMinutes')
+    setError(false)
+    setSaveDetail(null)
+    try {
+      await writeOps([{ op: 'set', path: ['browserAgentUnattendedMinutes'], value }])
+    } catch (cause) {
+      setError(true)
+      setSaveDetail(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const onBrowserAgentUnattendedActions = async (value: number) => {
+    setSaving('browserAgentUnattendedActions')
+    setError(false)
+    setSaveDetail(null)
+    try {
+      await writeOps([{ op: 'set', path: ['browserAgentUnattendedActions'], value }])
+    } catch (cause) {
+      setError(true)
+      setSaveDetail(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(null)
+    }
+  }
+
   const saveFields = async (fields: ReadonlyArray<readonly [keyof EnhancerSettings, string]>) => {
     setSaving(fields.map(([field]) => field).join(','))
     setError(false)
@@ -391,6 +419,8 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
           onBrowserAgentDebugTools={enabled => { void onBrowserAgentDebugTools(enabled) }}
           onBrowserAgentDemonstrate={enabled => { void onBrowserAgentDemonstrate(enabled) }}
           onBrowserAgentIdleClose={value => { void onBrowserAgentIdleClose(value) }}
+          onBrowserAgentUnattendedMinutes={value => { void onBrowserAgentUnattendedMinutes(value) }}
+          onBrowserAgentUnattendedActions={value => { void onBrowserAgentUnattendedActions(value) }}
           onOpenModel={feature => {
             setHighlightFeature(feature)
             setTab('models')

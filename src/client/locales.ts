@@ -78,6 +78,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentIdleClose' | 'browserAgentIdleCloseHint' |
       'browserAgentIdleClose_10m' | 'browserAgentIdleClose_30m' |
       'browserAgentIdleClose_60m' | 'browserAgentIdleClose_never' |
+      'browserAgentUnattendedLimitsHint' |
+      'browserAgentUnattendedMinutes' | 'browserAgentUnattendedActions' |
       'browserAgentDemoTitle' | 'browserAgentDemoHint' | 'browserAgentDemoStart' |
       'browserAgentDemoStop' | 'browserAgentDemoRecording' | 'browserAgentDemoRecordingHint' |
       'browserAgentDemoRecordingAgent' | 'browserAgentDemoEmpty' | 'browserAgentDemoCopy' |
@@ -486,6 +488,9 @@ export const agentLocales = {
     browserAgentIdleClose_30m: '30 分钟',
     browserAgentIdleClose_60m: '60 分钟',
     browserAgentIdleClose_never: '不自动关闭',
+    browserAgentUnattendedLimitsHint: '无人值守授权：定时任务里，一条流程最多自动放行多久、多少次动作；用完或超时自动回到逐次批准。默认 20 分钟 / 30 次，可设 5–60 分钟、10–200 次。',
+    browserAgentUnattendedMinutes: '授权时长（分钟）',
+    browserAgentUnattendedActions: '动作上限（次）',
     browserAgentDemoTitle: '演示录制',
     browserAgentDemoHint: '点「开始演示」，在专用浏览器里操作一遍，回来点「结束并查看步骤」。智能体也能自己发起演示。',
     browserAgentDemoStart: '开始演示',
@@ -529,12 +534,12 @@ export const agentLocales = {
     browserAgentDemoRecipeConfirmDelete: '确认删除',
     browserAgentDemoRunOptions: '运行方式',
     browserAgentDemoStepsShow: '查看 {n} 步',
-    browserAgentDemoUnattendedHint: '无人值守：定时任务不再逐次确认（仅本站，20 分钟 / 30 次；密码仍需人工）',
+    browserAgentDemoUnattendedHint: '无人值守：定时任务不再逐次确认（仅本站、限时、限次；密码仍需人工）',
     browserAgentDemoLastRunBadge: '上次未完成',
     browserAgentDemoLastRunOk: '上次 {at} · 成功',
     browserAgentDemoLastRunStopped: '上次 {at} · 停在第 {n} 步',
     browserAgentDemoLastRunFailed: '上次 {at} · 失败',
-    browserAgentDemoUnattendedOn: '已允许无人值守：只在 {site}，20 分钟内不再询问',
+    browserAgentDemoUnattendedOn: '已允许无人值守：只在 {site}，授权窗口内不再询问',
     browserAgentDemoUnattendedEnable: '允许无人值守',
     browserAgentDemoUnattendedDisable: '关闭无人值守',
     browserAgentDemoUnattendedNoSite: '这个流程没有记录站点，无法开启',
@@ -1215,6 +1220,9 @@ export const agentLocales = {
     browserAgentIdleClose_30m: '30 minutes',
     browserAgentIdleClose_60m: '60 minutes',
     browserAgentIdleClose_never: 'Never',
+    browserAgentUnattendedLimitsHint: 'Unattended grant: for scheduled runs, how long one flow may act and how many actions it may take before going back to asking each time. Defaults: 20 minutes / 30 actions (range 5–60 minutes, 10–200 actions).',
+    browserAgentUnattendedMinutes: 'Minutes',
+    browserAgentUnattendedActions: 'Action limit',
     browserAgentDemoTitle: 'Demonstration recording',
     browserAgentDemoHint: 'Press Start, perform the flow in the dedicated browser, then come back and press Stop to see the steps. The agent can also start a demonstration itself.',
     browserAgentDemoStart: 'Start recording',
@@ -1258,12 +1266,12 @@ export const agentLocales = {
     browserAgentDemoRecipeConfirmDelete: 'Delete for good',
     browserAgentDemoRunOptions: 'How it runs',
     browserAgentDemoStepsShow: 'Show {n} steps',
-    browserAgentDemoUnattendedHint: 'Run without per-action approval: scheduled tasks stop asking (this site only, 20 minutes / 30 actions; secrets still need a human)',
+    browserAgentDemoUnattendedHint: 'Run without per-action approval: scheduled tasks stop asking (this site only, limited time and actions; secrets still need a human)',
     browserAgentDemoLastRunBadge: 'Last run incomplete',
     browserAgentDemoLastRunOk: 'Last run {at} · done',
     browserAgentDemoLastRunStopped: 'Last run {at} · stopped at step {n}',
     browserAgentDemoLastRunFailed: 'Last run {at} · failed',
-    browserAgentDemoUnattendedOn: 'Unattended allowed: {site} only, no cards for 20 minutes',
+    browserAgentDemoUnattendedOn: 'Unattended allowed: {site} only, no cards inside the grant window',
     browserAgentDemoUnattendedEnable: 'Allow unattended',
     browserAgentDemoUnattendedDisable: 'Stop unattended',
     browserAgentDemoUnattendedNoSite: 'This flow has no recorded site',

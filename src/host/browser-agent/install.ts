@@ -162,6 +162,8 @@ export function installBrowserAgent(
     readonly demonstrate?: () => boolean
     /** Close agent tabs nobody used for a while (never bound / active / last tab). */
     readonly idleClose?: () => BrowserAgentIdleClose
+    /** Unattended-run grant budget: bounded minutes and actions per flow run. */
+    readonly unattended?: () => { readonly minutes: number, readonly actions: number }
     /** Saved demonstrations; omitted in tests that do not care. */
     readonly recipes?: DemoRecipeStore
     readonly profileRoot: string
@@ -368,6 +370,7 @@ export function installBrowserAgent(
         tabScope,
         debugTools: () => options.debugTools?.() === true,
         demonstrate: () => options.demonstrate?.() === true,
+        ...(options.unattended === undefined ? {} : { unattended: options.unattended }),
         onDemonstration: steps => { lastDemoSteps = steps },
         permission: permissionMode,
         ...(recipes === undefined ? {} : { recipes }),

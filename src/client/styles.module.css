@@ -2541,6 +2541,25 @@
   width: 100%;
 }
 
+.browserAgentUnattendedFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.browserAgentUnattendedField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.browserAgentUnattendedField input {
+  width: 96px;
+  cursor: text;
+}
+
 /* Peer: extraFoldersPane — right-sidebar Browser Agent control surface */
 .browserAgentPane {
   display: flex;

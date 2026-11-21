@@ -4,6 +4,7 @@ import type { BrowserDriver } from './driver.ts'
 import type { DemoStep } from './demo.ts'
 import { BrowserHumanGate } from './human-gate.ts'
 import { BrowserSessionState } from './session-state.ts'
+import { TabScopeStore } from './tab-scope.ts'
 import { registerBrowserTools } from './tools.ts'
 
 interface RegisteredTool {
@@ -18,7 +19,11 @@ const steps: DemoStep[] = [
   { kind: 'click', at: 4, role: 'button', name: 'Sign in', selector: '#signin' },
 ]
 
-function harness(demonstrate: boolean, recorded: readonly DemoStep[] = steps) {
+function harness(
+  demonstrate: boolean,
+  recorded: readonly DemoStep[] = steps,
+  options: { readonly readOnly?: boolean } = {},
+) {
   const tools = new Map<string, RegisteredTool>()
   const demonstrations: Array<readonly DemoStep[]> = []
   const calls = { clicks: [] as number[], types: [] as Array<[number, string]>, presses: [] as string[] }
@@ -71,11 +76,17 @@ function harness(demonstrate: boolean, recorded: readonly DemoStep[] = steps) {
   })
 
   const sessions = new BrowserSessionState()
+  const tabScope = new TabScopeStore()
+  if (options.readOnly === true) {
+    sessions.bind('s1', 1)
+    tabScope.setReadOnly(1, true)
+  }
   registerBrowserTools(ctx, {
     driver,
     approval: { requestApproval: async () => 'allow', current: () => null } as never,
     human: gate,
     sessions,
+    tabScope,
     demonstrate: () => demonstrate,
     onDemonstration: captured => { demonstrations.push(captured) },
     enabled: () => true,
@@ -113,6 +124,12 @@ describe('browser_demonstrate', () => {
     expect(out).toContain('= ***')
     expect(out).toContain('click button "Sign in"')
     expect(out).toContain('browser_snapshot')
+  })
+
+  it('refuses a replay into a read-only tab before the user demonstrates', async () => {
+    const h = harness(true, steps, { readOnly: true })
+    await expect(h.run({ message: 'show me', replay: true })).rejects.toThrow(/tab_read_only/)
+    expect(h.driver.startDemonstration).not.toHaveBeenCalled()
   })
 
   it('requires a message', async () => {

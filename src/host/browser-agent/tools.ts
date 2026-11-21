@@ -1,6 +1,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ParameterSchemaSpec } from '@deepseek-ai/dsh-tools'
 import type { Context } from '@deepseek-ai/cordis'
+import { BROWSER_AGENT_UNATTENDED } from '../../config.ts'
 import type { BrowserApprovalGate } from './approval.ts'
 import type { BrowserDriver } from './driver.ts'
 import type { BrowserHumanGate } from './human-gate.ts'
@@ -224,6 +225,11 @@ export interface BrowserToolsOptions {
   readonly debugTools?: () => boolean
   /** "Show me" recorder switch (browser_demonstrate). */
   readonly demonstrate?: () => boolean
+  /**
+   * Unattended-run grant budget: how long one saved flow may act on its recorded
+   * origin, and for how many actions. Defaults to 20 minutes / 30 actions.
+   */
+  readonly unattended?: () => { readonly minutes: number, readonly actions: number }
   /** Last completed recording, whoever stopped it (agent or sidebar). */
   readonly onDemonstration?: (steps: readonly DemoStep[]) => void
   /**
@@ -1471,6 +1477,9 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       guardEnabled()
       requireDemonstrate()
       const sessionId = sessionIdOf(exec)
+      // Replay is a write, so a read-only bound tab refuses it up front — before
+      // the user spends five minutes demonstrating a flow for nothing.
+      if (args.replay === true) requireWritableTab(sessionId, 'browser_demonstrate')
       const message = String(args.message ?? '').trim()
       if (message === '') throw new Error('message is required')
       const timeoutRaw = Number(args.timeoutMs)
@@ -1689,6 +1698,10 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
         throw new Error(`site ${JSON.stringify(wantedSite)} does not match flow "${meta.name}" (${meta.site}). Pass the site exactly as action=list shows it.`)
       }
       const sessionId = sessionIdOf(exec)
+      // A saved flow writes to the page exactly like browser_click. The user set
+      // the tab read-only for a reason; a replay must not be the way around it.
+      // Checked before launching or resolving values: a refused run changes nothing.
+      requireWritableTab(sessionId, 'browser_demo_recipes')
       const unattended = recipe.unattended && meta.site !== undefined
       // A new run closes whatever the last one left waiting for a decision.
       options.repair?.commit()
@@ -1717,9 +1730,19 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       const firstUrl = recipe.steps.find(step => step.tabUrl !== undefined)?.tabUrl
       // The user opted this flow into unattended runs: grant the site just
       // before its approval, so the run and the repairs it needs share one
-      // bounded decision.
+      // bounded decision. The budget comes from Settings (bounded 5–60 min,
+      // 10–200 actions); defaults are 20 minutes / 30 actions.
+      const budget = options.unattended?.() ?? {
+        minutes: BROWSER_AGENT_UNATTENDED.minutes.default,
+        actions: BROWSER_AGENT_UNATTENDED.actions.default,
+      }
       const grantedSite = unattended && meta.site !== undefined
-        ? options.approval.grantOrigin({ sessionId, url: meta.site, ttlMs: 20 * 60_000, actions: 30 })
+        ? options.approval.grantOrigin({
+            sessionId,
+            url: meta.site,
+            ttlMs: budget.minutes * 60_000,
+            actions: budget.actions,
+          })
           ? meta.site
           : undefined
         : undefined
@@ -1731,7 +1754,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
           firstUrl,
         )
       } catch (error) {
-        // Denied or aborted: do not leave the site open for the next 20 minutes.
+        // Denied or aborted: do not leave the site open for its whole grant.
         if (grantedSite !== undefined) options.approval.revokeOrigin({ sessionId, url: grantedSite })
         throw error
       }
@@ -1787,7 +1810,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       if (ranAll) {
         return [
           `saved flow: ${recipe.name} — replayed ${outcome.performed}/${outcome.total}`,
-          ...(unattended ? [`unattended: ${meta.site} is authorized for 20 min / 30 actions in this session`] : []),
+          ...(unattended ? [`unattended: ${meta.site} is authorized for ${budget.minutes} min / ${budget.actions} actions in this session`] : []),
           ...resolvedNote,
           ...outcome.lines,
           `url: ${outcome.url}`,
@@ -1800,7 +1823,7 @@ export function registerBrowserTools(ctx: Context, options: BrowserToolsOptions)
       })
       return [
         `saved flow: ${recipe.name} — replayed ${outcome.performed}/${outcome.total}`,
-        ...(unattended ? [`unattended: ${meta.site} is authorized for 20 min / 30 actions in this session`] : []),
+        ...(unattended ? [`unattended: ${meta.site} is authorized for ${budget.minutes} min / ${budget.actions} actions in this session`] : []),
         ...resolvedNote,
         ...outcome.lines,
         `stopped at step ${outcome.performed + 1}: ${outcome.reason}`,

@@ -7,6 +7,7 @@ import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types
 import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
 import {
+  BROWSER_AGENT_UNATTENDED,
   coerceBrowserAgentBrowserForPlatform,
   resolveBrowserAgentBrowser,
   resolveBrowserAgentIdleClose,
@@ -287,6 +288,14 @@ export const Config = z.object({
   browserAgentDemonstrate: z.boolean().default(false).volatile(),
   /** Close idle agent tabs after ~10 min; coerced via resolveBrowserAgentIdleClose. */
   browserAgentIdleClose: z.union([z.boolean(), z.string()]).default('10m').volatile(),
+  /** Unattended-run grant: bounded minutes (default 20). */
+  browserAgentUnattendedMinutes: z.number()
+    .default(BROWSER_AGENT_UNATTENDED.minutes.default)
+    .volatile(),
+  /** Unattended-run grant: bounded action budget (default 30). */
+  browserAgentUnattendedActions: z.number()
+    .default(BROWSER_AGENT_UNATTENDED.actions.default)
+    .volatile(),
   /** Default off; embeds official web chat + import to work. */
   webChatBridgeEnabled: z.boolean().default(true).volatile(),
   instructionsSkillsEnabled: z.boolean().default(true).volatile(),
@@ -1566,6 +1575,8 @@ function readSettings(config: Config): EnhancerSettings {
     browserAgentDebugTools: config.browserAgentDebugTools.get(),
     browserAgentDemonstrate: config.browserAgentDemonstrate.get(),
     browserAgentIdleClose: resolveBrowserAgentIdleClose(config.browserAgentIdleClose.get()),
+    browserAgentUnattendedMinutes: config.browserAgentUnattendedMinutes.get(),
+    browserAgentUnattendedActions: config.browserAgentUnattendedActions.get(),
     webChatBridgeEnabled: config.webChatBridgeEnabled.get(),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
     mcpConnectorsEnabled: config.mcpConnectorsEnabled.get(),
@@ -1659,6 +1670,10 @@ export function apply(ctx: Context, config: Config): void {
     debugTools: () => settings().browserAgentDebugTools,
     demonstrate: () => settings().browserAgentDemonstrate,
     idleClose: () => settings().browserAgentIdleClose,
+    unattended: () => ({
+      minutes: settings().browserAgentUnattendedMinutes,
+      actions: settings().browserAgentUnattendedActions,
+    }),
     recipes: new DemoRecipeStore(join(pluginDataPackageRoot, 'demo-recipes.json')),
     profileRoot: pluginDataPackageRoot,
     softPause: softPauseGate,
