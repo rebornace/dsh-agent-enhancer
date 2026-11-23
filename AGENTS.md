@@ -29,6 +29,10 @@ Post-`0.3.8` current P0 is **L7 browser agent**. **v1 main path is landed** (Pla
 - **Sticky Auto:** once Auto successfully falls back (e.g. to Chrome), keep that channel for the running driver. Do **not** tear down every Agent tool tick just because WebKit is listed first — that caused open/close flaps.
 - Mac Chrome/Safari candidates check both `/Applications` and `~/Applications`.
 
+## Soft pause covers the lineage
+
+The soft-pause gate keys on a Session id, and a subagent runs as its own Session (`header.parentSession`). A parent-only check therefore let a paused session keep spending: the child stepped and requested while the parent sat parked. `agent/pre-step` now walks `sessionLineage()` — own id, then ancestors while `header.origin === 'subagent'` — and holds while **any** of them is engaged. A fork keeps `parentSession` but is an independent conversation, so it is not covered; that is the same rule the official archived-session gate applies. Aborting the child drops nothing: `clearOnAbort` names a single session, so a stopped subagent cannot resume its parent. `tests/soft-pause-lineage.test.ts` pins hold, multi-level, fork, reverse, abort and "wait for every engaged ancestor".
+
 ## Mac Desktop link
 
 ```bash

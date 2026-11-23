@@ -1,8 +1,16 @@
 /** In-memory soft-pause gate: hold `agent/pre-step` until release or abort. */
 
 type Waiter = {
-  readonly settle: () => void
-  readonly detachAbort: () => void
+  /** One of its buckets was flushed: re-check whether anything is still engaged. */
+  readonly wake: () => void
+}
+
+export interface WaitWhileEngagedOptions {
+  /**
+   * Session whose own pause a signal abort drops. A stopped turn has always
+   * cleared its pause; a subagent step must not clear an ancestor's pause.
+   */
+  readonly clearOnAbort?: string
 }
 
 export class SoftPauseGate {
@@ -29,44 +37,75 @@ export class SoftPauseGate {
    * callers can check `signal.aborted` and return `{ kind: 'reject' }`.
    */
   async waitIfEngaged(sessionId: string, signal: AbortSignal): Promise<void> {
-    if (!this.engaged.has(sessionId)) return
+    await this.waitWhileEngaged([sessionId], signal, { clearOnAbort: sessionId })
+  }
+
+  /**
+   * Wait while ANY of `sessionIds` is engaged, settling only when none is.
+   * A subagent step passes its own id plus its engaged subagent ancestors, so
+   * releasing one of them cannot let the step through while another holds it.
+   */
+  async waitWhileEngaged(
+    sessionIds: readonly string[],
+    signal: AbortSignal,
+    options: WaitWhileEngagedOptions = {},
+  ): Promise<void> {
+    const owners = [...new Set(sessionIds)]
+    if (!owners.some(id => this.engaged.has(id))) return
     if (signal.aborted) {
-      this.clear(sessionId)
+      if (options.clearOnAbort !== undefined) this.clear(options.clearOnAbort)
       return
     }
     await new Promise<void>(resolve => {
       let settled = false
+      let registered: string[] = []
+      let waiter: Waiter
+
+      const detach = () => {
+        signal.removeEventListener('abort', onAbort)
+      }
       const settle = () => {
         if (settled) return
         settled = true
-        detachAbort()
-        const bucket = this.waiters.get(sessionId)
-        if (bucket !== undefined) {
+        detach()
+        for (const id of registered) {
+          const bucket = this.waiters.get(id)
+          if (bucket === undefined) continue
           bucket.delete(waiter)
-          if (bucket.size === 0) this.waiters.delete(sessionId)
+          if (bucket.size === 0) this.waiters.delete(id)
         }
+        registered = []
         resolve()
       }
+      const register = () => {
+        registered = []
+        for (const id of owners) {
+          if (!this.engaged.has(id)) continue
+          let bucket = this.waiters.get(id)
+          if (bucket === undefined) {
+            bucket = new Set()
+            this.waiters.set(id, bucket)
+          }
+          bucket.add(waiter)
+          registered.push(id)
+        }
+      }
       const onAbort = () => {
-        this.engaged.delete(sessionId)
-        this.flushWaiters(sessionId)
-      }
-      const detachAbort = () => {
-        signal.removeEventListener('abort', onAbort)
-      }
-      const waiter: Waiter = { settle, detachAbort }
-      let bucket = this.waiters.get(sessionId)
-      if (bucket === undefined) {
-        bucket = new Set()
-        this.waiters.set(sessionId, bucket)
-      }
-      bucket.add(waiter)
-      signal.addEventListener('abort', onAbort, { once: true })
-      // Engage may have been released between the check and registration.
-      if (!this.engaged.has(sessionId) || signal.aborted) {
-        if (signal.aborted) this.engaged.delete(sessionId)
+        if (options.clearOnAbort !== undefined) this.clear(options.clearOnAbort)
         settle()
       }
+      const wake = () => {
+        if (settled) return
+        if (owners.some(id => this.engaged.has(id))) register()
+        else settle()
+      }
+
+      waiter = { wake }
+      register()
+      signal.addEventListener('abort', onAbort, { once: true })
+      // Engage may have been released between the check and registration.
+      if (signal.aborted) onAbort()
+      else if (!owners.some(id => this.engaged.has(id))) settle()
     })
   }
 
@@ -80,9 +119,6 @@ export class SoftPauseGate {
     const bucket = this.waiters.get(sessionId)
     if (bucket === undefined) return
     this.waiters.delete(sessionId)
-    for (const waiter of bucket) {
-      waiter.detachAbort()
-      waiter.settle()
-    }
+    for (const waiter of bucket) waiter.wake()
   }
 }
