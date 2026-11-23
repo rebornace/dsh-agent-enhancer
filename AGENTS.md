@@ -33,6 +33,8 @@ Post-`0.3.8` current P0 is **L7 browser agent**. **v1 main path is landed** (Pla
 
 The soft-pause gate keys on a Session id, and a subagent runs as its own Session (`header.parentSession`). A parent-only check therefore let a paused session keep spending: the child stepped and requested while the parent sat parked. `agent/pre-step` now walks `sessionLineage()` — own id, then ancestors while `header.origin === 'subagent'` — and holds while **any** of them is engaged. A fork keeps `parentSession` but is an independent conversation, so it is not covered; that is the same rule the official archived-session gate applies. Aborting the child drops nothing: `clearOnAbort` names a single session, so a stopped subagent cannot resume its parent. `tests/soft-pause-lineage.test.ts` pins hold, multi-level, fork, reverse, abort and "wait for every engaged ancestor".
 
+The **control** must watch the tree, not the turn: a parent hands off in seconds, so visibility is `running || engaged || treeRunning`, computed by `isTreeRunning()` from the live `agents.list()` (status `running` + lineage). A parent-only `running` flag hid the one button that could stop the child, which is the case a pause is actually for. `tests/soft-pause-tree.test.ts` pins child, two-level, unrelated-tree, fork and running-root cases.
+
 ## Mac Desktop link
 
 ```bash

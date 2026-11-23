@@ -38,7 +38,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'autoClassifier' | 'autoClassifierDescription' | 'autoMappingTitle' |
       'autoTier_instant' | 'autoTier_thinking' | 'autoTier_pro' | 'autoTier_classifier' |
       'overlapHistory' | 'overlapOptimize' | 'overlapPredict' | 'overlapSoftPause' | 'dismissHint' |
-      'softPause' | 'softPauseDescription' | 'softPausePause' | 'softPauseResume' |
+      'softPause' | 'softPauseDescription' | 'softPauseDescriptionTree' | 'softPausePause' | 'softPauseResume' |
       'runAlerts' | 'runAlertsDescription' | 'runAlertsLevel' |
       'runAlertsLevel_hidden' | 'runAlertsLevel_unfocused' | 'runAlertsLevel_always' |
       'runAlertsFinished' | 'runAlertsWaitingApproval' | 'runAlertsWaitingQuestion' |
@@ -399,6 +399,7 @@ export const agentLocales = {
     dismissHint: '关闭提示',
     softPause: '暂停后续',
     softPauseDescription: '在最新用户消息上暂停或继续：先拦住下一轮模型调用以节省 token；当前回复与已发出的工具仍会跑完。不等于官方「停止」。',
+    softPauseDescriptionTree: '子代理还在跑（本回合已结束）：暂停会把它停在下一步模型调用前，正在执行的工具仍会跑完。',
     softPausePause: '暂停下一轮',
     softPauseResume: '继续下一轮',
     runAlerts: '运行通知',
@@ -1131,6 +1132,7 @@ export const agentLocales = {
     dismissHint: 'Dismiss notice',
     softPause: 'Pause next',
     softPauseDescription: 'Pause or resume on the latest user message: hold the next model call to save tokens; the current reply and in-flight tools still finish. Does not replace official Stop.',
+    softPauseDescriptionTree: 'A subagent is still working (this turn already ended): pausing holds it before its next model call, and tools already running still finish.',
     softPausePause: 'Pause next turn',
     softPauseResume: 'Resume next turn',
     runAlerts: 'Run notifications',

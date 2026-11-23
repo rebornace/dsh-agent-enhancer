@@ -4,50 +4,32 @@ import {
   softPauseActionVisible,
 } from '../src/client/soft-pause/visibility.ts'
 
+const base = {
+  enabled: true,
+  isLatestUser: true,
+  isMarker: false,
+  running: false,
+  engaged: false,
+  treeRunning: false,
+}
+
 describe('softPauseActionVisible', () => {
-  it('hides on non-latest, marker, idle-unpaused, or disabled', () => {
-    expect(softPauseActionVisible({
-      enabled: true,
-      isLatestUser: true,
-      isMarker: false,
-      running: true,
-      engaged: false,
-    })).toBe(true)
-    expect(softPauseActionVisible({
-      enabled: true,
-      isLatestUser: true,
-      isMarker: false,
-      running: false,
-      engaged: true,
-    })).toBe(true)
-    expect(softPauseActionVisible({
-      enabled: true,
-      isLatestUser: false,
-      isMarker: false,
-      running: true,
-      engaged: false,
-    })).toBe(false)
-    expect(softPauseActionVisible({
-      enabled: true,
-      isLatestUser: true,
-      isMarker: true,
-      running: true,
-      engaged: false,
-    })).toBe(false)
-    expect(softPauseActionVisible({
-      enabled: true,
-      isLatestUser: true,
-      isMarker: false,
-      running: false,
-      engaged: false,
-    })).toBe(false)
-    expect(softPauseActionVisible({
-      enabled: false,
-      isLatestUser: true,
-      isMarker: false,
-      running: true,
-      engaged: false,
-    })).toBe(false)
+  it('shows while this turn runs or the session is paused', () => {
+    expect(softPauseActionVisible({ ...base, running: true })).toBe(true)
+    expect(softPauseActionVisible({ ...base, engaged: true })).toBe(true)
+  })
+
+  it('stays reachable while only a subagent is working', () => {
+    // The parent hands off in seconds; the child it spawned is the work left.
+    expect(softPauseActionVisible({ ...base, treeRunning: true })).toBe(true)
+  })
+
+  it('hides on non-latest, marker, idle tree, or disabled', () => {
+    expect(softPauseActionVisible({ ...base, running: true, isLatestUser: false })).toBe(false)
+    expect(softPauseActionVisible({ ...base, running: true, isMarker: true })).toBe(false)
+    expect(softPauseActionVisible({ ...base })).toBe(false)
+    expect(softPauseActionVisible({ ...base, running: true, enabled: false })).toBe(false)
+    expect(softPauseActionVisible({ ...base, treeRunning: true, enabled: false })).toBe(false)
   })
 })
 

@@ -1,67 +1,11 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SoftPauseGate } from './gate.ts'
+import { sessionLineage, sessionStore } from './lineage.ts'
+import type { SessionLike } from './lineage.ts'
 
 export interface SoftPauseLiveOptions {
   readonly gate: SoftPauseGate
   readonly enabled: () => boolean
-}
-
-interface SessionHeaderLike {
-  readonly id: string
-  readonly origin?: string
-  readonly parentSession?: string
-}
-
-interface SessionLike {
-  readonly id?: string
-  readonly header?: SessionHeaderLike
-}
-
-interface SessionStoreLike {
-  get(id: string): SessionLike | undefined
-}
-
-/**
- * The agent's own session id, then its subagent ancestors.
- *
- * A subagent runs as its own Session (`header.parentSession`), so a gate that
- * only compared `payload.agent.session.id` let a paused session keep spending:
- * the child stepped while the parent was parked. Walking the lineage is the
- * same rule the official archived-session gate applies — a *fork* keeps the
- * source id in `parentSession` but is an independent conversation, so only
- * `origin === 'subagent'` continues the walk.
- */
-function parentHeader(sessions: SessionStoreLike | undefined, id: string): SessionHeaderLike | undefined {
-  try {
-    return sessions?.get(id)?.header
-  } catch {
-    // A store that refuses the id must not break the step; stop the walk.
-    return undefined
-  }
-}
-
-export function sessionLineage(session: SessionLike, sessions: SessionStoreLike | undefined): string[] {
-  const ids: string[] = []
-  const visited = new Set<string>()
-  let id = session.header?.id ?? session.id
-  let header = session.header
-  while (id !== undefined && !visited.has(id)) {
-    visited.add(id)
-    ids.push(id)
-    if (header === undefined) break
-    if (header.origin !== 'subagent' || header.parentSession === undefined) break
-    id = header.parentSession
-    header = parentHeader(sessions, id)
-  }
-  return ids
-}
-
-function sessionStore(ctx: Context): SessionStoreLike | undefined {
-  try {
-    return ctx.get('sessions') as SessionStoreLike | undefined
-  } catch {
-    return undefined
-  }
 }
 
 /**

@@ -27,13 +27,17 @@ export function SoftPauseAction(props: SoftPauseActionProps) {
     isMarker: props.isMarker,
     running: running === true,
     engaged: snapshot.engaged,
+    treeRunning: snapshot.treeRunning,
   })
   if (!visible) return null
 
   const engaged = snapshot.engaged
   const label = engaged ? props.t('softPauseResume') : props.t('softPausePause')
   // Short aria-label; tooltip carries the Settings description so users see Stop ≠ soft pause.
-  const tooltip = props.t('softPauseDescription')
+  // While a subagent runs and this turn already ended, say what the press will hold.
+  const tooltip = !engaged && snapshot.treeRunning && running !== true
+    ? props.t('softPauseDescriptionTree')
+    : props.t('softPauseDescription')
   const busy = snapshot.busy
 
   // Product Tooltip only — native `title` showed a second (browser) tip on hover.

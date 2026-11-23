@@ -601,6 +601,8 @@ export type SoftPauseSetRequest = z.infer<typeof softPauseSetRequestSchema>
 export const softPauseStateSchema = z.strictObject({
   sessionId: sessionIdSchema,
   engaged: z.boolean(),
+  /** Live work anywhere in this session's tree — a subagent can outlive the turn. */
+  treeRunning: z.boolean(),
 })
 export type SoftPauseState = z.infer<typeof softPauseStateSchema>
 const softPauseSnapshotRequestCodec = codec(

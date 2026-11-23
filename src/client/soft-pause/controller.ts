@@ -1,17 +1,18 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
-export interface SoftPauseRemote {
-  snapshot(sessionId: SessionId, signal?: AbortSignal): Promise<{ readonly engaged: boolean }>
-  set(
-    sessionId: SessionId,
-    engaged: boolean,
-    signal?: AbortSignal,
-  ): Promise<{ readonly engaged: boolean }>
+export interface SoftPauseRemoteState {
+  readonly engaged: boolean
+  /** Live work anywhere in this session's tree (a subagent outlives the turn). */
+  readonly treeRunning: boolean
 }
 
-export interface SoftPauseSnapshot {
+export interface SoftPauseRemote {
+  snapshot(sessionId: SessionId, signal?: AbortSignal): Promise<SoftPauseRemoteState>
+  set(sessionId: SessionId, engaged: boolean, signal?: AbortSignal): Promise<SoftPauseRemoteState>
+}
+
+export interface SoftPauseSnapshot extends SoftPauseRemoteState {
   readonly enabled: boolean
-  readonly engaged: boolean
   readonly busy: boolean
 }
 
@@ -32,7 +33,12 @@ export class SoftPauseController {
   private refreshController: AbortController | null = null
 
   constructor(private readonly options: SoftPauseControllerOptions) {
-    this.snapshot = { enabled: options.enabled(), engaged: false, busy: false }
+    this.snapshot = {
+      enabled: options.enabled(),
+      engaged: false,
+      treeRunning: false,
+      busy: false,
+    }
     if (this.snapshot.enabled) {
       this.startPolling()
       void this.refresh()
@@ -52,8 +58,8 @@ export class SoftPauseController {
     const enabled = this.options.enabled()
     if (!enabled) {
       this.stopPolling()
-      if (this.snapshot.engaged || this.snapshot.enabled) {
-        this.snapshot = { enabled: false, engaged: false, busy: false }
+      if (this.snapshot.engaged || this.snapshot.enabled || this.snapshot.treeRunning) {
+        this.snapshot = { enabled: false, engaged: false, treeRunning: false, busy: false }
         this.emit()
       }
       return
@@ -76,7 +82,12 @@ export class SoftPauseController {
     try {
       const result = await this.options.remote.set(this.options.sessionId, next)
       if (this.disposed) return
-      this.snapshot = { enabled: true, engaged: result.engaged, busy: false }
+      this.snapshot = {
+        enabled: true,
+        engaged: result.engaged,
+        treeRunning: result.treeRunning,
+        busy: false,
+      }
       this.emit()
     } catch {
       if (this.disposed) return
@@ -106,10 +117,15 @@ export class SoftPauseController {
         controller.signal,
       )
       if (this.disposed || controller.signal.aborted) return
-      if (this.snapshot.engaged === result.engaged && this.snapshot.enabled) return
+      if (
+        this.snapshot.enabled
+        && this.snapshot.engaged === result.engaged
+        && this.snapshot.treeRunning === result.treeRunning
+      ) return
       this.snapshot = {
         enabled: true,
         engaged: result.engaged,
+        treeRunning: result.treeRunning,
         busy: this.snapshot.busy,
       }
       this.emit()

@@ -195,6 +195,8 @@ import type { ContextInspectRequest, ContextInspectResult } from './context-insp
 import { installAutoSessionRoute } from './auto-route/session-hook.ts'
 import { SoftPauseGate } from './soft-pause/gate.ts'
 import { installSoftPause } from './soft-pause/live.ts'
+import { isTreeRunning, sessionStore } from './soft-pause/lineage.ts'
+import type { AgentLike } from './soft-pause/lineage.ts'
 import { AuxiliaryModels } from './model.ts'
 import {
   DEFAULT_BALANCE_REFRESH_MS,
@@ -1206,9 +1208,13 @@ export class AgentEnhancerService extends TypertRemoteService {
     this.assertOwner()
     if (!this.softPauseEnabled()) {
       if (this.softPause.isEngaged(request.sessionId)) this.softPause.release(request.sessionId)
-      return { sessionId: request.sessionId, engaged: false }
+      return { sessionId: request.sessionId, engaged: false, treeRunning: false }
     }
-    return { sessionId: request.sessionId, engaged: this.softPause.isEngaged(request.sessionId) }
+    return {
+      sessionId: request.sessionId,
+      engaged: this.softPause.isEngaged(request.sessionId),
+      treeRunning: this.softPauseTreeRunning(request.sessionId),
+    }
   }
 
   /** Engage or release the soft-pause gate (no new user turn on resume). */
@@ -1216,11 +1222,30 @@ export class AgentEnhancerService extends TypertRemoteService {
     this.assertOwner()
     if (!this.softPauseEnabled()) {
       this.softPause.release(request.sessionId)
-      return { sessionId: request.sessionId, engaged: false }
+      return { sessionId: request.sessionId, engaged: false, treeRunning: false }
     }
     if (request.engaged) this.softPause.engage(request.sessionId)
     else this.softPause.release(request.sessionId)
-    return { sessionId: request.sessionId, engaged: this.softPause.isEngaged(request.sessionId) }
+    return {
+      sessionId: request.sessionId,
+      engaged: this.softPause.isEngaged(request.sessionId),
+      treeRunning: this.softPauseTreeRunning(request.sessionId),
+    }
+  }
+
+  /**
+   * Whether a live agent in this session's subagent tree is still running.
+   * The control has to stay reachable after the parent's turn ends: the child
+   * it spawned keeps working, and that is exactly what a pause should stop.
+   */
+  private softPauseTreeRunning(sessionId: string): boolean {
+    const agents = (this.ctx as unknown as { agents?: { list?: () => readonly AgentLike[] } }).agents
+    if (typeof agents?.list !== 'function') return false
+    try {
+      return isTreeRunning(sessionId, agents.list(), sessionStore(this.ctx))
+    } catch {
+      return false
+    }
   }
 
   /** Desktop OS notification for run alerts (Electron / Windows Action Center). */
