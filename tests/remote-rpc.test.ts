@@ -60,6 +60,7 @@ describe('remote-control RPC surface', () => {
       phase: 'stopped',
       login: { phase: 'idle', status: 'idle' },
       devices: [],
+      tasks: 0,
     })
   })
 

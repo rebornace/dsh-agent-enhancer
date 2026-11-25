@@ -1168,7 +1168,7 @@ type ShowOsNotificationCall = (
 ) => Promise<RemoteResult<ShowOsNotificationResult>>
 
 function emptyRemoteStatus(): RemoteStatusWire {
-  return { phase: 'stopped', login: { phase: 'idle', status: 'idle' }, devices: [] }
+  return { phase: 'stopped', login: { phase: 'idle', status: 'idle' }, devices: [], tasks: 0 }
 }
 
 function errorMessage(error: unknown): string {

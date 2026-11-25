@@ -126,6 +126,15 @@ describe('installRemoteHostBridge', () => {
     await expect(answer).resolves.toEqual({ answers: [{ id: 'q1', selected: ['详细'] }] })
   })
 
+  it('refreshes the board when an unseen session emits an event', async () => {
+    const { bridge, handlers, ports } = harness()
+    await expect(bridge.refreshSessions()).resolves.toBe(1)
+    emit(handlers, 'session/event', { id: 'fresh' }, { type: 'turn/start', time: 5_000, data: {} })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(ports.listSessions).toHaveBeenCalledTimes(2)
+  })
+
   it('passes an approval through while no chat can answer', async () => {
     const { bridge, handlers } = harness({ shouldHold: () => false })
     await bridge.refreshSessions()

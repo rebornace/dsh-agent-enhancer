@@ -1,52 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
+import type { SessionController } from '@deepseek-ai/dsh-api-session-controller'
 import type { SessionRow } from './controller.ts'
 import type { HostBridgePorts } from './host-bridge.ts'
-
-interface ProxyFailure {
-  readonly code?: string
-  readonly message?: string
-}
-
-interface ProxyResponse {
-  readonly result?: {
-    readonly ok?: boolean
-    readonly value?: unknown
-    readonly error?: ProxyFailure
-  }
-}
-
-interface SessionsProxy {
-  list(request: unknown, signal?: AbortSignal): Promise<ProxyResponse>
-  prompt(request: unknown, signal?: AbortSignal): Promise<ProxyResponse>
-  cancel(request: unknown, signal?: AbortSignal): Promise<ProxyResponse>
-}
-
-interface ApiProxyLike {
-  readonly sessions: SessionsProxy
-}
-
-export interface CreateHostPortsOptions {
-  /** Soft pause owned by this plugin; there is no host RPC for it. */
-  readonly setPaused: (sessionId: string, paused: boolean) => Promise<void>
-}
-
-const RPC_ID = 'agent-enhancer-remote'
-
-function request(method: string, payload: unknown): unknown {
-  return { rpcId: RPC_ID, method: `session.${method}`, payload }
-}
-
-function unwrap(response: ProxyResponse): unknown {
-  const result = response?.result
-  if (result?.ok !== true) {
-    const message = typeof result?.error?.message === 'string' && result.error.message !== ''
-      ? result.error.message
-      : '宿主请求失败'
-    throw new Error(message)
-  }
-  return result.value
-}
 
 function titleOf(item: Record<string, unknown>, sessionId: string): string {
   const projections = item.projections
@@ -65,6 +21,8 @@ function toRow(item: unknown): SessionRow | undefined {
   const record = item as Record<string, unknown>
   const sessionId = typeof record.sessionId === 'string' ? record.sessionId : undefined
   if (sessionId === undefined || sessionId === '') return undefined
+  // A subagent is an implementation detail of its parent's task, not a task.
+  if (record.origin === 'subagent') return undefined
   return {
     id: sessionId,
     title: titleOf(record, sessionId),
@@ -73,26 +31,36 @@ function toRow(item: unknown): SessionRow | undefined {
 }
 
 /**
- * `apiProxy` is the host's local bridge for the Session Controller methods the
- * mobile/remote surfaces use (`{ rpcId, method, payload }` → `{ result }`).
- * Reusing it keeps this plugin off a second copy of the identity plumbing.
+ * The host owns sessions through `ctx.sessionController` — the same service the
+ * desktop UI talks to. `ctx.get` is a soft lookup: this plugin must not add the
+ * controller to `inject`, or a host without it would fail to load at all.
  */
-function apiProxy(ctx: Context): ApiProxyLike {
-  const proxy = ctx.get('apiProxy') as ApiProxyLike | undefined
-  if (proxy === undefined || proxy.sessions === undefined) {
-    throw new Error('宿主没有提供 apiProxy，远程控制无法工作')
+function controllerOf(ctx: Context): SessionController {
+  let service: unknown
+  try {
+    service = ctx.get('sessionController')
+  } catch {
+    service = undefined
   }
-  return proxy
+  if (service === null || service === undefined || typeof service !== 'object'
+    || typeof (service as { list?: unknown }).list !== 'function') {
+    throw new Error('宿主没有提供 sessionController，远程控制无法工作')
+  }
+  return service as SessionController
 }
 
-export function createHostPorts(ctx: Context, options: CreateHostPortsOptions): HostBridgePorts {
+type PromptRequest = Parameters<SessionController['prompt']>[0]
+type CancelRequest = Parameters<SessionController['cancel']>[0]
+
+export function createHostPorts(
+  ctx: Context,
+  options: { readonly setPaused: (sessionId: string, paused: boolean) => Promise<void> },
+): HostBridgePorts {
   return {
     async listSessions() {
       const signal = new AbortController().signal
-      const value = unwrap(await apiProxy(ctx).sessions.list(request('list', {}), signal))
-      const items = value !== null && typeof value === 'object'
-        ? (value as { items?: unknown }).items
-        : undefined
+      const value = await controllerOf(ctx).list({}, signal)
+      const items = value !== null && typeof value === 'object' ? value.items : undefined
       if (!Array.isArray(items)) return []
       const rows: SessionRow[] = []
       for (const item of items) {
@@ -103,19 +71,18 @@ export function createHostPorts(ctx: Context, options: CreateHostPortsOptions): 
     },
 
     async prompt(sessionId, text, mode) {
-      const payload = {
-        requestId: randomUUID(),
-        sessionId,
+      const request: PromptRequest = {
+        requestId: randomUUID() as PromptRequest['requestId'],
+        sessionId: sessionId as PromptRequest['sessionId'],
         mode,
         content: [{ type: 'text', text }],
       }
-      const signal = new AbortController().signal
-      unwrap(await apiProxy(ctx).sessions.prompt(request('prompt', payload), signal))
+      await controllerOf(ctx).prompt(request, new AbortController().signal)
     },
 
     async cancel(sessionId) {
-      const signal = new AbortController().signal
-      unwrap(await apiProxy(ctx).sessions.cancel(request('cancel', { sessionId }), signal))
+      const request = { sessionId: sessionId as CancelRequest['sessionId'] }
+      await controllerOf(ctx).cancel(request)
     },
 
     async setPaused(sessionId, paused) {

@@ -29,6 +29,8 @@ export interface RuntimeStatus {
   readonly devices: readonly RuntimeDevice[]
   readonly botId?: string
   readonly error?: string
+  /** Sessions currently on the board; zero is a real answer, not an error. */
+  readonly tasks: number
 }
 
 export type RuntimeTransport = {
@@ -84,8 +86,10 @@ export class RemoteRuntime {
   private generation = 0
   /** One setup at a time; callers await the same promise. */
   private startingPromise: Promise<RuntimeStatus> | undefined
-  /** A bridge failure may heal (apiProxy not ready yet); a stale token may not. */
+  /** A bridge failure may heal (service not registered yet); a stale token may not. */
   private recoverable = false
+  private retryTimer: ReturnType<typeof setTimeout> | undefined
+  private retries = 0
 
   constructor(private readonly options: RemoteRuntimeOptions) {
     this.transport = options.createTransport?.() ?? new WeixinTransport()
@@ -105,6 +109,7 @@ export class RemoteRuntime {
         boundAt: binding.boundAt,
         channel: binding.channel,
       })),
+      tasks: this.controller?.tasks().length ?? 0,
       ...(this.credentialsValue?.botId === undefined ? {} : { botId: this.credentialsValue.botId }),
       ...(this.errorValue === undefined ? {} : { error: this.errorValue }),
     }
@@ -122,7 +127,6 @@ export class RemoteRuntime {
 
   private async startInternal(): Promise<RuntimeStatus> {
     const generation = this.generation
-    this.errorValue = undefined
     this.recoverable = false
     // A retry replaces the half-built bridge from the failed attempt.
     this.adapter?.stop()
@@ -137,29 +141,28 @@ export class RemoteRuntime {
     })
     this.cursor = createCursorStore({ filePath: join(this.options.rootDir, 'cursor.json') })
     const ports = createHostPorts(this.options.ctx, { setPaused: this.options.setPaused })
-    this.controller = new RemoteController({
-      actions: {
-        sendPrompt: (sessionId, text) => ports.prompt(sessionId, text, 'queue'),
-        setPaused: this.options.setPaused,
-        stop: sessionId => ports.cancel(sessionId),
-      },
-      ...(this.options.now === undefined ? {} : { now: this.options.now }),
-    })
     this.bridge = installRemoteHostBridge(this.options.ctx, {
       ports,
       capabilities: this.options.capabilities,
       shouldHold: () => this.phaseValue === 'running' && (this.bindings?.list().length ?? 0) > 0,
       ...(this.options.now === undefined ? {} : { now: this.options.now }),
     })
+    // One board, owned by the bridge: it is the object host events write into.
+    this.controller = this.bridge.controller
     try {
       await this.bridge.refreshSessions()
     } catch (error) {
       this.phaseValue = 'failed'
       this.errorValue = messageOf(error)
-      // The host service can appear after plugin boot; a status request retries.
+      // The host service can register after plugin boot; keep trying on our own,
+      // so a user who never opens Settings still gets a working channel.
       this.recoverable = true
+      this.scheduleRetry()
       return this.status()
     }
+    this.errorValue = undefined
+    this.retries = 0
+    this.clearRetry()
     // A stop/dispose landed while sessions were loading: the runtime is gone.
     if (this.generation !== generation) return this.status()
     const stored = await this.options.credentials.load().catch(() => undefined)
@@ -199,6 +202,8 @@ export class RemoteRuntime {
    */
   async logout(): Promise<void> {
     this.generation += 1
+    this.clearRetry()
+    this.retries = 0
     this.controller?.releasePending()
     this.adapter?.stop()
     this.adapter = undefined
@@ -238,6 +243,8 @@ export class RemoteRuntime {
 
   stop(): void {
     this.generation += 1
+    this.clearRetry()
+    this.retries = 0
     this.controller?.releasePending()
     this.adapter?.stop()
     this.bridge?.dispose()
@@ -249,6 +256,27 @@ export class RemoteRuntime {
     this.cursor = undefined
     this.credentialsValue = undefined
     this.phaseValue = 'stopped'
+  }
+
+  /** Retry a recoverable setup failure without waiting for the settings page. */
+  private scheduleRetry(): void {
+    if (this.retryTimer !== undefined || !this.recoverable || this.retries >= 12) return
+    const delay = 5_000
+    this.retries += 1
+    const timer = setTimeout(() => {
+      this.retryTimer = undefined
+      if (!this.recoverable || this.phaseValue === 'stopped') return
+      void this.start().catch(() => {})
+    }, delay)
+    // Do not keep a test or a quitting host alive for a retry.
+    ;(timer as { unref?: () => void }).unref?.()
+    this.retryTimer = timer
+  }
+
+  private clearRetry(): void {
+    if (this.retryTimer === undefined) return
+    clearTimeout(this.retryTimer)
+    this.retryTimer = undefined
   }
 
   private async connect(credentials: WeixinCredentials): Promise<void> {
@@ -278,6 +306,7 @@ export class RemoteRuntime {
       capabilities: this.options.capabilities,
       cursor,
       ...(this.options.emptyPageDelayMs === undefined ? {} : { emptyPageDelayMs: this.options.emptyPageDelayMs }),
+      refresh: () => this.bridge?.refreshSessions() ?? Promise.resolve(0),
       onError: error => this.options.onError?.(error),
       onFatal: error => {
         this.recoverable = false

@@ -637,6 +637,8 @@ export const remoteStatusSchema = z.strictObject({
   devices: z.array(remoteDeviceSchema),
   botId: z.string().optional(),
   error: z.string().optional(),
+  /** Sessions on the remote board; zero is valid. */
+  tasks: z.number().int().nonnegative().optional(),
 })
 export type RemoteStatusWire = z.infer<typeof remoteStatusSchema>
 

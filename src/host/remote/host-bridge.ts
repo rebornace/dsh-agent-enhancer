@@ -65,8 +65,8 @@ export interface HostBridgeOptions {
 
 export interface HostBridge {
   readonly controller: RemoteController
-  /** Re-read sessions and register them on the board. */
-  refreshSessions(): Promise<void>
+  /** Re-read sessions and register them on the board; returns the row count. */
+  refreshSessions(): Promise<number>
   dispose(): void
 }
 
@@ -143,11 +143,39 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
   const known = (sessionId: string): boolean =>
     controller.tasks().some(task => task.id === sessionId)
 
+  let refreshing: Promise<number> | undefined
+  let lastEventRefresh = 0
+  const refreshSessions = async (): Promise<number> => {
+    if (refreshing !== undefined) return refreshing
+    refreshing = (async () => {
+      const rows = await options.ports.listSessions()
+      for (const row of rows) controller.track(row)
+      return rows.length
+    })()
+    try {
+      return await refreshing
+    } finally {
+      refreshing = undefined
+    }
+  }
+
+  /**
+   * A session this bridge has never seen means the board was built before that
+   * session existed (host indexes warm up after plugin apply). Refresh, but not
+   * once per event: a busy turn can emit many.
+   */
+  const refreshForUnknown = (at: number): void => {
+    if (at - lastEventRefresh < 2_000) return
+    lastEventRefresh = at
+    void refreshSessions().catch(() => {})
+  }
+
   const onSessionEvent = (session: HostSession, event: HostSessionEvent): void => {
     const sessionId = typeof session?.id === 'string' ? session.id : undefined
     if (sessionId === undefined || sessionId === '') return
     const data = event?.data ?? {}
     const at = typeof event.time === 'number' ? event.time : (options.now?.() ?? Date.now())
+    if (!known(sessionId)) refreshForUnknown(at)
     switch (event.type) {
       case 'turn/start':
         controller.onTurnStart(sessionId, at)
@@ -223,10 +251,7 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
 
   return {
     controller,
-    async refreshSessions() {
-      const rows = await options.ports.listSessions()
-      for (const row of rows) controller.track(row)
-    },
+    refreshSessions,
     dispose() {
       for (const dispose of disposers) {
         try {

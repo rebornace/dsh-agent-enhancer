@@ -121,7 +121,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'remoteLoginHint' | 'remoteLoginWaiting' | 'remoteLoginExpired' | 'remoteLoginFailed' |
       'remoteBindCode' | 'remoteBindCodeHint' | 'remoteBindCodeExpires' |
       'remoteDevices' | 'remoteDevicesEmpty' | 'remoteRevoke' | 'remoteLogout' |
-      'remoteQrLabel' | 'remoteLoadFailed' | 'remoteFailed' |
+      'remoteQrLabel' | 'remoteLoadFailed' | 'remoteFailed' | 'remoteTasksSynced' |
       'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackUndoAction' |
       'rollbackUndoCommandDescription' |
       'rollbackTitle' | 'rollbackScope' | 'rollbackScopeAlready' | 'rollbackScopeCovered' | 'rollbackUndoTitle' | 'rollbackUndoScope' | 'rollbackUndoScopeConversation' |
@@ -509,6 +509,7 @@ export const agentLocales = {
     remoteQrLabel: '微信登录二维码',
     remoteLoadFailed: '读取远程控制状态失败。',
     remoteFailed: '操作没有完成，请重试。',
+    remoteTasksSynced: '已同步任务',
     browserAgentBrowser: '专用浏览器',
     browserAgentDebugTools: '调试与页面模拟',
     browserAgentDebugToolsHint: '一个开关同时启用：读取网络请求与控制台输出（browser_network / browser_console），以及模拟深色模式、减少动画、视口尺寸（browser_emulate）。只记录 URL、状态、耗时与 console 文本，不读请求头、Cookie、响应体。',
@@ -1266,6 +1267,7 @@ export const agentLocales = {
     remoteQrLabel: 'WeChat login QR code',
     remoteLoadFailed: 'Could not read the remote-control status.',
     remoteFailed: 'The action did not finish. Try again.',
+    remoteTasksSynced: 'Tasks synced',
     browserAgentBrowser: 'Dedicated browser',
     browserAgentDebugTools: 'Debug & page emulation',
     browserAgentDebugToolsHint: 'One switch enables both: reading network requests and console output (browser_network / browser_console), and emulating dark mode, reduced motion or a viewport size (browser_emulate). Only URLs, status, timing and console text are recorded — never request headers, cookies or bodies.',

@@ -31,7 +31,7 @@ type Word =
 
 const WORDS: readonly { readonly kind: Word; readonly aliases: readonly string[] }[] = [
   { kind: 'tasks', aliases: ['任务', '任务列表', '列表', 'tasks', 'task', 'list'] },
-  { kind: 'switch', aliases: ['切', '切换', 'switch', 'sw'] },
+  { kind: 'switch', aliases: ['切', '切换', '选', 'switch', 'sw'] },
   { kind: 'approve', aliases: ['批准', '同意', 'approve', 'ok'] },
   { kind: 'reject', aliases: ['拒绝', '否决', 'reject', 'deny', 'no'] },
   { kind: 'answer', aliases: ['回答', 'answer'] },
@@ -52,6 +52,23 @@ function positiveInt(value: string): number | undefined {
   return Number(value)
 }
 
+/** Words that take a number or a code may be typed without a space: `切1`. */
+const NUMBER_WORDS = new Set<Word>(['switch', 'detail'])
+const CODE_WORDS = new Set<Word>(['approve', 'reject'])
+
+function gluedWord(lower: string, text: string): { kind: Word; rest: string } | undefined {
+  // Longest alias first so 切换 wins over 切 and 任务列表 over 任务.
+  const aliases = [...BY_ALIAS.entries()].sort((left, right) => right[0].length - left[0].length)
+  for (const [alias, kind] of aliases) {
+    if (!lower.startsWith(alias) || lower.length === alias.length) continue
+    const rest = text.slice(alias.length).trim()
+    if (rest === '') continue
+    if (NUMBER_WORDS.has(kind) && positiveInt(rest) !== undefined) return { kind, rest }
+    if (CODE_WORDS.has(kind) && isCode(rest.toLowerCase())) return { kind, rest }
+  }
+  return undefined
+}
+
 /** Parse one inbound message into a command. Pure; no channel knowledge. */
 export function parseCommand(input: string): RemoteCommand {
   const text = input.trim()
@@ -65,11 +82,19 @@ export function parseCommand(input: string): RemoteCommand {
     return { kind: 'message', text: payload }
   }
 
+  // A bare number after a list is the natural way to pick a task.
+  if (positiveInt(text) !== undefined) return { kind: 'switch', number: Number(text) }
+
   const space = text.search(/\s/)
   const head = (space === -1 ? text : text.slice(0, space)).toLowerCase()
-  const rest = space === -1 ? '' : text.slice(space).trim()
-  const kind = BY_ALIAS.get(head)
-  if (kind === undefined) return { kind: 'message', text }
+  let rest = space === -1 ? '' : text.slice(space).trim()
+  let kind = BY_ALIAS.get(head)
+  if (kind === undefined) {
+    const glued = gluedWord(lower, text)
+    if (glued === undefined) return { kind: 'message', text }
+    kind = glued.kind
+    rest = glued.rest
+  }
 
   switch (kind) {
     case 'tasks':

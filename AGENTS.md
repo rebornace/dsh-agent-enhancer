@@ -24,6 +24,10 @@ Post-`0.3.8` current P0 is **L7 browser agent**. **v1 main path is landed** (Pla
 - **The QR encodes `qrcode_img_content` itself.** Opening the liteapp page and scanning the page's own QR fails with「网络错误」. `src/client/remote/qr.ts` is a small byte-mode encoder verified against jsQR (L/M/Q/H, versions 1–20, UTF-8); do not swap it for a "open the link" shortcut.
 - **Pending approvals are not persisted.** A host restart has no waiter to answer them, so old cards are history, not buttons.
 
+- **Sessions are driven through `ctx.sessionController`.** Fold `list` / `prompt` / `cancel` over that host service; this Desktop build does **not** provide the older `apiProxy` seam, and assuming it did left the task list empty. A failed bridge is retried (bounded, once per 5s up to 12 tries) because the service can register after plugin apply.
+- **One board.** The runtime must adopt `bridge.controller`; a second `RemoteController` receives no host events and silently answers「当前没有任务」. The session list also warms up late, so the adapter re-reads it before every command and the bridge re-reads it when an unseen session emits an event.
+- **Control words tolerate how people type.** `切1`, `切换1`, `选1`, `详情4`, `批准a3f9` and a bare `1` after a list are commands; a sentence that merely starts with one (`继续优化这段`, `暂停吧`) stays a message. Approvals are never inferred from casual words.
+
 ## Browser agent — platform rules
 
 | OS | Settings / sidebar choices | Auto order |

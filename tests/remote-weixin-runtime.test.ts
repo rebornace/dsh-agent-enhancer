@@ -67,16 +67,14 @@ function transport(options: { readonly polls?: LoginPoll[]; readonly onUpdate?: 
 }
 
 function ctx() {
-  const proxy = {
-    sessions: {
-      list: vi.fn(async () => ({ result: { ok: true, value: { items: [{ sessionId: 's1', running: true }] } } })),
-      prompt: vi.fn(async () => ({ result: { ok: true, value: { accepted: true } } })),
-      cancel: vi.fn(async () => ({ result: { ok: true, value: { accepted: true } } })),
-    },
+  const controller = {
+    list: vi.fn(async () => ({ items: [{ sessionId: 's1', running: true }] })),
+    prompt: vi.fn(async () => ({ accepted: true })),
+    cancel: vi.fn(async () => ({ accepted: true })),
   }
   return {
     on: vi.fn(() => () => {}),
-    get: (name: string) => (name === 'apiProxy' ? proxy : undefined),
+    get: (name: string) => (name === 'sessionController' ? controller : undefined),
   } as unknown as Context
 }
 
@@ -121,6 +119,8 @@ describe('RemoteRuntime', () => {
 
     const status = await instance.start()
     expect(status.phase).toBe('running')
+    // The bridge's board must be the one the adapter and status read.
+    expect(status.tasks).toBe(1)
     await until(() => updates > 0)
     instance.stop()
     expect(instance.status().phase).toBe('stopped')
@@ -183,19 +183,17 @@ describe('RemoteRuntime', () => {
     const gate = new Promise<void>(resolve => {
       release = resolve
     })
-    const proxy = {
-      sessions: {
-        list: vi.fn(async () => {
-          await gate
-          return { result: { ok: true, value: { items: [] } } }
-        }),
-        prompt: vi.fn(async () => ({ result: { ok: true, value: { accepted: true } } })),
-        cancel: vi.fn(async () => ({ result: { ok: true, value: { accepted: true } } })),
-      },
+    const controller = {
+      list: vi.fn(async () => {
+        await gate
+        return { items: [] }
+      }),
+      prompt: vi.fn(async () => ({ accepted: true })),
+      cancel: vi.fn(async () => ({ accepted: true })),
     }
     const slowCtx = {
       on: vi.fn(() => () => {}),
-      get: (name: string) => (name === 'apiProxy' ? proxy : undefined),
+      get: (name: string) => (name === 'sessionController' ? controller : undefined),
     } as unknown as Context
     const instance = new RemoteRuntime({
       ctx: slowCtx,
@@ -215,18 +213,16 @@ describe('RemoteRuntime', () => {
     expect(instance.running).toBe(false)
   })
 
-  it('retries a bridge failure once the host bridge appears', async () => {
+  it('retries a bridge failure once the host service appears', async () => {
     let ready = false
-    const proxy = {
-      sessions: {
-        list: vi.fn(async () => ({ result: { ok: true, value: { items: [] } } })),
-        prompt: vi.fn(async () => ({ result: { ok: true, value: { accepted: true } } })),
-        cancel: vi.fn(async () => ({ result: { ok: true, value: { accepted: true } } })),
-      },
+    const controller = {
+      list: vi.fn(async () => ({ items: [] })),
+      prompt: vi.fn(async () => ({ accepted: true })),
+      cancel: vi.fn(async () => ({ accepted: true })),
     }
     const lateCtx = {
       on: vi.fn(() => () => {}),
-      get: (name: string) => (name === 'apiProxy' && ready ? proxy : undefined),
+      get: (name: string) => (name === 'sessionController' && ready ? controller : undefined),
     } as unknown as Context
     const instance = new RemoteRuntime({
       ctx: lateCtx,
@@ -244,6 +240,39 @@ describe('RemoteRuntime', () => {
     expect(healed.phase).toBe('unbound')
     expect(healed.error).toBeUndefined()
     instance.stop()
+  })
+
+  it('retries a recoverable failure without a settings request', async () => {
+    vi.useFakeTimers()
+    try {
+      let ready = false
+      const controller = {
+        list: vi.fn(async () => ({ items: [] })),
+        prompt: vi.fn(async () => ({ accepted: true })),
+        cancel: vi.fn(async () => ({ accepted: true })),
+      }
+      const lateCtx = {
+        on: vi.fn(() => () => {}),
+        get: (name: string) => (name === 'sessionController' && ready ? controller : undefined),
+      } as unknown as Context
+      const instance = new RemoteRuntime({
+        ctx: lateCtx,
+        rootDir: rootDir(),
+        capabilities,
+        setPaused: vi.fn(async () => {}),
+        credentials: memoryStore(),
+        createTransport: () => transport(),
+        emptyPageDelayMs: 1,
+      })
+
+      expect((await instance.start()).phase).toBe('failed')
+      ready = true
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(instance.status().phase).toBe('unbound')
+      instance.stop()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not restart itself after a stale token', async () => {
@@ -265,7 +294,7 @@ describe('RemoteRuntime', () => {
     instance.stop()
   })
 
-  it('fails when the host has no apiProxy', async () => {
+  it('fails when the host has no session controller', async () => {
     const broken = {
       on: vi.fn(() => () => {}),
       get: () => undefined,
@@ -281,7 +310,7 @@ describe('RemoteRuntime', () => {
     })
     const status = await instance.start()
     expect(status.phase).toBe('failed')
-    expect(status.error).toContain('apiProxy')
+    expect(status.error).toContain('sessionController')
     instance.stop()
   })
 })

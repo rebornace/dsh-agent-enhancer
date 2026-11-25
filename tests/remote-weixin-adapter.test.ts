@@ -51,6 +51,7 @@ function harness(options: {
   readonly failOnce?: { error: unknown }
   readonly onFatal?: (error: unknown) => void
   readonly sleep?: (ms: number) => Promise<void>
+  readonly refresh?: () => Promise<unknown>
 }) {
   const controllerInstance = controller()
   const bindings = options.bindings ?? new BindingStore({ filePath: null, now: () => 0 })
@@ -87,6 +88,7 @@ function harness(options: {
     credentials: { baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' },
     capabilities: options.capabilities ?? textOnly,
     sleep: options.sleep ?? (async () => {}),
+    ...(options.refresh === undefined ? {} : { refresh: options.refresh }),
     ...(options.onFatal === undefined ? {} : { onFatal: options.onFatal }),
   })
   return { adapter, bindings, sent, getUpdates, actions: controllerInstance.actions }
@@ -103,6 +105,19 @@ describe('WeixinAdapter', () => {
     expect(sent[0]?.chatId).toBe('chat-1')
     expect(sent[0]?.text).toContain('1 周报导出')
     expect(sent[0]?.contextToken).toBe('ctx-1')
+  })
+
+  it('refreshes the session list before running a command', async () => {
+    const bindings = new BindingStore({ filePath: null, now: () => 0 })
+    bindings.bind('chat-1', 'weixin')
+    const refresh = vi.fn(async () => {})
+    const { adapter } = harness({
+      pages: [{ cursor: 'c1', messages: [message('任务')] }],
+      bindings,
+      refresh,
+    })
+    await adapter.run()
+    expect(refresh).toHaveBeenCalledOnce()
   })
 
   it('asks an unbound chat to redeem a code first', async () => {

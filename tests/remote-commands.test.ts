@@ -20,6 +20,27 @@ describe('parseCommand', () => {
     expect(parseCommand('批准 oooo')).toEqual({ kind: 'invalid', reason: 'bad-code' })
   })
 
+  it('accepts the glued forms people actually type', () => {
+    expect(parseCommand('切1')).toEqual({ kind: 'switch', number: 1 })
+    expect(parseCommand('切换2')).toEqual({ kind: 'switch', number: 2 })
+    expect(parseCommand('选3')).toEqual({ kind: 'switch', number: 3 })
+    expect(parseCommand('详情4')).toEqual({ kind: 'detail', number: 4 })
+    expect(parseCommand('批准a3f9')).toEqual({ kind: 'approve', code: 'a3f9' })
+    expect(parseCommand('拒绝k2m7')).toEqual({ kind: 'reject', code: 'k2m7' })
+  })
+
+  it('treats a bare number as a task switch', () => {
+    expect(parseCommand('1')).toEqual({ kind: 'switch', number: 1 })
+    expect(parseCommand('24')).toEqual({ kind: 'switch', number: 24 })
+    expect(parseCommand('0')).toEqual({ kind: 'message', text: '0' })
+  })
+
+  it('does not turn ordinary sentences into commands', () => {
+    expect(parseCommand('继续优化这段')).toEqual({ kind: 'message', text: '继续优化这段' })
+    expect(parseCommand('暂停吧')).toEqual({ kind: 'message', text: '暂停吧' })
+    expect(parseCommand('选一个模板')).toEqual({ kind: 'message', text: '选一个模板' })
+  })
+
   it('parses task numbers', () => {
     expect(parseCommand('切 12')).toEqual({ kind: 'switch', number: 12 })
     expect(parseCommand('切 0')).toEqual({ kind: 'invalid', reason: 'bad-task-number' })

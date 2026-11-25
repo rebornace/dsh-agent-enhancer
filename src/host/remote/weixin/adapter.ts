@@ -31,6 +31,8 @@ export interface WeixinAdapterOptions {
   readonly sleep?: (ms: number) => Promise<void>
   readonly onFatal?: (error: unknown) => void
   readonly onError?: (error: unknown) => void
+  /** Re-read the host session list before a command; the index warms up late. */
+  readonly refresh?: () => Promise<unknown>
   /** Pause between empty pages; the real long poll already held for ~35s. */
   readonly emptyPageDelayMs?: number
 }
@@ -139,6 +141,11 @@ export class WeixinAdapter {
       return
     }
 
+    try {
+      await this.options.refresh?.()
+    } catch (error) {
+      this.options.onError?.(error)
+    }
     const reply = await this.options.controller.execute(chatId, text, this.options.capabilities)
     await this.reply(chatId, reply.text, message.contextToken)
   }

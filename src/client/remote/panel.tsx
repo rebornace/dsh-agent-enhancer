@@ -236,6 +236,12 @@ export function RemoteControlPanel({ t, getRemote, busy }: RemoteControlPanelPro
           </ul>
         )}
       </div>
+
+      {connected ? (
+        <p className={styles.remoteHint}>
+          {t('remoteTasksSynced')}: {status?.tasks ?? 0}
+        </p>
+      ) : null}
     </div>
   )
 }
