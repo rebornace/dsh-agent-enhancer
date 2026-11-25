@@ -82,8 +82,10 @@ export class RemoteRuntime {
   private errorValue: string | undefined
   /** Bumped by stop/logout so an in-flight scan result cannot reconnect. */
   private generation = 0
-  /** One setup at a time; a second start while the first is loading is a no-op. */
-  private starting = false
+  /** One setup at a time; callers await the same promise. */
+  private startingPromise: Promise<RuntimeStatus> | undefined
+  /** A bridge failure may heal (apiProxy not ready yet); a stale token may not. */
+  private recoverable = false
 
   constructor(private readonly options: RemoteRuntimeOptions) {
     this.transport = options.createTransport?.() ?? new WeixinTransport()
@@ -109,18 +111,26 @@ export class RemoteRuntime {
   }
 
   async start(): Promise<RuntimeStatus> {
-    if (this.phaseValue !== 'stopped' || this.starting) return this.status()
-    this.starting = true
-    try {
-      return await this.startInternal()
-    } finally {
-      this.starting = false
-    }
+    if (this.startingPromise !== undefined) return this.startingPromise
+    const retryable = this.phaseValue === 'failed' && this.recoverable
+    if (this.phaseValue !== 'stopped' && !retryable) return this.status()
+    this.startingPromise = this.startInternal().finally(() => {
+      this.startingPromise = undefined
+    })
+    return this.startingPromise
   }
 
   private async startInternal(): Promise<RuntimeStatus> {
     const generation = this.generation
     this.errorValue = undefined
+    this.recoverable = false
+    // A retry replaces the half-built bridge from the failed attempt.
+    this.adapter?.stop()
+    this.bridge?.dispose()
+    this.controller?.releasePending()
+    this.adapter = undefined
+    this.bridge = undefined
+    this.controller = undefined
     this.bindings = new BindingStore({
       filePath: join(this.options.rootDir, 'bindings.json'),
       ...(this.options.now === undefined ? {} : { now: this.options.now }),
@@ -146,6 +156,8 @@ export class RemoteRuntime {
     } catch (error) {
       this.phaseValue = 'failed'
       this.errorValue = messageOf(error)
+      // The host service can appear after plugin boot; a status request retries.
+      this.recoverable = true
       return this.status()
     }
     // A stop/dispose landed while sessions were loading: the runtime is gone.
@@ -162,7 +174,7 @@ export class RemoteRuntime {
 
   /** Start a fresh QR login; connecting happens when the scan is confirmed. */
   async beginLogin(): Promise<LoginTicket> {
-    if (this.phaseValue === 'stopped') await this.start()
+    await this.start()
     const generation = this.generation
     const ticket = await this.login.begin()
     void this.login.wait().then(credentials => {
@@ -193,6 +205,7 @@ export class RemoteRuntime {
     this.login.cancel()
     this.credentialsValue = undefined
     this.errorValue = undefined
+    this.recoverable = false
     await this.options.credentials.clear().catch(error => {
       this.options.onError?.(error)
     })
@@ -242,6 +255,7 @@ export class RemoteRuntime {
     if (this.controller === undefined || this.bindings === undefined || this.cursor === undefined) {
       return
     }
+    const generation = this.generation
     this.credentialsValue = credentials
     try {
       await this.options.credentials.save(credentials)
@@ -249,17 +263,24 @@ export class RemoteRuntime {
       // A token we cannot persist still works for this process; say so quietly.
       this.options.onError?.(error)
     }
+    // Logout/stop while saving must win; the runtime may already be gone.
+    if (this.generation !== generation) return
+    const controller = this.controller
+    const bindings = this.bindings
+    const cursor = this.cursor
+    if (controller === undefined || bindings === undefined || cursor === undefined) return
     this.adapter?.stop()
     const adapter = new WeixinAdapter({
       transport: this.transport,
-      controller: this.controller,
-      bindings: this.bindings,
+      controller,
+      bindings,
       credentials,
       capabilities: this.options.capabilities,
-      cursor: this.cursor,
+      cursor,
       ...(this.options.emptyPageDelayMs === undefined ? {} : { emptyPageDelayMs: this.options.emptyPageDelayMs }),
       onError: error => this.options.onError?.(error),
       onFatal: error => {
+        this.recoverable = false
         this.phaseValue = 'failed'
         this.errorValue = messageOf(error)
       },

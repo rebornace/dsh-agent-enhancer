@@ -1257,7 +1257,11 @@ export class AgentEnhancerService extends TypertRemoteService {
   /** WeChat link, pairing and device state. Never returns the bot token. */
   async remoteStatus(_request: Record<string, never>): Promise<RemoteStatusWire> {
     this.assertOwner()
-    const status = this.requireRemoteControl().status()
+    const remote = this.requireRemoteControl()
+    // Heals a boot race where the host bridge was not ready yet; a no-op when
+    // the runtime is already running/unbound or needs a fresh scan.
+    void remote.start().catch(() => {})
+    const status = remote.status()
     return { ...status, devices: [...status.devices] }
   }
 

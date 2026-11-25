@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RemoteRuntime } from '../src/host/remote/weixin/runtime.ts'
 import type { RuntimeTransport } from '../src/host/remote/weixin/runtime.ts'
 import type { WeixinCredentialStore } from '../src/host/remote/weixin/credentials.ts'
+import { WeixinTransportError } from '../src/host/remote/weixin/transport.ts'
 import type { LoginPoll, LoginTicket, UpdatesPage, WeixinCredentials } from '../src/host/remote/weixin/transport.ts'
 import type { ChannelCapabilities } from '../src/host/remote/types.ts'
 
@@ -212,6 +213,56 @@ describe('RemoteRuntime', () => {
     const status = await started
     expect(status.phase).toBe('stopped')
     expect(instance.running).toBe(false)
+  })
+
+  it('retries a bridge failure once the host bridge appears', async () => {
+    let ready = false
+    const proxy = {
+      sessions: {
+        list: vi.fn(async () => ({ result: { ok: true, value: { items: [] } } })),
+        prompt: vi.fn(async () => ({ result: { ok: true, value: { accepted: true } } })),
+        cancel: vi.fn(async () => ({ result: { ok: true, value: { accepted: true } } })),
+      },
+    }
+    const lateCtx = {
+      on: vi.fn(() => () => {}),
+      get: (name: string) => (name === 'apiProxy' && ready ? proxy : undefined),
+    } as unknown as Context
+    const instance = new RemoteRuntime({
+      ctx: lateCtx,
+      rootDir: rootDir(),
+      capabilities,
+      setPaused: vi.fn(async () => {}),
+      credentials: memoryStore(),
+      createTransport: () => transport(),
+      emptyPageDelayMs: 1,
+    })
+
+    expect((await instance.start()).phase).toBe('failed')
+    ready = true
+    const healed = await instance.start()
+    expect(healed.phase).toBe('unbound')
+    expect(healed.error).toBeUndefined()
+    instance.stop()
+  })
+
+  it('does not restart itself after a stale token', async () => {
+    const updates = vi.fn(async (): Promise<UpdatesPage> => {
+      throw new WeixinTransportError('stale-token', 'stale')
+    })
+    const fake: RuntimeTransport = { ...transport(), getUpdates: updates }
+    const instance = runtime({
+      store: memoryStore({ baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' }),
+      transport: fake,
+    })
+    await instance.start()
+    await until(() => instance.status().phase === 'failed')
+    const calls = updates.mock.calls.length
+    await instance.start()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(updates.mock.calls.length).toBe(calls)
+    expect(instance.status().phase).toBe('failed')
+    instance.stop()
   })
 
   it('fails when the host has no apiProxy', async () => {
