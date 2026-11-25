@@ -133,6 +133,21 @@ export class TaskBoard {
     return dropped
   }
 
+  /** Drop a pending without deciding it (another client already handled the request). */
+  clearPending(id: TaskId): Pending | undefined {
+    const task = this.tasks.get(id)
+    if (task?.pending === undefined) return undefined
+    const pending = task.pending
+    const paused = task.state === 'paused'
+    this.tasks.set(id, {
+      ...task,
+      pending: undefined,
+      state: paused ? 'paused' : 'running',
+      resumeTo: paused && task.resumeTo === 'waiting' ? 'running' : task.resumeTo,
+    })
+    return pending
+  }
+
   /** Soft pause: remember what to return to. No-op when already paused. */
   pause(id: TaskId): Task | undefined {
     const task = this.tasks.get(id)
