@@ -27,6 +27,7 @@ Post-`0.3.8` current P0 is **L7 browser agent**. **v1 main path is landed** (Pla
 - **Sessions are driven through `ctx.sessionController`.** Fold `list` / `prompt` / `cancel` over that host service; this Desktop build does **not** provide the older `apiProxy` seam, and assuming it did left the task list empty. A failed bridge is retried (bounded, once per 5s up to 12 tries) because the service can register after plugin apply.
 - **One board.** The runtime must adopt `bridge.controller`; a second `RemoteController` receives no host events and silently answers「当前没有任务」. The session list also warms up late, so the adapter re-reads it before every command and the bridge re-reads it when an unseen session emits an event.
 - **Control words tolerate how people type.** `切1`, `切换1`, `选1`, `详情4`, `批准a3f9` and a bare `1` after a list are commands; a sentence that merely starts with one (`继续优化这段`, `暂停吧`) stays a message. Approvals are never inferred from casual words.
+- **Push only what the user can act on.** Approval and question cards (with their code), turn failures, and the model's answer when the prompt came from the chat (`RemoteController.markRemotePrompt`). A turn started at the desktop stays quiet. Pushes go to paired chats only, use the last inbound `contextToken`, and never contain the bot token.
 
 ## Browser agent — platform rules
 

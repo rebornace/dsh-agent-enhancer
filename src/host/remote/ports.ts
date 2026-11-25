@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
 import type { SessionController } from '@deepseek-ai/dsh-api-session-controller'
 import type { SessionRow } from './controller.ts'
-import type { HostBridgePorts } from './host-bridge.ts'
+import type { BridgeNotice, HostBridgePorts } from './host-bridge.ts'
 
 function titleOf(item: Record<string, unknown>, sessionId: string): string {
   const projections = item.projections
@@ -54,7 +54,10 @@ type CancelRequest = Parameters<SessionController['cancel']>[0]
 
 export function createHostPorts(
   ctx: Context,
-  options: { readonly setPaused: (sessionId: string, paused: boolean) => Promise<void> },
+  options: {
+    readonly setPaused: (sessionId: string, paused: boolean) => Promise<void>
+    readonly notify?: (notice: BridgeNotice) => void
+  },
 ): HostBridgePorts {
   return {
     async listSessions() {
@@ -87,6 +90,10 @@ export function createHostPorts(
 
     async setPaused(sessionId, paused) {
       await options.setPaused(sessionId, paused)
+    },
+
+    notify(notice) {
+      options.notify?.(notice)
     },
   }
 }

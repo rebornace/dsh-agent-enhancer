@@ -64,6 +64,7 @@ function messageText(message: InboundMessage): string | undefined {
  */
 export class WeixinAdapter {
   private stopped = false
+  private readonly contexts = new Map<string, string>()
   private readonly channel: RemoteChannel
   private readonly sleep: (ms: number) => Promise<void>
   private readonly cursor: WeixinCursor
@@ -86,6 +87,11 @@ export class WeixinAdapter {
 
   get running(): boolean {
     return !this.stopped
+  }
+
+  /** Latest inbound context token, so a push can answer in the same thread. */
+  contextFor(chatId: string): string | undefined {
+    return this.contexts.get(chatId)
   }
 
   async run(): Promise<void> {
@@ -124,6 +130,9 @@ export class WeixinAdapter {
 
   private async handle(message: InboundMessage): Promise<void> {
     const chatId = message.fromUserId
+    if (message.contextToken !== undefined && message.contextToken !== '') {
+      this.contexts.set(chatId, message.contextToken)
+    }
     const text = messageText(message)
     if (text === undefined) {
       await this.reply(chatId, UNSUPPORTED_HINT, message.contextToken)

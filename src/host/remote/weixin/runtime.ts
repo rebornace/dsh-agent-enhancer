@@ -3,8 +3,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import { BindingStore } from '../bindings.ts'
 import { RemoteController } from '../controller.ts'
 import { installRemoteHostBridge } from '../host-bridge.ts'
-import type { HostBridge } from '../host-bridge.ts'
+import type { BridgeNotice, HostBridge } from '../host-bridge.ts'
 import { createHostPorts } from '../ports.ts'
+import { splitForChannel } from '../render.ts'
 import type { ChannelCapabilities } from '../types.ts'
 import { WeixinAdapter } from './adapter.ts'
 import { createCursorStore } from './cursor.ts'
@@ -61,6 +62,12 @@ export interface RemoteRuntimeOptions {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** Keep a push readable; the full text stays on the desktop. */
+function clip(value: string, max: number): string {
+  const text = value.trim()
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`
 }
 
 /**
@@ -140,7 +147,10 @@ export class RemoteRuntime {
       ...(this.options.now === undefined ? {} : { now: this.options.now }),
     })
     this.cursor = createCursorStore({ filePath: join(this.options.rootDir, 'cursor.json') })
-    const ports = createHostPorts(this.options.ctx, { setPaused: this.options.setPaused })
+    const ports = createHostPorts(this.options.ctx, {
+      setPaused: this.options.setPaused,
+      notify: notice => this.pushNotice(notice),
+    })
     this.bridge = installRemoteHostBridge(this.options.ctx, {
       ports,
       capabilities: this.options.capabilities,
@@ -256,6 +266,47 @@ export class RemoteRuntime {
     this.cursor = undefined
     this.credentialsValue = undefined
     this.phaseValue = 'stopped'
+  }
+
+  /**
+   * Push one notice to every paired chat. Approval/question cards reuse the
+   * same rendering as `任务`, a failure adds the error, a completion adds the
+   * model's own final text. Quiet when no chat can answer.
+   */
+  private pushNotice(notice: BridgeNotice): void {
+    const controller = this.controller
+    const adapter = this.adapter
+    const credentials = this.credentialsValue
+    if (this.phaseValue !== 'running' || controller === undefined || adapter === undefined
+      || credentials === undefined || this.bindings === undefined) return
+    const chats = this.bindings.list()
+    if (chats.length === 0) return
+    const card = controller.renderCard(notice.sessionId, this.options.capabilities)
+    if (card === undefined) return
+
+    let text = card
+    if (notice.kind === 'failed' && notice.error !== undefined) {
+      text += `\n${clip(notice.error, 300)}`
+    }
+    if (notice.kind === 'done' && notice.answer !== undefined) {
+      const answer = clip(notice.answer, 1_500)
+      if (answer !== '') text += `\n\n${answer}`
+    }
+
+    const chunks = splitForChannel(text, this.options.capabilities.maxChars)
+    void (async () => {
+      for (const chat of chats) {
+        const contextToken = adapter.contextFor(chat.chatId)
+        for (const chunk of chunks) {
+          await this.transport.sendText(
+            credentials,
+            chat.chatId,
+            chunk,
+            contextToken === undefined ? {} : { contextToken },
+          )
+        }
+      }
+    })().catch(error => this.options.onError?.(error))
   }
 
   /** Retry a recoverable setup failure without waiting for the settings page. */

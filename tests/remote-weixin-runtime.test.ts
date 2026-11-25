@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RemoteRuntime } from '../src/host/remote/weixin/runtime.ts'
 import type { RuntimeTransport } from '../src/host/remote/weixin/runtime.ts'
+import type { BridgeNotice } from '../src/host/remote/host-bridge.ts'
 import type { WeixinCredentialStore } from '../src/host/remote/weixin/credentials.ts'
 import { WeixinTransportError } from '../src/host/remote/weixin/transport.ts'
 import type { LoginPoll, LoginTicket, UpdatesPage, WeixinCredentials } from '../src/host/remote/weixin/transport.ts'
@@ -291,6 +292,65 @@ describe('RemoteRuntime', () => {
     await new Promise(resolve => setTimeout(resolve, 10))
     expect(updates.mock.calls.length).toBe(calls)
     expect(instance.status().phase).toBe('failed')
+    instance.stop()
+  })
+
+  it('pushes a need-you notice to a bound chat with the last context token', async () => {
+    const pages: UpdatesPage[] = []
+    const fake: RuntimeTransport = {
+      ...transport(),
+      getUpdates: vi.fn(async () => pages.shift() ?? { cursor: 'c1', messages: [] }),
+    }
+    const instance = runtime({
+      store: memoryStore({ baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' }),
+      transport: fake,
+    })
+    await instance.start()
+    const { code } = instance.issueBindCode()
+    pages.push({
+      cursor: 'c2',
+      messages: [{
+        seq: 1,
+        messageId: 1,
+        fromUserId: 'chat-1',
+        toUserId: 'bot-1',
+        createdAt: 1,
+        items: [{ kind: 'text', text: code }],
+        contextToken: 'ctx-1',
+      }],
+    })
+    await until(() => instance.devices().length === 1)
+
+    const sendText = fake.sendText as unknown as ReturnType<typeof vi.fn>
+    sendText.mockClear()
+    ;(instance as unknown as { pushNotice(notice: BridgeNotice): void }).pushNotice({
+      kind: 'failed',
+      sessionId: 's1',
+      error: '模型超时',
+    })
+    await until(() => sendText.mock.calls.length > 0)
+
+    const call = sendText.mock.calls[0] as [unknown, string, string, { contextToken?: string }]
+    expect(call[1]).toBe('chat-1')
+    expect(call[2]).toContain('s1')
+    expect(call[2]).toContain('模型超时')
+    expect(call[3].contextToken).toBe('ctx-1')
+    instance.stop()
+  })
+
+  it('does not push when no chat is paired', async () => {
+    const fake = transport()
+    const instance = runtime({
+      store: memoryStore({ baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' }),
+      transport: fake,
+    })
+    await instance.start()
+    ;(instance as unknown as { pushNotice(notice: BridgeNotice): void }).pushNotice({
+      kind: 'failed',
+      sessionId: 's1',
+    })
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(fake.sendText).not.toHaveBeenCalled()
     instance.stop()
   })
 

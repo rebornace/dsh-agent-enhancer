@@ -49,7 +49,18 @@ export interface HostBridgePorts {
   prompt(sessionId: string, text: string, mode: 'queue' | 'steer'): Promise<void>
   cancel(sessionId: string): Promise<void>
   setPaused(sessionId: string, paused: boolean): Promise<void>
+  /** Push one notice to the paired chats; failures belong to the channel. */
+  notify?(notice: BridgeNotice): void
 }
+
+/**
+ * A moment the user may care about. The bridge decides *when*; the channel
+ * decides how to phrase and where to send it.
+ */
+export type BridgeNotice =
+  | { readonly kind: 'approval' | 'question'; readonly sessionId: string; readonly code: string }
+  | { readonly kind: 'failed'; readonly sessionId: string; readonly error?: string }
+  | { readonly kind: 'done'; readonly sessionId: string; readonly answer?: string }
 
 export interface HostBridgeOptions {
   readonly ports: HostBridgePorts
@@ -106,6 +117,23 @@ function describeApproval(request: ApprovalRequestLike): string {
     : `${tool} 请求执行`
 }
 
+/** Text blocks of one assistant message, in order. */
+function assistantText(data: Record<string, unknown>): string | undefined {
+  const message = data.message
+  if (message === null || typeof message !== 'object') return undefined
+  const content = (message as { content?: unknown }).content
+  if (!Array.isArray(content)) return undefined
+  const parts: string[] = []
+  for (const block of content) {
+    if (block === null || typeof block !== 'object') continue
+    const record = block as { type?: unknown; text?: unknown }
+    if (record.type === 'text' && typeof record.text === 'string' && record.text.trim() !== '') {
+      parts.push(record.text.trim())
+    }
+  }
+  return parts.length === 0 ? undefined : parts.join('\n')
+}
+
 function questionLabels(question: HostQuestion): string[] {
   if (!Array.isArray(question.options)) return []
   return question.options
@@ -143,6 +171,15 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
   const known = (sessionId: string): boolean =>
     controller.tasks().some(task => task.id === sessionId)
 
+  const lastAssistant = new Map<string, string>()
+  const notify = (notice: BridgeNotice): void => {
+    try {
+      options.ports.notify?.(notice)
+    } catch {
+      // A channel that cannot push must not break the watermark.
+    }
+  }
+
   let refreshing: Promise<number> | undefined
   let lastEventRefresh = 0
   const refreshSessions = async (): Promise<number> => {
@@ -178,11 +215,30 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
     if (!known(sessionId)) refreshForUnknown(at)
     switch (event.type) {
       case 'turn/start':
+        lastAssistant.delete(sessionId)
         controller.onTurnStart(sessionId, at)
         break
-      case 'turn/end':
-        controller.onTurnEnd(sessionId, turnEndKind(data.reason), turnEndError(data.reason), at)
+      case 'turn/end': {
+        const reason = turnEndKind(data.reason)
+        controller.onTurnEnd(sessionId, reason, turnEndError(data.reason), at)
+        if (!known(sessionId)) break
+        if (reason === 'error') {
+          controller.takeRemotePrompt(sessionId)
+          notify({ kind: 'failed', sessionId, ...(turnEndError(data.reason) === undefined ? {} : { error: turnEndError(data.reason) }) })
+          break
+        }
+        if (controller.takeRemotePrompt(sessionId)) {
+          const answer = lastAssistant.get(sessionId)
+          lastAssistant.delete(sessionId)
+          notify({ kind: 'done', sessionId, ...(answer === undefined ? {} : { answer }) })
+        }
         break
+      }
+      case 'assistant/message': {
+        const text = assistantText(data)
+        if (text !== undefined) lastAssistant.set(sessionId, text.slice(0, 4_000))
+        break
+      }
       case 'session/title':
         if (typeof data.title === 'string' && data.title !== '') controller.onTitle(sessionId, data.title)
         break
@@ -207,6 +263,7 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
         ...(typeof request.approvalId === 'string' ? { approvalId: request.approvalId } : {}),
         risk: 'other',
       })
+      notify({ kind: 'approval', sessionId, code: handle.code })
       return handle.wait
     } catch {
       // Already waiting on another decision: leave this one to the desktop.
@@ -234,6 +291,7 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
         prompt,
         ...(labels.length === 0 ? {} : { options: labels }),
       })
+      notify({ kind: 'question', sessionId, code: handle.code })
       return handle.wait.then(text => ({
         answers: [{ id: questionId, ...pickAnswer(labels, text) }],
       }))

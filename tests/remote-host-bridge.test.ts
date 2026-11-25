@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { installRemoteHostBridge } from '../src/host/remote/host-bridge.ts'
-import type { HostBridgePorts } from '../src/host/remote/host-bridge.ts'
+import type { BridgeNotice, HostBridgePorts } from '../src/host/remote/host-bridge.ts'
 import type { ChannelCapabilities } from '../src/host/remote/types.ts'
 
 const textOnly: ChannelCapabilities = {
@@ -26,11 +26,13 @@ function harness(options: { readonly shouldHold?: () => boolean } = {}) {
       }
     },
   } as unknown as Context
+  const notices: BridgeNotice[] = []
   const ports: HostBridgePorts = {
     listSessions: vi.fn(async () => [{ id: 's1', title: '周报导出', running: true }]),
     prompt: vi.fn(async () => {}),
     cancel: vi.fn(async () => {}),
     setPaused: vi.fn(async () => {}),
+    notify: (notice: BridgeNotice) => { notices.push(notice) },
   }
   const bridge = installRemoteHostBridge(ctx, {
     ports,
@@ -38,7 +40,7 @@ function harness(options: { readonly shouldHold?: () => boolean } = {}) {
     now: () => 100,
     ...(options.shouldHold === undefined ? {} : { shouldHold: options.shouldHold }),
   })
-  return { bridge, handlers, ports }
+  return { bridge, handlers, ports, notices }
 }
 
 function emit(handlers: Map<string, Listener>, name: string, ...args: unknown[]): unknown {
@@ -133,6 +135,62 @@ describe('installRemoteHostBridge', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(ports.listSessions).toHaveBeenCalledTimes(2)
+  })
+
+  it('notices an approval and a question once each', async () => {
+    const { bridge, handlers, notices } = harness()
+    await bridge.refreshSessions()
+    emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
+
+    const approval = emit(handlers, 'approval/request', {
+      agent: { session: { id: 's1' } },
+      toolName: 'write',
+      reason: '写入 report.xlsx',
+    }, () => undefined) as Promise<'approve' | 'reject'>
+    expect(notices).toEqual([{ kind: 'approval', sessionId: 's1', code: expect.any(String) }])
+    bridge.controller.releasePending()
+    await approval
+
+    const question = emit(handlers, 'user-questions/request', {
+      agent: { session: { id: 's1' } },
+      questions: [{ id: 'q1', header: '用哪个模板？' }],
+    }, () => undefined) as Promise<unknown>
+    expect(notices[1]).toMatchObject({ kind: 'question', sessionId: 's1' })
+    bridge.controller.releasePending()
+    await question
+  })
+
+  it('pushes a failure and a remote turn answer, but stays quiet for desktop turns', async () => {
+    const { bridge, handlers, notices } = harness()
+    await bridge.refreshSessions()
+
+    emit(handlers, 'session/event', { id: 's1' }, {
+      type: 'turn/end',
+      time: 20,
+      data: { reason: { kind: 'error', error: { message: '模型超时' } } },
+    })
+    expect(notices[0]).toMatchObject({ kind: 'failed', sessionId: 's1', error: '模型超时' })
+
+    // A desktop turn: no remote prompt, so no completion push.
+    emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 30, data: {} })
+    emit(handlers, 'session/event', { id: 's1' }, {
+      type: 'assistant/message',
+      time: 31,
+      data: { message: { content: [{ type: 'text', text: '桌面上的回答' }] } },
+    })
+    emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/end', time: 32, data: { reason: { kind: 'completed' } } })
+    expect(notices).toHaveLength(1)
+
+    // A prompt sent from the remote chat: its answer comes back.
+    await bridge.controller.execute('chat-1', '整理成三条', textOnly)
+    emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 40, data: {} })
+    emit(handlers, 'session/event', { id: 's1' }, {
+      type: 'assistant/message',
+      time: 41,
+      data: { message: { content: [{ type: 'text', text: '第一条…\n第二条…' }] } },
+    })
+    emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/end', time: 42, data: { reason: { kind: 'completed' } } })
+    expect(notices[1]).toEqual({ kind: 'done', sessionId: 's1', answer: '第一条…\n第二条…' })
   })
 
   it('passes an approval through while no chat can answer', async () => {

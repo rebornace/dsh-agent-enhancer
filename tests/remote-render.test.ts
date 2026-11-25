@@ -48,6 +48,23 @@ describe('renderTaskCard', () => {
     expect(renderTaskCard(task, 1, rich)).toContain('点下方按钮')
   })
 
+  it('tells the user to answer a question instead of approving it', () => {
+    const board = new TaskBoard()
+    board.register('s1', '选模板', 'running', 0)
+    board.ask('s1', createPending({
+      kind: 'question',
+      sessionId: 's1',
+      prompt: '用哪个模板？',
+      options: ['简洁', '详细'],
+      code: 'q7t2',
+    }, 0), 0)
+    const task = board.get('s1')
+    if (task === undefined) throw new Error('missing task')
+    const card = renderTaskCard(task, 1, textOnly)
+    expect(card).toContain('回答 q7t2')
+    expect(card).not.toContain('批准 q7t2')
+  })
+
   it('renders running, done, and offline states', () => {
     const board = new TaskBoard()
     board.register('s1', '网页重构', 'running', 0)

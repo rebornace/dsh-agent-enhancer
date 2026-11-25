@@ -27,6 +27,9 @@ export function decisionActions(pending: Pending): readonly TaskAction[] {
 }
 
 function decisionHint(pending: Pending, capabilities: ChannelCapabilities): string {
+  if (pending.kind === 'question') {
+    return `回复「回答 ${pending.code} 你的答案」`
+  }
   if (capabilities.buttons) {
     return `点下方按钮，或回复「批准 ${pending.code}」/「拒绝 ${pending.code}」`
   }
