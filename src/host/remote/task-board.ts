@@ -1,7 +1,7 @@
 import { isExpired } from './types.ts'
 import type { Pending, PresentedState, Task, TaskId, TaskState } from './types.ts'
 
-export type TurnEndReason = 'ok' | 'error' | 'aborted'
+export type TurnEndReason = 'ok' | 'error' | 'aborted' | 'stopped'
 
 export type DecideResult = 'ok' | 'no-pending' | 'code-mismatch' | 'expired'
 
@@ -9,6 +9,7 @@ const TERMINAL: Record<TurnEndReason, TaskState> = {
   ok: 'done',
   error: 'failed',
   aborted: 'stopped',
+  stopped: 'stopped',
 }
 
 /**
