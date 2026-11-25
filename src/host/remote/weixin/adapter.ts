@@ -31,6 +31,8 @@ export interface WeixinAdapterOptions {
   readonly sleep?: (ms: number) => Promise<void>
   readonly onFatal?: (error: unknown) => void
   readonly onError?: (error: unknown) => void
+  /** Pause between empty pages; the real long poll already held for ~35s. */
+  readonly emptyPageDelayMs?: number
 }
 
 const RETRY_DELAYS_MS = [250, 1_000, 3_000, 5_000, 10_000, 30_000] as const
@@ -111,6 +113,9 @@ export class WeixinAdapter {
         } catch (error) {
           this.options.onError?.(error)
         }
+      }
+      if (page.messages.length === 0 && !this.stopped) {
+        await this.sleep(this.options.emptyPageDelayMs ?? 1_000)
       }
     }
   }
