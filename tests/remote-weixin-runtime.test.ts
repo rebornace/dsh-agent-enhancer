@@ -138,6 +138,36 @@ describe('RemoteRuntime', () => {
     instance.stop()
   })
 
+  it('never puts the bot token in the status payload', async () => {
+    const store = memoryStore({ baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'secret-token' })
+    const instance = runtime({ store, transport: transport() })
+    await instance.start()
+    expect(JSON.stringify(instance.status())).not.toContain('secret-token')
+    instance.stop()
+  })
+
+  it('logout forgets the token and returns to unbound', async () => {
+    const store = memoryStore({ baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' })
+    const fake = transport()
+    const instance = runtime({ store, transport: fake })
+    await instance.start()
+
+    await instance.logout()
+    expect(instance.status().phase).toBe('unbound')
+    expect(store.value).toBeUndefined()
+    await instance.logout()
+    instance.stop()
+  })
+
+  it('cancels a pending scan without leaving a stale error', async () => {
+    const instance = runtime({ transport: transport({ polls: [{ status: 'wait' }] }) })
+    await instance.beginLogin()
+    instance.cancelLogin()
+    expect(instance.status().phase).toBe('unbound')
+    expect(instance.status().error).toBeUndefined()
+    instance.stop()
+  })
+
   it('issues a pairing code and revokes devices', async () => {
     const instance = runtime({})
     await instance.start()

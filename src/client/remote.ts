@@ -48,6 +48,10 @@ import type {
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
   SoftPauseState,
+  RemoteBindCodeResult,
+  RemoteLoginBeginResult,
+  RemoteRevokeRequest,
+  RemoteStatusWire,
 } from '../host/rpc.ts'
 import type { AuxiliaryResult } from '../host/types.ts'
 import type { WebChatLoginSnapshot } from '../host/web-chat-bridge/login-snapshot-types.ts'
@@ -297,6 +301,90 @@ export const clientRemoteInfo = {
       codec: codec('dsh-agent-enhancer#SoftPauseSetRequest'),
     }],
     result: codec('dsh-agent-enhancer#SoftPauseState'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/remoteStatus',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'remoteStatus',
+    implementation: 'remoteStatus',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#RemoteStatusRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#RemoteStatusResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/remoteLoginBegin',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'remoteLoginBegin',
+    implementation: 'remoteLoginBegin',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#RemoteLoginBeginRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#RemoteLoginBeginResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/remoteLoginCancel',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'remoteLoginCancel',
+    implementation: 'remoteLoginCancel',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#RemoteLoginCancelRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#RemoteOkResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/remoteBindCode',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'remoteBindCode',
+    implementation: 'remoteBindCode',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#RemoteBindCodeRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#RemoteBindCodeResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/remoteRevoke',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'remoteRevoke',
+    implementation: 'remoteRevoke',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#RemoteRevokeRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#RemoteRevokeResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/remoteLogout',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'remoteLogout',
+    implementation: 'remoteLogout',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#RemoteLoginCancelRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#RemoteOkResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/showOsNotification',
     service: 'agentEnhancer',
@@ -1079,6 +1167,161 @@ type ShowOsNotificationCall = (
   request: ShowOsNotificationRequest,
 ) => Promise<RemoteResult<ShowOsNotificationResult>>
 
+function emptyRemoteStatus(): RemoteStatusWire {
+  return { phase: 'stopped', login: { phase: 'idle', status: 'idle' }, devices: [] }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** Settings page view of the channel; never throws so the card still renders. */
+export const agentEnhancerRemoteStatus = {
+  async invoke(remote: unknown, signal?: AbortSignal): Promise<RemoteStatusWire> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const empty = emptyRemoteStatus()
+    if (remote === null || remote === undefined || typeof remote !== 'object') return empty
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') return empty
+    const call = Reflect.get(namespace, 'remoteStatus') as
+      | ((request: Record<string, never>) => Promise<RemoteResult<RemoteStatusWire>>)
+      | undefined
+    if (typeof call !== 'function') return empty
+    try {
+      const result = await call.call(namespace, {})
+      return result.ok ? result.value : empty
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return empty
+    }
+  },
+}
+
+type RemoteLoginBeginCall = (
+  request: Record<string, never>,
+) => Promise<RemoteResult<RemoteLoginBeginResult>>
+
+export const agentEnhancerRemoteLoginBegin = {
+  async invoke(remote: unknown, signal?: AbortSignal): Promise<RemoteLoginBeginResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const unavailable = (error: string): RemoteLoginBeginResult => ({ ok: false, error })
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return unavailable('宿主不可用，先打开一次桌面端')
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') {
+      return unavailable('插件远程接口缺失，重载插件后再试')
+    }
+    const call = Reflect.get(namespace, 'remoteLoginBegin') as RemoteLoginBeginCall | undefined
+    if (typeof call !== 'function') return unavailable('remoteLoginBegin 缺失，请更新或重载插件')
+    try {
+      const result = await call.call(namespace, {})
+      return result.ok ? result.value : unavailable('登录接口调用失败')
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return unavailable(errorMessage(error))
+    }
+  },
+}
+
+export const agentEnhancerRemoteLoginCancel = {
+  async invoke(remote: unknown, signal?: AbortSignal): Promise<{ ok: true }> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const namespace = remote !== null && typeof remote === 'object'
+      ? Reflect.get(remote, 'agentEnhancer') as object | undefined
+      : undefined
+    const call = namespace === undefined
+      ? undefined
+      : Reflect.get(namespace, 'remoteLoginCancel') as
+        | ((request: Record<string, never>) => Promise<RemoteResult<{ ok: true }>>)
+        | undefined
+    if (typeof call === 'function') {
+      try {
+        await call.call(namespace, {})
+      } catch {
+        // Cancelling is best effort; the next attempt supersedes this one anyway.
+      }
+    }
+    return { ok: true }
+  },
+}
+
+type RemoteBindCodeCall = (
+  request: Record<string, never>,
+) => Promise<RemoteResult<RemoteBindCodeResult>>
+
+export const agentEnhancerRemoteBindCode = {
+  async invoke(remote: unknown, signal?: AbortSignal): Promise<RemoteBindCodeResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const unavailable = (error: string): RemoteBindCodeResult => ({ ok: false, error })
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return unavailable('宿主不可用')
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') return unavailable('插件远程接口缺失')
+    const call = Reflect.get(namespace, 'remoteBindCode') as RemoteBindCodeCall | undefined
+    if (typeof call !== 'function') return unavailable('remoteBindCode 缺失')
+    try {
+      const result = await call.call(namespace, {})
+      return result.ok ? result.value : unavailable('生成绑定码失败')
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return unavailable(errorMessage(error))
+    }
+  },
+}
+
+type RemoteRevokeCall = (
+  request: RemoteRevokeRequest,
+) => Promise<RemoteResult<{ ok: boolean; revoked: number; error?: string }>>
+
+export const agentEnhancerRemoteRevoke = {
+  async invoke(
+    remote: unknown,
+    request: RemoteRevokeRequest,
+    signal?: AbortSignal,
+  ): Promise<{ ok: boolean; revoked: number; error?: string }> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const namespace = remote !== null && typeof remote === 'object'
+      ? Reflect.get(remote, 'agentEnhancer') as object | undefined
+      : undefined
+    const call = namespace === undefined
+      ? undefined
+      : Reflect.get(namespace, 'remoteRevoke') as RemoteRevokeCall | undefined
+    if (typeof call !== 'function') return { ok: false, revoked: 0, error: '宿主接口缺失' }
+    try {
+      const result = await call.call(namespace, request)
+      return result.ok ? result.value : { ok: false, revoked: 0, error: '撤销失败' }
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return { ok: false, revoked: 0, error: errorMessage(error) }
+    }
+  },
+}
+
+type RemoteLogoutCall = (
+  request: Record<string, never>,
+) => Promise<RemoteResult<{ ok: true }>>
+
+export const agentEnhancerRemoteLogout = {
+  async invoke(remote: unknown, signal?: AbortSignal): Promise<{ ok: true }> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const namespace = remote !== null && typeof remote === 'object'
+      ? Reflect.get(remote, 'agentEnhancer') as object | undefined
+      : undefined
+    const call = namespace === undefined
+      ? undefined
+      : Reflect.get(namespace, 'remoteLogout') as RemoteLogoutCall | undefined
+    if (typeof call === 'function') {
+      try {
+        await call.call(namespace, {})
+      } catch (error) {
+        if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      }
+    }
+    return { ok: true }
+  },
+}
 export const agentEnhancerShowOsNotification = {
   async invoke(remote: unknown, request: ShowOsNotificationRequest, signal?: AbortSignal) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')

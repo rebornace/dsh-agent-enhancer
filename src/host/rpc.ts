@@ -615,6 +615,83 @@ const softPauseSetRequestCodec = codec(
 )
 const softPauseStateCodec = codec('dsh-agent-enhancer#SoftPauseState', softPauseStateSchema)
 
+export const remoteDeviceSchema = z.strictObject({
+  chatId: z.string().min(1),
+  boundAt: z.number(),
+  channel: z.string().min(1),
+})
+export type RemoteDeviceWire = z.infer<typeof remoteDeviceSchema>
+
+export const remoteLoginSnapshotSchema = z.strictObject({
+  phase: z.enum(['idle', 'waiting', 'connected', 'failed']),
+  /** Raw host status token; unknown values are passed through, never guessed. */
+  status: z.string(),
+  qrUrl: z.string().optional(),
+  error: z.string().optional(),
+})
+export type RemoteLoginSnapshotWire = z.infer<typeof remoteLoginSnapshotSchema>
+
+export const remoteStatusSchema = z.strictObject({
+  phase: z.enum(['stopped', 'unbound', 'running', 'failed']),
+  login: remoteLoginSnapshotSchema,
+  devices: z.array(remoteDeviceSchema),
+  botId: z.string().optional(),
+  error: z.string().optional(),
+})
+export type RemoteStatusWire = z.infer<typeof remoteStatusSchema>
+
+export const remoteStatusRequestSchema = z.strictObject({})
+export const remoteLoginBeginRequestSchema = z.strictObject({})
+export const remoteLoginBeginResultSchema = z.strictObject({
+  ok: z.boolean(),
+  ticket: z.string().optional(),
+  /** Encode this URL into a QR code; opening it and scanning the page fails. */
+  qrUrl: z.string().optional(),
+  error: z.string().optional(),
+})
+export type RemoteLoginBeginResult = z.infer<typeof remoteLoginBeginResultSchema>
+export const remoteLoginCancelRequestSchema = z.strictObject({})
+export const remoteBindCodeRequestSchema = z.strictObject({})
+export const remoteBindCodeResultSchema = z.strictObject({
+  ok: z.boolean(),
+  code: z.string().regex(/^\d{6}$/).optional(),
+  expiresAt: z.number().optional(),
+  error: z.string().optional(),
+})
+export type RemoteBindCodeResult = z.infer<typeof remoteBindCodeResultSchema>
+export const remoteRevokeRequestSchema = z.strictObject({
+  chatId: z.string().min(1).optional(),
+})
+export type RemoteRevokeRequest = z.infer<typeof remoteRevokeRequestSchema>
+export const remoteRevokeResultSchema = z.strictObject({
+  ok: z.boolean(),
+  revoked: z.number().int().nonnegative(),
+  error: z.string().optional(),
+})
+export const remoteOkResultSchema = z.strictObject({
+  ok: z.literal(true),
+})
+
+const remoteStatusRequestCodec = codec('dsh-agent-enhancer#RemoteStatusRequest', remoteStatusRequestSchema)
+const remoteStatusResultCodec = codec('dsh-agent-enhancer#RemoteStatusResult', remoteStatusSchema)
+const remoteLoginBeginRequestCodec = codec(
+  'dsh-agent-enhancer#RemoteLoginBeginRequest',
+  remoteLoginBeginRequestSchema,
+)
+const remoteLoginBeginResultCodec = codec(
+  'dsh-agent-enhancer#RemoteLoginBeginResult',
+  remoteLoginBeginResultSchema,
+)
+const remoteLoginCancelRequestCodec = codec(
+  'dsh-agent-enhancer#RemoteLoginCancelRequest',
+  remoteLoginCancelRequestSchema,
+)
+const remoteBindCodeRequestCodec = codec('dsh-agent-enhancer#RemoteBindCodeRequest', remoteBindCodeRequestSchema)
+const remoteBindCodeResultCodec = codec('dsh-agent-enhancer#RemoteBindCodeResult', remoteBindCodeResultSchema)
+const remoteRevokeRequestCodec = codec('dsh-agent-enhancer#RemoteRevokeRequest', remoteRevokeRequestSchema)
+const remoteRevokeResultCodec = codec('dsh-agent-enhancer#RemoteRevokeResult', remoteRevokeResultSchema)
+const remoteOkResultCodec = codec('dsh-agent-enhancer#RemoteOkResult', remoteOkResultSchema)
+
 export const showOsNotificationRequestSchema = z.strictObject({
   title: z.string().min(1).max(120),
   body: z.string().min(1).max(240),
@@ -1779,6 +1856,78 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: softPauseSetRequestCodec,
       }],
       result: softPauseStateCodec,
+    },
+    'agentEnhancer/remoteStatus': {
+      service: 'agentEnhancer',
+      implementation: 'remoteStatus',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: remoteStatusRequestCodec,
+        strictCodec: remoteStatusRequestCodec,
+      }],
+      result: remoteStatusResultCodec,
+    },
+    'agentEnhancer/remoteLoginBegin': {
+      service: 'agentEnhancer',
+      implementation: 'remoteLoginBegin',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: remoteLoginBeginRequestCodec,
+        strictCodec: remoteLoginBeginRequestCodec,
+      }],
+      result: remoteLoginBeginResultCodec,
+    },
+    'agentEnhancer/remoteLoginCancel': {
+      service: 'agentEnhancer',
+      implementation: 'remoteLoginCancel',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: remoteLoginCancelRequestCodec,
+        strictCodec: remoteLoginCancelRequestCodec,
+      }],
+      result: remoteOkResultCodec,
+    },
+    'agentEnhancer/remoteBindCode': {
+      service: 'agentEnhancer',
+      implementation: 'remoteBindCode',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: remoteBindCodeRequestCodec,
+        strictCodec: remoteBindCodeRequestCodec,
+      }],
+      result: remoteBindCodeResultCodec,
+    },
+    'agentEnhancer/remoteRevoke': {
+      service: 'agentEnhancer',
+      implementation: 'remoteRevoke',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: remoteRevokeRequestCodec,
+        strictCodec: remoteRevokeRequestCodec,
+      }],
+      result: remoteRevokeResultCodec,
+    },
+    'agentEnhancer/remoteLogout': {
+      service: 'agentEnhancer',
+      implementation: 'remoteLogout',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: remoteLoginCancelRequestCodec,
+        strictCodec: remoteLoginCancelRequestCodec,
+      }],
+      result: remoteOkResultCodec,
     },
     'agentEnhancer/showOsNotification': {
       service: 'agentEnhancer',

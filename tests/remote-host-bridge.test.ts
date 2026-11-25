@@ -16,7 +16,7 @@ const textOnly: ChannelCapabilities = {
 
 type Listener = (...args: unknown[]) => unknown
 
-function harness() {
+function harness(options: { readonly shouldHold?: () => boolean } = {}) {
   const handlers = new Map<string, Listener>()
   const ctx = {
     on: (name: string, listener: Listener) => {
@@ -32,7 +32,12 @@ function harness() {
     cancel: vi.fn(async () => {}),
     setPaused: vi.fn(async () => {}),
   }
-  const bridge = installRemoteHostBridge(ctx, { ports, capabilities: textOnly, now: () => 100 })
+  const bridge = installRemoteHostBridge(ctx, {
+    ports,
+    capabilities: textOnly,
+    now: () => 100,
+    ...(options.shouldHold === undefined ? {} : { shouldHold: options.shouldHold }),
+  })
   return { bridge, handlers, ports }
 }
 
@@ -119,6 +124,22 @@ describe('installRemoteHostBridge', () => {
     if (code === undefined) throw new Error('missing code')
     await bridge.controller.execute('chat-1', `回答 ${code} 详细`, textOnly)
     await expect(answer).resolves.toEqual({ answers: [{ id: 'q1', selected: ['详细'] }] })
+  })
+
+  it('passes an approval through while no chat can answer', async () => {
+    const { bridge, handlers } = harness({ shouldHold: () => false })
+    await bridge.refreshSessions()
+    emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
+
+    const next = vi.fn(() => 'desktop')
+    const result = emit(handlers, 'approval/request', {
+      agent: { session: { id: 's1' } },
+      toolName: 'write',
+    }, next)
+
+    expect(next).toHaveBeenCalledOnce()
+    expect(result).toBe('desktop')
+    expect(bridge.controller.tasks()[0]?.pending).toBeUndefined()
   })
 
   it('leaves multi-question cards to the desktop', () => {

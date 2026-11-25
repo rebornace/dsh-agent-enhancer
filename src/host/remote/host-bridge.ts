@@ -56,6 +56,11 @@ export interface HostBridgeOptions {
   readonly capabilities: ChannelCapabilities
   readonly now?: () => number
   readonly ttlMs?: number
+  /**
+   * Whether a remote chat can actually answer right now. Without it a parsed
+   * chat holds every approval forever even though nothing is listening.
+   */
+  readonly shouldHold?: () => boolean
 }
 
 export interface HostBridge {
@@ -162,7 +167,10 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
     }
   }
 
+  const canAnswer = (): boolean => options.shouldHold?.() !== false
+
   const onApprovalRequest = (request: ApprovalRequestLike, next: () => unknown): unknown => {
+    if (!canAnswer()) return next()
     const sessionId = sessionIdOf(request?.agent)
     if (sessionId === undefined || !known(sessionId)) return next()
     try {
@@ -179,6 +187,7 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
   }
 
   const onQuestionRequest = (request: QuestionRequestLike, next: () => unknown): unknown => {
+    if (!canAnswer()) return next()
     const sessionId = sessionIdOf(request?.agent) ?? (typeof request?.sessionId === 'string' ? request.sessionId : undefined)
     if (sessionId === undefined || !known(sessionId)) return next()
     const questions = Array.isArray(request.questions) ? request.questions : []

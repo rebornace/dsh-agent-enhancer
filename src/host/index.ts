@@ -254,8 +254,13 @@ import type {
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
   SoftPauseState,
+  RemoteBindCodeResult,
+  RemoteLoginBeginResult,
+  RemoteRevokeRequest,
+  RemoteStatusWire,
 } from './rpc.ts'
 import { showOsNotificationNow } from './run-alerts/notify.ts'
+import type { RemoteRuntime } from './remote/weixin/runtime.ts'
 import type { AuxiliaryResult } from './types.ts'
 export const name = PLUGIN_ID
 export const inject = [
@@ -380,6 +385,8 @@ export class AgentEnhancerService extends TypertRemoteService {
     private readonly browserAgentProfileDir: string = defaultBrowserAgentProfileDir(
       join(homedir(), '.dsh', 'profiles', 'desktop', 'plugin-data', PACKAGE_NAME),
     ),
+    /** Null while the remote-control feature is off or unavailable. */
+    private readonly remoteControl: () => RemoteRuntime | null = () => null,
   ) {
     super(ctx, 'agentEnhancer')
   }
@@ -1231,6 +1238,70 @@ export class AgentEnhancerService extends TypertRemoteService {
       engaged: this.softPause.isEngaged(request.sessionId),
       treeRunning: this.softPauseTreeRunning(request.sessionId),
     }
+  }
+
+  private requireRemoteControl(): RemoteRuntime {
+    const remote = this.remoteControl()
+    if (remote === null) {
+      throw new RemoteError('agent-enhancer/failed', '远程控制未启用，请先在设置里开启', {
+        code: 'FILE_EDIT_FAILED',
+      })
+    }
+    return remote
+  }
+
+  /** WeChat link, pairing and device state. Never returns the bot token. */
+  async remoteStatus(_request: Record<string, never>): Promise<RemoteStatusWire> {
+    this.assertOwner()
+    const status = this.requireRemoteControl().status()
+    return { ...status, devices: [...status.devices] }
+  }
+
+  /** Show a fresh QR. Connecting happens on confirmation, not here. */
+  async remoteLoginBegin(_request: Record<string, never>): Promise<RemoteLoginBeginResult> {
+    this.assertOwner()
+    try {
+      const ticket = await this.requireRemoteControl().beginLogin()
+      return { ok: true, ticket: ticket.ticket, qrUrl: ticket.qrUrl }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  async remoteLoginCancel(_request: Record<string, never>): Promise<{ ok: true }> {
+    this.assertOwner()
+    this.requireRemoteControl().cancelLogin()
+    return { ok: true }
+  }
+
+  /** One-shot code a chat types once to become a control device. */
+  async remoteBindCode(_request: Record<string, never>): Promise<RemoteBindCodeResult> {
+    this.assertOwner()
+    try {
+      const issued = this.requireRemoteControl().issueBindCode()
+      return { ok: true, code: issued.code, expiresAt: issued.expiresAt }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  async remoteRevoke(request: RemoteRevokeRequest): Promise<{ ok: boolean; revoked: number; error?: string }> {
+    this.assertOwner()
+    try {
+      const remote = this.requireRemoteControl()
+      const before = remote.devices().length
+      remote.revoke(request.chatId)
+      return { ok: true, revoked: before - remote.devices().length }
+    } catch (error) {
+      return { ok: false, revoked: 0, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** Forget the bot login; bound chats stay remembered. */
+  async remoteLogout(_request: Record<string, never>): Promise<{ ok: true }> {
+    this.assertOwner()
+    await this.requireRemoteControl().logout()
+    return { ok: true }
   }
 
   /**

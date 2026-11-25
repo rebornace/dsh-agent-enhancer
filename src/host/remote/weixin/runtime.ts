@@ -80,6 +80,8 @@ export class RemoteRuntime {
   private credentialsValue: WeixinCredentials | undefined
   private phaseValue: RuntimePhase = 'stopped'
   private errorValue: string | undefined
+  /** Bumped by stop/logout so an in-flight scan result cannot reconnect. */
+  private generation = 0
 
   constructor(private readonly options: RemoteRuntimeOptions) {
     this.transport = options.createTransport?.() ?? new WeixinTransport()
@@ -124,6 +126,7 @@ export class RemoteRuntime {
     this.bridge = installRemoteHostBridge(this.options.ctx, {
       ports,
       capabilities: this.options.capabilities,
+      shouldHold: () => this.phaseValue === 'running' && (this.bindings?.list().length ?? 0) > 0,
       ...(this.options.now === undefined ? {} : { now: this.options.now }),
     })
     try {
@@ -145,11 +148,39 @@ export class RemoteRuntime {
   /** Start a fresh QR login; connecting happens when the scan is confirmed. */
   async beginLogin(): Promise<LoginTicket> {
     if (this.phaseValue === 'stopped') await this.start()
+    const generation = this.generation
     const ticket = await this.login.begin()
     void this.login.wait().then(credentials => {
-      if (credentials !== undefined) void this.connect(credentials)
+      // A logout or stop while the code was being scanned must win.
+      if (credentials !== undefined && this.generation === generation) void this.connect(credentials)
     })
     return ticket
+  }
+
+  /** Abandon the QR currently on screen without touching a live connection. */
+  cancelLogin(): void {
+    this.login.cancel()
+    if (this.phaseValue === 'unbound' || this.phaseValue === 'failed') {
+      this.errorValue = undefined
+      this.phaseValue = 'unbound'
+    }
+  }
+
+  /**
+   * Forget the WeChat login. Bindings survive (they are about chats, not the
+   * bot), but the adapter stops until a new scan confirms.
+   */
+  async logout(): Promise<void> {
+    this.generation += 1
+    this.adapter?.stop()
+    this.adapter = undefined
+    this.login.cancel()
+    this.credentialsValue = undefined
+    this.errorValue = undefined
+    await this.options.credentials.clear().catch(error => {
+      this.options.onError?.(error)
+    })
+    if (this.phaseValue !== 'stopped') this.phaseValue = 'unbound'
   }
 
   /** One-shot pairing code for an unbound chat. */
@@ -177,6 +208,7 @@ export class RemoteRuntime {
   }
 
   stop(): void {
+    this.generation += 1
     this.adapter?.stop()
     this.bridge?.dispose()
     this.login.cancel()
