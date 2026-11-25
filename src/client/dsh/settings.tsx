@@ -425,6 +425,7 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
             setHighlightFeature(feature)
             setTab('models')
           }}
+          getRemote={getRemote}
           featureExtraDescription={module => {
             if (module === 'instructionsSkills') {
               if (!settings.instructionsSkillsEnabled || skillsLeftNavSeatReady) return undefined

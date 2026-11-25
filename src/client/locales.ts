@@ -115,6 +115,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentGuideDescription' | 'browserAgentSidebarHint' |
       'browserAgentSidebarLoading' | 'browserAgentSidebarConnected' |
       'browserAgentSidebarDisconnected' | 'browserAgentSidebarChatHint' |
+      'remoteControl' | 'remoteControlDescription' |
+      'remoteStatus_stopped' | 'remoteStatus_unbound' | 'remoteStatus_running' | 'remoteStatus_failed' |
+      'remoteLogin' | 'remoteLoginAgain' | 'remoteRegenerate' | 'remoteLoginCancel' |
+      'remoteLoginHint' | 'remoteLoginWaiting' | 'remoteLoginExpired' | 'remoteLoginFailed' |
+      'remoteBindCode' | 'remoteBindCodeHint' | 'remoteBindCodeExpires' |
+      'remoteDevices' | 'remoteDevicesEmpty' | 'remoteRevoke' | 'remoteLogout' |
+      'remoteQrLabel' | 'remoteLoadFailed' | 'remoteFailed' |
       'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackUndoAction' |
       'rollbackUndoCommandDescription' |
       'rollbackTitle' | 'rollbackScope' | 'rollbackScopeAlready' | 'rollbackScopeCovered' | 'rollbackUndoTitle' | 'rollbackUndoScope' | 'rollbackUndoScopeConversation' |
@@ -478,6 +485,30 @@ export const agentLocales = {
     webChatShareFetchFailed: '分享内容读取失败。请确认链接仍有效（任意账号的公开分享均可），或重新生成分享后再试。',
     browserAgent: '浏览器控制',
     browserAgentDescription: '让智能体用专用浏览器打开并操作网页（点击、填写等需你批准）。Mac 为 Safari / Chrome，Windows 为 Chrome / Edge。默认关闭。开启后可在对话中自动启动。不同于官方侧栏网页浏览。',
+    remoteControl: '微信远程控制',
+    remoteControlDescription: '人离开电脑后，用微信查看任务、批准或拒绝、暂停继续、追加指令。只控制已有会话，不新开会话；只在需要你时发消息。默认关闭。需要扫码登录一次，再在微信里发送一次性绑定码。',
+    remoteStatus_stopped: '未启用',
+    remoteStatus_unbound: '未连接微信',
+    remoteStatus_running: '已连接微信',
+    remoteStatus_failed: '连接异常',
+    remoteLogin: '扫码登录',
+    remoteLoginAgain: '重新扫码',
+    remoteRegenerate: '换一张二维码',
+    remoteLoginCancel: '取消扫码',
+    remoteLoginHint: '用微信扫一扫上方的二维码并确认。二维码只用于这次登录。',
+    remoteLoginWaiting: '等待扫码…',
+    remoteLoginExpired: '二维码已过期，重新生成一张即可。',
+    remoteLoginFailed: '登录没有完成，可以重新扫码。',
+    remoteBindCode: '生成绑定码',
+    remoteBindCodeHint: '在微信里把这 6 位数字发给这个机器人，这台聊天就会成为控制端。',
+    remoteBindCodeExpires: '10 分钟内有效，只能用一次。',
+    remoteDevices: '已绑定聊天',
+    remoteDevicesEmpty: '还没有绑定任何聊天。先生成绑定码，再到微信里发送。',
+    remoteRevoke: '吊销',
+    remoteLogout: '断开微信',
+    remoteQrLabel: '微信登录二维码',
+    remoteLoadFailed: '读取远程控制状态失败。',
+    remoteFailed: '操作没有完成，请重试。',
     browserAgentBrowser: '专用浏览器',
     browserAgentDebugTools: '调试与页面模拟',
     browserAgentDebugToolsHint: '一个开关同时启用：读取网络请求与控制台输出（browser_network / browser_console），以及模拟深色模式、减少动画、视口尺寸（browser_emulate）。只记录 URL、状态、耗时与 console 文本，不读请求头、Cookie、响应体。',
@@ -1211,6 +1242,30 @@ export const agentLocales = {
       'Opens official web chat in the main area. Sign in on the web the first time. Move the current chat, or any account’s public share link, into a workspace session (single conversation). For bulk deepseek_data ZIP, use the official experimental DeepSeek chat import plugin. On by default. Does not connect web-account quota to the local API.',
     browserAgent: 'Browser control',
     browserAgentDescription: 'Let the agent open and use a dedicated browser window (clicks and typing need your approval). Mac: Safari / Chrome; Windows: Chrome / Edge. Off by default. Auto-launches from chat when needed. Not the official sidebar browser.',
+    remoteControl: 'WeChat remote control',
+    remoteControlDescription: 'While you are away from the computer, use WeChat to see tasks, approve or reject, pause/resume and send follow-ups. It only drives existing sessions, never opens a shadow one, and messages you only when you are needed. Off by default. Scan once to log in, then send a one-time pairing code from WeChat.',
+    remoteStatus_stopped: 'Not enabled',
+    remoteStatus_unbound: 'Not connected to WeChat',
+    remoteStatus_running: 'Connected to WeChat',
+    remoteStatus_failed: 'Connection problem',
+    remoteLogin: 'Scan to log in',
+    remoteLoginAgain: 'Scan again',
+    remoteRegenerate: 'New QR code',
+    remoteLoginCancel: 'Cancel scan',
+    remoteLoginHint: 'Scan the QR code above and confirm in WeChat. It is only used for this login.',
+    remoteLoginWaiting: 'Waiting for the scan…',
+    remoteLoginExpired: 'The QR code expired. Generate a new one.',
+    remoteLoginFailed: 'Login did not finish. Scan again to retry.',
+    remoteBindCode: 'Create pairing code',
+    remoteBindCodeHint: 'Send this 6-digit code to the bot in WeChat; that chat becomes a control device.',
+    remoteBindCodeExpires: 'Valid for 10 minutes, one use only.',
+    remoteDevices: 'Paired chats',
+    remoteDevicesEmpty: 'No chat is paired yet. Create a code, then send it from WeChat.',
+    remoteRevoke: 'Revoke',
+    remoteLogout: 'Disconnect WeChat',
+    remoteQrLabel: 'WeChat login QR code',
+    remoteLoadFailed: 'Could not read the remote-control status.',
+    remoteFailed: 'The action did not finish. Try again.',
     browserAgentBrowser: 'Dedicated browser',
     browserAgentDebugTools: 'Debug & page emulation',
     browserAgentDebugToolsHint: 'One switch enables both: reading network requests and console output (browser_network / browser_console), and emulating dark mode, reduced motion or a viewport size (browser_emulate). Only URLs, status, timing and console text are recorded — never request headers, cookies or bodies.',

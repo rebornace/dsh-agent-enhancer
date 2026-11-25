@@ -15,6 +15,15 @@ Post-`0.3.8` current P0 is **L7 browser agent**. **v1 main path is landed** (Pla
 
 **Web chat (`webChatBridge`)** main path is landed: left-nav embed of `chat.deepseek.com`; Move to workspace = **导入当前对话** (`history_messages` + guest Bearer) or **导入分享链接** (public `share/content`, any account). Same fragment→Session mapping as official `@deepseek-ai/dsh-deepseek-chat-import` (THINK→reasoning, `web_search` / `web_fetch`) when the API payload includes those fragments. Preview lists Q&A only; thinking appears after import. Share rows use `message_id` (not bare `id`); orphan parents fall back to linear import. Do **not** silent-fallback current chat to DOM when the session API fails — fail and suggest share. Do **not** ship a bulk `deepseek_data-*.zip` product line (use official experimental「DeepSeek 会话导入」). Do **not** reintroduce account-bulk scraping. Background: `docs/architecture/web-chat-bridge.md` (local-only). Screenshots: `docs/images/web-chat-left-nav.png`, `docs/images/web-chat-to-workspace.png`.
 
+**WeChat remote control (`remoteControl`)** is user-facing, off by default, and the only channel today. Rules that must survive edits:
+
+- **The bridge holds an approval only while someone can answer.** `shouldHold()` = runtime `running` **and** at least one paired chat. Without it a runtime with no devices swallowed every approval and waited forever for a reply nobody could send.
+- **A closed channel releases its asks.** `stop()` and `logout()` call `controller.releasePending()` (approval → `reject`, question → empty answer). A tool must never hang on a channel that no longer exists; do not delete those calls.
+- **Pairing is one-shot.** Codes are 6 digits, in memory only, 10 minutes, never written to disk; bindings persist, tokens live in the host credential service (no plaintext fallback).
+- **No token reaches the client.** `remoteStatus` carries phase / login snapshot / devices / botId only; the bot token stays inside the runtime.
+- **The QR encodes `qrcode_img_content` itself.** Opening the liteapp page and scanning the page's own QR fails with「网络错误」. `src/client/remote/qr.ts` is a small byte-mode encoder verified against jsQR (L/M/Q/H, versions 1–20, UTF-8); do not swap it for a "open the link" shortcut.
+- **Pending approvals are not persisted.** A host restart has no waiter to answer them, so old cards are history, not buttons.
+
 ## Browser agent — platform rules
 
 | OS | Settings / sidebar choices | Auto order |

@@ -25,7 +25,7 @@ describe('composer settings', () => {
   it('enables history, optimize, predict, and rollback by default', () => {
     expect(MODULES).toEqual([
       'history', 'optimize', 'predict', 'quote', 'rollback', 'softPause', 'runAlerts', 'contextInspect', 'usage',
-      'sessionDelete', 'fileEdit', 'instructionsSkills', 'mcpConnectors', 'webChatBridge', 'browserAgent',
+      'sessionDelete', 'fileEdit', 'instructionsSkills', 'mcpConnectors', 'webChatBridge', 'browserAgent', 'remoteControl',
     ])
     expect(DEFAULT_SETTINGS.autoClassifierEnabled).toBe(false)
     expect(DEFAULT_SETTINGS.browserAgentEnabled).toBe(false)
@@ -47,6 +47,7 @@ describe('composer settings', () => {
       browserAgentUnattendedMinutes: 20,
       browserAgentUnattendedActions: 30,
       webChatBridgeEnabled: true,
+      remoteControlEnabled: false,
       contextInspectEnabled: true,
       usageEnabled: true,
       sessionDeleteEnabled: true,
@@ -102,6 +103,7 @@ describe('composer settings', () => {
       browserAgentUnattendedMinutes: 20,
       browserAgentUnattendedActions: 30,
       webChatBridgeEnabled: true,
+      remoteControlEnabled: false,
       contextInspectEnabled: true,
       usageEnabled: true,
       sessionDeleteEnabled: true,
@@ -152,6 +154,7 @@ describe('composer settings', () => {
       browserAgentUnattendedMinutes: 20,
       browserAgentUnattendedActions: 30,
       webChatBridgeEnabled: true,
+      remoteControlEnabled: false,
       contextInspectEnabled: true,
       usageEnabled: true,
       sessionDeleteEnabled: true,

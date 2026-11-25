@@ -56,6 +56,21 @@ describe('RemoteController', () => {
     expect(controller.renderCard('s1', textOnly)).not.toContain('a3f9')
   })
 
+  it('releases held asks when the channel is torn down', async () => {
+    const { controller } = setup()
+    seed(controller)
+    const approval = controller.askApproval('s1', { prompt: '写入 report.xlsx' })
+    const question = controller.askQuestion('s2', { prompt: '用哪个模板？' })
+
+    controller.releasePending()
+
+    await expect(approval.wait).resolves.toBe('reject')
+    await expect(question.wait).resolves.toBe('')
+    // A second release is harmless and a late decision finds nothing to answer.
+    controller.releasePending()
+    expect((await controller.execute('chat-1', '批准 a3f9', textOnly)).text).toContain('没有')
+  })
+
   it('refuses to guess between two approvals and resolves the coded one', async () => {
     const { controller } = setup()
     seed(controller)

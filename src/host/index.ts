@@ -260,7 +260,9 @@ import type {
   RemoteStatusWire,
 } from './rpc.ts'
 import { showOsNotificationNow } from './run-alerts/notify.ts'
-import type { RemoteRuntime } from './remote/weixin/runtime.ts'
+import { RemoteRuntime } from './remote/weixin/runtime.ts'
+import { createWeixinCredentialStore } from './remote/weixin/credentials.ts'
+import { WEIXIN_CAPABILITIES } from './remote/weixin/capabilities.ts'
 import type { AuxiliaryResult } from './types.ts'
 export const name = PLUGIN_ID
 export const inject = [
@@ -305,6 +307,8 @@ export const Config = z.object({
     .volatile(),
   /** Default off; embeds official web chat + import to work. */
   webChatBridgeEnabled: z.boolean().default(true).volatile(),
+  /** WeChat remote control; needs a QR login and a paired chat. Off by default. */
+  remoteControlEnabled: z.boolean().default(false).volatile(),
   instructionsSkillsEnabled: z.boolean().default(true).volatile(),
   mcpConnectorsEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.
@@ -1674,6 +1678,7 @@ function readSettings(config: Config): EnhancerSettings {
     browserAgentUnattendedMinutes: config.browserAgentUnattendedMinutes.get(),
     browserAgentUnattendedActions: config.browserAgentUnattendedActions.get(),
     webChatBridgeEnabled: config.webChatBridgeEnabled.get(),
+    remoteControlEnabled: config.remoteControlEnabled.get(),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
     mcpConnectorsEnabled: config.mcpConnectorsEnabled.get(),
     optimizeProvider: config.optimizeProvider.get(),
@@ -1792,6 +1797,42 @@ export function apply(ctx: Context, config: Config): void {
       softPauseGate.release(sessionId)
     },
   })
+
+  // WeChat remote control. The runtime is created once and only started while
+  // the feature toggle is on; the service sees null until then so settings can
+  // render "not enabled" without touching WeChat.
+  const remoteControlLive = { enabled: settings().remoteControlEnabled }
+  const remoteRuntime = new RemoteRuntime({
+    ctx,
+    rootDir: join(pluginDataPackageRoot, 'remote'),
+    capabilities: WEIXIN_CAPABILITIES,
+    // Same pause as the desktop control: hold the next model call, let tools finish.
+    setPaused: async (sessionId, paused) => {
+      if (!settings().softPauseEnabled) return
+      if (paused) softPauseGate.engage(sessionId)
+      else softPauseGate.release(sessionId)
+    },
+    credentials: createWeixinCredentialStore(ctx),
+    onError: error => {
+      const detail = error instanceof Error ? error.message : String(error)
+      ctx.logger.warn(`agent-enhancer: remote control: ${detail}`)
+    },
+  })
+  let remoteRunning = false
+  const syncRemoteControl = async (enabled: boolean): Promise<void> => {
+    remoteControlLive.enabled = enabled
+    if (enabled === remoteRunning) return
+    remoteRunning = enabled
+    try {
+      if (enabled) await remoteRuntime.start()
+      else remoteRuntime.stop()
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      ctx.logger.warn(`agent-enhancer: remote control start failed: ${detail}`)
+    }
+  }
+  void syncRemoteControl(settings().remoteControlEnabled)
+
   new AgentEnhancerService(ctx, models, {
       async summarize(range) {
         const stored = await usage.listCalls()
@@ -1824,6 +1865,7 @@ export function apply(ctx: Context, config: Config): void {
       browserAgentLive.browser = hostBrowserPreference(browser)
     },
     browserAgentProfileDir,
+    () => (remoteControlLive.enabled ? remoteRuntime : null),
   )
   ctx.effect(() => {
     const unsubscribe = ctx.on('internal/update', (resolvedConfig, next) => {
@@ -1838,6 +1880,7 @@ export function apply(ctx: Context, config: Config): void {
       browserAgentLive.enabled = cfg.browserAgentEnabled.get()
       browserAgentLive.browser = hostBrowserPreference(cfg.browserAgentBrowser.get())
       browserAgentLive.demonstrate = cfg.browserAgentDemonstrate.get()
+      void syncRemoteControl(cfg.remoteControlEnabled.get())
       // Always refresh: heals missing browser_* tools after live pack reload /
       // async teardown races. Idempotent when already mounted.
       browserAgent.refresh()
@@ -1858,6 +1901,7 @@ export function apply(ctx: Context, config: Config): void {
       unsubscribe()
       await mcpRuntime.disposeAll()
       await browserAgent.dispose()
+      remoteRuntime.stop()
     }
   })
   installSoftPause(ctx, {

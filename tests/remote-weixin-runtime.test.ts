@@ -177,6 +177,43 @@ describe('RemoteRuntime', () => {
     instance.stop()
   })
 
+  it('lets a stop during startup win', async () => {
+    let release = (): void => {}
+    const gate = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const proxy = {
+      sessions: {
+        list: vi.fn(async () => {
+          await gate
+          return { result: { ok: true, value: { items: [] } } }
+        }),
+        prompt: vi.fn(async () => ({ result: { ok: true, value: { accepted: true } } })),
+        cancel: vi.fn(async () => ({ result: { ok: true, value: { accepted: true } } })),
+      },
+    }
+    const slowCtx = {
+      on: vi.fn(() => () => {}),
+      get: (name: string) => (name === 'apiProxy' ? proxy : undefined),
+    } as unknown as Context
+    const instance = new RemoteRuntime({
+      ctx: slowCtx,
+      rootDir: rootDir(),
+      capabilities,
+      setPaused: vi.fn(async () => {}),
+      credentials: memoryStore({ baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' }),
+      createTransport: () => transport(),
+      emptyPageDelayMs: 1,
+    })
+
+    const started = instance.start()
+    instance.stop()
+    release()
+    const status = await started
+    expect(status.phase).toBe('stopped')
+    expect(instance.running).toBe(false)
+  })
+
   it('fails when the host has no apiProxy', async () => {
     const broken = {
       on: vi.fn(() => () => {}),

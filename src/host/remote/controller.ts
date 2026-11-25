@@ -175,6 +175,21 @@ export class RemoteController {
     return dropped
   }
 
+  /**
+   * Resolve every held ask so tearing the channel down cannot leave a tool
+   * waiting forever. An approval becomes a rejection (the desktop had already
+   * been bypassed by this hook); a question becomes an empty answer.
+   */
+  releasePending(): void {
+    for (const resolve of this.approvalWaiters.values()) resolve('reject')
+    this.approvalWaiters.clear()
+    for (const resolve of this.questionWaiters.values()) resolve('')
+    this.questionWaiters.clear()
+    for (const task of this.board.list()) {
+      if (task.pending !== undefined) this.board.clearPending(task.id)
+    }
+  }
+
   renderCard(id: TaskId, capabilities: ChannelCapabilities, hostOnline = true): string | undefined {
     const task = this.board.get(id)
     if (task === undefined) return undefined

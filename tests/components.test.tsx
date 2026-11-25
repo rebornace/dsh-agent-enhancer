@@ -169,6 +169,8 @@ const translations: Record<string, string> = {
   webChatBridgeDescription: 'Embed official web chat; import rendered capture or export into workspace sessions',
   browserAgent: 'Browser agent',
   browserAgentDescription: 'Let the agent drive signed-in pages via a local Chrome/Edge extension',
+  remoteControl: 'WeChat remote control',
+  remoteControlDescription: 'Use WeChat to approve, pause and follow up while away from the computer',
   browserAgentBrowser: 'Dedicated browser',
   browserAgentBrowser_auto: 'Auto (Windows prefers Edge)',
   browserAgentBrowser_chrome: 'Google Chrome',
@@ -1065,7 +1067,7 @@ describe('AgentOverlay prompt history search', () => {
 })
 
 describe('PluginSettings', () => {
-  it('renders fifteen module switches on the Features tab by default', () => {
+  it('renders sixteen module switches on the Features tab by default', () => {
     settingsHarness()
     expect(screen.getByText('Toggle input helpers as needed')).toBeTruthy()
     expect(screen.getByText('↑↓ revisit sent prompts; Alt+R to search (Ctrl+R in compatible environments)')).toBeTruthy()
@@ -1080,11 +1082,13 @@ describe('PluginSettings', () => {
     expect(screen.getByText(translations.usageDescription!)).toBeTruthy()
     expect(screen.getByText('Permanently delete a session and its local data from the sidebar ⋯ menu (cannot be undone)')).toBeTruthy()
     expect(screen.getByText(translations.browserAgentDescription!)).toBeTruthy()
-    expect(screen.getAllByRole('switch')).toHaveLength(15)
+    expect(screen.getByText(translations.remoteControlDescription!)).toBeTruthy()
+    expect(screen.getAllByRole('switch')).toHaveLength(16)
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-label'))).toEqual([
       'Prompt history', 'Optimize prompt', 'Next-prompt prediction', 'Select to quote', 'Conversation and file rollback', 'Soft pause',
       'Run alerts',
       'Context details', 'Model bill', 'Delete session', 'Edit files', 'Skills', 'Connectors', 'Web chat bridge', 'Browser agent',
+      'WeChat remote control',
     ])
     expect(screen.getByRole('tab', { name: 'Features' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: 'Models & routing' })).toBeTruthy()
@@ -1473,7 +1477,7 @@ describe('CoexistenceHints', () => {
     expect(store.getSnapshot()).toEqual(['optimize', 'predict'])
     expect(set).not.toHaveBeenCalled()
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-checked'))).toEqual([
-      'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'false',
+      'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'false', 'false',
     ])
 
     const reopened = new OverlapHintStore(localStorage, 'test-release')

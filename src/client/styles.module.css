@@ -2560,6 +2560,103 @@
   cursor: text;
 }
 
+/* WeChat remote control card under the 远程控制 switch. */
+.remotePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  max-width: 420px;
+}
+
+.remoteHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.remotePhase {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.remoteQr {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: fit-content;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l2, transparent);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-interactive-bg-active, transparent);
+}
+
+.remoteQr svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--dsw-radius-sm);
+}
+
+.remoteActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.remoteBind {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.remoteCode {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-primary);
+}
+
+.remoteDevicesBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.remoteDevices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.remoteDevice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.remoteHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.remoteError {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary, #ef4444);
+}
+
 /* Peer: extraFoldersPane — right-sidebar Browser Agent control surface */
 .browserAgentPane {
   display: flex;

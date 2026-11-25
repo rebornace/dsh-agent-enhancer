@@ -51,6 +51,7 @@ describe('composer configuration and Remote metadata', () => {
     expect(Config.dict!.browserAgentEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.browserAgentBrowser?.meta.volatile).toBe(true)
     expect(Config.dict!.webChatBridgeEnabled?.meta.volatile).toBe(true)
+    expect(Config.dict!.remoteControlEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.instructionsSkillsEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.mcpConnectorsEnabled?.meta.volatile).toBe(true)
     expect(Config.dict!.optimizeProvider?.meta.volatile).toBe(true)
@@ -81,6 +82,7 @@ describe('composer configuration and Remote metadata', () => {
       browserAgentUnattendedMinutes: 20,
       browserAgentUnattendedActions: 30,
       webChatBridgeEnabled: true,
+      remoteControlEnabled: false,
       instructionsSkillsEnabled: true,
       mcpConnectorsEnabled: true,
       optimizeProvider: '',
@@ -127,6 +129,7 @@ describe('composer configuration and Remote metadata', () => {
       browserAgentUnattendedMinutes: 20,
       browserAgentUnattendedActions: 30,
       webChatBridgeEnabled: true,
+      remoteControlEnabled: false,
       instructionsSkillsEnabled: false,
       mcpConnectorsEnabled: false,
       optimizeProvider: 'deepseek',
@@ -159,6 +162,7 @@ describe('composer configuration and Remote metadata', () => {
       browserAgentUnattendedMinutes: 20,
       browserAgentUnattendedActions: 30,
       webChatBridgeEnabled: true,
+      remoteControlEnabled: false,
       instructionsSkillsEnabled: false,
       mcpConnectorsEnabled: false,
       optimizeProvider: 'deepseek',
@@ -190,6 +194,7 @@ describe('composer configuration and Remote metadata', () => {
       'browserAgentEnabled', 'browserAgentBrowser', 'browserAgentDebugTools', 'browserAgentDemonstrate', 'browserAgentIdleClose',
       'browserAgentUnattendedMinutes', 'browserAgentUnattendedActions',
       'webChatBridgeEnabled',
+      'remoteControlEnabled',
       'instructionsSkillsEnabled',
       'mcpConnectorsEnabled',
       'optimizeProvider', 'optimizeModel', 'optimizeReasoningEffort',

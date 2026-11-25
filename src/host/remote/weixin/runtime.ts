@@ -82,6 +82,8 @@ export class RemoteRuntime {
   private errorValue: string | undefined
   /** Bumped by stop/logout so an in-flight scan result cannot reconnect. */
   private generation = 0
+  /** One setup at a time; a second start while the first is loading is a no-op. */
+  private starting = false
 
   constructor(private readonly options: RemoteRuntimeOptions) {
     this.transport = options.createTransport?.() ?? new WeixinTransport()
@@ -107,7 +109,17 @@ export class RemoteRuntime {
   }
 
   async start(): Promise<RuntimeStatus> {
-    if (this.phaseValue !== 'stopped') return this.status()
+    if (this.phaseValue !== 'stopped' || this.starting) return this.status()
+    this.starting = true
+    try {
+      return await this.startInternal()
+    } finally {
+      this.starting = false
+    }
+  }
+
+  private async startInternal(): Promise<RuntimeStatus> {
+    const generation = this.generation
     this.errorValue = undefined
     this.bindings = new BindingStore({
       filePath: join(this.options.rootDir, 'bindings.json'),
@@ -136,7 +148,10 @@ export class RemoteRuntime {
       this.errorValue = messageOf(error)
       return this.status()
     }
+    // A stop/dispose landed while sessions were loading: the runtime is gone.
+    if (this.generation !== generation) return this.status()
     const stored = await this.options.credentials.load().catch(() => undefined)
+    if (this.generation !== generation) return this.status()
     if (stored !== undefined) {
       await this.connect(stored)
     } else {
@@ -172,6 +187,7 @@ export class RemoteRuntime {
    */
   async logout(): Promise<void> {
     this.generation += 1
+    this.controller?.releasePending()
     this.adapter?.stop()
     this.adapter = undefined
     this.login.cancel()
@@ -209,6 +225,7 @@ export class RemoteRuntime {
 
   stop(): void {
     this.generation += 1
+    this.controller?.releasePending()
     this.adapter?.stop()
     this.bridge?.dispose()
     this.login.cancel()

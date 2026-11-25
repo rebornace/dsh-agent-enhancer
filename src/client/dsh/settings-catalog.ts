@@ -22,6 +22,7 @@ export type FeatureLabelKey =
   | 'mcpConnectors'
   | 'webChatBridge'
   | 'browserAgent'
+  | 'remoteControl'
 
 export type FeatureDescriptionKey =
   | 'historyDescription'
@@ -39,6 +40,7 @@ export type FeatureDescriptionKey =
   | 'mcpConnectorsDescription'
   | 'webChatBridgeDescription'
   | 'browserAgentDescription'
+  | 'remoteControlDescription'
 
 export interface SettingsFeatureEntry {
   readonly module: ModuleName
@@ -153,6 +155,12 @@ export const SETTINGS_FEATURE_GROUPS: readonly SettingsFeatureGroup[] = [
         module: 'browserAgent',
         labelKey: 'browserAgent',
         descriptionKey: 'browserAgentDescription',
+        modelFeature: null,
+      },
+      {
+        module: 'remoteControl',
+        labelKey: 'remoteControl',
+        descriptionKey: 'remoteControlDescription',
         modelFeature: null,
       },
     ],

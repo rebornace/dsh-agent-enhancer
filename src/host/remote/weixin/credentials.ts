@@ -40,10 +40,16 @@ function parse(value: string): WeixinCredentials | undefined {
 }
 
 function provider(ctx: Context): CredentialProviderLike | undefined {
-  const service = ctx.get('credentials') as CredentialProviderLike | undefined
-  if (service === undefined) return undefined
-  if (typeof service.resolve !== 'function' || typeof service.set !== 'function') return undefined
-  return service
+  let service: unknown
+  try {
+    service = ctx.get('credentials')
+  } catch {
+    return undefined
+  }
+  if (service === undefined || service === null || typeof service !== 'object') return undefined
+  const candidate = service as Partial<CredentialProviderLike>
+  if (typeof candidate.resolve !== 'function' || typeof candidate.set !== 'function') return undefined
+  return service as CredentialProviderLike
 }
 
 /**
