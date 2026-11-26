@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { createCode } from './types.ts'
 
-export type RemoteChannel = 'weixin'
+export type RemoteChannel = 'weixin' | 'telegram'
 
 export interface ChatBinding {
   readonly chatId: string
@@ -47,7 +47,7 @@ function numericCode(): string {
  */
 export class BindingStore {
   private readonly chats = new Map<string, ChatBinding>()
-  private readonly codes = new Map<string, number>()
+  private readonly codes = new Map<string, { readonly expiresAt: number; readonly channel: RemoteChannel }>()
   private readonly now: () => number
   private readonly code: () => string
   private readonly codeTtlMs: number
@@ -104,20 +104,25 @@ export class BindingStore {
   }
 
   /** Issue a one-shot pairing code. Codes are unique among live ones. */
-  issueCode(ttlMs = this.codeTtlMs): { code: string; expiresAt: number } {
+  issueCode(
+    ttlMs = this.codeTtlMs,
+    channel: RemoteChannel = 'weixin',
+  ): { code: string; expiresAt: number } {
     this.pruneCodes()
     let code = this.code()
     for (let attempt = 0; this.codes.has(code) && attempt < 20; attempt += 1) code = this.code()
     const expiresAt = this.now() + ttlMs
-    this.codes.set(code, expiresAt)
+    this.codes.set(code, { expiresAt, channel })
     return { code, expiresAt }
   }
 
-  /** One-shot redemption; expired or unknown codes fail. */
+  /** One-shot redemption; expired, unknown or foreign-channel codes fail. */
   redeem(code: string, chatId: string, channel: RemoteChannel, at = this.now()): boolean {
     this.pruneCodes(at)
-    const expiresAt = this.codes.get(code)
-    if (expiresAt === undefined) return false
+    const entry = this.codes.get(code)
+    if (entry === undefined) return false
+    // A WeChat code sent to the Telegram bot must stay usable in WeChat.
+    if (entry.channel !== channel) return false
     this.codes.delete(code)
     this.bind(chatId, channel, at)
     return true
@@ -126,8 +131,8 @@ export class BindingStore {
   /** Drop expired pairing codes and return how many were removed. */
   pruneCodes(at = this.now()): number {
     let removed = 0
-    for (const [code, expiresAt] of this.codes) {
-      if (expiresAt > at) continue
+    for (const [code, entry] of this.codes) {
+      if (entry.expiresAt > at) continue
       this.codes.delete(code)
       removed += 1
     }

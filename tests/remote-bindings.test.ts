@@ -92,6 +92,16 @@ describe('BindingStore', () => {
     expect(third.list()).toHaveLength(1)
   })
 
+  it('keeps a pairing code scoped to its channel', () => {
+    const store = new BindingStore({ filePath: null, now: () => 0, code: () => '246810' })
+    const { code } = store.issueCode(1_000, 'weixin')
+    expect(store.redeem(code, 'tg-chat', 'telegram')).toBe(false)
+    expect(store.isBound('tg-chat')).toBe(false)
+    // A wrong-channel attempt must not burn the code.
+    expect(store.redeem(code, 'wx-chat', 'weixin')).toBe(true)
+    expect(store.binding('wx-chat')?.channel).toBe('weixin')
+  })
+
   it('ignores a corrupt file instead of throwing', () => {
     const file = tempFile()
     const store = new BindingStore({ filePath: file })

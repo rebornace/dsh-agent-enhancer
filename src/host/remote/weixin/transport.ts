@@ -50,27 +50,9 @@ export interface LoginPoll {
   readonly credentials?: WeixinCredentials
 }
 
-export type InboundItem =
-  | { readonly kind: 'text'; readonly text: string }
-  | { readonly kind: 'voice'; readonly text?: string }
-  | { readonly kind: 'image' }
-  | { readonly kind: 'file' }
-  | { readonly kind: 'other' }
+import type { InboundItem, InboundMessage, UpdatesPage } from '../channels/types.ts'
 
-export interface InboundMessage {
-  readonly seq: number
-  readonly messageId: number
-  readonly fromUserId: string
-  readonly toUserId: string
-  readonly createdAt: number
-  readonly items: readonly InboundItem[]
-  readonly contextToken?: string
-}
-
-export interface UpdatesPage {
-  readonly cursor: string
-  readonly messages: readonly InboundMessage[]
-}
+export type { InboundItem, InboundMessage, UpdatesPage }
 
 export interface SendTextOptions {
   readonly contextToken?: string
