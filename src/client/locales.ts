@@ -127,7 +127,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'remoteLogin' | 'remoteLoginAgain' | 'remoteRegenerate' | 'remoteLoginCancel' |
       'remoteLoginHint' | 'remoteLoginWaiting' | 'remoteLoginExpired' | 'remoteLoginFailed' |
       'remoteBindCode' | 'remoteBindCodeHint' | 'remoteBindCodeExpires' |
-      'remoteDevices' | 'remoteDevicesEmpty' | 'remoteRevoke' | 'remoteLogout' |
+      'remoteDevices' | 'remoteDevicesEmpty' | 'remoteRevoke' | 'remoteDisconnect' |
       'remoteQrLabel' | 'remoteLoadFailed' | 'remoteFailed' | 'remoteTasksSynced' |
       'rollback' | 'rollbackDescription' | 'rollbackBoundary' | 'rollbackAction' | 'rollbackUndoAction' |
       'rollbackUndoCommandDescription' |
@@ -535,7 +535,7 @@ export const agentLocales = {
     remoteDevices: '已绑定聊天',
     remoteDevicesEmpty: '还没有绑定任何聊天。先生成绑定码，再到对应聊天里发送。',
     remoteRevoke: '吊销',
-    remoteLogout: '断开微信',
+    remoteDisconnect: '断开连接',
     remoteQrLabel: '微信登录二维码',
     remoteLoadFailed: '读取远程控制状态失败。',
     remoteFailed: '操作没有完成，请重试。',
@@ -1316,7 +1316,7 @@ export const agentLocales = {
     remoteDevices: 'Paired chats',
     remoteDevicesEmpty: 'No chat is paired yet. Create a code, then send it from that chat.',
     remoteRevoke: 'Revoke',
-    remoteLogout: 'Disconnect WeChat',
+    remoteDisconnect: 'Disconnect',
     remoteQrLabel: 'WeChat login QR code',
     remoteLoadFailed: 'Could not read the remote-control status.',
     remoteFailed: 'The action did not finish. Try again.',

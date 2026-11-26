@@ -73,6 +73,38 @@ describe('createHostPorts', () => {
     expect(setPaused).toHaveBeenCalledWith('s1', true)
   })
 
+  it('reads the last assistant text from history', async () => {
+    const events = vi.fn(async () => ({
+      records: [
+        {
+          type: 'event',
+          event: {
+            type: 'assistant/message',
+            seq: 1,
+            time: 1,
+            data: { message: { content: [{ type: 'text', text: '旧回答' }] } },
+          },
+        },
+        {
+          type: 'event',
+          event: {
+            type: 'assistant/message',
+            seq: 2,
+            time: 2,
+            data: { message: { content: [{ type: 'reasoning' }, { type: 'text', text: '最新回答' }] } },
+          },
+        },
+      ],
+    }))
+    const ctx = ctxWith({ list: vi.fn(), prompt: vi.fn(), cancel: vi.fn(), events })
+    const ports = createHostPorts(ctx, { setPaused: vi.fn() })
+    await expect(ports.readAnswer?.('s1')).resolves.toBe('最新回答')
+    expect(events).toHaveBeenCalledWith(
+      { address: { kind: 'session', sessionId: 's1' }, maxMessages: 50 },
+      expect.any(AbortSignal),
+    )
+  })
+
   it('fails loudly when the host has no session controller', async () => {
     const ports = createHostPorts(ctxWith(undefined), { setPaused: vi.fn() })
     await expect(ports.listSessions()).rejects.toThrow(/sessionController/)

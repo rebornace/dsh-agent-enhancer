@@ -249,7 +249,7 @@ function ChannelCard(props: ChannelCardProps) {
             disabled={disabled}
             onClick={props.onLogout}
           >
-            {t('remoteLogout')}
+            {t('remoteDisconnect')}
           </button>
         ) : null}
       </header>

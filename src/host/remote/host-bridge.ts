@@ -49,6 +49,8 @@ export interface HostBridgePorts {
   prompt(sessionId: string, text: string, mode: 'queue' | 'steer'): Promise<void>
   cancel(sessionId: string): Promise<void>
   setPaused(sessionId: string, paused: boolean): Promise<void>
+  /** Read the last assistant text from history for `详情` on old turns. */
+  readAnswer?(sessionId: string): Promise<string | undefined>
   /** Push one notice to the paired chats; failures belong to the channel. */
   notify?(notice: BridgeNotice): void
 }
@@ -118,7 +120,7 @@ function describeApproval(request: ApprovalRequestLike): string {
 }
 
 /** Text blocks of one assistant message, in order. */
-function assistantText(data: Record<string, unknown>): string | undefined {
+export function assistantText(data: Record<string, unknown>): string | undefined {
   const message = data.message
   if (message === null || typeof message !== 'object') return undefined
   const content = (message as { content?: unknown }).content
@@ -164,6 +166,7 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
       setPaused: (sessionId, paused) => options.ports.setPaused(sessionId, paused),
       stop: sessionId => options.ports.cancel(sessionId),
     },
+    ...(options.ports.readAnswer === undefined ? {} : { readAnswer: options.ports.readAnswer }),
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.ttlMs === undefined ? {} : { ttlMs: options.ttlMs }),
   })
@@ -229,7 +232,20 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
         if (reason === 'ok') {
           const answer = lastAssistant.get(sessionId)
           lastAssistant.delete(sessionId)
-          notify({ kind: 'done', sessionId, ...(answer === undefined ? {} : { answer }) })
+          if (answer !== undefined) {
+            notify({ kind: 'done', sessionId, answer })
+          } else if (options.ports.readAnswer !== undefined) {
+            // Live text can be missed (event timing); history still has it.
+            void options.ports.readAnswer(sessionId)
+              .then(text => notify({
+                kind: 'done',
+                sessionId,
+                ...(text === undefined || text.trim() === '' ? {} : { answer: text }),
+              }))
+              .catch(() => { notify({ kind: 'done', sessionId }) })
+          } else {
+            notify({ kind: 'done', sessionId })
+          }
         }
         break
       }

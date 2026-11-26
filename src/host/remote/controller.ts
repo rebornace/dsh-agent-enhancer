@@ -43,6 +43,8 @@ export interface RemoteControllerOptions {
   readonly now?: () => number
   readonly ttlMs?: number
   readonly code?: () => string
+  /** Cold-safe last assistant text for `详情` when no live answer is cached. */
+  readonly readAnswer?: (sessionId: TaskId) => Promise<string | undefined>
 }
 
 export interface SessionRow {
@@ -248,7 +250,16 @@ export class RemoteController {
       // Viewing a task selects it: follow-ups continue what the user is reading.
       this.focusByChat.set(chatId, target.id)
       const card = this.renderCard(target.id, capabilities)
-      const answer = this.board.get(target.id)?.lastAnswer
+      let answer = this.board.get(target.id)?.lastAnswer
+      if (answer === undefined && this.options.readAnswer !== undefined) {
+        // Turns that ended before this channel started have no live answer.
+        answer = await this.options.readAnswer(target.id).catch(() => undefined)
+        if (answer !== undefined && answer.trim() !== '') {
+          this.board.answer(target.id, answer.trim().slice(0, 8_000), at)
+        } else {
+          answer = undefined
+        }
+      }
       const text = card === undefined
         ? '任务已不存在。'
         : answer === undefined || answer === ''

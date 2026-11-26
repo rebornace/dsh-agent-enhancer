@@ -88,6 +88,21 @@ describe('RemoteController', () => {
     expect(controller.focus('chat-2')).toBeUndefined()
   })
 
+  it('falls back to the session history when no live answer exists', async () => {
+    const actions = {
+      sendPrompt: vi.fn(async () => {}),
+      setPaused: vi.fn(async () => {}),
+      stop: vi.fn(async () => {}),
+    }
+    const readAnswer = vi.fn(async () => '历史回答')
+    const controller = new RemoteController({ actions, readAnswer })
+    controller.track({ id: 's1', title: '周报导出', running: true }, 0)
+    controller.setFocus('chat-1', 's1')
+    const reply = await controller.execute('chat-1', '详情', textOnly)
+    expect(reply.text).toContain('回答：历史回答')
+    expect(readAnswer).toHaveBeenCalledWith('s1')
+  })
+
   it('treats a numbered 详情 as a selection', async () => {
     const { controller } = setup()
     seed(controller)

@@ -1,7 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
 import type { SessionController } from '@deepseek-ai/dsh-api-session-controller'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionRow } from './controller.ts'
+import { assistantText } from './host-bridge.ts'
 import type { BridgeNotice, HostBridgePorts } from './host-bridge.ts'
 
 function titleOf(item: Record<string, unknown>, sessionId: string): string {
@@ -90,6 +92,22 @@ export function createHostPorts(
 
     async setPaused(sessionId, paused) {
       await options.setPaused(sessionId, paused)
+    },
+
+    async readAnswer(sessionId) {
+      const controller = controllerOf(ctx)
+      const page = await controller.events({
+        address: { kind: 'session', sessionId: sessionId as SessionId },
+        maxMessages: 50,
+      }, new AbortController().signal)
+      const records = page?.records ?? []
+      for (let index = records.length - 1; index >= 0; index -= 1) {
+        const entry = records[index]
+        if (entry?.type !== 'event' || entry.event?.type !== 'assistant/message') continue
+        const text = assistantText(entry.event.data as Record<string, unknown>)
+        if (text !== undefined && text.trim() !== '') return text
+      }
+      return undefined
     },
 
     notify(notice) {
