@@ -242,7 +242,8 @@
 }
 
 .settingManageAction {
-  align-self: flex-start;
+  justify-self: start;
+  align-self: start;
   margin-top: 6px;
 }
 
