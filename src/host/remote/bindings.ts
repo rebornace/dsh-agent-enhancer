@@ -156,7 +156,7 @@ export class BindingStore {
       const channel = (value as { channel?: unknown }).channel
       const boundAt = (value as { boundAt?: unknown }).boundAt
       const focus = (value as { focusSessionId?: unknown }).focusSessionId
-      if (channel !== 'weixin') continue
+      if (channel !== 'weixin' && channel !== 'telegram') continue
       this.chats.set(chatId, {
         chatId,
         channel,

@@ -92,6 +92,23 @@ describe('BindingStore', () => {
     expect(third.list()).toHaveLength(1)
   })
 
+  it('reloads a Telegram binding instead of dropping it', () => {
+    const file = tempFile()
+    const first = new BindingStore({ filePath: file, now: () => 5 })
+    first.bind('tg-chat', 'telegram')
+    first.setFocus('tg-chat', 'session-2')
+
+    // A restart used to keep only the weixin rows, so Telegram looked
+    // connected with no paired chat and stopped holding approvals.
+    const second = new BindingStore({ filePath: file })
+    expect(second.isBound('tg-chat')).toBe(true)
+    expect(second.binding('tg-chat')).toMatchObject({
+      channel: 'telegram',
+      boundAt: 5,
+      focusSessionId: 'session-2',
+    })
+  })
+
   it('keeps a pairing code scoped to its channel', () => {
     const store = new BindingStore({ filePath: null, now: () => 0, code: () => '246810' })
     const { code } = store.issueCode(1_000, 'weixin')
