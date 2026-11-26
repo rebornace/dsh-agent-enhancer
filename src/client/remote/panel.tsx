@@ -442,9 +442,11 @@ function ChannelCard(props: ChannelCardProps) {
           </button>
           {props.showFeishuHelp ? (
             <div className={styles.remoteQr}>
+              <p className={styles.remoteHint}>{t('remoteFeishuStepTemplate')}</p>
               <p className={styles.remoteHint}>{t('remoteFeishuStepApp')}</p>
               <p className={styles.remoteHint}>{t('remoteFeishuStepBot')}</p>
               <p className={styles.remoteHint}>{t('remoteFeishuStepEvents')}</p>
+              <p className={styles.remoteHint}>{t('remoteFeishuStepCallback')}</p>
               <p className={styles.remoteHint}>{t('remoteFeishuStepPublish')}</p>
               <a
                 className={styles.settingsLink}
