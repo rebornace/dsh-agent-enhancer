@@ -240,12 +240,13 @@ export class RemoteController {
     }
 
     if (command.kind === 'detail') {
+      const pending = this.tasks().filter(task => task.pending !== undefined)
       const target = command.number === undefined
-        ? this.taskFor(chatId)
+        ? (pending.length === 1 ? pending[0] : this.taskFor(chatId))
         : this.byNumber(command.number)
       if (target === undefined) return { text: '没有可显示的任务。回「任务」看列表。' }
-      // An explicit number is also a selection: the next message should follow it.
-      if (command.number !== undefined) this.focusByChat.set(chatId, target.id)
+      // Viewing a task selects it: follow-ups continue what the user is reading.
+      this.focusByChat.set(chatId, target.id)
       const card = this.renderCard(target.id, capabilities)
       const answer = this.board.get(target.id)?.lastAnswer
       const text = card === undefined

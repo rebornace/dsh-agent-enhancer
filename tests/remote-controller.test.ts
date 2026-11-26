@@ -95,6 +95,18 @@ describe('RemoteController', () => {
     expect(controller.focus('chat-1')).toBe('s2')
   })
 
+  it('prefers the lone pending task and selects it when 详情 has no number', async () => {
+    const { controller } = setup()
+    seed(controller)
+    await controller.execute('chat-1', '切 2', textOnly)
+    const approval = controller.askApproval('s1', { prompt: '写入 report.xlsx' })
+    const reply = await controller.execute('chat-1', '详情', textOnly)
+    expect(reply.text).toContain('周报导出')
+    expect(controller.focus('chat-1')).toBe('s1')
+    controller.releasePending()
+    await approval.wait
+  })
+
   it('shows the last answer in 详情 and forgets it when a new turn starts', async () => {
     const { controller } = setup()
     seed(controller)
