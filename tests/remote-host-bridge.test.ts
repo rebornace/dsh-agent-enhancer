@@ -160,7 +160,7 @@ describe('installRemoteHostBridge', () => {
     await question
   })
 
-  it('pushes a failure and a remote turn answer, but stays quiet for desktop turns', async () => {
+  it('pushes the answer on every completed turn, not only remote ones', async () => {
     const { bridge, handlers, notices } = harness()
     await bridge.refreshSessions()
 
@@ -171,7 +171,8 @@ describe('installRemoteHostBridge', () => {
     })
     expect(notices[0]).toMatchObject({ kind: 'failed', sessionId: 's1', error: '模型超时' })
 
-    // A desktop turn: no remote prompt, so no completion push.
+    // A turn started at the desktop still belongs to a tracked task; the user
+    // may be away, so its answer is pushed as well.
     emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 30, data: {} })
     emit(handlers, 'session/event', { id: 's1' }, {
       type: 'assistant/message',
@@ -179,9 +180,9 @@ describe('installRemoteHostBridge', () => {
       data: { message: { content: [{ type: 'text', text: '桌面上的回答' }] } },
     })
     emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/end', time: 32, data: { reason: { kind: 'completed' } } })
-    expect(notices).toHaveLength(1)
+    expect(notices[1]).toEqual({ kind: 'done', sessionId: 's1', answer: '桌面上的回答' })
 
-    // A prompt sent from the remote chat: its answer comes back.
+    // A prompt sent from the remote chat behaves the same way.
     await bridge.controller.execute('chat-1', '整理成三条', textOnly)
     emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 40, data: {} })
     emit(handlers, 'session/event', { id: 's1' }, {
@@ -190,7 +191,7 @@ describe('installRemoteHostBridge', () => {
       data: { message: { content: [{ type: 'text', text: '第一条…\n第二条…' }] } },
     })
     emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/end', time: 42, data: { reason: { kind: 'completed' } } })
-    expect(notices[1]).toEqual({ kind: 'done', sessionId: 's1', answer: '第一条…\n第二条…' })
+    expect(notices[2]).toEqual({ kind: 'done', sessionId: 's1', answer: '第一条…\n第二条…' })
   })
 
   it('passes an approval through while no chat can answer', async () => {

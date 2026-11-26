@@ -226,6 +226,8 @@ describe('RemoteHub', () => {
     await until(() => sent.length >= 2)
     expect(sent.some(entry => entry.channel === 'weixin' && entry.text.includes('模型超时'))).toBe(true)
     expect(sent.some(entry => entry.channel === 'telegram' && entry.text.includes('模型超时'))).toBe(true)
+    const telegram = sent.find(entry => entry.channel === 'telegram' && entry.text.includes('模型超时'))
+    expect(telegram?.buttons).toEqual([{ label: '详情', command: '详情 1' }])
     hub.stop()
   })
 
@@ -255,6 +257,7 @@ describe('RemoteHub', () => {
     const telegram = sent.find(entry => entry.channel === 'telegram' && entry.text.includes('请求执行'))
     const weixin = sent.find(entry => entry.channel === 'weixin' && entry.text.includes('请求执行'))
     expect(telegram?.buttons?.map(button => button.label)).toEqual(['批准', '拒绝', '详情'])
+    expect(telegram?.buttons?.find(button => button.label === '详情')?.command).toBe('详情 1')
     expect(weixin?.buttons).toBeUndefined()
     hub.stop()
   })

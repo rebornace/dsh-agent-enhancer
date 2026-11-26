@@ -88,6 +88,26 @@ describe('RemoteController', () => {
     expect(controller.focus('chat-2')).toBeUndefined()
   })
 
+  it('treats a numbered 详情 as a selection', async () => {
+    const { controller } = setup()
+    seed(controller)
+    await controller.execute('chat-1', '详情 2', textOnly)
+    expect(controller.focus('chat-1')).toBe('s2')
+  })
+
+  it('shows the last answer in 详情 and forgets it when a new turn starts', async () => {
+    const { controller } = setup()
+    seed(controller)
+    controller.onTurnStart('s1', 1)
+    controller.onAnswer('s1', '三句话答案', 2)
+    controller.onTurnEnd('s1', 'ok', undefined, 3)
+    await controller.execute('chat-1', '切 1', textOnly)
+
+    expect((await controller.execute('chat-1', '详情', textOnly)).text).toContain('回答：三句话答案')
+    controller.onTurnStart('s1', 4)
+    expect((await controller.execute('chat-1', '详情', textOnly)).text).not.toContain('回答：三句话答案')
+  })
+
   it('adds task-picker buttons only on channels that render them', async () => {
     const { controller } = setup()
     seed(controller)

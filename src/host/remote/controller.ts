@@ -62,7 +62,6 @@ export class RemoteController {
   private readonly board = new TaskBoard()
   private readonly numbers = new Map<TaskId, number>()
   private readonly focusByChat = new Map<string, TaskId>()
-  private readonly remotePrompts = new Set<TaskId>()
   private readonly approvalWaiters = new Map<string, (outcome: 'approve' | 'reject') => void>()
   private readonly questionWaiters = new Map<string, (text: string) => void>()
   private readonly codeByApprovalId = new Map<string, string>()
@@ -114,6 +113,13 @@ export class RemoteController {
 
   onTitle(id: TaskId, title: string): void {
     this.board.rename(id, title)
+  }
+
+  /** Record the model's final text so `详情` can show the actual answer. */
+  onAnswer(id: TaskId, text: string, at = this.now()): void {
+    const trimmed = text.trim()
+    if (trimmed === '') return
+    this.board.answer(id, trimmed.length > 8_000 ? `${trimmed.slice(0, 7_999)}…` : trimmed, at)
   }
 
   onNote(id: TaskId, line: string, at = this.now()): void {
@@ -215,19 +221,6 @@ export class RemoteController {
     this.focusByChat.set(chatId, id)
   }
 
-  /**
-   * Mark a session whose prompt came from the remote chat, so its turn end is
-   * worth pushing back. A turn started at the desktop stays quiet.
-   */
-  markRemotePrompt(id: TaskId): void {
-    this.remotePrompts.add(id)
-  }
-
-  /** Consume the mark on the next turn end. */
-  takeRemotePrompt(id: TaskId): boolean {
-    return this.remotePrompts.delete(id)
-  }
-
   /** Handle one inbound message for a chat. Returns the reply text. */
   async execute(chatId: string, input: string, capabilities: ChannelCapabilities, at = this.now()): Promise<Reply> {
     const command = parseCommand(input)
@@ -251,8 +244,16 @@ export class RemoteController {
         ? this.taskFor(chatId)
         : this.byNumber(command.number)
       if (target === undefined) return { text: '没有可显示的任务。回「任务」看列表。' }
+      // An explicit number is also a selection: the next message should follow it.
+      if (command.number !== undefined) this.focusByChat.set(chatId, target.id)
       const card = this.renderCard(target.id, capabilities)
-      return this.withTaskButtons(card ?? '任务已不存在。', target.id, capabilities)
+      const answer = this.board.get(target.id)?.lastAnswer
+      const text = card === undefined
+        ? '任务已不存在。'
+        : answer === undefined || answer === ''
+          ? card
+          : `${card}\n\n回答：${answer}`
+      return this.withTaskButtons(text, target.id, capabilities)
     }
 
     if (command.kind === 'approve' || command.kind === 'reject') {
@@ -297,7 +298,6 @@ export class RemoteController {
     } catch (error) {
       return { text: `发送失败：${error instanceof Error ? error.message : String(error)}` }
     }
-    this.markRemotePrompt(target.id)
     return this.withTaskButtons(
       `已发给【${this.numbers.get(target.id) ?? 0}】${target.title}`,
       target.id,

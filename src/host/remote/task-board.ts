@@ -72,6 +72,16 @@ export class TaskBoard {
       state: 'running',
       pending: undefined,
       resumeTo: undefined,
+      lastAnswer: undefined,
+      lastActivityAt: Math.max(task.lastActivityAt, at),
+    }))
+  }
+
+  /** Store the model's final text for this turn (the remote answer). */
+  answer(id: TaskId, text: string, at: number): Task | undefined {
+    return this.replace(id, task => ({
+      ...task,
+      lastAnswer: text,
       lastActivityAt: Math.max(task.lastActivityAt, at),
     }))
   }

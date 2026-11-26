@@ -31,6 +31,8 @@ export interface Task {
   readonly state: TaskState
   readonly lastActivityAt: number
   readonly lastLine?: string
+  /** Last assistant text for this task; the remote answer, capped in memory. */
+  readonly lastAnswer?: string
   readonly pending?: Pending
   /** State to return to after a soft pause. */
   readonly resumeTo?: 'running' | 'waiting'

@@ -223,11 +223,10 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
         controller.onTurnEnd(sessionId, reason, turnEndError(data.reason), at)
         if (!known(sessionId)) break
         if (reason === 'error') {
-          controller.takeRemotePrompt(sessionId)
           notify({ kind: 'failed', sessionId, ...(turnEndError(data.reason) === undefined ? {} : { error: turnEndError(data.reason) }) })
           break
         }
-        if (controller.takeRemotePrompt(sessionId)) {
+        if (reason === 'ok') {
           const answer = lastAssistant.get(sessionId)
           lastAssistant.delete(sessionId)
           notify({ kind: 'done', sessionId, ...(answer === undefined ? {} : { answer }) })
@@ -236,7 +235,11 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
       }
       case 'assistant/message': {
         const text = assistantText(data)
-        if (text !== undefined) lastAssistant.set(sessionId, text.slice(0, 4_000))
+        if (text !== undefined) {
+          const stored = text.length > 8_000 ? `${text.slice(0, 7_999)}…` : text
+          lastAssistant.set(sessionId, stored)
+          controller.onAnswer(sessionId, stored, at)
+        }
         break
       }
       case 'session/title':

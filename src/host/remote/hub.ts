@@ -7,7 +7,6 @@ import type { RemoteController } from './controller.ts'
 import { installRemoteHostBridge } from './host-bridge.ts'
 import type { BridgeNotice, HostBridge } from './host-bridge.ts'
 import { createHostPorts } from './ports.ts'
-import { decisionActions } from './render.ts'
 import type { ChannelCapabilities } from './types.ts'
 import { TelegramChannel } from './telegram/channel.ts'
 import { createTelegramCredentialStore } from './telegram/credentials.ts'
@@ -325,20 +324,30 @@ export class RemoteHub {
         text += `\n${clip(notice.error, 300)}`
       }
       if (notice.kind === 'done' && notice.answer !== undefined) {
-        const answer = clip(notice.answer, binding.channel === 'telegram' ? 3_000 : 1_500)
+        const answer = clip(notice.answer, 6_000)
         if (answer !== '') text += `\n\n${answer}`
       }
       const task = controller.tasks().find(entry => entry.id === notice.sessionId)
       const pending = task?.pending
       let buttons: { label: string; command: string }[] | undefined
-      if (capabilities.buttons && pending !== undefined) {
-        if (pending.kind === 'approval') {
-          buttons = decisionActions(pending).map(action => ({ label: action.label, command: action.command }))
-        } else if (pending.options !== undefined && pending.options.length > 0) {
-          buttons = pending.options.map(option => ({
-            label: option,
-            command: `回答 ${pending.code} ${option}`,
-          }))
+      if (capabilities.buttons) {
+        const number = controller.numberOf(notice.sessionId)
+        if (pending !== undefined) {
+          if (pending.kind === 'approval') {
+            buttons = [
+              { label: '批准', command: `批准 ${pending.code}` },
+              { label: '拒绝', command: `拒绝 ${pending.code}` },
+              { label: '详情', command: number === undefined ? '详情' : `详情 ${number}` },
+            ]
+          } else if (pending.options !== undefined && pending.options.length > 0) {
+            buttons = pending.options.map(option => ({
+              label: option,
+              command: `回答 ${pending.code} ${option}`,
+            }))
+          }
+        } else if (notice.kind === 'done' || notice.kind === 'failed') {
+          // Reading the answer and replying afterwards go through this task.
+          buttons = [{ label: '详情', command: number === undefined ? '详情' : `详情 ${number}` }]
         }
       }
       void channel.send(binding.chatId, text, buttons).catch(error => this.options.onError?.(error))
