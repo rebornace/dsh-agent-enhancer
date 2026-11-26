@@ -232,15 +232,24 @@
   cursor: not-allowed;
 }
 
-/* Features page: options stay collapsed until asked for. */
-.settingAdvanced {
+/* Features page: only the large browser-agent option set folds. */
+.browserAgentDisclosure {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
-  max-width: 420px;
   margin-top: 8px;
-  padding-left: 10px;
-  border-left: 2px solid var(--dsw-alias-border-l1, transparent);
+}
+
+.settingInlineAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.settingInlineAction svg {
+  flex: 0 0 auto;
 }
 
 .settingsSelect {

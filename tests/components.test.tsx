@@ -1079,8 +1079,6 @@ describe('PluginSettings', () => {
     expect(screen.getByText('Select text in chat, file preview, editor, or terminal to insert a quote chip (no model call)')).toBeTruthy()
     expect(screen.getByText(translations.softPauseDescription!)).toBeTruthy()
     expect(screen.getByText(translations.runAlertsDescription!)).toBeTruthy()
-    expect(screen.queryByRole('combobox', { name: translations.runAlertsLevel! })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: `${translations.runAlerts!} ${translations.settingsAdvanced!}` }))
     expect(screen.getByRole('combobox', { name: translations.runAlertsLevel! })).toBeTruthy()
     expect((screen.getByRole('combobox', { name: translations.runAlertsLevel! }) as HTMLSelectElement).value).toBe('unfocused')
     expect(screen.getByText(translations.contextInspectDescription!)).toBeTruthy()
@@ -1113,6 +1111,16 @@ describe('PluginSettings', () => {
     for (const forbidden of ['strength', 'continuation', 'template', '强度', '续写', '模板']) {
       expect(screen.queryByText(new RegExp(forbidden, 'i'))).toBeNull()
     }
+  })
+
+  it('folds only the large browser-agent options and exposes them on request', () => {
+    settingsHarness(undefined, { browserAgentEnabled: true })
+    expect(screen.queryByRole('combobox', { name: 'Dedicated browser' })).toBeNull()
+    const toggle = screen.getByRole('button', { name: 'Browser agent Advanced settings' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('combobox', { name: 'Dedicated browser' })).toBeTruthy()
   })
 
   it('writes each requested value directly and follows the next accepted snapshot', async () => {
@@ -1158,7 +1166,6 @@ describe('PluginSettings', () => {
       failures: [],
     }))
     settingsHarness(set, {}, loadCatalog, { persist })
-    fireEvent.click(screen.getByRole('button', { name: 'Optimize prompt Advanced settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'Optimize prompt Model' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Optimize prompt Model' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: 'DeepSeek Chat' }))
@@ -1205,7 +1212,6 @@ describe('PluginSettings', () => {
       failures: [],
     }))
     const h = settingsHarness(set, {}, loadCatalog)
-    fireEvent.click(screen.getByRole('button', { name: 'Optimize prompt Advanced settings' }))
     expect(screen.getByRole('button', { name: 'Optimize prompt Model' })).toBeTruthy()
     expect(screen.queryByText('Follow session')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Optimize prompt Model' }))
@@ -1227,7 +1233,6 @@ describe('PluginSettings', () => {
     })
     expect(screen.getByRole('button', { name: 'Optimize prompt Model' }).textContent).toContain('DeepSeek Chat · High')
     fireEvent.click(screen.getByRole('tab', { name: 'Features' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Next-prompt prediction Advanced settings' }))
     expect(screen.getByRole('button', { name: 'Next-prompt prediction Model' })).toBeTruthy()
   })
 
@@ -1244,7 +1249,6 @@ describe('PluginSettings', () => {
       failures: [],
     }))
     const h = settingsHarness(set, {}, loadCatalog)
-    fireEvent.click(screen.getByRole('button', { name: 'Optimize prompt Advanced settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'Optimize prompt Model' }))
     const optimizePill = await screen.findByRole('button', { name: 'Optimize prompt Model' })
     fireEvent.click(optimizePill)
