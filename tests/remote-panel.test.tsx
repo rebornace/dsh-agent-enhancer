@@ -68,9 +68,27 @@ function harness(initial: RemoteStatusWire) {
 }
 
 describe('RemoteSettingsPanel', () => {
+  it('asks the user to enable the feature first', async () => {
+    const { get } = harness(status())
+    const onOpenFeatures = vi.fn()
+    render(
+      <RemoteSettingsPanel
+        t={t}
+        getRemote={get}
+        busy={false}
+        enabled={false}
+        onOpenFeatures={onOpenFeatures}
+      />,
+    )
+    expect(await screen.findByText('remoteDisabledHint')).toBeTruthy()
+    expect(screen.queryByText('remoteChannelWeixin')).toBeNull()
+    fireEvent.click(screen.getByText('remoteOpenFeatures'))
+    expect(onOpenFeatures).toHaveBeenCalledOnce()
+  })
+
   it('renders a card per channel with its own actions', async () => {
     const { get } = harness(status())
-    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} />)
+    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
     expect(await screen.findByText('remoteChannelWeixin')).toBeTruthy()
     expect(screen.getByText('remoteChannelTelegram')).toBeTruthy()
     expect(screen.getByText('remoteLogin')).toBeTruthy()
@@ -80,7 +98,7 @@ describe('RemoteSettingsPanel', () => {
 
   it('shows the WeChat QR after a login begins', async () => {
     const { remote, get } = harness(status())
-    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} />)
+    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
     fireEvent.click(await screen.findByText('remoteLogin'))
     await waitFor(() => { expect(remote.agentEnhancer.remoteLoginBegin).toHaveBeenCalledOnce() })
     expect(await screen.findByRole('img', { name: 'remoteQrLabel' })).toBeTruthy()
@@ -89,7 +107,7 @@ describe('RemoteSettingsPanel', () => {
 
   it('connects Telegram with the pasted token', async () => {
     const { remote, get } = harness(status())
-    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} />)
+    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
     fireEvent.change(await screen.findByLabelText('remoteTelegramToken'), { target: { value: '123:abc' } })
     fireEvent.click(screen.getByText('remoteTelegramConnect'))
     await waitFor(() => {
@@ -106,7 +124,7 @@ describe('RemoteSettingsPanel', () => {
         channel('telegram'),
       ],
     }))
-    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} />)
+    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
     const buttons = await screen.findAllByText('remoteBindCode')
     fireEvent.click(buttons[0]!)
     expect(await screen.findByText('246810')).toBeTruthy()
@@ -125,7 +143,7 @@ describe('RemoteSettingsPanel', () => {
         channel('telegram'),
       ],
     }))
-    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} />)
+    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
     fireEvent.click(await screen.findByText('remoteRevoke'))
     await waitFor(() => {
       expect(remote.agentEnhancer.remoteRevoke).toHaveBeenCalledWith({ channel: 'weixin', chatId: 'chat-1' })

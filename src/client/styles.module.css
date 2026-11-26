@@ -2601,6 +2601,22 @@
   background: var(--dsw-alias-interactive-bg-active, transparent);
 }
 
+.remoteDisabled {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l1, transparent);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-interactive-bg-active, transparent);
+}
+
+.remoteLink {
+  color: var(--dsw-alias-label-primary);
+  text-decoration: underline;
+}
+
 .remoteChannelHeader {
   display: flex;
   align-items: center;

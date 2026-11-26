@@ -428,6 +428,7 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
             setHighlightFeature(feature)
             setTab('models')
           }}
+          onOpenRemote={() => { setTab('remote') }}
           featureExtraDescription={module => {
             if (module === 'instructionsSkills') {
               if (!settings.instructionsSkillsEnabled || skillsLeftNavSeatReady) return undefined
@@ -448,7 +449,13 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
       break
     case 'remote':
       panel = (
-        <RemoteSettingsPanel t={t} getRemote={getRemote} busy={busy} />
+        <RemoteSettingsPanel
+          t={t}
+          getRemote={getRemote}
+          busy={busy}
+          enabled={settings.remoteControlEnabled}
+          onOpenFeatures={() => { setTab('features') }}
+        />
       )
       break
     case 'models':

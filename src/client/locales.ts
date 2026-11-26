@@ -115,10 +115,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentGuideDescription' | 'browserAgentSidebarHint' |
       'browserAgentSidebarLoading' | 'browserAgentSidebarConnected' |
       'browserAgentSidebarDisconnected' | 'browserAgentSidebarChatHint' |
-      'remoteControl' | 'remoteControlDescription' |
+      'remoteControl' | 'remoteControlDescription' | 'remoteManage' |
+      'remoteDisabledHint' | 'remoteOpenFeatures' |
       'remoteSettingsIntro' | 'remoteChannelWeixin' | 'remoteChannelTelegram' |
       'remoteChannelPhase_off' | 'remoteChannelPhase_unbound' | 'remoteChannelPhase_running' | 'remoteChannelPhase_failed' |
       'remoteTelegramToken' | 'remoteTelegramTokenPlaceholder' | 'remoteTelegramTokenHint' | 'remoteTelegramConnect' |
+      'remoteTelegramHowTo' | 'remoteTelegramOpenBotFather' |
       'remoteStatus_stopped' | 'remoteStatus_unbound' | 'remoteStatus_running' | 'remoteStatus_failed' |
       'remoteLogin' | 'remoteLoginAgain' | 'remoteRegenerate' | 'remoteLoginCancel' |
       'remoteLoginHint' | 'remoteLoginWaiting' | 'remoteLoginExpired' | 'remoteLoginFailed' |
@@ -490,7 +492,10 @@ export const agentLocales = {
     browserAgent: '浏览器控制',
     browserAgentDescription: '让智能体用专用浏览器打开并操作网页（点击、填写等需你批准）。Mac 为 Safari / Chrome，Windows 为 Chrome / Edge。默认关闭。开启后可在对话中自动启动。不同于官方侧栏网页浏览。',
     remoteControl: '微信远程控制',
-    remoteControlDescription: '人离开电脑后，用微信查看任务、批准或拒绝、暂停继续、追加指令。只控制已有会话，不新开会话；只在需要你时发消息。默认关闭。需要扫码登录一次，再在微信里发送一次性绑定码。',
+    remoteControlDescription: '人离开电脑后，用微信或 Telegram 查看任务、批准或拒绝、暂停继续、追加指令。只控制已有会话，不新开会话；只在需要你时发消息。默认关闭。到「远程连接」页扫码或填 Bot Token 连接，再在聊天里发送一次性绑定码。',
+    remoteManage: '管理远程连接 →',
+    remoteDisabledHint: '远程控制当前未开启。先到「功能」页打开开关，再回来连接渠道。',
+    remoteOpenFeatures: '去功能页开启',
     remoteSettingsIntro: '一个页面管理所有渠道：扫码或填写 Token 连接，生成一次性绑定码，再用对应聊天控制桌面会话。',
     remoteChannelWeixin: '微信',
     remoteChannelTelegram: 'Telegram',
@@ -500,8 +505,10 @@ export const agentLocales = {
     remoteChannelPhase_failed: '连接异常',
     remoteTelegramToken: 'Bot Token',
     remoteTelegramTokenPlaceholder: '从 @BotFather 获取，例如 123456:ABC…',
-    remoteTelegramTokenHint: 'Token 只保存在宿主凭据服务。连接后插件用长轮询收消息，不需要公网地址。',
+    remoteTelegramTokenHint: 'Token 只保存在宿主凭据服务。连接后插件用长轮询收消息，不需要公网地址；重启会自动重连。',
     remoteTelegramConnect: '连接',
+    remoteTelegramHowTo: '还没有 Bot？给 @BotFather 发送 /newbot，起好名字后复制它返回的 Token。',
+    remoteTelegramOpenBotFather: '打开 @BotFather',
     remoteStatus_stopped: '未启用',
     remoteStatus_unbound: '未连接微信',
     remoteStatus_running: '已连接微信',
@@ -515,10 +522,10 @@ export const agentLocales = {
     remoteLoginExpired: '二维码已过期，重新生成一张即可。',
     remoteLoginFailed: '登录没有完成，可以重新扫码。',
     remoteBindCode: '生成绑定码',
-    remoteBindCodeHint: '在微信里把这 6 位数字发给这个机器人，这台聊天就会成为控制端。',
+    remoteBindCodeHint: '在对应渠道里把这 6 位数字发给机器人，这台聊天就会成为控制端。',
     remoteBindCodeExpires: '10 分钟内有效，只能用一次。',
     remoteDevices: '已绑定聊天',
-    remoteDevicesEmpty: '还没有绑定任何聊天。先生成绑定码，再到微信里发送。',
+    remoteDevicesEmpty: '还没有绑定任何聊天。先生成绑定码，再到对应聊天里发送。',
     remoteRevoke: '吊销',
     remoteLogout: '断开微信',
     remoteQrLabel: '微信登录二维码',
@@ -1260,7 +1267,10 @@ export const agentLocales = {
     browserAgent: 'Browser control',
     browserAgentDescription: 'Let the agent open and use a dedicated browser window (clicks and typing need your approval). Mac: Safari / Chrome; Windows: Chrome / Edge. Off by default. Auto-launches from chat when needed. Not the official sidebar browser.',
     remoteControl: 'WeChat remote control',
-    remoteControlDescription: 'While you are away from the computer, use WeChat to see tasks, approve or reject, pause/resume and send follow-ups. It only drives existing sessions, never opens a shadow one, and messages you only when you are needed. Off by default. Scan once to log in, then send a one-time pairing code from WeChat.',
+    remoteControlDescription: 'While you are away from the computer, use WeChat or Telegram to see tasks, approve or reject, pause/resume and send follow-ups. It only drives existing sessions, never opens a shadow one, and messages you only when you are needed. Off by default. Connect on the Remote tab by scanning or pasting a Bot Token, then send a one-time pairing code from that chat.',
+    remoteManage: 'Manage remote connections →',
+    remoteDisabledHint: 'Remote control is off. Turn it on in Features, then come back to connect a channel.',
+    remoteOpenFeatures: 'Open Features',
     remoteSettingsIntro: 'One page for every channel: scan or paste a token to connect, create a one-time pairing code, then control desktop sessions from that chat.',
     remoteChannelWeixin: 'WeChat',
     remoteChannelTelegram: 'Telegram',
@@ -1270,8 +1280,10 @@ export const agentLocales = {
     remoteChannelPhase_failed: 'Connection problem',
     remoteTelegramToken: 'Bot Token',
     remoteTelegramTokenPlaceholder: 'From @BotFather, e.g. 123456:ABC…',
-    remoteTelegramTokenHint: 'The token is stored only in the host credential service. After connecting, the plugin uses long polling, so no public address is needed.',
+    remoteTelegramTokenHint: 'The token is stored only in the host credential service. After connecting, the plugin uses long polling, so no public address is needed; it reconnects on restart.',
     remoteTelegramConnect: 'Connect',
+    remoteTelegramHowTo: 'No bot yet? Send /newbot to @BotFather, name it, then copy the token it returns.',
+    remoteTelegramOpenBotFather: 'Open @BotFather',
     remoteStatus_stopped: 'Not enabled',
     remoteStatus_unbound: 'Not connected to WeChat',
     remoteStatus_running: 'Connected to WeChat',
@@ -1285,10 +1297,10 @@ export const agentLocales = {
     remoteLoginExpired: 'The QR code expired. Generate a new one.',
     remoteLoginFailed: 'Login did not finish. Scan again to retry.',
     remoteBindCode: 'Create pairing code',
-    remoteBindCodeHint: 'Send this 6-digit code to the bot in WeChat; that chat becomes a control device.',
+    remoteBindCodeHint: 'Send this 6-digit code to the bot on this channel; that chat becomes a control device.',
     remoteBindCodeExpires: 'Valid for 10 minutes, one use only.',
     remoteDevices: 'Paired chats',
-    remoteDevicesEmpty: 'No chat is paired yet. Create a code, then send it from WeChat.',
+    remoteDevicesEmpty: 'No chat is paired yet. Create a code, then send it from that chat.',
     remoteRevoke: 'Revoke',
     remoteLogout: 'Disconnect WeChat',
     remoteQrLabel: 'WeChat login QR code',

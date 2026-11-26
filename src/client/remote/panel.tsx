@@ -18,6 +18,9 @@ export interface RemoteSettingsPanelProps {
   /** Host remote face; undefined in a preview without Host wiring. */
   readonly getRemote?: () => unknown
   readonly busy: boolean
+  /** Master switch lives on the Features tab. */
+  readonly enabled: boolean
+  readonly onOpenFeatures: () => void
 }
 
 const POLL_MS = 3_000
@@ -38,7 +41,7 @@ function errorMessage(error: unknown): string {
  * band. Approval decisions never happen here; this page only connects channels
  * and pairs chats.
  */
-export function RemoteSettingsPanel({ t, getRemote, busy }: RemoteSettingsPanelProps) {
+export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeatures }: RemoteSettingsPanelProps) {
   const [status, setStatus] = useState<RemoteStatusWire | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -49,6 +52,7 @@ export function RemoteSettingsPanel({ t, getRemote, busy }: RemoteSettingsPanelP
   remoteRef.current = getRemote
 
   useEffect(() => {
+    if (!enabled) return
     let active = true
     let timer: ReturnType<typeof setTimeout> | undefined
     const tick = async (): Promise<void> => {
@@ -75,7 +79,7 @@ export function RemoteSettingsPanel({ t, getRemote, busy }: RemoteSettingsPanelP
     }
     // The tab mounts only while Settings is open; polling lives for that span.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [enabled])
 
   const refresh = async (): Promise<void> => {
     const remote = remoteRef.current?.()
@@ -104,7 +108,7 @@ export function RemoteSettingsPanel({ t, getRemote, busy }: RemoteSettingsPanelP
     }
   }
 
-  const disabled = busy || pending !== null || getRemote === undefined
+  const disabled = busy || pending !== null || getRemote === undefined || !enabled
   const weixin = status?.channels.find(channel => channel.id === 'weixin')
   const telegram = status?.channels.find(channel => channel.id === 'telegram')
 
@@ -139,7 +143,23 @@ export function RemoteSettingsPanel({ t, getRemote, busy }: RemoteSettingsPanelP
       {loadError !== null ? <p className={styles.remoteError} role="status">{loadError}</p> : null}
       {actionError !== null ? <p className={styles.remoteError} role="alert">{actionError}</p> : null}
 
-      <ChannelCard
+      {!enabled ? (
+        <div className={styles.remoteDisabled} role="note">
+          <p className={styles.remoteHint}>{t('remoteDisabledHint')}</p>
+          <button
+            type="button"
+            className={styles.settingsActionPrimary}
+            disabled={busy}
+            onClick={onOpenFeatures}
+          >
+            {t('remoteOpenFeatures')}
+          </button>
+        </div>
+      ) : null}
+
+      {enabled ? (
+        <>
+          <ChannelCard
         t={t}
         channel={weixin}
         id="weixin"
@@ -175,6 +195,8 @@ export function RemoteSettingsPanel({ t, getRemote, busy }: RemoteSettingsPanelP
         onLogout={() => { logout('telegram') }}
         onRevoke={chatId => { revoke('telegram', chatId) }}
       />
+        </>
+      ) : null}
     </div>
   )
 }
@@ -294,6 +316,20 @@ function ChannelCard(props: ChannelCardProps) {
 
       {id === 'telegram' && !connected ? (
         <p className={styles.remoteHint}>{t('remoteTelegramTokenHint')}</p>
+      ) : null}
+
+      {id === 'telegram' && !connected ? (
+        <p className={styles.remoteHint}>
+          {t('remoteTelegramHowTo')}{' '}
+          <a
+            className={styles.remoteLink}
+            href="https://t.me/BotFather"
+            target="_blank"
+            rel="noreferrer"
+          >
+            {t('remoteTelegramOpenBotFather')}
+          </a>
+        </p>
       ) : null}
 
       {connected ? (

@@ -37,6 +37,8 @@ export interface SettingsFeaturesPanelProps {
   readonly onBrowserAgentUnattendedMinutes?: (value: number) => void
   readonly onBrowserAgentUnattendedActions?: (value: number) => void
   readonly onOpenModel: (feature: ConfigurableAuxiliaryFeature) => void
+  /** Jump to the Remote tab from the feature row. */
+  readonly onOpenRemote?: () => void
   /** Optional per-module extra description (e.g. host capability warnings). */
   readonly featureExtraDescription?: (module: ModuleName) => string | undefined
 }
@@ -93,6 +95,7 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
     onBrowserAgentUnattendedMinutes,
     onBrowserAgentUnattendedActions,
     onOpenModel,
+    onOpenRemote,
     featureExtraDescription,
   } = props
 
@@ -114,6 +117,16 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                 <div className={styles.settingText}>
                   <div className={styles.settingTitle}>{t(entry.labelKey)}</div>
                   <p className={styles.settingDescription}>{t(entry.descriptionKey)}</p>
+                  {entry.module === 'remoteControl' ? (
+                    <button
+                      type="button"
+                      className={styles.settingsLink}
+                      disabled={busy || onOpenRemote === undefined}
+                      onClick={onOpenRemote}
+                    >
+                      {t('remoteManage')}
+                    </button>
+                  ) : null}
                   {featureExtraDescription?.(entry.module) !== undefined ? (
                     <p className={styles.settingDescription} role="note">
                       {featureExtraDescription(entry.module)}
