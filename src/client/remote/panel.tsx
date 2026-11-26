@@ -337,6 +337,7 @@ function ChannelCard(props: ChannelCardProps) {
             <div className={styles.remoteQr}>
               <QrCode value="https://t.me/BotFather" size={140} label={t('remoteTelegramQrLabel')} />
               <p className={styles.remoteHint}>{t('remoteTelegramQrHint')}</p>
+              <p className={styles.remoteHint}>{t('remoteTelegramNameHint')}</p>
             </div>
           ) : null}
         </div>

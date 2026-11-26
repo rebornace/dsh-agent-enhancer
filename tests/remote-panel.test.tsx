@@ -110,6 +110,7 @@ describe('RemoteSettingsPanel', () => {
     render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
     fireEvent.click(await screen.findByText('remoteTelegramOpenBotFather'))
     expect(await screen.findByRole('img', { name: 'remoteTelegramQrLabel' })).toBeTruthy()
+    expect(screen.getByText('remoteTelegramNameHint')).toBeTruthy()
     expect(document.querySelector('a[href="https://t.me/BotFather"]')).toBeNull()
     fireEvent.click(screen.getByText('remoteTelegramHideBotFather'))
     expect(screen.queryByRole('img', { name: 'remoteTelegramQrLabel' })).toBeNull()

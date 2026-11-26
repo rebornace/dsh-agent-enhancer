@@ -141,6 +141,7 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                       onClick={onOpenRemote}
                     >
                       <span>{t('remoteManage')}</span>
+                      <IconChevronRightOutlineRegular size={14} />
                     </Button>
                   ) : null}
                   {entry.module === 'browserAgent' ? (

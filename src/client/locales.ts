@@ -122,6 +122,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'remoteChannelPhase_off' | 'remoteChannelPhase_unbound' | 'remoteChannelPhase_running' | 'remoteChannelPhase_failed' |
       'remoteTelegramToken' | 'remoteTelegramTokenPlaceholder' | 'remoteTelegramTokenHint' | 'remoteTelegramConnect' |
       'remoteTelegramOpenBotFather' | 'remoteTelegramHideBotFather' | 'remoteTelegramQrLabel' | 'remoteTelegramQrHint' |
+      'remoteTelegramNameHint' |
       'remoteStatus_stopped' | 'remoteStatus_unbound' | 'remoteStatus_running' | 'remoteStatus_failed' |
       'remoteLogin' | 'remoteLoginAgain' | 'remoteRegenerate' | 'remoteLoginCancel' |
       'remoteLoginHint' | 'remoteLoginWaiting' | 'remoteLoginExpired' | 'remoteLoginFailed' |
@@ -515,6 +516,7 @@ export const agentLocales = {
     remoteTelegramHideBotFather: '收起二维码',
     remoteTelegramQrLabel: '打开 @BotFather 的二维码',
     remoteTelegramQrHint: '用手机相机或 Telegram 扫一扫，直接在手机上打开 @BotFather；发送 /newbot，起好名字后复制它返回的 Token。',
+    remoteTelegramNameHint: '命名规则：显示名随意；用户名必须以 bot 结尾、5–32 位，只能字母、数字、下划线，且全球唯一。失败通常是名字被占用，加个随机后缀再试（例：dsh_remote_4821_bot）。',
     remoteStatus_stopped: '未启用',
     remoteStatus_unbound: '未连接微信',
     remoteStatus_running: '已连接微信',
@@ -1295,6 +1297,7 @@ export const agentLocales = {
     remoteTelegramHideBotFather: 'Hide QR code',
     remoteTelegramQrLabel: 'QR code that opens @BotFather',
     remoteTelegramQrHint: 'Scan with your phone camera or Telegram to open @BotFather on the phone; send /newbot, name it, then copy the token it returns.',
+    remoteTelegramNameHint: 'Naming rules: the display name is free-form; the username must end in bot, be 5–32 characters of letters, digits and underscores, and be globally unique. A failure usually means the name is taken — add a random suffix (e.g. dsh_remote_4821_bot).',
     remoteStatus_stopped: 'Not enabled',
     remoteStatus_unbound: 'Not connected to WeChat',
     remoteStatus_running: 'Connected to WeChat',
