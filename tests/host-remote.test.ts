@@ -82,7 +82,7 @@ describe('composer configuration and Remote metadata', () => {
       browserAgentUnattendedMinutes: 20,
       browserAgentUnattendedActions: 30,
       webChatBridgeEnabled: true,
-      remoteControlEnabled: false,
+      remoteControlEnabled: true,
       instructionsSkillsEnabled: true,
       mcpConnectorsEnabled: true,
       optimizeProvider: '',

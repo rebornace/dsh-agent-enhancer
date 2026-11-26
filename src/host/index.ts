@@ -309,8 +309,8 @@ export const Config = z.object({
     .volatile(),
   /** Default off; embeds official web chat + import to work. */
   webChatBridgeEnabled: z.boolean().default(true).volatile(),
-  /** WeChat remote control; needs a QR login and a paired chat. Off by default. */
-  remoteControlEnabled: z.boolean().default(false).volatile(),
+  /** WeChat + Telegram remote control; on by default, inert until a chat is paired. */
+  remoteControlEnabled: z.boolean().default(true).volatile(),
   instructionsSkillsEnabled: z.boolean().default(true).volatile(),
   mcpConnectorsEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.

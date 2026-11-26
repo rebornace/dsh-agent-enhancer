@@ -21,7 +21,7 @@ export interface TelegramAdapterOptions {
 }
 
 const TELEGRAM_HINTS = {
-  unbound: '这个 Telegram 聊天还没绑定。请在电脑上打开「设置 → 智能体增强 → 功能 → 微信远程控制」的 Telegram 渠道生成绑定码，然后把 6 位数字发给我。',
+  unbound: '这个 Telegram 聊天还没绑定。请在电脑上打开「设置 → 智能体增强 → 远程连接」的 Telegram 渠道生成绑定码，然后把 6 位数字发给我。',
   badCode: '绑定码无效、已过期，或不是 Telegram 渠道的。请重新生成一个。',
   unsupported: '目前只支持文字。语音、图片和文件请在电脑上查看。',
   bound: '已绑定。回「任务」查看当前任务。',

@@ -29,6 +29,7 @@ describe('composer settings', () => {
     ])
     expect(DEFAULT_SETTINGS.autoClassifierEnabled).toBe(false)
     expect(DEFAULT_SETTINGS.browserAgentEnabled).toBe(false)
+    expect(DEFAULT_SETTINGS.remoteControlEnabled).toBe(true)
     expect(DEFAULT_SETTINGS.browserAgentBrowser).toBe('auto')
     expect(DEFAULT_SETTINGS).toEqual({
       historyEnabled: true,
@@ -47,7 +48,7 @@ describe('composer settings', () => {
       browserAgentUnattendedMinutes: 20,
       browserAgentUnattendedActions: 30,
       webChatBridgeEnabled: true,
-      remoteControlEnabled: false,
+      remoteControlEnabled: true,
       contextInspectEnabled: true,
       usageEnabled: true,
       sessionDeleteEnabled: true,
@@ -103,7 +104,7 @@ describe('composer settings', () => {
       browserAgentUnattendedMinutes: 20,
       browserAgentUnattendedActions: 30,
       webChatBridgeEnabled: true,
-      remoteControlEnabled: false,
+      remoteControlEnabled: true,
       contextInspectEnabled: true,
       usageEnabled: true,
       sessionDeleteEnabled: true,
@@ -154,7 +155,7 @@ describe('composer settings', () => {
       browserAgentUnattendedMinutes: 20,
       browserAgentUnattendedActions: 30,
       webChatBridgeEnabled: true,
-      remoteControlEnabled: false,
+      remoteControlEnabled: true,
       contextInspectEnabled: true,
       usageEnabled: true,
       sessionDeleteEnabled: true,

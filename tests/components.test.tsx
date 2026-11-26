@@ -169,7 +169,7 @@ const translations: Record<string, string> = {
   webChatBridgeDescription: 'Embed official web chat; import rendered capture or export into workspace sessions',
   browserAgent: 'Browser agent',
   browserAgentDescription: 'Let the agent drive signed-in pages via a local Chrome/Edge extension',
-  remoteControl: 'WeChat remote control',
+  remoteControl: 'Remote control',
   remoteControlDescription: 'Use WeChat to approve, pause and follow up while away from the computer',
   browserAgentBrowser: 'Dedicated browser',
   browserAgentBrowser_auto: 'Auto (Windows prefers Edge)',
@@ -1088,7 +1088,7 @@ describe('PluginSettings', () => {
       'Prompt history', 'Optimize prompt', 'Next-prompt prediction', 'Select to quote', 'Conversation and file rollback', 'Soft pause',
       'Run alerts',
       'Context details', 'Model bill', 'Delete session', 'Edit files', 'Skills', 'Connectors', 'Web chat bridge', 'Browser agent',
-      'WeChat remote control',
+      'Remote control',
     ])
     expect(screen.getByRole('tab', { name: 'Features' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: 'Models & routing' })).toBeTruthy()
@@ -1477,7 +1477,7 @@ describe('CoexistenceHints', () => {
     expect(store.getSnapshot()).toEqual(['optimize', 'predict'])
     expect(set).not.toHaveBeenCalled()
     expect(screen.getAllByRole('switch').map(item => item.getAttribute('aria-checked'))).toEqual([
-      'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'false', 'false',
+      'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'true', 'false', 'true',
     ])
 
     const reopened = new OverlapHintStore(localStorage, 'test-release')
