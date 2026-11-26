@@ -238,7 +238,11 @@ export class RemoteController {
       const target = this.byNumber(command.number)
       if (target === undefined) return { text: `没有编号 ${command.number} 的任务。回「任务」看列表。` }
       this.focusByChat.set(chatId, target.id)
-      return this.withTaskButtons(`已切到 【${command.number}】${target.title}`, target.id, capabilities)
+      // Switching shows the task itself: the user watches it from here on.
+      const task = this.board.get(target.id)
+      return task === undefined
+        ? { text: '任务已不存在。回「任务」看列表。' }
+        : this.focusedReply(task, capabilities, at)
     }
 
     if (command.kind === 'detail') {
@@ -249,23 +253,10 @@ export class RemoteController {
       if (target === undefined) return { text: '没有可显示的任务。回「任务」看列表。' }
       // Viewing a task selects it: follow-ups continue what the user is reading.
       this.focusByChat.set(chatId, target.id)
-      const card = this.renderCard(target.id, capabilities)
-      let answer = this.board.get(target.id)?.lastAnswer
-      if (answer === undefined && this.options.readAnswer !== undefined) {
-        // Turns that ended before this channel started have no live answer.
-        answer = await this.options.readAnswer(target.id).catch(() => undefined)
-        if (answer !== undefined && answer.trim() !== '') {
-          this.board.answer(target.id, answer.trim().slice(0, 8_000), at)
-        } else {
-          answer = undefined
-        }
-      }
-      const text = card === undefined
-        ? '任务已不存在。'
-        : answer === undefined || answer === ''
-          ? card
-          : `${card}\n\n回答：${answer}`
-      return this.withTaskButtons(text, target.id, capabilities)
+      const task = this.board.get(target.id)
+      return task === undefined
+        ? { text: '任务已不存在。回「任务」看列表。' }
+        : this.focusedReply(task, capabilities, at)
     }
 
     if (command.kind === 'approve' || command.kind === 'reject') {
@@ -318,6 +309,31 @@ export class RemoteController {
   }
 
   /** Attach a task's actions when the channel can render buttons. */
+  /**
+   * One task, in full: status, pending decision and the latest answer.
+   * Switching and 详情 land here, so the chat watches a task instead of
+   * bouncing back into the picker.
+   */
+  private async focusedReply(task: Task, capabilities: ChannelCapabilities, at: number): Promise<Reply> {
+    const card = this.renderCard(task.id, capabilities)
+    let answer = this.board.get(task.id)?.lastAnswer
+    if (answer === undefined && this.options.readAnswer !== undefined) {
+      // Turns that ended before this channel started have no live answer.
+      answer = await this.options.readAnswer(task.id).catch(() => undefined)
+      if (answer !== undefined && answer.trim() !== '') {
+        this.board.answer(task.id, answer.trim().slice(0, 8_000), at)
+      } else {
+        answer = undefined
+      }
+    }
+    const text = card === undefined
+      ? '任务已不存在。'
+      : answer === undefined || answer === ''
+        ? card
+        : `${card}\n\n回答：${answer}`
+    return this.withTaskButtons(text, task.id, capabilities)
+  }
+
   private withTaskButtons(text: string, id: TaskId, capabilities: ChannelCapabilities): Reply {
     if (!capabilities.buttons) return { text }
     const task = this.board.get(id)

@@ -126,6 +126,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'remoteFeishuAppId' | 'remoteFeishuAppSecret' | 'remoteFeishuAppIdPlaceholder' |
       'remoteFeishuAppSecretPlaceholder' | 'remoteFeishuConnect' | 'remoteFeishuHint' |
       'remoteFeishuGuideTitle' | 'remoteFeishuGuideShow' | 'remoteFeishuGuideHide' |
+      'remoteFeishuTemplateTitle' | 'remoteFeishuTemplateStep1' | 'remoteFeishuTemplateStep2' |
+      'remoteFeishuTemplateStep3' | 'remoteFeishuTemplateOpen' |
       'remoteFeishuGuideStepCreate' | 'remoteFeishuGuideCreateHint' | 'remoteFeishuGuideOpenConsole' |
       'remoteFeishuGuideStepBot' | 'remoteFeishuGuideBotHint' | 'remoteFeishuGuidePermissions' |
       'remoteFeishuGuideCopyScopes' | 'remoteFeishuGuideCopied' | 'remoteFeishuGuideCopyFailed' |
@@ -534,9 +536,14 @@ export const agentLocales = {
     remoteFeishuAppSecretPlaceholder: '应用凭证里的 App Secret',
     remoteFeishuConnect: '连接',
     remoteFeishuHint: 'App Secret 只保存在宿主凭据服务。长连接收消息，不需要公网地址；重启会自动重连。',
-    remoteFeishuGuideTitle: '配置向导（大约 3 分钟）',
-    remoteFeishuGuideShow: '展开向导',
-    remoteFeishuGuideHide: '收起向导',
+    remoteFeishuGuideTitle: '手动配置（5 步）',
+    remoteFeishuGuideShow: '没看到模板？按 5 步手动配置',
+    remoteFeishuGuideHide: '收起手动步骤',
+    remoteFeishuTemplateTitle: '推荐：用模板创建（更快）',
+    remoteFeishuTemplateStep1: '打开开放平台，点页面顶部的「创建飞书智能体应用」，起个名字创建。',
+    remoteFeishuTemplateStep2: '模板已带机器人、权限、事件和卡片回调；把 App ID / App Secret 填到上面。',
+    remoteFeishuTemplateStep3: '创建版本并发布（个人版免审），回到这里点「连接」。',
+    remoteFeishuTemplateOpen: '打开开放平台',
     remoteFeishuGuideStepCreate: '创建应用',
     remoteFeishuGuideCreateHint: '在开放平台创建企业自建应用（个人版发布免审），复制 App ID 和 App Secret 填到上面。',
     remoteFeishuGuideOpenConsole: '打开开放平台',
@@ -1346,9 +1353,14 @@ export const agentLocales = {
     remoteFeishuAppSecretPlaceholder: 'App Secret from the app credentials',
     remoteFeishuConnect: 'Connect',
     remoteFeishuHint: 'The App Secret lives only in the host credential service. The long connection needs no public address and reconnects after a restart.',
-    remoteFeishuGuideTitle: 'Setup guide (about 3 minutes)',
-    remoteFeishuGuideShow: 'Show guide',
-    remoteFeishuGuideHide: 'Hide guide',
+    remoteFeishuGuideTitle: 'Manual setup (5 steps)',
+    remoteFeishuGuideShow: 'No template? Configure in 5 steps',
+    remoteFeishuGuideHide: 'Hide manual steps',
+    remoteFeishuTemplateTitle: 'Recommended: start from the template',
+    remoteFeishuTemplateStep1: 'Open the developer console and click “Create a Feishu agent app” at the top, then name it.',
+    remoteFeishuTemplateStep2: 'The template already enables the bot, scopes, events and card callback; paste its App ID / App Secret above.',
+    remoteFeishuTemplateStep3: 'Create and publish a version (the personal edition publishes instantly), then press Connect here.',
+    remoteFeishuTemplateOpen: 'Open the developer console',
     remoteFeishuGuideStepCreate: 'Create the app',
     remoteFeishuGuideCreateHint: 'Create an enterprise self-built app (the personal edition publishes instantly), then paste its App ID and App Secret above.',
     remoteFeishuGuideOpenConsole: 'Open the developer console',

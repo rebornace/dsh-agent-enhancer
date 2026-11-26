@@ -92,7 +92,7 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
   const [showBotFather, setShowBotFather] = useState(false)
   const [appId, setAppId] = useState('')
   const [appSecret, setAppSecret] = useState('')
-  const [showFeishuHelp, setShowFeishuHelp] = useState(true)
+  const [showFeishuHelp, setShowFeishuHelp] = useState(false)
   const remoteRef = useRef(getRemote)
   remoteRef.current = getRemote
 
@@ -476,8 +476,38 @@ function ChannelCard(props: ChannelCardProps) {
 
       {id === 'feishu' && !connected ? (
         <div className={styles.remoteFeishuGuide}>
+          <span className={styles.remoteFeishuGuideTitle}>{t('remoteFeishuTemplateTitle')}</span>
+          <ol className={styles.remoteFeishuSteps}>
+            <li className={styles.remoteFeishuStep}>
+              <span className={styles.remoteFeishuStepIndex}>1</span>
+              <div className={styles.remoteFeishuStepBody}>
+                <span className={styles.remoteHint}>{t('remoteFeishuTemplateStep1')}</span>
+              </div>
+            </li>
+            <li className={styles.remoteFeishuStep}>
+              <span className={styles.remoteFeishuStepIndex}>2</span>
+              <div className={styles.remoteFeishuStepBody}>
+                <span className={styles.remoteHint}>{t('remoteFeishuTemplateStep2')}</span>
+              </div>
+            </li>
+            <li className={styles.remoteFeishuStep}>
+              <span className={styles.remoteFeishuStepIndex}>3</span>
+              <div className={styles.remoteFeishuStepBody}>
+                <span className={styles.remoteHint}>{t('remoteFeishuTemplateStep3')}</span>
+              </div>
+            </li>
+          </ol>
+          <div className={styles.remoteFeishuStepActions}>
+            <a
+              className={styles.settingsLink}
+              href="https://open.feishu.cn/app"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t('remoteFeishuTemplateOpen')}
+            </a>
+          </div>
           <div className={styles.remoteFeishuGuideHeader}>
-            <span className={styles.remoteFeishuGuideTitle}>{t('remoteFeishuGuideTitle')}</span>
             <button
               type="button"
               className={styles.settingsLink}
@@ -489,6 +519,7 @@ function ChannelCard(props: ChannelCardProps) {
           </div>
           {props.showFeishuHelp ? (
             <>
+              <span className={styles.remoteFeishuGuideTitle}>{t('remoteFeishuGuideTitle')}</span>
               <ol className={styles.remoteFeishuSteps}>
                 <li className={styles.remoteFeishuStep}>
                   <span className={styles.remoteFeishuStepIndex}>1</span>

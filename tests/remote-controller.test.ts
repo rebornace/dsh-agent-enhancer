@@ -135,6 +135,17 @@ describe('RemoteController', () => {
     expect((await controller.execute('chat-1', '详情', textOnly)).text).not.toContain('回答：三句话答案')
   })
 
+  it('switches to the task card instead of another picker', async () => {
+    const { controller } = setup()
+    seed(controller)
+    const reply = await controller.execute('chat-1', '切 1', rich)
+    expect(reply.text).toContain('周报导出')
+    // Not the list: the other task must not appear as a picker row.
+    expect(reply.buttons?.some(button => button.command.startsWith('切 '))).toBe(false)
+    expect(reply.buttons?.map(button => button.label)).toEqual(['暂停', '详情'])
+    expect(controller.focus('chat-1')).toBe('s1')
+  })
+
   it('adds task-picker buttons only on channels that render them', async () => {
     const { controller } = setup()
     seed(controller)
@@ -148,7 +159,7 @@ describe('RemoteController', () => {
     seed(controller)
     const approval = controller.askApproval('s1', { prompt: '写入 report.xlsx' })
     const reply = await controller.execute('chat-1', '详情', rich)
-    expect(reply.buttons?.map(button => button.label)).toEqual(['批准', '拒绝', '任务'])
+    expect(reply.buttons?.map(button => button.label)).toEqual(['批准', '拒绝', '详情'])
     expect(reply.buttons?.[0]?.command).toBe('批准 a3f9')
     controller.releasePending()
     await approval.wait
@@ -159,7 +170,7 @@ describe('RemoteController', () => {
     seed(controller)
     const question = controller.askQuestion('s1', { prompt: '用哪个模板？', options: ['简洁', '详细'] })
     const reply = await controller.execute('chat-1', '详情', rich)
-    expect(reply.buttons?.map(button => button.label)).toEqual(['简洁', '详细', '任务'])
+    expect(reply.buttons?.map(button => button.label)).toEqual(['简洁', '详细', '详情'])
     expect(reply.buttons?.[1]?.command).toBe('回答 a3f9 详细')
     controller.releasePending()
     await question.wait

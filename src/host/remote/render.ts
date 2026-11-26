@@ -40,14 +40,14 @@ export function taskActionButtons(task: Task): readonly ChannelButton[] {
       return [
         { label: '批准', command: `批准 ${code}` },
         { label: '拒绝', command: `拒绝 ${code}` },
-        { label: '任务', command: '任务' },
+        { label: '详情', command: '详情' },
       ]
     }
     const options = (task.pending.options ?? []).slice(0, 6).map(option => ({
       label: clipLabel(option),
       command: `回答 ${code} ${option}`,
     }))
-    return [...options, { label: '任务', command: '任务' }]
+    return [...options, { label: '详情', command: '详情' }]
   }
   const actions: ChannelButton[] = []
   if (task.state === 'running' || task.state === 'waiting') {
@@ -55,7 +55,9 @@ export function taskActionButtons(task: Task): readonly ChannelButton[] {
   } else if (task.state === 'paused') {
     actions.push({ label: '继续', command: '继续' })
   }
-  actions.push({ label: '任务', command: '任务' })
+  // A card is a view of one task, not another task picker: the list is the
+  // `任务` command, and switching by hand stays possible.
+  actions.push({ label: '详情', command: '详情' })
   return actions
 }
 

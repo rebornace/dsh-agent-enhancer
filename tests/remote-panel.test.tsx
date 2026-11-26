@@ -131,7 +131,11 @@ describe('RemoteSettingsPanel', () => {
   it('links each Feishu guide step to the app once the App ID is entered', async () => {
     const { get } = harness(status())
     render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
-    expect(await screen.findByText('remoteFeishuGuideNeedId')).toBeTruthy()
+    // The template path is recommended first; the manual steps stay folded.
+    expect(await screen.findByText('remoteFeishuTemplateTitle')).toBeTruthy()
+    expect(screen.queryByText('remoteFeishuGuideNeedId')).toBeNull()
+    fireEvent.click(screen.getByText('remoteFeishuGuideShow'))
+    expect(screen.getByText('remoteFeishuGuideNeedId')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('remoteFeishuAppId'), { target: { value: 'cli_abc123' } })
     await waitFor(() => {
       expect(document.querySelector('a[href="https://open.feishu.cn/app/cli_abc123/auth"]')).toBeTruthy()
@@ -150,7 +154,8 @@ describe('RemoteSettingsPanel', () => {
     })
     const { get } = harness(status())
     render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
-    fireEvent.click(await screen.findByText('remoteFeishuGuideCopyScopes'))
+    fireEvent.click(await screen.findByText('remoteFeishuGuideShow'))
+    fireEvent.click(screen.getByText('remoteFeishuGuideCopyScopes'))
     await waitFor(() => { expect(writeText).toHaveBeenCalledOnce() })
     const payload = String(writeText.mock.calls[0]?.[0])
     expect(payload).toContain('im:message.p2p_msg:readonly')
@@ -166,7 +171,8 @@ describe('RemoteSettingsPanel', () => {
     })
     const { get } = harness(status())
     render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
-    fireEvent.click(await screen.findByText('remoteFeishuGuideCopyScopes'))
+    fireEvent.click(await screen.findByText('remoteFeishuGuideShow'))
+    fireEvent.click(screen.getByText('remoteFeishuGuideCopyScopes'))
     expect(await screen.findByText('remoteFeishuGuideCopyFailed')).toBeTruthy()
     expect(screen.getByText(/"im:message\.p2p_msg:readonly"/)).toBeTruthy()
   })
