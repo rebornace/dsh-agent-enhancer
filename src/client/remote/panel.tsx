@@ -48,6 +48,7 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
   const [actionError, setActionError] = useState<string | null>(null)
   const [codes, setCodes] = useState<Partial<Record<RemoteChannelIdWire, string>>>({})
   const [token, setToken] = useState('')
+  const [showBotFather, setShowBotFather] = useState(false)
   const remoteRef = useRef(getRemote)
   remoteRef.current = getRemote
 
@@ -194,6 +195,8 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
         onBindCode={() => { issueCode('telegram') }}
         onLogout={() => { logout('telegram') }}
         onRevoke={chatId => { revoke('telegram', chatId) }}
+        showBotFather={showBotFather}
+        onToggleBotFather={() => { setShowBotFather(current => !current) }}
       />
         </>
       ) : null}
@@ -211,6 +214,8 @@ interface ChannelCardProps {
   readonly token?: string
   readonly onTokenChange?: (value: string) => void
   readonly onConnectToken?: () => void
+  readonly showBotFather?: boolean
+  readonly onToggleBotFather?: () => void
   readonly onLogin?: () => void
   readonly onCancel?: () => void
   readonly onBindCode: () => void
@@ -319,17 +324,22 @@ function ChannelCard(props: ChannelCardProps) {
       ) : null}
 
       {id === 'telegram' && !connected ? (
-        <p className={styles.remoteHint}>
-          {t('remoteTelegramHowTo')}{' '}
-          <a
-            className={styles.remoteLink}
-            href="https://t.me/BotFather"
-            target="_blank"
-            rel="noreferrer"
+        <div className={styles.remoteBotFather}>
+          <button
+            type="button"
+            className={styles.settingsLink}
+            disabled={disabled}
+            onClick={props.onToggleBotFather}
           >
-            {t('remoteTelegramOpenBotFather')}
-          </a>
-        </p>
+            {props.showBotFather ? t('remoteTelegramHideBotFather') : t('remoteTelegramOpenBotFather')}
+          </button>
+          {props.showBotFather ? (
+            <div className={styles.remoteQr}>
+              <QrCode value="https://t.me/BotFather" size={140} label={t('remoteTelegramQrLabel')} />
+              <p className={styles.remoteHint}>{t('remoteTelegramQrHint')}</p>
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {connected ? (

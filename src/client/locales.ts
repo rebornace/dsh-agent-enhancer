@@ -120,7 +120,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'remoteSettingsIntro' | 'remoteChannelWeixin' | 'remoteChannelTelegram' |
       'remoteChannelPhase_off' | 'remoteChannelPhase_unbound' | 'remoteChannelPhase_running' | 'remoteChannelPhase_failed' |
       'remoteTelegramToken' | 'remoteTelegramTokenPlaceholder' | 'remoteTelegramTokenHint' | 'remoteTelegramConnect' |
-      'remoteTelegramHowTo' | 'remoteTelegramOpenBotFather' |
+      'remoteTelegramOpenBotFather' | 'remoteTelegramHideBotFather' | 'remoteTelegramQrLabel' | 'remoteTelegramQrHint' |
       'remoteStatus_stopped' | 'remoteStatus_unbound' | 'remoteStatus_running' | 'remoteStatus_failed' |
       'remoteLogin' | 'remoteLoginAgain' | 'remoteRegenerate' | 'remoteLoginCancel' |
       'remoteLoginHint' | 'remoteLoginWaiting' | 'remoteLoginExpired' | 'remoteLoginFailed' |
@@ -507,8 +507,10 @@ export const agentLocales = {
     remoteTelegramTokenPlaceholder: '从 @BotFather 获取，例如 123456:ABC…',
     remoteTelegramTokenHint: 'Token 只保存在宿主凭据服务。连接后插件用长轮询收消息，不需要公网地址；重启会自动重连。',
     remoteTelegramConnect: '连接',
-    remoteTelegramHowTo: '还没有 Bot？给 @BotFather 发送 /newbot，起好名字后复制它返回的 Token。',
-    remoteTelegramOpenBotFather: '打开 @BotFather',
+    remoteTelegramOpenBotFather: '扫码打开 @BotFather',
+    remoteTelegramHideBotFather: '收起二维码',
+    remoteTelegramQrLabel: '打开 @BotFather 的二维码',
+    remoteTelegramQrHint: '用手机相机或 Telegram 扫一扫，直接在手机上打开 @BotFather；发送 /newbot，起好名字后复制它返回的 Token。',
     remoteStatus_stopped: '未启用',
     remoteStatus_unbound: '未连接微信',
     remoteStatus_running: '已连接微信',
@@ -1282,8 +1284,10 @@ export const agentLocales = {
     remoteTelegramTokenPlaceholder: 'From @BotFather, e.g. 123456:ABC…',
     remoteTelegramTokenHint: 'The token is stored only in the host credential service. After connecting, the plugin uses long polling, so no public address is needed; it reconnects on restart.',
     remoteTelegramConnect: 'Connect',
-    remoteTelegramHowTo: 'No bot yet? Send /newbot to @BotFather, name it, then copy the token it returns.',
-    remoteTelegramOpenBotFather: 'Open @BotFather',
+    remoteTelegramOpenBotFather: 'Scan to open @BotFather',
+    remoteTelegramHideBotFather: 'Hide QR code',
+    remoteTelegramQrLabel: 'QR code that opens @BotFather',
+    remoteTelegramQrHint: 'Scan with your phone camera or Telegram to open @BotFather on the phone; send /newbot, name it, then copy the token it returns.',
     remoteStatus_stopped: 'Not enabled',
     remoteStatus_unbound: 'Not connected to WeChat',
     remoteStatus_running: 'Connected to WeChat',

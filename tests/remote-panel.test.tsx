@@ -105,6 +105,16 @@ describe('RemoteSettingsPanel', () => {
     expect(screen.getByText('remoteLoginWaiting')).toBeTruthy()
   })
 
+  it('opens a BotFather QR for the phone instead of a browser link', async () => {
+    const { get } = harness(status())
+    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
+    fireEvent.click(await screen.findByText('remoteTelegramOpenBotFather'))
+    expect(await screen.findByRole('img', { name: 'remoteTelegramQrLabel' })).toBeTruthy()
+    expect(document.querySelector('a[href="https://t.me/BotFather"]')).toBeNull()
+    fireEvent.click(screen.getByText('remoteTelegramHideBotFather'))
+    expect(screen.queryByRole('img', { name: 'remoteTelegramQrLabel' })).toBeNull()
+  })
+
   it('connects Telegram with the pasted token', async () => {
     const { remote, get } = harness(status())
     render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)

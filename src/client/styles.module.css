@@ -2617,6 +2617,13 @@
   text-decoration: underline;
 }
 
+.remoteBotFather {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
 .remoteChannelHeader {
   display: flex;
   align-items: center;
