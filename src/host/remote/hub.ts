@@ -12,6 +12,10 @@ import { TelegramChannel } from './telegram/channel.ts'
 import { createTelegramCredentialStore } from './telegram/credentials.ts'
 import type { TelegramCredentialStore } from './telegram/credentials.ts'
 import { TelegramTransport } from './telegram/transport.ts'
+import { FeishuChannel } from './feishu/channel.ts'
+import { createFeishuCredentialStore } from './feishu/credentials.ts'
+import type { FeishuCredentialStore } from './feishu/credentials.ts'
+import { FeishuTransport } from './feishu/transport.ts'
 import { WEIXIN_CAPABILITIES } from './weixin/capabilities.ts'
 import { WeixinChannel } from './weixin/channel.ts'
 import { createWeixinCredentialStore } from './weixin/credentials.ts'
@@ -26,10 +30,13 @@ export interface RemoteHubOptions {
   readonly setPaused: (sessionId: string, paused: boolean) => Promise<void>
   readonly createWeixinTransport?: () => WeixinTransport
   readonly createTelegramTransport?: () => TelegramTransport
+  readonly createFeishuTransport?: () => FeishuTransport
   readonly weixinCredentials?: WeixinCredentialStore
   readonly telegramCredentials?: TelegramCredentialStore
+  readonly feishuCredentials?: FeishuCredentialStore
   readonly weixinCapabilities?: ChannelCapabilities
   readonly telegramCapabilities?: ChannelCapabilities
+  readonly feishuCapabilities?: ChannelCapabilities
   readonly onError?: (error: unknown) => void
   /** Tests use 1ms; production polls already held for ~35s. */
   readonly emptyPageDelayMs?: number
@@ -42,6 +49,16 @@ const TELEGRAM_CAPABILITIES: ChannelCapabilities = {
   media: 'none',
   markdown: false,
   maxChars: 4_000,
+  privateOnly: true,
+}
+
+const FEISHU_CAPABILITIES: ChannelCapabilities = {
+  buttons: true,
+  editMessage: false,
+  threads: false,
+  media: 'none',
+  markdown: false,
+  maxChars: 3_000,
   privateOnly: true,
 }
 
@@ -74,6 +91,7 @@ export class RemoteHub {
   private bridge: HostBridge | undefined
   private weixin: WeixinChannel | undefined
   private telegram: TelegramChannel | undefined
+  private feishu: FeishuChannel | undefined
   private phaseValue: HubStatus['phase'] = 'stopped'
   private errorValue: string | undefined
   private startingPromise: Promise<HubStatus> | undefined
@@ -83,14 +101,18 @@ export class RemoteHub {
   private generation = 0
   private readonly weixinCapabilities: ChannelCapabilities
   private readonly telegramCapabilities: ChannelCapabilities
+  private readonly feishuCapabilities: ChannelCapabilities
   private readonly weixinCredentials: WeixinCredentialStore
   private readonly telegramCredentials: TelegramCredentialStore
+  private readonly feishuCredentials: FeishuCredentialStore
 
   constructor(private readonly options: RemoteHubOptions) {
     this.weixinCapabilities = options.weixinCapabilities ?? WEIXIN_CAPABILITIES
     this.telegramCapabilities = options.telegramCapabilities ?? TELEGRAM_CAPABILITIES
+    this.feishuCapabilities = options.feishuCapabilities ?? FEISHU_CAPABILITIES
     this.weixinCredentials = options.weixinCredentials ?? createWeixinCredentialStore(options.ctx)
     this.telegramCredentials = options.telegramCredentials ?? createTelegramCredentialStore(options.ctx)
+    this.feishuCredentials = options.feishuCredentials ?? createFeishuCredentialStore(options.ctx)
   }
 
   get running(): boolean {
@@ -98,16 +120,17 @@ export class RemoteHub {
   }
 
   private anyRunning(): boolean {
-    return this.weixin?.running === true || this.telegram?.running === true
+    return this.weixin?.running === true || this.telegram?.running === true || this.feishu?.running === true
   }
 
   status(): HubStatus {
     const weixin = this.weixin
     const telegram = this.telegram
-    const started = weixin !== undefined && telegram !== undefined
+    const feishu = this.feishu
+    const started = weixin !== undefined && telegram !== undefined && feishu !== undefined
     const channels = started
-      ? [weixin.status(), telegram.status()]
-      : [offStatus('weixin'), offStatus('telegram')]
+      ? [weixin.status(), telegram.status(), feishu.status()]
+      : [offStatus('weixin'), offStatus('telegram'), offStatus('feishu')]
     let phase: HubStatus['phase']
     if (!started) {
       phase = this.phaseValue === 'failed' ? 'failed' : this.phaseValue
@@ -211,8 +234,22 @@ export class RemoteHub {
         ? {}
         : { emptyPageDelayMs: this.options.emptyPageDelayMs }),
     })
+    this.feishu = new FeishuChannel({
+      capabilities: this.feishuCapabilities,
+      credentials: this.feishuCredentials,
+      bindings,
+      controller: this.controller,
+      refresh: () => this.bridge?.refreshSessions() ?? Promise.resolve(0),
+      ...(this.options.createFeishuTransport === undefined
+        ? {}
+        : { createTransport: this.options.createFeishuTransport }),
+      ...(this.options.onError === undefined ? {} : { onError: this.options.onError }),
+      ...(this.options.emptyPageDelayMs === undefined
+        ? {}
+        : { emptyPageDelayMs: this.options.emptyPageDelayMs }),
+    })
 
-    await Promise.all([this.weixin.start(), this.telegram.start()])
+    await Promise.all([this.weixin.start(), this.telegram.start(), this.feishu.start()])
     this.refreshPhase()
     return this.status()
   }
@@ -233,6 +270,15 @@ export class RemoteHub {
     await this.start()
     if (this.telegram === undefined) return { ok: false, error: '远程控制还没有启动' }
     const result = await this.telegram.connect(token)
+    this.refreshPhase()
+    return result
+  }
+
+  /** Validate the Feishu app credentials and open the long connection. */
+  async connectFeishu(appId: string, appSecret: string): Promise<{ ok: boolean; name?: string; error?: string }> {
+    await this.start()
+    if (this.feishu === undefined) return { ok: false, error: '远程控制还没有启动' }
+    const result = await this.feishu.connect(appId, appSecret)
     this.refreshPhase()
     return result
   }
@@ -262,6 +308,7 @@ export class RemoteHub {
   async logout(channel?: RemoteChannel): Promise<void> {
     if (channel === undefined || channel === 'weixin') await this.weixin?.logout()
     if (channel === undefined || channel === 'telegram') await this.telegram?.logout()
+    if (channel === undefined || channel === 'feishu') await this.feishu?.logout()
     // Only release held asks when nobody is left who could answer them.
     if (!this.anyRunning()) this.controller?.releasePending()
     this.refreshPhase()
@@ -292,12 +339,14 @@ export class RemoteHub {
   private disposeChannels(): void {
     this.weixin?.stop()
     this.telegram?.stop()
+    this.feishu?.stop()
     this.weixin = undefined
     this.telegram = undefined
+    this.feishu = undefined
   }
 
   private refreshPhase(): void {
-    const channels = [this.weixin, this.telegram].filter(channel => channel !== undefined)
+    const channels = [this.weixin, this.telegram, this.feishu].filter(channel => channel !== undefined)
     if (channels.some(channel => channel.running)) {
       this.phaseValue = 'running'
       this.errorValue = undefined
@@ -313,11 +362,17 @@ export class RemoteHub {
     const controller = this.controller
     if (controller === undefined || this.bindings === undefined) return
     for (const binding of this.bindings.list()) {
-      const channel = binding.channel === 'weixin' ? this.weixin : this.telegram
+      const channel = binding.channel === 'weixin'
+        ? this.weixin
+        : binding.channel === 'telegram'
+          ? this.telegram
+          : this.feishu
       if (channel === undefined || !channel.running) continue
       const capabilities = binding.channel === 'weixin'
         ? this.weixinCapabilities
-        : this.telegramCapabilities
+        : binding.channel === 'telegram'
+          ? this.telegramCapabilities
+          : this.feishuCapabilities
       let text = controller.renderCard(notice.sessionId, capabilities)
       if (text === undefined) continue
       if (notice.kind === 'failed' && notice.error !== undefined) {

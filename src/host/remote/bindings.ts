@@ -2,7 +2,14 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { createCode } from './types.ts'
 
-export type RemoteChannel = 'weixin' | 'telegram'
+export type RemoteChannel = 'weixin' | 'telegram' | 'feishu'
+
+/** Every channel a binding row may name; `load()` must round-trip each one. */
+export const REMOTE_CHANNELS: readonly RemoteChannel[] = ['weixin', 'telegram', 'feishu']
+
+export function isRemoteChannel(value: unknown): value is RemoteChannel {
+  return typeof value === 'string' && (REMOTE_CHANNELS as readonly string[]).includes(value)
+}
 
 export interface ChatBinding {
   readonly chatId: string
@@ -156,7 +163,7 @@ export class BindingStore {
       const channel = (value as { channel?: unknown }).channel
       const boundAt = (value as { boundAt?: unknown }).boundAt
       const focus = (value as { focusSessionId?: unknown }).focusSessionId
-      if (channel !== 'weixin' && channel !== 'telegram') continue
+      if (!isRemoteChannel(channel)) continue
       this.chats.set(chatId, {
         chatId,
         channel,

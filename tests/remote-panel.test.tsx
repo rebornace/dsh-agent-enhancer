@@ -10,7 +10,7 @@ afterEach(() => {
 
 const t = ((key: string) => key) as never
 
-function channel(id: 'weixin' | 'telegram', overrides: Partial<RemoteChannelStatusWire> = {}): RemoteChannelStatusWire {
+function channel(id: 'weixin' | 'telegram' | 'feishu', overrides: Partial<RemoteChannelStatusWire> = {}): RemoteChannelStatusWire {
   return {
     id,
     phase: 'unbound',
@@ -23,7 +23,7 @@ function channel(id: 'weixin' | 'telegram', overrides: Partial<RemoteChannelStat
 function status(overrides: Partial<RemoteStatusWire> = {}): RemoteStatusWire {
   return {
     phase: 'unbound',
-    channels: [channel('weixin'), channel('telegram')],
+    channels: [channel('weixin'), channel('telegram'), channel('feishu')],
     tasks: 0,
     ...overrides,
   }
@@ -41,6 +41,7 @@ function harness(initial: RemoteStatusWire) {
               login: { phase: 'waiting', status: 'wait', qrUrl: 'https://liteapp.weixin.qq.com/q/x?type=3' },
             }),
             channel('telegram'),
+            channel('feishu'),
           ],
         })
         return { ok: true, value: { ok: true, ticket: 't1', qrUrl: 'https://liteapp.weixin.qq.com/q/x?type=3' } }
@@ -58,9 +59,21 @@ function harness(initial: RemoteStatusWire) {
           channels: [
             channel('weixin'),
             channel('telegram', { phase: 'running', login: { phase: 'connected', status: 'connected' }, handle: '@dsh_bot' }),
+            channel('feishu'),
           ],
         })
         return { ok: true, value: { ok: true, username: 'dsh_bot' } }
+      }),
+      remoteFeishuConnect: vi.fn(async () => {
+        current = status({
+          phase: 'running',
+          channels: [
+            channel('weixin'),
+            channel('telegram'),
+            channel('feishu', { phase: 'running', login: { phase: 'connected', status: 'connected' }, handle: 'DSH 助手' }),
+          ],
+        })
+        return { ok: true, value: { ok: true, name: 'DSH 助手' } }
       }),
     },
   }
@@ -91,9 +104,28 @@ describe('RemoteSettingsPanel', () => {
     render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
     expect(await screen.findByText('remoteChannelWeixin')).toBeTruthy()
     expect(screen.getByText('remoteChannelTelegram')).toBeTruthy()
+    expect(screen.getByText('remoteChannelFeishu')).toBeTruthy()
     expect(screen.getByText('remoteLogin')).toBeTruthy()
     expect(screen.getByLabelText('remoteTelegramToken')).toBeTruthy()
     expect(screen.getByText('remoteTelegramConnect')).toBeTruthy()
+    expect(screen.getByLabelText('remoteFeishuAppId')).toBeTruthy()
+    expect(screen.getByLabelText('remoteFeishuAppSecret')).toBeTruthy()
+    expect(screen.getByText('remoteFeishuConnect')).toBeTruthy()
+  })
+
+  it('connects Feishu with the app credentials and shows the bot name', async () => {
+    const { remote, get } = harness(status())
+    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
+    fireEvent.change(await screen.findByLabelText('remoteFeishuAppId'), { target: { value: 'cli_abc' } })
+    fireEvent.change(screen.getByLabelText('remoteFeishuAppSecret'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByText('remoteFeishuConnect'))
+    await waitFor(() => {
+      expect(remote.agentEnhancer.remoteFeishuConnect).toHaveBeenCalledWith({
+        appId: 'cli_abc',
+        appSecret: 'secret',
+      })
+    })
+    expect(await screen.findByText('DSH 助手')).toBeTruthy()
   })
 
   it('shows the WeChat QR after a login begins', async () => {

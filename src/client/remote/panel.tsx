@@ -4,6 +4,7 @@ import type { RemoteChannelIdWire, RemoteChannelStatusWire, RemoteStatusWire } f
 import styles from '../styles.module.css'
 import {
   agentEnhancerRemoteBindCode,
+  agentEnhancerRemoteFeishuConnect,
   agentEnhancerRemoteLoginBegin,
   agentEnhancerRemoteLoginCancel,
   agentEnhancerRemoteLogout,
@@ -49,6 +50,9 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
   const [codes, setCodes] = useState<Partial<Record<RemoteChannelIdWire, string>>>({})
   const [token, setToken] = useState('')
   const [showBotFather, setShowBotFather] = useState(false)
+  const [appId, setAppId] = useState('')
+  const [appSecret, setAppSecret] = useState('')
+  const [showFeishuHelp, setShowFeishuHelp] = useState(false)
   const remoteRef = useRef(getRemote)
   remoteRef.current = getRemote
 
@@ -112,6 +116,7 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
   const disabled = busy || pending !== null || getRemote === undefined || !enabled
   const weixin = status?.channels.find(channel => channel.id === 'weixin')
   const telegram = status?.channels.find(channel => channel.id === 'telegram')
+  const feishu = status?.channels.find(channel => channel.id === 'feishu')
 
   const issueCode = (channel: RemoteChannelIdWire): void => {
     void run(`bind-${channel}`, async remote => {
@@ -198,6 +203,37 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
         showBotFather={showBotFather}
         onToggleBotFather={() => { setShowBotFather(current => !current) }}
       />
+
+      <ChannelCard
+        t={t}
+        channel={feishu}
+        id="feishu"
+        title={t('remoteChannelFeishu')}
+        code={codes.feishu}
+        disabled={disabled}
+        appId={appId}
+        onAppIdChange={setAppId}
+        appSecret={appSecret}
+        onAppSecretChange={setAppSecret}
+        onConnectApp={() => {
+          const id = appId.trim()
+          const secret = appSecret.trim()
+          if (id === '' || secret === '') return
+          void run('feishu-connect', async remote => {
+            const result = await agentEnhancerRemoteFeishuConnect.invoke(remote, {
+              appId: id,
+              appSecret: secret,
+            })
+            if (result.ok) setAppSecret('')
+            return result
+          })
+        }}
+        showFeishuHelp={showFeishuHelp}
+        onToggleFeishuHelp={() => { setShowFeishuHelp(current => !current) }}
+        onBindCode={() => { issueCode('feishu') }}
+        onLogout={() => { logout('feishu') }}
+        onRevoke={chatId => { revoke('feishu', chatId) }}
+      />
         </>
       ) : null}
     </div>
@@ -216,6 +252,13 @@ interface ChannelCardProps {
   readonly onConnectToken?: () => void
   readonly showBotFather?: boolean
   readonly onToggleBotFather?: () => void
+  readonly appId?: string
+  readonly onAppIdChange?: (value: string) => void
+  readonly appSecret?: string
+  readonly onAppSecretChange?: (value: string) => void
+  readonly onConnectApp?: () => void
+  readonly showFeishuHelp?: boolean
+  readonly onToggleFeishuHelp?: () => void
   readonly onLogin?: () => void
   readonly onCancel?: () => void
   readonly onBindCode: () => void
@@ -338,6 +381,79 @@ function ChannelCard(props: ChannelCardProps) {
               <QrCode value="https://t.me/BotFather" size={140} label={t('remoteTelegramQrLabel')} />
               <p className={styles.remoteHint}>{t('remoteTelegramQrHint')}</p>
               <p className={styles.remoteHint}>{t('remoteTelegramNameHint')}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {id === 'feishu' && !connected ? (
+        <div className={styles.remoteCredentialFields}>
+          <input
+            className={styles.remoteTokenInput}
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={t('remoteFeishuAppIdPlaceholder')}
+            aria-label={t('remoteFeishuAppId')}
+            disabled={disabled}
+            value={props.appId ?? ''}
+            onChange={event => { props.onAppIdChange?.(event.target.value) }}
+          />
+          <input
+            className={styles.remoteTokenInput}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={t('remoteFeishuAppSecretPlaceholder')}
+            aria-label={t('remoteFeishuAppSecret')}
+            disabled={disabled}
+            value={props.appSecret ?? ''}
+            onChange={event => { props.onAppSecretChange?.(event.target.value) }}
+            onKeyDown={event => {
+              if (event.key === 'Enter') props.onConnectApp?.()
+            }}
+          />
+          <div className={styles.remoteActions}>
+            <button
+              type="button"
+              className={styles.settingsActionPrimary}
+              disabled={disabled || (props.appId ?? '').trim() === '' || (props.appSecret ?? '').trim() === ''}
+              onClick={props.onConnectApp}
+            >
+              {t('remoteFeishuConnect')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {id === 'feishu' && !connected ? (
+        <p className={styles.remoteHint}>{t('remoteFeishuHint')}</p>
+      ) : null}
+
+      {id === 'feishu' && !connected ? (
+        <div className={styles.remoteBotFather}>
+          <button
+            type="button"
+            className={styles.settingsLink}
+            disabled={disabled}
+            onClick={props.onToggleFeishuHelp}
+          >
+            {props.showFeishuHelp ? t('remoteFeishuHideHelp') : t('remoteFeishuOpenHelp')}
+          </button>
+          {props.showFeishuHelp ? (
+            <div className={styles.remoteQr}>
+              <p className={styles.remoteHint}>{t('remoteFeishuStepApp')}</p>
+              <p className={styles.remoteHint}>{t('remoteFeishuStepBot')}</p>
+              <p className={styles.remoteHint}>{t('remoteFeishuStepEvents')}</p>
+              <p className={styles.remoteHint}>{t('remoteFeishuStepPublish')}</p>
+              <a
+                className={styles.settingsLink}
+                href="https://open.feishu.cn/app"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t('remoteFeishuOpenPlatform')}
+              </a>
             </div>
           ) : null}
         </div>

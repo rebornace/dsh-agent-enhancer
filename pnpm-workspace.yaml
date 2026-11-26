@@ -2,6 +2,8 @@ packages:
   - .
 allowBuilds:
   esbuild: true
+  # protobufjs ships a no-op postinstall for its CLI; the runtime module needs none.
+  protobufjs: false
 minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-agent-default-model@0.2.2-rc.1 || 0.2.2-rc.2 || 0.2.2-rc.5'
   - '@deepseek-ai/dsh-agent-preset-registry@0.2.2-rc.1 || 0.2.2-rc.2 || 0.2.2-rc.5'

@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RemoteHub } from '../src/host/remote/hub.ts'
 import type { WeixinCredentialStore } from '../src/host/remote/weixin/credentials.ts'
 import type { TelegramCredentialStore } from '../src/host/remote/telegram/credentials.ts'
+import type { FeishuCredentialStore } from '../src/host/remote/feishu/credentials.ts'
 import type { WeixinTransport } from '../src/host/remote/weixin/transport.ts'
 import type { TelegramTransport } from '../src/host/remote/telegram/transport.ts'
+import type { FeishuTransport } from '../src/host/remote/feishu/transport.ts'
 import type { InboundMessage, UpdatesPage } from '../src/host/remote/channels/types.ts'
 
 const dirs: string[] = []
@@ -60,6 +62,7 @@ async function until(predicate: () => boolean, timeoutMs = 2_000): Promise<void>
 interface HarnessOptions {
   readonly weixin?: { baseUrl: string; token: string; botId?: string }
   readonly telegram?: { token: string; botId?: string; username?: string }
+  readonly feishu?: { appId: string; appSecret: string; name?: string }
 }
 
 function harness(options: HarnessOptions) {
@@ -80,13 +83,14 @@ function harness(options: HarnessOptions) {
   } as unknown as Context
 
   const sent: {
-    channel: 'weixin' | 'telegram'
+    channel: 'weixin' | 'telegram' | 'feishu'
     chatId: string
     text: string
     buttons?: readonly { label: string; command: string }[]
   }[] = []
   const weixinPages: UpdatesPage[] = []
   const telegramPages: UpdatesPage[] = []
+  const feishuPages: UpdatesPage[] = []
 
   const weixinTransport = {
     beginLogin: vi.fn(async () => ({ ticket: 't1', qrUrl: 'https://liteapp.weixin.qq.com/q/x?type=3' })),
@@ -121,11 +125,32 @@ function harness(options: HarnessOptions) {
     }),
   } as unknown as TelegramTransport
 
+  const feishuTransport = {
+    validate: vi.fn(async () => ({ name: 'DSH 助手' })),
+    start: vi.fn(async () => {}),
+    stop: vi.fn(),
+    getUpdates: vi.fn(async (cursor?: string) => (
+      feishuPages.shift() ?? { cursor: cursor ?? '', messages: [] }
+    )),
+    sendText: vi.fn(async (
+      _credentials: unknown,
+      chatId: string,
+      text: string,
+      options?: { readonly buttons?: readonly { label: string; command: string }[] },
+    ) => {
+      sent.push({ channel: 'feishu', chatId, text, ...(options?.buttons === undefined ? {} : { buttons: options.buttons }) })
+      return 'om_1'
+    }),
+  } as unknown as FeishuTransport
+
   const weixinStore = memoryStore<{ baseUrl: string; token: string; botId?: string }>(
     options.weixin === undefined ? undefined : { ...options.weixin },
   )
   const telegramStore = memoryStore<{ token: string; botId?: string; username?: string }>(
     options.telegram === undefined ? undefined : { ...options.telegram },
+  )
+  const feishuStore = memoryStore<{ appId: string; appSecret: string; name?: string }>(
+    options.feishu === undefined ? undefined : { ...options.feishu },
   )
 
   const hub = new RemoteHub({
@@ -134,22 +159,52 @@ function harness(options: HarnessOptions) {
     setPaused: vi.fn(async () => {}),
     createWeixinTransport: () => weixinTransport,
     createTelegramTransport: () => telegramTransport,
+    createFeishuTransport: () => feishuTransport,
     weixinCredentials: weixinStore as unknown as WeixinCredentialStore,
     telegramCredentials: telegramStore as unknown as TelegramCredentialStore,
+    feishuCredentials: feishuStore as unknown as FeishuCredentialStore,
     emptyPageDelayMs: 1,
   })
 
-  return { hub, sent, weixinPages, telegramPages, weixinStore, telegramStore, handlers, sessionController }
+  return {
+    hub,
+    sent,
+    weixinPages,
+    telegramPages,
+    feishuPages,
+    weixinStore,
+    telegramStore,
+    feishuStore,
+    handlers,
+    sessionController,
+  }
 }
 
 describe('RemoteHub', () => {
-  it('starts with both channels unbound and the shared task board', async () => {
+  it('starts with every channel unbound and the shared task board', async () => {
     const { hub } = harness({})
     const status = await hub.start()
     expect(status.phase).toBe('unbound')
     expect(status.tasks).toBe(1)
-    expect(status.channels.map(channel => channel.id)).toEqual(['weixin', 'telegram'])
+    expect(status.channels.map(channel => channel.id)).toEqual(['weixin', 'telegram', 'feishu'])
     expect(status.channels.every(channel => channel.phase === 'unbound')).toBe(true)
+    hub.stop()
+  })
+
+  it('connects Feishu with app credentials and binds a chat', async () => {
+    const { hub, feishuPages, feishuStore } = harness({})
+    await hub.start()
+    const result = await hub.connectFeishu('cli_abc', 'secret')
+    expect(result).toEqual({ ok: true, name: 'DSH 助手' })
+    expect(feishuStore.value?.appId).toBe('cli_abc')
+    await until(() => hub.status().channels.some(channel => channel.id === 'feishu' && channel.phase === 'running'))
+
+    const code = hub.issueBindCode('feishu')
+    feishuPages.push({ cursor: '', messages: [message('oc_chat', code.code)] })
+    await until(() => hub.devices('feishu').length === 1)
+    expect(hub.devices('feishu')[0]?.chatId).toBe('oc_chat')
+    const feishu = hub.status().channels.find(channel => channel.id === 'feishu')
+    expect(feishu?.handle).toBe('DSH 助手')
     hub.stop()
   })
 
@@ -201,9 +256,10 @@ describe('RemoteHub', () => {
   })
 
   it('pushes a failure to every paired chat on its own channel', async () => {
-    const { hub, sent, handlers, weixinPages, telegramPages } = harness({
+    const { hub, sent, handlers, weixinPages, telegramPages, feishuPages } = harness({
       weixin: { baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' },
       telegram: { token: '123456:ABC-def_ghi' },
+      feishu: { appId: 'cli_abc', appSecret: 'secret', name: 'DSH 助手' },
     })
     await hub.start()
 
@@ -213,6 +269,9 @@ describe('RemoteHub', () => {
     const tg = hub.issueBindCode('telegram')
     telegramPages.push({ cursor: 't1', messages: [message('tg-chat', tg.code)] })
     await until(() => hub.devices('telegram').length === 1)
+    const fs = hub.issueBindCode('feishu')
+    feishuPages.push({ cursor: '', messages: [message('oc-chat', fs.code)] })
+    await until(() => hub.devices('feishu').length === 1)
 
     sent.length = 0
     const onEvent = handlers.get('session/event')
@@ -223,11 +282,14 @@ describe('RemoteHub', () => {
       data: { reason: { kind: 'error', error: { message: '模型超时' } } },
     } as never)
 
-    await until(() => sent.length >= 2)
+    await until(() => sent.length >= 3)
     expect(sent.some(entry => entry.channel === 'weixin' && entry.text.includes('模型超时'))).toBe(true)
     expect(sent.some(entry => entry.channel === 'telegram' && entry.text.includes('模型超时'))).toBe(true)
+    expect(sent.some(entry => entry.channel === 'feishu' && entry.text.includes('模型超时'))).toBe(true)
     const telegram = sent.find(entry => entry.channel === 'telegram' && entry.text.includes('模型超时'))
     expect(telegram?.buttons).toEqual([{ label: '详情', command: '详情 1' }])
+    const feishu = sent.find(entry => entry.channel === 'feishu' && entry.text.includes('模型超时'))
+    expect(feishu?.buttons).toEqual([{ label: '详情', command: '详情 1' }])
     hub.stop()
   })
 

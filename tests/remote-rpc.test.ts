@@ -7,6 +7,7 @@ import {
 import { remoteInfo } from '../src/host/rpc.ts'
 import {
   agentEnhancerRemoteBindCode,
+  agentEnhancerRemoteFeishuConnect,
   agentEnhancerRemoteLoginBegin,
   agentEnhancerRemoteRevoke,
   agentEnhancerRemoteStatus,
@@ -22,6 +23,7 @@ const METHODS = [
   'remoteRevoke',
   'remoteLogout',
   'remoteTelegramConnect',
+  'remoteFeishuConnect',
 ] as const
 
 describe('remote-control RPC surface', () => {
@@ -51,10 +53,16 @@ describe('remote-control RPC surface', () => {
           login: { phase: 'idle', status: 'idle' },
           devices: [],
         },
+        {
+          id: 'feishu',
+          phase: 'unbound',
+          login: { phase: 'idle', status: 'idle' },
+          devices: [],
+        },
       ],
       tasks: 3,
     })
-    expect(parsed.channels).toHaveLength(2)
+    expect(parsed.channels).toHaveLength(3)
     // Strict object: a token smuggled in must fail rather than pass through.
     expect(() => remoteStatusSchema.parse({
       phase: 'running',
@@ -70,12 +78,13 @@ describe('remote-control RPC surface', () => {
     expect(() => remoteBindCodeResultSchema.parse({ ok: true, code: 'abcdef' })).toThrow()
   })
 
-  it('returns an empty two-channel status when the host remote is missing', async () => {
+  it('returns an empty three-channel status when the host remote is missing', async () => {
     await expect(agentEnhancerRemoteStatus.invoke(null)).resolves.toEqual({
       phase: 'stopped',
       channels: [
         { id: 'weixin', phase: 'off', login: { phase: 'idle', status: 'idle' }, devices: [] },
         { id: 'telegram', phase: 'off', login: { phase: 'idle', status: 'idle' }, devices: [] },
+        { id: 'feishu', phase: 'off', login: { phase: 'idle', status: 'idle' }, devices: [] },
       ],
       tasks: 0,
     })
@@ -95,5 +104,8 @@ describe('remote-control RPC surface', () => {
 
     const telegram = await agentEnhancerRemoteTelegramConnect.invoke(undefined, { token: '123:abc' })
     expect(telegram.ok).toBe(false)
+
+    const feishu = await agentEnhancerRemoteFeishuConnect.invoke(undefined, { appId: 'cli_x', appSecret: 's' })
+    expect(feishu.ok).toBe(false)
   })
 })

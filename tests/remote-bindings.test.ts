@@ -109,6 +109,14 @@ describe('BindingStore', () => {
     })
   })
 
+  it('reloads a Feishu binding instead of dropping it', () => {
+    const file = tempFile()
+    const first = new BindingStore({ filePath: file, now: () => 7 })
+    first.bind('oc-chat', 'feishu')
+    const second = new BindingStore({ filePath: file })
+    expect(second.binding('oc-chat')).toMatchObject({ channel: 'feishu', boundAt: 7 })
+  })
+
   it('keeps a pairing code scoped to its channel', () => {
     const store = new BindingStore({ filePath: null, now: () => 0, code: () => '246810' })
     const { code } = store.issueCode(1_000, 'weixin')

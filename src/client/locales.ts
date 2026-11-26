@@ -118,11 +118,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentSidebarDisconnected' | 'browserAgentSidebarChatHint' |
       'remoteControl' | 'remoteControlDescription' | 'remoteManage' |
       'remoteDisabledHint' | 'remoteOpenFeatures' |
-      'remoteSettingsIntro' | 'remoteChannelWeixin' | 'remoteChannelTelegram' |
+      'remoteSettingsIntro' | 'remoteChannelWeixin' | 'remoteChannelTelegram' | 'remoteChannelFeishu' |
       'remoteChannelPhase_off' | 'remoteChannelPhase_unbound' | 'remoteChannelPhase_running' | 'remoteChannelPhase_failed' |
       'remoteTelegramToken' | 'remoteTelegramTokenPlaceholder' | 'remoteTelegramTokenHint' | 'remoteTelegramConnect' |
       'remoteTelegramOpenBotFather' | 'remoteTelegramHideBotFather' | 'remoteTelegramQrLabel' | 'remoteTelegramQrHint' |
       'remoteTelegramNameHint' |
+      'remoteFeishuAppId' | 'remoteFeishuAppSecret' | 'remoteFeishuAppIdPlaceholder' |
+      'remoteFeishuAppSecretPlaceholder' | 'remoteFeishuConnect' | 'remoteFeishuHint' |
+      'remoteFeishuOpenHelp' | 'remoteFeishuHideHelp' | 'remoteFeishuStepApp' |
+      'remoteFeishuStepBot' | 'remoteFeishuStepEvents' | 'remoteFeishuStepPublish' |
+      'remoteFeishuOpenPlatform' |
       'remoteStatus_stopped' | 'remoteStatus_unbound' | 'remoteStatus_running' | 'remoteStatus_failed' |
       'remoteLogin' | 'remoteLoginAgain' | 'remoteRegenerate' | 'remoteLoginCancel' |
       'remoteLoginHint' | 'remoteLoginWaiting' | 'remoteLoginExpired' | 'remoteLoginFailed' |
@@ -497,13 +502,14 @@ export const agentLocales = {
     browserAgent: '浏览器控制',
     browserAgentDescription: '让智能体用专用浏览器打开并操作网页（点击、填写等需你批准）。Mac 为 Safari / Chrome，Windows 为 Chrome / Edge。默认关闭。开启后可在对话中自动启动。不同于官方侧栏网页浏览。',
     remoteControl: '远程控制',
-    remoteControlDescription: '人离开电脑后，用微信或 Telegram 查看任务、批准或拒绝、暂停继续、追加指令。只控制已有会话，不新开会话；只在需要你时发消息。默认开启；未绑定任何聊天时不会工作。到「远程连接」页扫码或填 Bot Token 连接，再在聊天里发送一次性绑定码。',
+    remoteControlDescription: '人离开电脑后，用微信、Telegram 或飞书查看任务、批准或拒绝、暂停继续、追加指令。只控制已有会话，不新开会话；只在需要你时发消息。默认开启；未绑定任何聊天时不会工作。到「远程连接」页扫码或填凭据连接，再在聊天里发送一次性绑定码。',
     remoteManage: '管理远程连接',
     remoteDisabledHint: '远程控制当前未开启。先到「功能」页打开开关，再回来连接渠道。',
     remoteOpenFeatures: '去功能页开启',
-    remoteSettingsIntro: '一个页面管理所有渠道：扫码或填写 Token 连接，生成一次性绑定码，再用对应聊天控制桌面会话。',
+    remoteSettingsIntro: '一个页面管理所有渠道：扫码或填写凭据连接，生成一次性绑定码，再用对应聊天控制桌面会话。',
     remoteChannelWeixin: '微信',
     remoteChannelTelegram: 'Telegram',
+    remoteChannelFeishu: '飞书',
     remoteChannelPhase_off: '未启用',
     remoteChannelPhase_unbound: '未连接',
     remoteChannelPhase_running: '已连接',
@@ -517,9 +523,22 @@ export const agentLocales = {
     remoteTelegramQrLabel: '打开 @BotFather 的二维码',
     remoteTelegramQrHint: '用手机相机或 Telegram 扫一扫，直接在手机上打开 @BotFather；发送 /newbot，起好名字后复制它返回的 Token。',
     remoteTelegramNameHint: '命名规则：显示名随意；用户名必须以 bot 结尾、5–32 位，只能字母、数字、下划线，且全球唯一。失败通常是名字被占用，加个随机后缀再试（例：dsh_remote_4821_bot）。',
+    remoteFeishuAppId: 'App ID',
+    remoteFeishuAppSecret: 'App Secret',
+    remoteFeishuAppIdPlaceholder: 'cli_ 开头的 App ID',
+    remoteFeishuAppSecretPlaceholder: '应用凭证里的 App Secret',
+    remoteFeishuConnect: '连接',
+    remoteFeishuHint: 'App Secret 只保存在宿主凭据服务。长连接收消息，不需要公网地址；重启会自动重连。',
+    remoteFeishuOpenHelp: '怎么创建飞书应用',
+    remoteFeishuHideHelp: '收起步骤',
+    remoteFeishuStepApp: '1. 打开飞书开放平台 → 创建企业自建应用，记下 App ID 和 App Secret。',
+    remoteFeishuStepBot: '2. 添加「机器人」能力；权限加 im:message 与 im:message:send_as_bot（接收单聊消息）。',
+    remoteFeishuStepEvents: '3. 事件订阅选「长连接」，添加 im.message.receive_v1 与 card.action.trigger。',
+    remoteFeishuStepPublish: '4. 创建版本并发布；在飞书里搜索机器人名字，发消息开始。',
+    remoteFeishuOpenPlatform: '打开飞书开放平台',
     remoteStatus_stopped: '未启用',
-    remoteStatus_unbound: '未连接微信',
-    remoteStatus_running: '已连接微信',
+    remoteStatus_unbound: '未连接',
+    remoteStatus_running: '已连接',
     remoteStatus_failed: '连接异常',
     remoteLogin: '扫码登录',
     remoteLoginAgain: '重新扫码',
@@ -1278,13 +1297,14 @@ export const agentLocales = {
     browserAgent: 'Browser control',
     browserAgentDescription: 'Let the agent open and use a dedicated browser window (clicks and typing need your approval). Mac: Safari / Chrome; Windows: Chrome / Edge. Off by default. Auto-launches from chat when needed. Not the official sidebar browser.',
     remoteControl: 'Remote control',
-    remoteControlDescription: 'While you are away from the computer, use WeChat or Telegram to see tasks, approve or reject, pause/resume and send follow-ups. It only drives existing sessions, never opens a shadow one, and messages you only when you are needed. On by default and inert until a chat is paired. Connect on the Remote tab by scanning or pasting a Bot Token, then send a one-time pairing code from that chat.',
+    remoteControlDescription: 'While you are away from the computer, use WeChat, Telegram or Feishu to see tasks, approve or reject, pause/resume and send follow-ups. It only drives existing sessions, never opens a shadow one, and messages you only when you are needed. On by default and inert until a chat is paired. Connect on the Remote tab by scanning or pasting credentials, then send a one-time pairing code from that chat.',
     remoteManage: 'Manage remote connections',
     remoteDisabledHint: 'Remote control is off. Turn it on in Features, then come back to connect a channel.',
     remoteOpenFeatures: 'Open Features',
-    remoteSettingsIntro: 'One page for every channel: scan or paste a token to connect, create a one-time pairing code, then control desktop sessions from that chat.',
+    remoteSettingsIntro: 'One page for every channel: scan a QR code or paste credentials to connect, create a one-time pairing code, then control desktop sessions from that chat.',
     remoteChannelWeixin: 'WeChat',
     remoteChannelTelegram: 'Telegram',
+    remoteChannelFeishu: 'Feishu',
     remoteChannelPhase_off: 'Not enabled',
     remoteChannelPhase_unbound: 'Not connected',
     remoteChannelPhase_running: 'Connected',
@@ -1298,9 +1318,22 @@ export const agentLocales = {
     remoteTelegramQrLabel: 'QR code that opens @BotFather',
     remoteTelegramQrHint: 'Scan with your phone camera or Telegram to open @BotFather on the phone; send /newbot, name it, then copy the token it returns.',
     remoteTelegramNameHint: 'Naming rules: the display name is free-form; the username must end in bot, be 5–32 characters of letters, digits and underscores, and be globally unique. A failure usually means the name is taken — add a random suffix (e.g. dsh_remote_4821_bot).',
+    remoteFeishuAppId: 'App ID',
+    remoteFeishuAppSecret: 'App Secret',
+    remoteFeishuAppIdPlaceholder: 'App ID starting with cli_',
+    remoteFeishuAppSecretPlaceholder: 'App Secret from the app credentials',
+    remoteFeishuConnect: 'Connect',
+    remoteFeishuHint: 'The App Secret lives only in the host credential service. The long connection needs no public address and reconnects after a restart.',
+    remoteFeishuOpenHelp: 'How to create a Feishu app',
+    remoteFeishuHideHelp: 'Hide steps',
+    remoteFeishuStepApp: '1. Open the Feishu developer console, create an enterprise self-built app, and note its App ID and App Secret.',
+    remoteFeishuStepBot: '2. Add the Bot capability; grant im:message and im:message:send_as_bot (read direct messages).',
+    remoteFeishuStepEvents: '3. Under Event Subscriptions choose Long Connection, then add im.message.receive_v1 and card.action.trigger.',
+    remoteFeishuStepPublish: '4. Create and publish a version; search for the bot in Feishu and send it a message.',
+    remoteFeishuOpenPlatform: 'Open the Feishu developer console',
     remoteStatus_stopped: 'Not enabled',
-    remoteStatus_unbound: 'Not connected to WeChat',
-    remoteStatus_running: 'Connected to WeChat',
+    remoteStatus_unbound: 'Not connected',
+    remoteStatus_running: 'Connected',
     remoteStatus_failed: 'Connection problem',
     remoteLogin: 'Scan to log in',
     remoteLoginAgain: 'Scan again',

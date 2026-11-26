@@ -615,7 +615,7 @@ const softPauseSetRequestCodec = codec(
 )
 const softPauseStateCodec = codec('dsh-agent-enhancer#SoftPauseState', softPauseStateSchema)
 
-export const remoteChannelIdSchema = z.enum(['weixin', 'telegram'])
+export const remoteChannelIdSchema = z.enum(['weixin', 'telegram', 'feishu'])
 export type RemoteChannelIdWire = z.infer<typeof remoteChannelIdSchema>
 
 export const remoteChannelDeviceSchema = z.strictObject({
@@ -698,6 +698,17 @@ export const remoteTelegramConnectResultSchema = z.strictObject({
   error: z.string().optional(),
 })
 export type RemoteTelegramConnectResult = z.infer<typeof remoteTelegramConnectResultSchema>
+export const remoteFeishuConnectRequestSchema = z.strictObject({
+  appId: z.string().min(1).max(100),
+  appSecret: z.string().min(1).max(200),
+})
+export type RemoteFeishuConnectRequest = z.infer<typeof remoteFeishuConnectRequestSchema>
+export const remoteFeishuConnectResultSchema = z.strictObject({
+  ok: z.boolean(),
+  name: z.string().optional(),
+  error: z.string().optional(),
+})
+export type RemoteFeishuConnectResult = z.infer<typeof remoteFeishuConnectResultSchema>
 export const remoteOkResultSchema = z.strictObject({
   ok: z.literal(true),
 })
@@ -728,6 +739,14 @@ const remoteTelegramConnectRequestCodec = codec(
 const remoteTelegramConnectResultCodec = codec(
   'dsh-agent-enhancer#RemoteTelegramConnectResult',
   remoteTelegramConnectResultSchema,
+)
+const remoteFeishuConnectRequestCodec = codec(
+  'dsh-agent-enhancer#RemoteFeishuConnectRequest',
+  remoteFeishuConnectRequestSchema,
+)
+const remoteFeishuConnectResultCodec = codec(
+  'dsh-agent-enhancer#RemoteFeishuConnectResult',
+  remoteFeishuConnectResultSchema,
 )
 const remoteOkResultCodec = codec('dsh-agent-enhancer#RemoteOkResult', remoteOkResultSchema)
 
@@ -1979,6 +1998,18 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: remoteTelegramConnectRequestCodec,
       }],
       result: remoteTelegramConnectResultCodec,
+    },
+    'agentEnhancer/remoteFeishuConnect': {
+      service: 'agentEnhancer',
+      implementation: 'remoteFeishuConnect',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: remoteFeishuConnectRequestCodec,
+        strictCodec: remoteFeishuConnectRequestCodec,
+      }],
+      result: remoteFeishuConnectResultCodec,
     },
     'agentEnhancer/showOsNotification': {
       service: 'agentEnhancer',

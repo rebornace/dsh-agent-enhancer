@@ -262,6 +262,8 @@ import type {
   RemoteStatusWire,
   RemoteTelegramConnectRequest,
   RemoteTelegramConnectResult,
+  RemoteFeishuConnectRequest,
+  RemoteFeishuConnectResult,
 } from './rpc.ts'
 import { showOsNotificationNow } from './run-alerts/notify.ts'
 import { RemoteHub } from './remote/hub.ts'
@@ -1317,6 +1319,16 @@ export class AgentEnhancerService extends TypertRemoteService {
     this.assertOwner()
     try {
       return await this.requireRemoteControl().connectTelegram(request.token)
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** Validate Feishu app credentials and open the long connection. */
+  async remoteFeishuConnect(request: RemoteFeishuConnectRequest): Promise<RemoteFeishuConnectResult> {
+    this.assertOwner()
+    try {
+      return await this.requireRemoteControl().connectFeishu(request.appId, request.appSecret)
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }

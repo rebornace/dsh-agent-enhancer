@@ -56,6 +56,8 @@ import type {
   RemoteStatusWire,
   RemoteTelegramConnectRequest,
   RemoteTelegramConnectResult,
+  RemoteFeishuConnectRequest,
+  RemoteFeishuConnectResult,
 } from '../host/rpc.ts'
 import type { AuxiliaryResult } from '../host/types.ts'
 import type { WebChatLoginSnapshot } from '../host/web-chat-bridge/login-snapshot-types.ts'
@@ -403,6 +405,20 @@ export const clientRemoteInfo = {
       codec: codec('dsh-agent-enhancer#RemoteTelegramConnectRequest'),
     }],
     result: codec('dsh-agent-enhancer#RemoteTelegramConnectResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/remoteFeishuConnect',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'remoteFeishuConnect',
+    implementation: 'remoteFeishuConnect',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#RemoteFeishuConnectRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#RemoteFeishuConnectResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/showOsNotification',
     service: 'agentEnhancer',
@@ -1186,13 +1202,13 @@ type ShowOsNotificationCall = (
 ) => Promise<RemoteResult<ShowOsNotificationResult>>
 
 function emptyRemoteStatus(): RemoteStatusWire {
-  const off = (id: 'weixin' | 'telegram'): RemoteStatusWire['channels'][number] => ({
+  const off = (id: 'weixin' | 'telegram' | 'feishu'): RemoteStatusWire['channels'][number] => ({
     id,
     phase: 'off',
     login: { phase: 'idle', status: 'idle' },
     devices: [],
   })
-  return { phase: 'stopped', channels: [off('weixin'), off('telegram')], tasks: 0 }
+  return { phase: 'stopped', channels: [off('weixin'), off('telegram'), off('feishu')], tasks: 0 }
 }
 
 function errorMessage(error: unknown): string {
@@ -1370,6 +1386,32 @@ export const agentEnhancerRemoteTelegramConnect = {
     if (namespace === undefined || typeof namespace !== 'object') return unavailable('插件远程接口缺失')
     const call = Reflect.get(namespace, 'remoteTelegramConnect') as RemoteTelegramConnectCall | undefined
     if (typeof call !== 'function') return unavailable('remoteTelegramConnect 缺失')
+    try {
+      const result = await call.call(namespace, request)
+      return result.ok ? result.value : unavailable('连接失败')
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return unavailable(errorMessage(error))
+    }
+  },
+}
+export const agentEnhancerRemoteFeishuConnect = {
+  async invoke(
+    remote: unknown,
+    request: RemoteFeishuConnectRequest,
+    signal?: AbortSignal,
+  ): Promise<RemoteFeishuConnectResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const unavailable = (error: string): RemoteFeishuConnectResult => ({ ok: false, error })
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return unavailable('宿主不可用')
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') return unavailable('插件远程接口缺失')
+    const call = Reflect.get(namespace, 'remoteFeishuConnect') as
+      | ((request: RemoteFeishuConnectRequest) => Promise<RemoteResult<RemoteFeishuConnectResult>>)
+      | undefined
+    if (typeof call !== 'function') return unavailable('remoteFeishuConnect 缺失')
     try {
       const result = await call.call(namespace, request)
       return result.ok ? result.value : unavailable('连接失败')

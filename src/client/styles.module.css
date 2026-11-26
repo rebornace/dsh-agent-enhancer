@@ -2661,6 +2661,12 @@
   gap: 8px;
 }
 
+.remoteCredentialFields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .remoteTokenInput {
   flex: 1 1 auto;
   min-width: 0;
