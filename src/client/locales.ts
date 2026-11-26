@@ -12,7 +12,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'modelCatalogLoading' | 'modelCatalogError' |
       'modelLabel' | 'modelFollowSession' | 'modelAuto' | 'modelUnconfigured' | 'reasoningDefault' |
       'settingsBack' | 'settingsConfigure' |
-      'settingsTabFeatures' | 'settingsTabModels' | 'settingsTabAbout' |
+      'settingsTabFeatures' | 'settingsTabRemote' | 'settingsTabModels' | 'settingsTabAbout' |
       'settingsGroupChat' | 'settingsGroupWorkspace' | 'settingsOpenModel' |
       'settingsAuxModelsTitle' | 'settingsAuxModelsIntro' |
       'usageTitle' | 'usageNote' | 'usageMeterOpen' | 'usageBuckets' |
@@ -116,6 +116,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentSidebarLoading' | 'browserAgentSidebarConnected' |
       'browserAgentSidebarDisconnected' | 'browserAgentSidebarChatHint' |
       'remoteControl' | 'remoteControlDescription' |
+      'remoteSettingsIntro' | 'remoteChannelWeixin' | 'remoteChannelTelegram' |
+      'remoteChannelPhase_off' | 'remoteChannelPhase_unbound' | 'remoteChannelPhase_running' | 'remoteChannelPhase_failed' |
+      'remoteTelegramToken' | 'remoteTelegramTokenPlaceholder' | 'remoteTelegramTokenHint' | 'remoteTelegramConnect' |
       'remoteStatus_stopped' | 'remoteStatus_unbound' | 'remoteStatus_running' | 'remoteStatus_failed' |
       'remoteLogin' | 'remoteLoginAgain' | 'remoteRegenerate' | 'remoteLoginCancel' |
       'remoteLoginHint' | 'remoteLoginWaiting' | 'remoteLoginExpired' | 'remoteLoginFailed' |
@@ -295,6 +298,7 @@ export const agentLocales = {
     settingsTitle: '智能体增强',
     settingsSubtitle: '补齐常用智能体能力，可按需开关',
     settingsTabFeatures: '功能',
+    settingsTabRemote: '远程连接',
     settingsTabModels: '模型与路由',
     settingsTabAbout: '关于',
     settingsGroupChat: '对话',
@@ -487,6 +491,17 @@ export const agentLocales = {
     browserAgentDescription: '让智能体用专用浏览器打开并操作网页（点击、填写等需你批准）。Mac 为 Safari / Chrome，Windows 为 Chrome / Edge。默认关闭。开启后可在对话中自动启动。不同于官方侧栏网页浏览。',
     remoteControl: '微信远程控制',
     remoteControlDescription: '人离开电脑后，用微信查看任务、批准或拒绝、暂停继续、追加指令。只控制已有会话，不新开会话；只在需要你时发消息。默认关闭。需要扫码登录一次，再在微信里发送一次性绑定码。',
+    remoteSettingsIntro: '一个页面管理所有渠道：扫码或填写 Token 连接，生成一次性绑定码，再用对应聊天控制桌面会话。',
+    remoteChannelWeixin: '微信',
+    remoteChannelTelegram: 'Telegram',
+    remoteChannelPhase_off: '未启用',
+    remoteChannelPhase_unbound: '未连接',
+    remoteChannelPhase_running: '已连接',
+    remoteChannelPhase_failed: '连接异常',
+    remoteTelegramToken: 'Bot Token',
+    remoteTelegramTokenPlaceholder: '从 @BotFather 获取，例如 123456:ABC…',
+    remoteTelegramTokenHint: 'Token 只保存在宿主凭据服务。连接后插件用长轮询收消息，不需要公网地址。',
+    remoteTelegramConnect: '连接',
     remoteStatus_stopped: '未启用',
     remoteStatus_unbound: '未连接微信',
     remoteStatus_running: '已连接微信',
@@ -1053,6 +1068,7 @@ export const agentLocales = {
     settingsTitle: 'Agent Enhancer',
     settingsSubtitle: 'Everyday agent features — turn each one on or off',
     settingsTabFeatures: 'Features',
+    settingsTabRemote: 'Remote',
     settingsTabModels: 'Models & routing',
     settingsTabAbout: 'About',
     settingsGroupChat: 'Chat',
@@ -1245,6 +1261,17 @@ export const agentLocales = {
     browserAgentDescription: 'Let the agent open and use a dedicated browser window (clicks and typing need your approval). Mac: Safari / Chrome; Windows: Chrome / Edge. Off by default. Auto-launches from chat when needed. Not the official sidebar browser.',
     remoteControl: 'WeChat remote control',
     remoteControlDescription: 'While you are away from the computer, use WeChat to see tasks, approve or reject, pause/resume and send follow-ups. It only drives existing sessions, never opens a shadow one, and messages you only when you are needed. Off by default. Scan once to log in, then send a one-time pairing code from WeChat.',
+    remoteSettingsIntro: 'One page for every channel: scan or paste a token to connect, create a one-time pairing code, then control desktop sessions from that chat.',
+    remoteChannelWeixin: 'WeChat',
+    remoteChannelTelegram: 'Telegram',
+    remoteChannelPhase_off: 'Not enabled',
+    remoteChannelPhase_unbound: 'Not connected',
+    remoteChannelPhase_running: 'Connected',
+    remoteChannelPhase_failed: 'Connection problem',
+    remoteTelegramToken: 'Bot Token',
+    remoteTelegramTokenPlaceholder: 'From @BotFather, e.g. 123456:ABC…',
+    remoteTelegramTokenHint: 'The token is stored only in the host credential service. After connecting, the plugin uses long polling, so no public address is needed.',
+    remoteTelegramConnect: 'Connect',
     remoteStatus_stopped: 'Not enabled',
     remoteStatus_unbound: 'Not connected to WeChat',
     remoteStatus_running: 'Connected to WeChat',

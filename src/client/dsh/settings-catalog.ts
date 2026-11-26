@@ -1,7 +1,7 @@
 import type { ConfigurableAuxiliaryFeature, ModuleName } from '../../config.ts'
 
 /** In-plugin settings tabs — mirrors official plugins underline chrome. */
-export const SETTINGS_TABS = ['features', 'models', 'about'] as const
+export const SETTINGS_TABS = ['features', 'remote', 'models', 'about'] as const
 export type SettingsTabId = typeof SETTINGS_TABS[number]
 
 export type SettingsGroupId = 'chat' | 'workspace'

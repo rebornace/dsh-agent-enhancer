@@ -1,6 +1,6 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { useEffect, useRef, useState } from 'react'
-import type { RemoteStatusWire } from '../../host/rpc.ts'
+import type { RemoteChannelIdWire, RemoteChannelStatusWire, RemoteStatusWire } from '../../host/rpc.ts'
 import styles from '../styles.module.css'
 import {
   agentEnhancerRemoteBindCode,
@@ -9,10 +9,11 @@ import {
   agentEnhancerRemoteLogout,
   agentEnhancerRemoteRevoke,
   agentEnhancerRemoteStatus,
+  agentEnhancerRemoteTelegramConnect,
 } from '../remote.ts'
 import { QrCode } from './qr-code.tsx'
 
-export interface RemoteControlPanelProps {
+export interface RemoteSettingsPanelProps {
   readonly t: TranslateNS<'agent-enhancer'>
   /** Host remote face; undefined in a preview without Host wiring. */
   readonly getRemote?: () => unknown
@@ -26,18 +27,24 @@ function shortChatId(chatId: string): string {
   return `${chatId.slice(0, 6)}…${chatId.slice(-4)}`
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 /**
- * Settings card for the WeChat channel: connect, pair a chat, see devices.
+ * Remote channels settings: one card per platform.
  *
- * Status is polled from the host because the scan confirms out of band; the
- * page never holds the bot token, only the status object the host builds.
+ * Status is polled from the host because scans and token checks happen out of
+ * band. Approval decisions never happen here; this page only connects channels
+ * and pairs chats.
  */
-export function RemoteControlPanel({ t, getRemote, busy }: RemoteControlPanelProps) {
+export function RemoteSettingsPanel({ t, getRemote, busy }: RemoteSettingsPanelProps) {
   const [status, setStatus] = useState<RemoteStatusWire | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [bindCode, setBindCode] = useState<string | null>(null)
+  const [codes, setCodes] = useState<Partial<Record<RemoteChannelIdWire, string>>>({})
+  const [token, setToken] = useState('')
   const remoteRef = useRef(getRemote)
   remoteRef.current = getRemote
 
@@ -57,7 +64,7 @@ export function RemoteControlPanel({ t, getRemote, busy }: RemoteControlPanelPro
         setLoadError(null)
       } catch (error) {
         if (!active) return
-        setLoadError(error instanceof Error ? error.message : String(error))
+        setLoadError(errorMessage(error))
       }
       if (active) timer = setTimeout(() => { void tick() }, POLL_MS)
     }
@@ -66,18 +73,20 @@ export function RemoteControlPanel({ t, getRemote, busy }: RemoteControlPanelPro
       active = false
       if (timer !== undefined) clearTimeout(timer)
     }
-    // The panel mounts only while the feature is on; polling lives for that span.
+    // The tab mounts only while Settings is open; polling lives for that span.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const refresh = async (): Promise<void> => {
     const remote = remoteRef.current?.()
     if (remote === undefined) return
-    const next = await agentEnhancerRemoteStatus.invoke(remote)
-    setStatus(next)
+    setStatus(await agentEnhancerRemoteStatus.invoke(remote))
   }
 
-  const run = async (key: string, action: (remote: unknown) => Promise<{ ok?: boolean; error?: string } | void>): Promise<void> => {
+  const run = async (
+    key: string,
+    action: (remote: unknown) => Promise<{ ok?: boolean; error?: string } | void>,
+  ): Promise<void> => {
     const remote = remoteRef.current?.()
     if (remote === undefined) return
     setPending(key)
@@ -88,81 +97,165 @@ export function RemoteControlPanel({ t, getRemote, busy }: RemoteControlPanelPro
         setActionError(result.error ?? t('remoteFailed'))
       }
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error))
+      setActionError(errorMessage(error))
     } finally {
       setPending(null)
       await refresh().catch(() => {})
     }
   }
 
-  const phase = status?.phase ?? 'stopped'
-  const login = status?.login
-  const connected = phase === 'running'
-  const qrUrl = login?.qrUrl
-  const waitingForScan = login?.phase === 'waiting' && qrUrl !== undefined
-  const devices = status?.devices ?? []
   const disabled = busy || pending !== null || getRemote === undefined
+  const weixin = status?.channels.find(channel => channel.id === 'weixin')
+  const telegram = status?.channels.find(channel => channel.id === 'telegram')
+
+  const issueCode = (channel: RemoteChannelIdWire): void => {
+    void run(`bind-${channel}`, async remote => {
+      const result = await agentEnhancerRemoteBindCode.invoke(remote, { channel })
+      if (result.ok && result.code !== undefined) {
+        setCodes(current => ({ ...current, [channel]: result.code }))
+      }
+      return result
+    })
+  }
+
+  const revoke = (channel: RemoteChannelIdWire, chatId: string): void => {
+    void run(`revoke-${channel}`, remote => agentEnhancerRemoteRevoke.invoke(remote, { channel, chatId }))
+  }
+
+  const logout = (channel: RemoteChannelIdWire): void => {
+    setCodes(current => ({ ...current, [channel]: undefined }))
+    void run(`logout-${channel}`, remote => agentEnhancerRemoteLogout.invoke(remote, { channel }))
+  }
 
   return (
-    <div className={styles.remotePanel} data-remote-panel>
-      <div className={styles.remoteHeader}>
-        <span className={styles.remotePhase}>
-          {t(`remoteStatus_${phase}` as 'remoteStatus_stopped')}
+    <div className={styles.remoteSettings}>
+      <div className={styles.remoteSettingsHeader}>
+        <p className={styles.remoteIntro}>{t('remoteSettingsIntro')}</p>
+        <span className={styles.remoteHint}>
+          {t('remoteTasksSynced')}: {status?.tasks ?? 0}
         </span>
+      </div>
+
+      {loadError !== null ? <p className={styles.remoteError} role="status">{loadError}</p> : null}
+      {actionError !== null ? <p className={styles.remoteError} role="alert">{actionError}</p> : null}
+
+      <ChannelCard
+        t={t}
+        channel={weixin}
+        id="weixin"
+        title={t('remoteChannelWeixin')}
+        code={codes.weixin}
+        disabled={disabled}
+        onLogin={() => { void run('weixin-login', remote => agentEnhancerRemoteLoginBegin.invoke(remote)) }}
+        onCancel={() => { void run('weixin-cancel', remote => agentEnhancerRemoteLoginCancel.invoke(remote)) }}
+        onBindCode={() => { issueCode('weixin') }}
+        onLogout={() => { logout('weixin') }}
+        onRevoke={chatId => { revoke('weixin', chatId) }}
+      />
+
+      <ChannelCard
+        t={t}
+        channel={telegram}
+        id="telegram"
+        title={t('remoteChannelTelegram')}
+        code={codes.telegram}
+        disabled={disabled}
+        token={token}
+        onTokenChange={setToken}
+        onConnectToken={() => {
+          const value = token.trim()
+          if (value === '') return
+          void run('telegram-connect', async remote => {
+            const result = await agentEnhancerRemoteTelegramConnect.invoke(remote, { token: value })
+            if (result.ok) setToken('')
+            return result
+          })
+        }}
+        onBindCode={() => { issueCode('telegram') }}
+        onLogout={() => { logout('telegram') }}
+        onRevoke={chatId => { revoke('telegram', chatId) }}
+      />
+    </div>
+  )
+}
+
+interface ChannelCardProps {
+  readonly t: TranslateNS<'agent-enhancer'>
+  readonly channel: RemoteChannelStatusWire | undefined
+  readonly id: RemoteChannelIdWire
+  readonly title: string
+  readonly code: string | undefined
+  readonly disabled: boolean
+  readonly token?: string
+  readonly onTokenChange?: (value: string) => void
+  readonly onConnectToken?: () => void
+  readonly onLogin?: () => void
+  readonly onCancel?: () => void
+  readonly onBindCode: () => void
+  readonly onLogout: () => void
+  readonly onRevoke: (chatId: string) => void
+}
+
+function ChannelCard(props: ChannelCardProps) {
+  const { t, channel, id, title, code, disabled } = props
+  const phase = channel?.phase ?? 'off'
+  const login = channel?.login
+  const qrUrl = login?.qrUrl
+  const waiting = login?.phase === 'waiting' && qrUrl !== undefined
+  const connected = phase === 'running'
+  const devices = channel?.devices ?? []
+
+  return (
+    <section className={styles.remoteChannelCard} data-channel={id}>
+      <header className={styles.remoteChannelHeader}>
+        <span className={styles.remoteChannelName}>{title}</span>
+        <span className={styles.remotePhase} data-phase={phase}>
+          {t(`remoteChannelPhase_${phase}` as 'remoteChannelPhase_off')}
+        </span>
+        {channel?.handle !== undefined ? (
+          <span className={styles.remoteHint} title={channel.handle}>{channel.handle}</span>
+        ) : null}
         {connected ? (
           <button
             type="button"
             className={styles.settingsLink}
             disabled={disabled}
-            onClick={() => {
-              setBindCode(null)
-              void run('logout', remote => agentEnhancerRemoteLogout.invoke(remote))
-            }}
+            onClick={props.onLogout}
           >
             {t('remoteLogout')}
           </button>
         ) : null}
-      </div>
+      </header>
 
-      {loadError !== null ? <p className={styles.remoteError} role="status">{loadError}</p> : null}
-      {actionError !== null ? <p className={styles.remoteError} role="alert">{actionError}</p> : null}
-      {phase === 'failed' && status?.error !== undefined ? (
-        <p className={styles.remoteError} role="alert">{status.error}</p>
+      {channel?.error !== undefined ? (
+        <p className={styles.remoteError} role="alert">{channel.error}</p>
       ) : null}
 
-      {waitingForScan && qrUrl !== undefined ? (
+      {id === 'weixin' && waiting ? (
         <div className={styles.remoteQr}>
           <QrCode value={qrUrl} label={t('remoteQrLabel')} />
           <p className={styles.remoteHint}>{t('remoteLoginHint')}</p>
           <p className={styles.remoteHint}>{t('remoteLoginWaiting')}</p>
           <div className={styles.remoteActions}>
-            <button
-              type="button"
-              className={styles.settingsLink}
-              disabled={disabled}
-              onClick={() => { void run('cancel', remote => agentEnhancerRemoteLoginCancel.invoke(remote)) }}
-            >
+            <button type="button" className={styles.settingsLink} disabled={disabled} onClick={props.onCancel}>
               {t('remoteLoginCancel')}
             </button>
-            <button
-              type="button"
-              className={styles.settingsLink}
-              disabled={disabled}
-              onClick={() => { void run('login', remote => agentEnhancerRemoteLoginBegin.invoke(remote)) }}
-            >
+            <button type="button" className={styles.settingsLink} disabled={disabled} onClick={props.onLogin}>
               {t('remoteRegenerate')}
             </button>
           </div>
         </div>
-      ) : connected ? null : (
+      ) : null}
+
+      {id === 'weixin' && !connected && !waiting ? (
         <div className={styles.remoteActions}>
           <button
             type="button"
             className={styles.settingsActionPrimary}
             disabled={disabled}
-            onClick={() => { void run('login', remote => agentEnhancerRemoteLoginBegin.invoke(remote)) }}
+            onClick={props.onLogin}
           >
-            {t('remoteLogin')}
+            {login?.phase === 'failed' ? t('remoteLoginAgain') : t('remoteLogin')}
           </button>
           {login?.phase === 'failed' ? (
             <span className={styles.remoteHint}>
@@ -170,43 +263,58 @@ export function RemoteControlPanel({ t, getRemote, busy }: RemoteControlPanelPro
             </span>
           ) : null}
         </div>
-      )}
+      ) : null}
+
+      {id === 'telegram' && !connected ? (
+        <div className={styles.remoteTokenRow}>
+          <input
+            className={styles.remoteTokenInput}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={t('remoteTelegramTokenPlaceholder')}
+            aria-label={t('remoteTelegramToken')}
+            disabled={disabled}
+            value={props.token ?? ''}
+            onChange={event => { props.onTokenChange?.(event.target.value) }}
+            onKeyDown={event => {
+              if (event.key === 'Enter') props.onConnectToken?.()
+            }}
+          />
+          <button
+            type="button"
+            className={styles.settingsActionPrimary}
+            disabled={disabled || (props.token ?? '').trim() === ''}
+            onClick={props.onConnectToken}
+          >
+            {t('remoteTelegramConnect')}
+          </button>
+        </div>
+      ) : null}
+
+      {id === 'telegram' && !connected ? (
+        <p className={styles.remoteHint}>{t('remoteTelegramTokenHint')}</p>
+      ) : null}
 
       {connected ? (
-        <>
-          <div className={styles.remoteActions}>
-            <button
-              type="button"
-              className={styles.settingsLink}
-              disabled={disabled}
-              onClick={() => {
-                setBindCode(null)
-                void run('bind', async remote => {
-                  const result = await agentEnhancerRemoteBindCode.invoke(remote)
-                  if (result.ok && result.code !== undefined) setBindCode(result.code)
-                  return result
-                })
-              }}
-            >
-              {t('remoteBindCode')}
-            </button>
-            <button
-              type="button"
-              className={styles.settingsLink}
-              disabled={disabled}
-              onClick={() => { void run('login', remote => agentEnhancerRemoteLoginBegin.invoke(remote)) }}
-            >
-              {t('remoteLoginAgain')}
-            </button>
-          </div>
-          {bindCode !== null ? (
-            <div className={styles.remoteBind}>
-              <span className={styles.remoteCode}>{bindCode}</span>
-              <p className={styles.remoteHint}>{t('remoteBindCodeHint')}</p>
-              <p className={styles.remoteHint}>{t('remoteBindCodeExpires')}</p>
-            </div>
-          ) : null}
-        </>
+        <div className={styles.remoteActions}>
+          <button
+            type="button"
+            className={styles.settingsLink}
+            disabled={disabled}
+            onClick={props.onBindCode}
+          >
+            {t('remoteBindCode')}
+          </button>
+        </div>
+      ) : null}
+
+      {code !== undefined ? (
+        <div className={styles.remoteBind}>
+          <span className={styles.remoteCode}>{code}</span>
+          <p className={styles.remoteHint}>{t('remoteBindCodeHint')}</p>
+          <p className={styles.remoteHint}>{t('remoteBindCodeExpires')}</p>
+        </div>
       ) : null}
 
       <div className={styles.remoteDevicesBlock}>
@@ -218,16 +326,12 @@ export function RemoteControlPanel({ t, getRemote, busy }: RemoteControlPanelPro
             {devices.map(device => (
               <li key={device.chatId} className={styles.remoteDevice}>
                 <span title={device.chatId}>{shortChatId(device.chatId)}</span>
-                <span className={styles.remoteHint}>
-                  {new Date(device.boundAt).toLocaleDateString()}
-                </span>
+                <span className={styles.remoteHint}>{new Date(device.boundAt).toLocaleDateString()}</span>
                 <button
                   type="button"
                   className={styles.settingsLink}
                   disabled={disabled}
-                  onClick={() => {
-                    void run('revoke', remote => agentEnhancerRemoteRevoke.invoke(remote, { chatId: device.chatId }))
-                  }}
+                  onClick={() => { props.onRevoke(device.chatId) }}
                 >
                   {t('remoteRevoke')}
                 </button>
@@ -236,12 +340,6 @@ export function RemoteControlPanel({ t, getRemote, busy }: RemoteControlPanelPro
           </ul>
         )}
       </div>
-
-      {connected ? (
-        <p className={styles.remoteHint}>
-          {t('remoteTasksSynced')}: {status?.tasks ?? 0}
-        </p>
-      ) : null}
-    </div>
+    </section>
   )
 }

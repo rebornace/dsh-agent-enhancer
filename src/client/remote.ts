@@ -48,10 +48,14 @@ import type {
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
   SoftPauseState,
+  RemoteBindCodeRequest,
   RemoteBindCodeResult,
   RemoteLoginBeginResult,
+  RemoteLogoutRequest,
   RemoteRevokeRequest,
   RemoteStatusWire,
+  RemoteTelegramConnectRequest,
+  RemoteTelegramConnectResult,
 } from '../host/rpc.ts'
 import type { AuxiliaryResult } from '../host/types.ts'
 import type { WebChatLoginSnapshot } from '../host/web-chat-bridge/login-snapshot-types.ts'
@@ -382,9 +386,23 @@ export const clientRemoteInfo = {
       name: 'request',
       wire: 'request',
       source: 'json',
-      codec: codec('dsh-agent-enhancer#RemoteLoginCancelRequest'),
+      codec: codec('dsh-agent-enhancer#RemoteLogoutRequest'),
     }],
     result: codec('dsh-agent-enhancer#RemoteOkResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/remoteTelegramConnect',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'remoteTelegramConnect',
+    implementation: 'remoteTelegramConnect',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#RemoteTelegramConnectRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#RemoteTelegramConnectResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/showOsNotification',
     service: 'agentEnhancer',
@@ -1168,7 +1186,13 @@ type ShowOsNotificationCall = (
 ) => Promise<RemoteResult<ShowOsNotificationResult>>
 
 function emptyRemoteStatus(): RemoteStatusWire {
-  return { phase: 'stopped', login: { phase: 'idle', status: 'idle' }, devices: [], tasks: 0 }
+  const off = (id: 'weixin' | 'telegram'): RemoteStatusWire['channels'][number] => ({
+    id,
+    phase: 'off',
+    login: { phase: 'idle', status: 'idle' },
+    devices: [],
+  })
+  return { phase: 'stopped', channels: [off('weixin'), off('telegram')], tasks: 0 }
 }
 
 function errorMessage(error: unknown): string {
@@ -1247,11 +1271,15 @@ export const agentEnhancerRemoteLoginCancel = {
 }
 
 type RemoteBindCodeCall = (
-  request: Record<string, never>,
+  request: RemoteBindCodeRequest,
 ) => Promise<RemoteResult<RemoteBindCodeResult>>
 
 export const agentEnhancerRemoteBindCode = {
-  async invoke(remote: unknown, signal?: AbortSignal): Promise<RemoteBindCodeResult> {
+  async invoke(
+    remote: unknown,
+    request: RemoteBindCodeRequest,
+    signal?: AbortSignal,
+  ): Promise<RemoteBindCodeResult> {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
     const unavailable = (error: string): RemoteBindCodeResult => ({ ok: false, error })
     if (remote === null || remote === undefined || typeof remote !== 'object') {
@@ -1262,7 +1290,7 @@ export const agentEnhancerRemoteBindCode = {
     const call = Reflect.get(namespace, 'remoteBindCode') as RemoteBindCodeCall | undefined
     if (typeof call !== 'function') return unavailable('remoteBindCode 缺失')
     try {
-      const result = await call.call(namespace, {})
+      const result = await call.call(namespace, request)
       return result.ok ? result.value : unavailable('生成绑定码失败')
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
@@ -1300,11 +1328,11 @@ export const agentEnhancerRemoteRevoke = {
 }
 
 type RemoteLogoutCall = (
-  request: Record<string, never>,
+  request: RemoteLogoutRequest,
 ) => Promise<RemoteResult<{ ok: true }>>
 
 export const agentEnhancerRemoteLogout = {
-  async invoke(remote: unknown, signal?: AbortSignal): Promise<{ ok: true }> {
+  async invoke(remote: unknown, request: RemoteLogoutRequest = {}, signal?: AbortSignal): Promise<{ ok: true }> {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
     const namespace = remote !== null && typeof remote === 'object'
       ? Reflect.get(remote, 'agentEnhancer') as object | undefined
@@ -1314,12 +1342,41 @@ export const agentEnhancerRemoteLogout = {
       : Reflect.get(namespace, 'remoteLogout') as RemoteLogoutCall | undefined
     if (typeof call === 'function') {
       try {
-        await call.call(namespace, {})
+        await call.call(namespace, request)
       } catch (error) {
         if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
       }
     }
     return { ok: true }
+  },
+}
+
+type RemoteTelegramConnectCall = (
+  request: RemoteTelegramConnectRequest,
+) => Promise<RemoteResult<RemoteTelegramConnectResult>>
+
+export const agentEnhancerRemoteTelegramConnect = {
+  async invoke(
+    remote: unknown,
+    request: RemoteTelegramConnectRequest,
+    signal?: AbortSignal,
+  ): Promise<RemoteTelegramConnectResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const unavailable = (error: string): RemoteTelegramConnectResult => ({ ok: false, error })
+    if (remote === null || remote === undefined || typeof remote !== 'object') {
+      return unavailable('宿主不可用')
+    }
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') return unavailable('插件远程接口缺失')
+    const call = Reflect.get(namespace, 'remoteTelegramConnect') as RemoteTelegramConnectCall | undefined
+    if (typeof call !== 'function') return unavailable('remoteTelegramConnect 缺失')
+    try {
+      const result = await call.call(namespace, request)
+      return result.ok ? result.value : unavailable('连接失败')
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return unavailable(errorMessage(error))
+    }
   },
 }
 export const agentEnhancerShowOsNotification = {

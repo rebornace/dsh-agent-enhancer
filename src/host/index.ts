@@ -254,15 +254,17 @@ import type {
   SoftPauseSetRequest,
   SoftPauseSnapshotRequest,
   SoftPauseState,
+  RemoteBindCodeRequest,
   RemoteBindCodeResult,
   RemoteLoginBeginResult,
+  RemoteLogoutRequest,
   RemoteRevokeRequest,
   RemoteStatusWire,
+  RemoteTelegramConnectRequest,
+  RemoteTelegramConnectResult,
 } from './rpc.ts'
 import { showOsNotificationNow } from './run-alerts/notify.ts'
-import { RemoteRuntime } from './remote/weixin/runtime.ts'
-import { createWeixinCredentialStore } from './remote/weixin/credentials.ts'
-import { WEIXIN_CAPABILITIES } from './remote/weixin/capabilities.ts'
+import { RemoteHub } from './remote/hub.ts'
 import type { AuxiliaryResult } from './types.ts'
 export const name = PLUGIN_ID
 export const inject = [
@@ -390,7 +392,7 @@ export class AgentEnhancerService extends TypertRemoteService {
       join(homedir(), '.dsh', 'profiles', 'desktop', 'plugin-data', PACKAGE_NAME),
     ),
     /** Null while the remote-control feature is off or unavailable. */
-    private readonly remoteControl: () => RemoteRuntime | null = () => null,
+    private readonly remoteControl: () => RemoteHub | null = () => null,
   ) {
     super(ctx, 'agentEnhancer')
   }
@@ -1244,7 +1246,7 @@ export class AgentEnhancerService extends TypertRemoteService {
     }
   }
 
-  private requireRemoteControl(): RemoteRuntime {
+  private requireRemoteControl(): RemoteHub {
     const remote = this.remoteControl()
     if (remote === null) {
       throw new RemoteError('agent-enhancer/failed', '远程控制未启用，请先在设置里开启', {
@@ -1254,22 +1256,22 @@ export class AgentEnhancerService extends TypertRemoteService {
     return remote
   }
 
-  /** WeChat link, pairing and device state. Never returns the bot token. */
+  /** Channel status, pairing and devices. Never returns a bot token. */
   async remoteStatus(_request: Record<string, never>): Promise<RemoteStatusWire> {
     this.assertOwner()
     const remote = this.requireRemoteControl()
     // Heals a boot race where the host bridge was not ready yet; a no-op when
-    // the runtime is already running/unbound or needs a fresh scan.
+    // the hub is already running.
     void remote.start().catch(() => {})
     const status = remote.status()
-    return { ...status, devices: [...status.devices] }
+    return { ...status, channels: status.channels.map(channel => ({ ...channel, devices: [...channel.devices] })) }
   }
 
-  /** Show a fresh QR. Connecting happens on confirmation, not here. */
+  /** Show a fresh WeChat QR. Connecting happens on confirmation, not here. */
   async remoteLoginBegin(_request: Record<string, never>): Promise<RemoteLoginBeginResult> {
     this.assertOwner()
     try {
-      const ticket = await this.requireRemoteControl().beginLogin()
+      const ticket = await this.requireRemoteControl().beginWeixinLogin()
       return { ok: true, ticket: ticket.ticket, qrUrl: ticket.qrUrl }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -1278,15 +1280,15 @@ export class AgentEnhancerService extends TypertRemoteService {
 
   async remoteLoginCancel(_request: Record<string, never>): Promise<{ ok: true }> {
     this.assertOwner()
-    this.requireRemoteControl().cancelLogin()
+    this.requireRemoteControl().cancelWeixinLogin()
     return { ok: true }
   }
 
   /** One-shot code a chat types once to become a control device. */
-  async remoteBindCode(_request: Record<string, never>): Promise<RemoteBindCodeResult> {
+  async remoteBindCode(request: RemoteBindCodeRequest): Promise<RemoteBindCodeResult> {
     this.assertOwner()
     try {
-      const issued = this.requireRemoteControl().issueBindCode()
+      const issued = this.requireRemoteControl().issueBindCode(request.channel)
       return { ok: true, code: issued.code, expiresAt: issued.expiresAt }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -1296,20 +1298,28 @@ export class AgentEnhancerService extends TypertRemoteService {
   async remoteRevoke(request: RemoteRevokeRequest): Promise<{ ok: boolean; revoked: number; error?: string }> {
     this.assertOwner()
     try {
-      const remote = this.requireRemoteControl()
-      const before = remote.devices().length
-      remote.revoke(request.chatId)
-      return { ok: true, revoked: before - remote.devices().length }
+      const revoked = this.requireRemoteControl().revoke(request.channel, request.chatId)
+      return { ok: true, revoked }
     } catch (error) {
       return { ok: false, revoked: 0, error: error instanceof Error ? error.message : String(error) }
     }
   }
 
-  /** Forget the bot login; bound chats stay remembered. */
-  async remoteLogout(_request: Record<string, never>): Promise<{ ok: true }> {
+  /** Forget a bot login; bound chats stay remembered. */
+  async remoteLogout(request: RemoteLogoutRequest): Promise<{ ok: true }> {
     this.assertOwner()
-    await this.requireRemoteControl().logout()
+    await this.requireRemoteControl().logout(request.channel)
     return { ok: true }
+  }
+
+  /** Validate and connect a Telegram bot token. */
+  async remoteTelegramConnect(request: RemoteTelegramConnectRequest): Promise<RemoteTelegramConnectResult> {
+    this.assertOwner()
+    try {
+      return await this.requireRemoteControl().connectTelegram(request.token)
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   /**
@@ -1802,21 +1812,19 @@ export function apply(ctx: Context, config: Config): void {
     },
   })
 
-  // WeChat remote control. The runtime is created once and only started while
-  // the feature toggle is on; the service sees null until then so settings can
-  // render "not enabled" without touching WeChat.
+  // Remote channels (WeChat + Telegram). One hub is created per plugin load and
+  // only started while the feature toggle is on; the service sees null until
+  // then so settings can render "not enabled" without touching any platform.
   const remoteControlLive = { enabled: settings().remoteControlEnabled }
-  const remoteRuntime = new RemoteRuntime({
+  const remoteHub = new RemoteHub({
     ctx,
     rootDir: join(pluginDataPackageRoot, 'remote'),
-    capabilities: WEIXIN_CAPABILITIES,
     // Same pause as the desktop control: hold the next model call, let tools finish.
     setPaused: async (sessionId, paused) => {
       if (!settings().softPauseEnabled) return
       if (paused) softPauseGate.engage(sessionId)
       else softPauseGate.release(sessionId)
     },
-    credentials: createWeixinCredentialStore(ctx),
     onError: error => {
       const detail = error instanceof Error ? error.message : String(error)
       ctx.logger.warn(`agent-enhancer: remote control: ${detail}`)
@@ -1828,8 +1836,8 @@ export function apply(ctx: Context, config: Config): void {
     if (enabled === remoteRunning) return
     remoteRunning = enabled
     try {
-      if (enabled) await remoteRuntime.start()
-      else remoteRuntime.stop()
+      if (enabled) await remoteHub.start()
+      else remoteHub.stop()
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       ctx.logger.warn(`agent-enhancer: remote control start failed: ${detail}`)
@@ -1840,7 +1848,7 @@ export function apply(ctx: Context, config: Config): void {
     id: 'remote-control',
     label: 'Remote control focus',
     async purge(sessionId) {
-      remoteRuntime.forgetSession(sessionId)
+      remoteHub.forgetSession(sessionId)
     },
   })
 
@@ -1876,7 +1884,7 @@ export function apply(ctx: Context, config: Config): void {
       browserAgentLive.browser = hostBrowserPreference(browser)
     },
     browserAgentProfileDir,
-    () => (remoteControlLive.enabled ? remoteRuntime : null),
+    () => (remoteControlLive.enabled ? remoteHub : null),
   )
   ctx.effect(() => {
     const unsubscribe = ctx.on('internal/update', (resolvedConfig, next) => {
@@ -1912,7 +1920,7 @@ export function apply(ctx: Context, config: Config): void {
       unsubscribe()
       await mcpRuntime.disposeAll()
       await browserAgent.dispose()
-      remoteRuntime.stop()
+      remoteHub.stop()
     }
   })
   installSoftPause(ctx, {

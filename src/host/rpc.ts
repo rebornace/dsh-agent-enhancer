@@ -615,30 +615,40 @@ const softPauseSetRequestCodec = codec(
 )
 const softPauseStateCodec = codec('dsh-agent-enhancer#SoftPauseState', softPauseStateSchema)
 
-export const remoteDeviceSchema = z.strictObject({
+export const remoteChannelIdSchema = z.enum(['weixin', 'telegram'])
+export type RemoteChannelIdWire = z.infer<typeof remoteChannelIdSchema>
+
+export const remoteChannelDeviceSchema = z.strictObject({
   chatId: z.string().min(1),
   boundAt: z.number(),
-  channel: z.string().min(1),
 })
-export type RemoteDeviceWire = z.infer<typeof remoteDeviceSchema>
+export type RemoteChannelDeviceWire = z.infer<typeof remoteChannelDeviceSchema>
 
-export const remoteLoginSnapshotSchema = z.strictObject({
+export const remoteChannelLoginSchema = z.strictObject({
   phase: z.enum(['idle', 'waiting', 'connected', 'failed']),
   /** Raw host status token; unknown values are passed through, never guessed. */
   status: z.string(),
   qrUrl: z.string().optional(),
   error: z.string().optional(),
 })
-export type RemoteLoginSnapshotWire = z.infer<typeof remoteLoginSnapshotSchema>
+export type RemoteChannelLoginWire = z.infer<typeof remoteChannelLoginSchema>
+
+export const remoteChannelStatusSchema = z.strictObject({
+  id: remoteChannelIdSchema,
+  phase: z.enum(['off', 'unbound', 'running', 'failed']),
+  login: remoteChannelLoginSchema,
+  devices: z.array(remoteChannelDeviceSchema),
+  handle: z.string().optional(),
+  error: z.string().optional(),
+})
+export type RemoteChannelStatusWire = z.infer<typeof remoteChannelStatusSchema>
 
 export const remoteStatusSchema = z.strictObject({
   phase: z.enum(['stopped', 'unbound', 'running', 'failed']),
-  login: remoteLoginSnapshotSchema,
-  devices: z.array(remoteDeviceSchema),
-  botId: z.string().optional(),
-  error: z.string().optional(),
+  channels: z.array(remoteChannelStatusSchema),
   /** Sessions on the remote board; zero is valid. */
-  tasks: z.number().int().nonnegative().optional(),
+  tasks: z.number().int().nonnegative(),
+  error: z.string().optional(),
 })
 export type RemoteStatusWire = z.infer<typeof remoteStatusSchema>
 
@@ -653,7 +663,10 @@ export const remoteLoginBeginResultSchema = z.strictObject({
 })
 export type RemoteLoginBeginResult = z.infer<typeof remoteLoginBeginResultSchema>
 export const remoteLoginCancelRequestSchema = z.strictObject({})
-export const remoteBindCodeRequestSchema = z.strictObject({})
+export const remoteBindCodeRequestSchema = z.strictObject({
+  channel: remoteChannelIdSchema,
+})
+export type RemoteBindCodeRequest = z.infer<typeof remoteBindCodeRequestSchema>
 export const remoteBindCodeResultSchema = z.strictObject({
   ok: z.boolean(),
   code: z.string().regex(/^\d{6}$/).optional(),
@@ -662,6 +675,7 @@ export const remoteBindCodeResultSchema = z.strictObject({
 })
 export type RemoteBindCodeResult = z.infer<typeof remoteBindCodeResultSchema>
 export const remoteRevokeRequestSchema = z.strictObject({
+  channel: remoteChannelIdSchema.optional(),
   chatId: z.string().min(1).optional(),
 })
 export type RemoteRevokeRequest = z.infer<typeof remoteRevokeRequestSchema>
@@ -670,6 +684,20 @@ export const remoteRevokeResultSchema = z.strictObject({
   revoked: z.number().int().nonnegative(),
   error: z.string().optional(),
 })
+export const remoteLogoutRequestSchema = z.strictObject({
+  channel: remoteChannelIdSchema.optional(),
+})
+export type RemoteLogoutRequest = z.infer<typeof remoteLogoutRequestSchema>
+export const remoteTelegramConnectRequestSchema = z.strictObject({
+  token: z.string().min(1).max(200),
+})
+export type RemoteTelegramConnectRequest = z.infer<typeof remoteTelegramConnectRequestSchema>
+export const remoteTelegramConnectResultSchema = z.strictObject({
+  ok: z.boolean(),
+  username: z.string().optional(),
+  error: z.string().optional(),
+})
+export type RemoteTelegramConnectResult = z.infer<typeof remoteTelegramConnectResultSchema>
 export const remoteOkResultSchema = z.strictObject({
   ok: z.literal(true),
 })
@@ -692,6 +720,15 @@ const remoteBindCodeRequestCodec = codec('dsh-agent-enhancer#RemoteBindCodeReque
 const remoteBindCodeResultCodec = codec('dsh-agent-enhancer#RemoteBindCodeResult', remoteBindCodeResultSchema)
 const remoteRevokeRequestCodec = codec('dsh-agent-enhancer#RemoteRevokeRequest', remoteRevokeRequestSchema)
 const remoteRevokeResultCodec = codec('dsh-agent-enhancer#RemoteRevokeResult', remoteRevokeResultSchema)
+const remoteLogoutRequestCodec = codec('dsh-agent-enhancer#RemoteLogoutRequest', remoteLogoutRequestSchema)
+const remoteTelegramConnectRequestCodec = codec(
+  'dsh-agent-enhancer#RemoteTelegramConnectRequest',
+  remoteTelegramConnectRequestSchema,
+)
+const remoteTelegramConnectResultCodec = codec(
+  'dsh-agent-enhancer#RemoteTelegramConnectResult',
+  remoteTelegramConnectResultSchema,
+)
 const remoteOkResultCodec = codec('dsh-agent-enhancer#RemoteOkResult', remoteOkResultSchema)
 
 export const showOsNotificationRequestSchema = z.strictObject({
@@ -1926,10 +1963,22 @@ export const remoteInfo = createTypertRemoteInfo({
       parameters: [{
         name: 'request',
         source: 'json',
-        codec: remoteLoginCancelRequestCodec,
-        strictCodec: remoteLoginCancelRequestCodec,
+        codec: remoteLogoutRequestCodec,
+        strictCodec: remoteLogoutRequestCodec,
       }],
       result: remoteOkResultCodec,
+    },
+    'agentEnhancer/remoteTelegramConnect': {
+      service: 'agentEnhancer',
+      implementation: 'remoteTelegramConnect',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: remoteTelegramConnectRequestCodec,
+        strictCodec: remoteTelegramConnectRequestCodec,
+      }],
+      result: remoteTelegramConnectResultCodec,
     },
     'agentEnhancer/showOsNotification': {
       service: 'agentEnhancer',

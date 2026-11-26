@@ -34,6 +34,7 @@ import {
 } from '../web-chat-bridge/left-nav.ts'
 import { SettingsModelsPanel } from './settings-models.tsx'
 import { autoTierFieldPrefix } from './settings-model-pill.tsx'
+import { RemoteSettingsPanel } from '../remote/panel.tsx'
 import { agentEnhancerBrowserAgentSetBrowser } from '../remote.ts'
 
 type SettingsForm = Pick<ConfigForm<EnhancerSettings>, 'getSnapshot' | 'subscribe' | 'set' | 'mutate'>
@@ -75,6 +76,8 @@ function tabLabel(
   switch (tab) {
     case 'features':
       return t('settingsTabFeatures')
+    case 'remote':
+      return t('settingsTabRemote')
     case 'models':
       return t('settingsTabModels')
     case 'about':
@@ -425,7 +428,6 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
             setHighlightFeature(feature)
             setTab('models')
           }}
-          getRemote={getRemote}
           featureExtraDescription={module => {
             if (module === 'instructionsSkills') {
               if (!settings.instructionsSkillsEnabled || skillsLeftNavSeatReady) return undefined
@@ -442,6 +444,11 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
             return undefined
           }}
         />
+      )
+      break
+    case 'remote':
+      panel = (
+        <RemoteSettingsPanel t={t} getRemote={getRemote} busy={busy} />
       )
       break
     case 'models':

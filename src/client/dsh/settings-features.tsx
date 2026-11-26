@@ -22,7 +22,6 @@ import type {
   RunAlertsLevel,
 } from '../../config.ts'
 import styles from '../styles.module.css'
-import { RemoteControlPanel } from '../remote/panel.tsx'
 import { SETTINGS_FEATURE_GROUPS } from './settings-catalog.ts'
 
 export interface SettingsFeaturesPanelProps {
@@ -38,8 +37,6 @@ export interface SettingsFeaturesPanelProps {
   readonly onBrowserAgentUnattendedMinutes?: (value: number) => void
   readonly onBrowserAgentUnattendedActions?: (value: number) => void
   readonly onOpenModel: (feature: ConfigurableAuxiliaryFeature) => void
-  /** Host remote face for the WeChat card (QR, pairing code, devices). */
-  readonly getRemote?: () => unknown
   /** Optional per-module extra description (e.g. host capability warnings). */
   readonly featureExtraDescription?: (module: ModuleName) => string | undefined
 }
@@ -96,7 +93,6 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
     onBrowserAgentUnattendedMinutes,
     onBrowserAgentUnattendedActions,
     onOpenModel,
-    getRemote,
     featureExtraDescription,
   } = props
 
@@ -243,9 +239,6 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                       </div>
                       <p className={styles.settingDescription}>{t('browserAgentUnattendedLimitsHint')}</p>
                     </div>
-                  ) : null}
-                  {entry.module === 'remoteControl' && settings.remoteControlEnabled ? (
-                    <RemoteControlPanel t={t} getRemote={getRemote} busy={busy} />
                   ) : null}
                 </div>
                 <div className={styles.settingControls}>

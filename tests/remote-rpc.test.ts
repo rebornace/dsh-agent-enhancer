@@ -10,6 +10,7 @@ import {
   agentEnhancerRemoteLoginBegin,
   agentEnhancerRemoteRevoke,
   agentEnhancerRemoteStatus,
+  agentEnhancerRemoteTelegramConnect,
   clientRemoteInfo,
 } from '../src/client/remote.ts'
 
@@ -20,6 +21,7 @@ const METHODS = [
   'remoteBindCode',
   'remoteRevoke',
   'remoteLogout',
+  'remoteTelegramConnect',
 ] as const
 
 describe('remote-control RPC surface', () => {
@@ -32,19 +34,32 @@ describe('remote-control RPC surface', () => {
     }
   })
 
-  it('accepts a status payload without any token field', () => {
+  it('accepts a multi-channel status payload without any token field', () => {
     const parsed = remoteStatusSchema.parse({
       phase: 'running',
-      login: { phase: 'connected', status: 'confirmed' },
-      devices: [{ chatId: 'chat-1', boundAt: 100, channel: 'weixin' }],
-      botId: 'bot-1',
+      channels: [
+        {
+          id: 'weixin',
+          phase: 'running',
+          login: { phase: 'connected', status: 'confirmed' },
+          devices: [{ chatId: 'chat-1', boundAt: 100 }],
+          handle: 'bot-1',
+        },
+        {
+          id: 'telegram',
+          phase: 'unbound',
+          login: { phase: 'idle', status: 'idle' },
+          devices: [],
+        },
+      ],
+      tasks: 3,
     })
-    expect(parsed.devices).toHaveLength(1)
+    expect(parsed.channels).toHaveLength(2)
     // Strict object: a token smuggled in must fail rather than pass through.
     expect(() => remoteStatusSchema.parse({
       phase: 'running',
-      login: { phase: 'connected', status: 'confirmed' },
-      devices: [],
+      channels: [],
+      tasks: 0,
       token: 'secret',
     })).toThrow()
   })
@@ -55,11 +70,13 @@ describe('remote-control RPC surface', () => {
     expect(() => remoteBindCodeResultSchema.parse({ ok: true, code: 'abcdef' })).toThrow()
   })
 
-  it('returns an empty status when the host remote is missing', async () => {
+  it('returns an empty two-channel status when the host remote is missing', async () => {
     await expect(agentEnhancerRemoteStatus.invoke(null)).resolves.toEqual({
       phase: 'stopped',
-      login: { phase: 'idle', status: 'idle' },
-      devices: [],
+      channels: [
+        { id: 'weixin', phase: 'off', login: { phase: 'idle', status: 'idle' }, devices: [] },
+        { id: 'telegram', phase: 'off', login: { phase: 'idle', status: 'idle' }, devices: [] },
+      ],
       tasks: 0,
     })
   })
@@ -69,11 +86,14 @@ describe('remote-control RPC surface', () => {
     expect(begin.ok).toBe(false)
     expect(begin.error).toBeTruthy()
 
-    const bind = await agentEnhancerRemoteBindCode.invoke(undefined)
+    const bind = await agentEnhancerRemoteBindCode.invoke(undefined, { channel: 'weixin' })
     expect(bind.ok).toBe(false)
 
-    const revoke = await agentEnhancerRemoteRevoke.invoke(undefined, {})
+    const revoke = await agentEnhancerRemoteRevoke.invoke(undefined, { channel: 'weixin' })
     expect(revoke.ok).toBe(false)
     expect(revoke.revoked).toBe(0)
+
+    const telegram = await agentEnhancerRemoteTelegramConnect.invoke(undefined, { token: '123:abc' })
+    expect(telegram.ok).toBe(false)
   })
 })
