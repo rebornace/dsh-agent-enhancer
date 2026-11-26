@@ -136,7 +136,7 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className={styles.settingInlineAction}
+                      className={styles.settingManageAction}
                       disabled={busy || onOpenRemote === undefined}
                       onClick={onOpenRemote}
                     >
@@ -311,7 +311,6 @@ export function SettingsFeaturesPanel(props: SettingsFeaturesPanelProps) {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className={styles.settingInlineAction}
                       disabled={busy}
                       aria-label={`${t(entry.labelKey)} ${t('settingsOpenModel')}`}
                       onClick={() => {
