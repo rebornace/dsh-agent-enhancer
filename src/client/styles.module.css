@@ -215,6 +215,7 @@
   line-height: 18px;
   cursor: pointer;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .settingsLink svg {
@@ -2665,6 +2666,93 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.remoteFeishuGuide {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--dsw-alias-border-l2, transparent);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-interactive-bg-active, transparent);
+}
+
+.remoteFeishuGuideHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.remoteFeishuGuideTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.remoteFeishuSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.remoteFeishuStep {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.remoteFeishuStepIndex {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--dsw-alias-border-l2, transparent);
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-base, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.remoteFeishuStepBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.remoteFeishuStepTitle {
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.remoteFeishuStepActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.remoteFeishuScopes {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--dsw-alias-border-l2, transparent);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base, transparent);
+  color: var(--dsw-alias-label-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
 }
 
 .remoteTokenInput {

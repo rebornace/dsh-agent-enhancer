@@ -125,9 +125,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'remoteTelegramNameHint' |
       'remoteFeishuAppId' | 'remoteFeishuAppSecret' | 'remoteFeishuAppIdPlaceholder' |
       'remoteFeishuAppSecretPlaceholder' | 'remoteFeishuConnect' | 'remoteFeishuHint' |
-      'remoteFeishuOpenHelp' | 'remoteFeishuHideHelp' | 'remoteFeishuStepTemplate' | 'remoteFeishuStepApp' |
-      'remoteFeishuStepBot' | 'remoteFeishuStepEvents' | 'remoteFeishuStepCallback' | 'remoteFeishuStepPublish' |
-      'remoteFeishuOpenPlatform' |
+      'remoteFeishuGuideTitle' | 'remoteFeishuGuideShow' | 'remoteFeishuGuideHide' |
+      'remoteFeishuGuideStepCreate' | 'remoteFeishuGuideCreateHint' | 'remoteFeishuGuideOpenConsole' |
+      'remoteFeishuGuideStepBot' | 'remoteFeishuGuideBotHint' | 'remoteFeishuGuidePermissions' |
+      'remoteFeishuGuideCopyScopes' | 'remoteFeishuGuideCopied' | 'remoteFeishuGuideCopyFailed' |
+      'remoteFeishuGuideStepEvents' | 'remoteFeishuGuideEventsHint' | 'remoteFeishuGuideEventConfig' |
+      'remoteFeishuGuideStepCallback' | 'remoteFeishuGuideCallbackHint' | 'remoteFeishuGuideCallbackConfig' |
+      'remoteFeishuGuideStepPublish' | 'remoteFeishuGuidePublishHint' | 'remoteFeishuGuideOpenApp' |
+      'remoteFeishuGuideNeedId' | 'remoteFeishuGuideConnectHint' | 'remoteFeishuNoChatHint' |
       'remoteStatus_stopped' | 'remoteStatus_unbound' | 'remoteStatus_running' | 'remoteStatus_failed' |
       'remoteLogin' | 'remoteLoginAgain' | 'remoteRegenerate' | 'remoteLoginCancel' |
       'remoteLoginHint' | 'remoteLoginWaiting' | 'remoteLoginExpired' | 'remoteLoginFailed' |
@@ -529,15 +534,30 @@ export const agentLocales = {
     remoteFeishuAppSecretPlaceholder: '应用凭证里的 App Secret',
     remoteFeishuConnect: '连接',
     remoteFeishuHint: 'App Secret 只保存在宿主凭据服务。长连接收消息，不需要公网地址；重启会自动重连。',
-    remoteFeishuOpenHelp: '怎么创建飞书应用',
-    remoteFeishuHideHelp: '收起步骤',
-    remoteFeishuStepTemplate: '省事路径：开放平台首页如果有「创建飞书智能体应用」模板，直接用它建，权限和事件都已预置，只需补上第 4 步的回调并发布。',
-    remoteFeishuStepApp: '1. 打开飞书开放平台 → 创建企业自建应用（个人版也能建，发布秒过），记下 App ID 和 App Secret。',
-    remoteFeishuStepBot: '2. 添加「机器人」能力；权限加 im:message.p2p_msg:readonly（收单聊）与 im:message:send_as_bot（发消息）。',
-    remoteFeishuStepEvents: '3. 事件与回调 → 事件配置选「长连接」，添加 im.message.receive_v1。',
-    remoteFeishuStepCallback: '4. 同一页的「回调配置」也选长连接，添加 card.action.trigger（它不在事件列表里）。',
-    remoteFeishuStepPublish: '5. 创建版本并发布；在飞书里搜索机器人名字，发消息开始。',
-    remoteFeishuOpenPlatform: '打开飞书开放平台',
+    remoteFeishuGuideTitle: '配置向导（大约 3 分钟）',
+    remoteFeishuGuideShow: '展开向导',
+    remoteFeishuGuideHide: '收起向导',
+    remoteFeishuGuideStepCreate: '创建应用',
+    remoteFeishuGuideCreateHint: '在开放平台创建企业自建应用（个人版发布免审），复制 App ID 和 App Secret 填到上面。',
+    remoteFeishuGuideOpenConsole: '打开开放平台',
+    remoteFeishuGuideStepBot: '开启机器人与权限',
+    remoteFeishuGuideBotHint: '添加「机器人」能力；到权限管理点「批量导入」，粘贴复制来的清单。',
+    remoteFeishuGuidePermissions: '权限管理',
+    remoteFeishuGuideCopyScopes: '复制权限清单',
+    remoteFeishuGuideCopied: '已复制',
+    remoteFeishuGuideCopyFailed: '自动复制被浏览器拦截了，手动全选下面这段，粘贴到飞书的「批量导入」里。',
+    remoteFeishuGuideStepEvents: '订阅事件（长连接）',
+    remoteFeishuGuideEventsHint: '事件配置选「使用长连接接收事件」，添加 im.message.receive_v1。',
+    remoteFeishuGuideEventConfig: '事件配置',
+    remoteFeishuGuideStepCallback: '配置卡片回调（长连接）',
+    remoteFeishuGuideCallbackHint: '切到「回调配置」，同样选长连接，添加 card.action.trigger（它不在事件列表里）。',
+    remoteFeishuGuideCallbackConfig: '回调配置',
+    remoteFeishuGuideStepPublish: '发布版本',
+    remoteFeishuGuidePublishHint: '创建版本并发布；权限和事件在发布之后才生效。',
+    remoteFeishuGuideOpenApp: '打开应用',
+    remoteFeishuGuideNeedId: '先在上面填好 App ID，第 2–5 步的链接就会直接打开你这个应用的对应页面。',
+    remoteFeishuGuideConnectHint: '第 1–5 步完成后，回到这里点「连接」。',
+    remoteFeishuNoChatHint: '还没收到你的消息。在飞书里搜索机器人名字发一句「你好」；如果一直没回复，确认版本已发布、事件和回调都选了长连接。',
     remoteStatus_stopped: '未启用',
     remoteStatus_unbound: '未连接',
     remoteStatus_running: '已连接',
@@ -1326,15 +1346,30 @@ export const agentLocales = {
     remoteFeishuAppSecretPlaceholder: 'App Secret from the app credentials',
     remoteFeishuConnect: 'Connect',
     remoteFeishuHint: 'The App Secret lives only in the host credential service. The long connection needs no public address and reconnects after a restart.',
-    remoteFeishuOpenHelp: 'How to create a Feishu app',
-    remoteFeishuHideHelp: 'Hide steps',
-    remoteFeishuStepTemplate: 'Shortcut: if the developer console shows a "Create a Feishu agent app" template, start there — it presets the scopes and events, and you only add the callback in step 4 and publish.',
-    remoteFeishuStepApp: '1. Open the Feishu developer console, create an enterprise self-built app (the personal edition works and publishes instantly), and note its App ID and App Secret.',
-    remoteFeishuStepBot: '2. Add the Bot capability; grant im:message.p2p_msg:readonly (read DMs) and im:message:send_as_bot (send messages).',
-    remoteFeishuStepEvents: '3. Events & Callbacks → Event Configuration → Long Connection, then add im.message.receive_v1.',
-    remoteFeishuStepCallback: '4. On the same page, set Callback Configuration to Long Connection and add card.action.trigger (it is not in the event list).',
-    remoteFeishuStepPublish: '5. Create and publish a version; search for the bot in Feishu and send it a message.',
-    remoteFeishuOpenPlatform: 'Open the Feishu developer console',
+    remoteFeishuGuideTitle: 'Setup guide (about 3 minutes)',
+    remoteFeishuGuideShow: 'Show guide',
+    remoteFeishuGuideHide: 'Hide guide',
+    remoteFeishuGuideStepCreate: 'Create the app',
+    remoteFeishuGuideCreateHint: 'Create an enterprise self-built app (the personal edition publishes instantly), then paste its App ID and App Secret above.',
+    remoteFeishuGuideOpenConsole: 'Open the developer console',
+    remoteFeishuGuideStepBot: 'Enable the bot and scopes',
+    remoteFeishuGuideBotHint: 'Add the Bot capability; under Permissions use Import and paste the copied list.',
+    remoteFeishuGuidePermissions: 'Permissions',
+    remoteFeishuGuideCopyScopes: 'Copy scope list',
+    remoteFeishuGuideCopied: 'Copied',
+    remoteFeishuGuideCopyFailed: 'The browser blocked automatic copying; select the list below and paste it into Feishu’s bulk import.',
+    remoteFeishuGuideStepEvents: 'Subscribe to events (long connection)',
+    remoteFeishuGuideEventsHint: 'Set Event Configuration to Long Connection, then add im.message.receive_v1.',
+    remoteFeishuGuideEventConfig: 'Event configuration',
+    remoteFeishuGuideStepCallback: 'Configure the card callback (long connection)',
+    remoteFeishuGuideCallbackHint: 'Switch to Callback Configuration, choose Long Connection there too, and add card.action.trigger (it is not in the event list).',
+    remoteFeishuGuideCallbackConfig: 'Callback configuration',
+    remoteFeishuGuideStepPublish: 'Publish a version',
+    remoteFeishuGuidePublishHint: 'Create and publish a version; scopes and events only take effect after that.',
+    remoteFeishuGuideOpenApp: 'Open the app',
+    remoteFeishuGuideNeedId: 'Fill in the App ID above and steps 2–5 will link straight to this app’s pages.',
+    remoteFeishuGuideConnectHint: 'When steps 1–5 are done, come back and press Connect.',
+    remoteFeishuNoChatHint: 'No message received yet. Search for the bot in Feishu and say hello; if it stays silent, check that the version is published and both events and callbacks use the long connection.',
     remoteStatus_stopped: 'Not enabled',
     remoteStatus_unbound: 'Not connected',
     remoteStatus_running: 'Connected',

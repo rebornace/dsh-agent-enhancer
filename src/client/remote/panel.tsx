@@ -26,6 +26,46 @@ export interface RemoteSettingsPanelProps {
 
 const POLL_MS = 3_000
 
+/**
+ * Scopes pasted into the Feishu console's bulk import. `p2p_msg` receives the
+ * direct messages, `send_as_bot` answers them, and `readonly` is what the card
+ * callback needs before a tapped button is delivered.
+ */
+const FEISHU_SCOPES = [
+  '{',
+  '  "scopes": {',
+  '    "tenant": [',
+  '      "im:message.p2p_msg:readonly",',
+  '      "im:message:send_as_bot",',
+  '      "im:message.readonly"',
+  '    ],',
+  '    "user": []',
+  '  }',
+  '}',
+].join('\n')
+
+async function copyPlainText(text: string): Promise<void> {
+  const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard
+  if (clipboard !== undefined && typeof clipboard.writeText === 'function') {
+    try {
+      await clipboard.writeText(text)
+      return
+    } catch {
+      // A webview can refuse the clipboard API; fall back to a selection copy.
+    }
+  }
+  if (typeof document === 'undefined') throw new Error('clipboard unavailable')
+  const area = document.createElement('textarea')
+  area.value = text
+  area.style.position = 'fixed'
+  area.style.opacity = '0'
+  document.body.appendChild(area)
+  area.select()
+  const copied = typeof document.execCommand === 'function' && document.execCommand('copy')
+  document.body.removeChild(area)
+  if (!copied) throw new Error('copy failed')
+}
+
 function shortChatId(chatId: string): string {
   if (chatId.length <= 12) return chatId
   return `${chatId.slice(0, 6)}…${chatId.slice(-4)}`
@@ -52,7 +92,7 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
   const [showBotFather, setShowBotFather] = useState(false)
   const [appId, setAppId] = useState('')
   const [appSecret, setAppSecret] = useState('')
-  const [showFeishuHelp, setShowFeishuHelp] = useState(false)
+  const [showFeishuHelp, setShowFeishuHelp] = useState(true)
   const remoteRef = useRef(getRemote)
   remoteRef.current = getRemote
 
@@ -274,6 +314,24 @@ function ChannelCard(props: ChannelCardProps) {
   const waiting = login?.phase === 'waiting' && qrUrl !== undefined
   const connected = phase === 'running'
   const devices = channel?.devices ?? []
+  const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
+  const rawAppId = (props.appId ?? '').trim()
+  const appBase = rawAppId.startsWith('cli_')
+    ? `https://open.feishu.cn/app/${encodeURIComponent(rawAppId)}`
+    : undefined
+  const copyScopes = (): void => {
+    void copyPlainText(FEISHU_SCOPES)
+      .then(() => {
+        setCopyFailed(false)
+        setCopied(true)
+        setTimeout(() => { setCopied(false) }, 1_800)
+      })
+      .catch(() => {
+        setCopyFailed(true)
+        setCopied(false)
+      })
+  }
 
   return (
     <section className={styles.remoteChannelCard} data-channel={id}>
@@ -413,6 +471,139 @@ function ChannelCard(props: ChannelCardProps) {
               if (event.key === 'Enter') props.onConnectApp?.()
             }}
           />
+        </div>
+      ) : null}
+
+      {id === 'feishu' && !connected ? (
+        <div className={styles.remoteFeishuGuide}>
+          <div className={styles.remoteFeishuGuideHeader}>
+            <span className={styles.remoteFeishuGuideTitle}>{t('remoteFeishuGuideTitle')}</span>
+            <button
+              type="button"
+              className={styles.settingsLink}
+              disabled={disabled}
+              onClick={props.onToggleFeishuHelp}
+            >
+              {props.showFeishuHelp ? t('remoteFeishuGuideHide') : t('remoteFeishuGuideShow')}
+            </button>
+          </div>
+          {props.showFeishuHelp ? (
+            <>
+              <ol className={styles.remoteFeishuSteps}>
+                <li className={styles.remoteFeishuStep}>
+                  <span className={styles.remoteFeishuStepIndex}>1</span>
+                  <div className={styles.remoteFeishuStepBody}>
+                    <span className={styles.remoteFeishuStepTitle}>{t('remoteFeishuGuideStepCreate')}</span>
+                    <span className={styles.remoteHint}>{t('remoteFeishuGuideCreateHint')}</span>
+                    <div className={styles.remoteFeishuStepActions}>
+                      <a
+                        className={styles.settingsLink}
+                        href="https://open.feishu.cn/app"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {t('remoteFeishuGuideOpenConsole')}
+                      </a>
+                    </div>
+                  </div>
+                </li>
+                <li className={styles.remoteFeishuStep}>
+                  <span className={styles.remoteFeishuStepIndex}>2</span>
+                  <div className={styles.remoteFeishuStepBody}>
+                    <span className={styles.remoteFeishuStepTitle}>{t('remoteFeishuGuideStepBot')}</span>
+                    <span className={styles.remoteHint}>{t('remoteFeishuGuideBotHint')}</span>
+                    <div className={styles.remoteFeishuStepActions}>
+                      {appBase === undefined ? null : (
+                        <a
+                          className={styles.settingsLink}
+                          href={`${appBase}/auth`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {t('remoteFeishuGuidePermissions')}
+                        </a>
+                      )}
+                      <button type="button" className={styles.settingsLink} onClick={copyScopes}>
+                        {copied ? t('remoteFeishuGuideCopied') : t('remoteFeishuGuideCopyScopes')}
+                      </button>
+                    </div>
+                  </div>
+                </li>
+                <li className={styles.remoteFeishuStep}>
+                  <span className={styles.remoteFeishuStepIndex}>3</span>
+                  <div className={styles.remoteFeishuStepBody}>
+                    <span className={styles.remoteFeishuStepTitle}>{t('remoteFeishuGuideStepEvents')}</span>
+                    <span className={styles.remoteHint}>{t('remoteFeishuGuideEventsHint')}</span>
+                    <div className={styles.remoteFeishuStepActions}>
+                      {appBase === undefined ? null : (
+                        <a
+                          className={styles.settingsLink}
+                          href={`${appBase}/event?tab=event`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {t('remoteFeishuGuideEventConfig')}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </li>
+                <li className={styles.remoteFeishuStep}>
+                  <span className={styles.remoteFeishuStepIndex}>4</span>
+                  <div className={styles.remoteFeishuStepBody}>
+                    <span className={styles.remoteFeishuStepTitle}>{t('remoteFeishuGuideStepCallback')}</span>
+                    <span className={styles.remoteHint}>{t('remoteFeishuGuideCallbackHint')}</span>
+                    <div className={styles.remoteFeishuStepActions}>
+                      {appBase === undefined ? null : (
+                        <a
+                          className={styles.settingsLink}
+                          href={`${appBase}/event?tab=callback`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {t('remoteFeishuGuideCallbackConfig')}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </li>
+                <li className={styles.remoteFeishuStep}>
+                  <span className={styles.remoteFeishuStepIndex}>5</span>
+                  <div className={styles.remoteFeishuStepBody}>
+                    <span className={styles.remoteFeishuStepTitle}>{t('remoteFeishuGuideStepPublish')}</span>
+                    <span className={styles.remoteHint}>{t('remoteFeishuGuidePublishHint')}</span>
+                    <div className={styles.remoteFeishuStepActions}>
+                      {appBase === undefined ? null : (
+                        <a
+                          className={styles.settingsLink}
+                          href={appBase}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {t('remoteFeishuGuideOpenApp')}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              </ol>
+              {appBase === undefined ? (
+                <p className={styles.remoteHint}>{t('remoteFeishuGuideNeedId')}</p>
+              ) : null}
+              {copyFailed ? (
+                <>
+                  <p className={styles.remoteHint}>{t('remoteFeishuGuideCopyFailed')}</p>
+                  <pre className={styles.remoteFeishuScopes}>{FEISHU_SCOPES}</pre>
+                </>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {id === 'feishu' && !connected ? (
+        <>
+          <p className={styles.remoteHint}>{t('remoteFeishuHint')}</p>
           <div className={styles.remoteActions}>
             <button
               type="button"
@@ -422,43 +613,9 @@ function ChannelCard(props: ChannelCardProps) {
             >
               {t('remoteFeishuConnect')}
             </button>
+            <span className={styles.remoteHint}>{t('remoteFeishuGuideConnectHint')}</span>
           </div>
-        </div>
-      ) : null}
-
-      {id === 'feishu' && !connected ? (
-        <p className={styles.remoteHint}>{t('remoteFeishuHint')}</p>
-      ) : null}
-
-      {id === 'feishu' && !connected ? (
-        <div className={styles.remoteBotFather}>
-          <button
-            type="button"
-            className={styles.settingsLink}
-            disabled={disabled}
-            onClick={props.onToggleFeishuHelp}
-          >
-            {props.showFeishuHelp ? t('remoteFeishuHideHelp') : t('remoteFeishuOpenHelp')}
-          </button>
-          {props.showFeishuHelp ? (
-            <div className={styles.remoteQr}>
-              <p className={styles.remoteHint}>{t('remoteFeishuStepTemplate')}</p>
-              <p className={styles.remoteHint}>{t('remoteFeishuStepApp')}</p>
-              <p className={styles.remoteHint}>{t('remoteFeishuStepBot')}</p>
-              <p className={styles.remoteHint}>{t('remoteFeishuStepEvents')}</p>
-              <p className={styles.remoteHint}>{t('remoteFeishuStepCallback')}</p>
-              <p className={styles.remoteHint}>{t('remoteFeishuStepPublish')}</p>
-              <a
-                className={styles.settingsLink}
-                href="https://open.feishu.cn/app"
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t('remoteFeishuOpenPlatform')}
-              </a>
-            </div>
-          ) : null}
-        </div>
+        </>
       ) : null}
 
       {connected ? (
@@ -480,6 +637,10 @@ function ChannelCard(props: ChannelCardProps) {
           <p className={styles.remoteHint}>{t('remoteBindCodeHint')}</p>
           <p className={styles.remoteHint}>{t('remoteBindCodeExpires')}</p>
         </div>
+      ) : null}
+
+      {id === 'feishu' && connected && devices.length === 0 ? (
+        <p className={styles.remoteHint}>{t('remoteFeishuNoChatHint')}</p>
       ) : null}
 
       <div className={styles.remoteDevicesBlock}>

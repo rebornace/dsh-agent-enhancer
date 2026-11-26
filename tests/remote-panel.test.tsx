@@ -128,6 +128,49 @@ describe('RemoteSettingsPanel', () => {
     expect(await screen.findByText('DSH 助手')).toBeTruthy()
   })
 
+  it('links each Feishu guide step to the app once the App ID is entered', async () => {
+    const { get } = harness(status())
+    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
+    expect(await screen.findByText('remoteFeishuGuideNeedId')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('remoteFeishuAppId'), { target: { value: 'cli_abc123' } })
+    await waitFor(() => {
+      expect(document.querySelector('a[href="https://open.feishu.cn/app/cli_abc123/auth"]')).toBeTruthy()
+    })
+    expect(document.querySelector('a[href="https://open.feishu.cn/app/cli_abc123/event?tab=event"]')).toBeTruthy()
+    expect(document.querySelector('a[href="https://open.feishu.cn/app/cli_abc123/event?tab=callback"]')).toBeTruthy()
+    expect(document.querySelector('a[href="https://open.feishu.cn/app/cli_abc123"]')).toBeTruthy()
+    expect(screen.queryByText('remoteFeishuGuideNeedId')).toBeNull()
+  })
+
+  it('copies the Feishu scope list from the guide', async () => {
+    const writeText = vi.fn(async (_text: string) => {})
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+    const { get } = harness(status())
+    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
+    fireEvent.click(await screen.findByText('remoteFeishuGuideCopyScopes'))
+    await waitFor(() => { expect(writeText).toHaveBeenCalledOnce() })
+    const payload = String(writeText.mock.calls[0]?.[0])
+    expect(payload).toContain('im:message.p2p_msg:readonly')
+    expect(payload).toContain('im:message:send_as_bot')
+    expect(payload).toContain('im:message.readonly')
+    expect(await screen.findByText('remoteFeishuGuideCopied')).toBeTruthy()
+  })
+
+  it('shows the scope list when the clipboard is blocked', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn(async () => { throw new Error('blocked') }) },
+      configurable: true,
+    })
+    const { get } = harness(status())
+    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
+    fireEvent.click(await screen.findByText('remoteFeishuGuideCopyScopes'))
+    expect(await screen.findByText('remoteFeishuGuideCopyFailed')).toBeTruthy()
+    expect(screen.getByText(/"im:message\.p2p_msg:readonly"/)).toBeTruthy()
+  })
+
   it('shows the WeChat QR after a login begins', async () => {
     const { remote, get } = harness(status())
     render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
