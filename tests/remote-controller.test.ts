@@ -12,6 +12,8 @@ const textOnly: ChannelCapabilities = {
   privateOnly: true,
 }
 
+const rich: ChannelCapabilities = { ...textOnly, buttons: true }
+
 function setup(codes: readonly string[] = ['a3f9', 'k2m7', 'q7t2']) {
   const queue = [...codes]
   const clock = { now: 0 }
@@ -84,6 +86,36 @@ describe('RemoteController', () => {
     expect(controller.focus('chat-1')).toBe('s2')
     controller.setFocus('chat-2', 'gone')
     expect(controller.focus('chat-2')).toBeUndefined()
+  })
+
+  it('adds task-picker buttons only on channels that render them', async () => {
+    const { controller } = setup()
+    seed(controller)
+    const reply = await controller.execute('chat-1', '任务', rich)
+    expect(reply.buttons?.map(button => button.command)).toEqual(['切 1', '切 2'])
+    expect((await controller.execute('chat-1', '任务', textOnly)).buttons).toBeUndefined()
+  })
+
+  it('turns a pending card into decision buttons', async () => {
+    const { controller } = setup()
+    seed(controller)
+    const approval = controller.askApproval('s1', { prompt: '写入 report.xlsx' })
+    const reply = await controller.execute('chat-1', '详情', rich)
+    expect(reply.buttons?.map(button => button.label)).toEqual(['批准', '拒绝', '任务'])
+    expect(reply.buttons?.[0]?.command).toBe('批准 a3f9')
+    controller.releasePending()
+    await approval.wait
+  })
+
+  it('turns question options into answer buttons', async () => {
+    const { controller } = setup()
+    seed(controller)
+    const question = controller.askQuestion('s1', { prompt: '用哪个模板？', options: ['简洁', '详细'] })
+    const reply = await controller.execute('chat-1', '详情', rich)
+    expect(reply.buttons?.map(button => button.label)).toEqual(['简洁', '详细', '任务'])
+    expect(reply.buttons?.[1]?.command).toBe('回答 a3f9 详细')
+    controller.releasePending()
+    await question.wait
   })
 
   it('releases held asks when the channel is torn down', async () => {

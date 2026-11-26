@@ -1,6 +1,7 @@
 import { routeAnswer, routeDecision } from './approval-router.ts'
 import { parseCommand } from './commands.ts'
-import { renderTaskCard, renderTaskList } from './render.ts'
+import { listActionButtons, renderTaskCard, renderTaskList, taskActionButtons } from './render.ts'
+import type { ChannelButton } from './render.ts'
 import { TaskBoard } from './task-board.ts'
 import type { TurnEndReason } from './task-board.ts'
 import { createCode, createPending } from './types.ts'
@@ -33,6 +34,8 @@ export interface AskHandle<T> {
 
 export interface Reply {
   readonly text: string
+  /** Inline actions for channels with buttons; omitted for text-only channels. */
+  readonly buttons?: readonly ChannelButton[]
 }
 
 export interface RemoteControllerOptions {
@@ -229,13 +232,18 @@ export class RemoteController {
   async execute(chatId: string, input: string, capabilities: ChannelCapabilities, at = this.now()): Promise<Reply> {
     const command = parseCommand(input)
     if (command.kind === 'invalid') return { text: this.invalidText(command.reason) }
-    if (command.kind === 'tasks') return { text: this.renderList(capabilities) }
+    if (command.kind === 'tasks') {
+      const text = this.renderList(capabilities)
+      if (!capabilities.buttons) return { text }
+      const buttons = listActionButtons(this.tasks(), this.numbers)
+      return buttons.length === 0 ? { text } : { text, buttons }
+    }
 
     if (command.kind === 'switch') {
       const target = this.byNumber(command.number)
       if (target === undefined) return { text: `没有编号 ${command.number} 的任务。回「任务」看列表。` }
       this.focusByChat.set(chatId, target.id)
-      return { text: `已切到 【${command.number}】${target.title}` }
+      return this.withTaskButtons(`已切到 【${command.number}】${target.title}`, target.id, capabilities)
     }
 
     if (command.kind === 'detail') {
@@ -244,7 +252,7 @@ export class RemoteController {
         : this.byNumber(command.number)
       if (target === undefined) return { text: '没有可显示的任务。回「任务」看列表。' }
       const card = this.renderCard(target.id, capabilities)
-      return { text: card ?? '任务已不存在。' }
+      return this.withTaskButtons(card ?? '任务已不存在。', target.id, capabilities)
     }
 
     if (command.kind === 'approve' || command.kind === 'reject') {
@@ -273,7 +281,10 @@ export class RemoteController {
       }
       if (paused) this.board.pause(target.id)
       else this.board.resume(target.id, at)
-      return { text: paused ? `已暂停【${this.numbers.get(target.id) ?? 0}】${target.title}` : `已继续【${this.numbers.get(target.id) ?? 0}】${target.title}` }
+      const text = paused
+        ? `已暂停【${this.numbers.get(target.id) ?? 0}】${target.title}`
+        : `已继续【${this.numbers.get(target.id) ?? 0}】${target.title}`
+      return this.withTaskButtons(text, target.id, capabilities)
     }
 
     // Plain text goes to the focused task.
@@ -287,7 +298,20 @@ export class RemoteController {
       return { text: `发送失败：${error instanceof Error ? error.message : String(error)}` }
     }
     this.markRemotePrompt(target.id)
-    return { text: `已发给【${this.numbers.get(target.id) ?? 0}】${target.title}` }
+    return this.withTaskButtons(
+      `已发给【${this.numbers.get(target.id) ?? 0}】${target.title}`,
+      target.id,
+      capabilities,
+    )
+  }
+
+  /** Attach a task's actions when the channel can render buttons. */
+  private withTaskButtons(text: string, id: TaskId, capabilities: ChannelCapabilities): Reply {
+    if (!capabilities.buttons) return { text }
+    const task = this.board.get(id)
+    if (task === undefined) return { text }
+    const buttons = taskActionButtons(task)
+    return buttons.length === 0 ? { text } : { text, buttons }
   }
 
   private decide(kind: 'approve' | 'reject', code: string | undefined, at: number): Reply {

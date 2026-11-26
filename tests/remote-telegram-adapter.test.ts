@@ -53,7 +53,11 @@ function harness(options: {
 }) {
   const controllerInstance = controller()
   const bindings = options.bindings ?? new BindingStore({ filePath: null, now: () => 0 })
-  const sent: { chatId: string; text: string }[] = []
+  const sent: {
+    chatId: string
+    text: string
+    buttons?: readonly { label: string; command: string }[]
+  }[] = []
   const pages = [...options.pages]
   let adapter: TelegramAdapter
   const getUpdates = vi.fn(async (cursor?: string) => {
@@ -63,8 +67,17 @@ function harness(options: {
     }
     return pages.shift() ?? { cursor: '', messages: [] }
   })
-  const sendText = vi.fn(async (_credentials: unknown, _chatId: string, text: string) => {
-    sent.push({ chatId: _chatId, text })
+  const sendText = vi.fn(async (
+    _credentials: unknown,
+    _chatId: string,
+    text: string,
+    sendOptions?: { readonly buttons?: readonly { label: string; command: string }[] },
+  ) => {
+    sent.push({
+      chatId: _chatId,
+      text,
+      ...(sendOptions?.buttons === undefined ? {} : { buttons: sendOptions.buttons }),
+    })
     return 1
   })
   const answerCallbackQuery = vi.fn(async () => {})
@@ -95,6 +108,18 @@ describe('TelegramAdapter', () => {
     expect(sent).toHaveLength(1)
     expect(sent[0]?.chatId).toBe('555')
     expect(sent[0]?.text).toContain('1 周报导出')
+  })
+
+  it('forwards inline buttons when the channel supports them', async () => {
+    const bindings = new BindingStore({ filePath: null, now: () => 0 })
+    bindings.bind('555', 'telegram')
+    const { adapter, sent } = harness({
+      pages: [{ cursor: '2', messages: [message('任务')] }],
+      bindings,
+      capabilities: { ...textOnly, buttons: true },
+    })
+    await adapter.run()
+    expect(sent[0]?.buttons?.map(button => button.command)).toEqual(['切 1'])
   })
 
   it('runs a tapped inline button and acknowledges the callback', async () => {

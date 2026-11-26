@@ -17,6 +17,68 @@ export interface TaskAction {
   readonly command: string
 }
 
+/** One inline button; `command` is exactly what the user would type. */
+export interface ChannelButton {
+  readonly label: string
+  readonly command: string
+}
+
+export interface TaskAction extends ChannelButton {
+  readonly id: 'approve' | 'reject' | 'detail'
+}
+
+function clipLabel(value: string, max = 22): string {
+  const text = value.trim()
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`
+}
+
+/** Actions for the card of one task, as tappable buttons. */
+export function taskActionButtons(task: Task): readonly ChannelButton[] {
+  if (task.pending !== undefined) {
+    const code = task.pending.code
+    if (task.pending.kind === 'approval') {
+      return [
+        { label: '批准', command: `批准 ${code}` },
+        { label: '拒绝', command: `拒绝 ${code}` },
+        { label: '任务', command: '任务' },
+      ]
+    }
+    const options = (task.pending.options ?? []).slice(0, 6).map(option => ({
+      label: clipLabel(option),
+      command: `回答 ${code} ${option}`,
+    }))
+    return [...options, { label: '任务', command: '任务' }]
+  }
+  const actions: ChannelButton[] = []
+  if (task.state === 'running' || task.state === 'waiting') {
+    actions.push({ label: '暂停', command: '暂停' })
+  } else if (task.state === 'paused') {
+    actions.push({ label: '继续', command: '继续' })
+  }
+  actions.push({ label: '任务', command: '任务' })
+  return actions
+}
+
+/** Task-picker buttons for the list: active tasks first, then most recent. */
+export function listActionButtons(
+  tasks: readonly Task[],
+  numbers: ReadonlyMap<string, number>,
+): readonly ChannelButton[] {
+  const active = tasks.filter(task =>
+    task.state === 'running' || task.state === 'waiting' || task.state === 'paused')
+  const rest = tasks
+    .filter(task => !active.includes(task))
+    .sort((left, right) => right.lastActivityAt - left.lastActivityAt)
+  const chosen = [...active, ...rest].slice(0, 8)
+  return chosen.map(task => {
+    const number = numbers.get(task.id) ?? 0
+    return {
+      label: clipLabel(`${number} ${task.title}`),
+      command: `切 ${number}`,
+    }
+  })
+}
+
 /** Actions for a pending decision. Buttons are a shortcut for the same words. */
 export function decisionActions(pending: Pending): readonly TaskAction[] {
   return [
@@ -75,10 +137,12 @@ export function renderTaskList(
     return `${number} ${task.title}  ${STATE_LABEL[task.state]}${marker}`
   })
   const pending = tasks.find(task => task.pending !== undefined)
-  const hint = pending === undefined
-    ? '回复「切 2」切换任务'
-    : capabilities.buttons
-      ? '点消息里的按钮处理待办，或回复「切 2」切换任务'
+  const hint = capabilities.buttons
+    ? pending === undefined
+      ? '点下方任务按钮切换，或回复「切 2」'
+      : '点消息里的按钮处理待办，或点任务按钮切换'
+    : pending === undefined
+      ? '回复「切 2」切换任务'
       : '回复「批准 <编号>」处理待办，或回复「切 2」切换任务'
   return [...lines, '', hint].join('\n')
 }

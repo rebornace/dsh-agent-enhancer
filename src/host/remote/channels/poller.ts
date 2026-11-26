@@ -172,16 +172,26 @@ export class ChannelPoller {
     const reply = await this.options.controller.execute(chatId, text, this.options.capabilities)
     // Follow the chat's choice across replies and restarts.
     this.options.bindings.setFocus(chatId, this.options.controller.focus(chatId))
-    await this.reply(chatId, reply.text, message.contextToken)
+    await this.reply(chatId, reply.text, message.contextToken, reply.buttons)
   }
 
-  private async reply(chatId: string, text: string, contextToken?: string): Promise<void> {
+  private async reply(
+    chatId: string,
+    text: string,
+    contextToken?: string,
+    buttons?: readonly { readonly label: string; readonly command: string }[],
+  ): Promise<void> {
     const chunks = splitForChannel(text, this.options.capabilities.maxChars)
-    for (const chunk of chunks) {
+    for (const [index, chunk] of chunks.entries()) {
       await this.options.transport.sendText(
         chatId,
         chunk,
-        contextToken === undefined ? {} : { contextToken },
+        {
+          ...(contextToken === undefined ? {} : { contextToken }),
+          ...(index === chunks.length - 1 && buttons !== undefined && buttons.length > 0
+            ? { buttons }
+            : {}),
+        },
       )
     }
   }
