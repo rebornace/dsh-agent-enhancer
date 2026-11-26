@@ -122,7 +122,11 @@ export class WeixinChannel {
   }
 
   /** Push a ready-made text; used for notices, not command replies. */
-  async send(chatId: string, text: string): Promise<void> {
+  async send(
+    chatId: string,
+    text: string,
+    _buttons?: readonly { readonly label: string; readonly command: string }[],
+  ): Promise<void> {
     const credentials = this.credentialsValue
     const adapter = this.adapter
     if (this.phaseValue !== 'running' || credentials === undefined || adapter === undefined) return

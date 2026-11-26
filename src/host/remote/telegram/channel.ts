@@ -132,12 +132,22 @@ export class TelegramChannel {
     this.phaseValue = 'off'
   }
 
-  async send(chatId: string, text: string): Promise<void> {
+  async send(
+    chatId: string,
+    text: string,
+    buttons?: readonly { readonly label: string; readonly command: string }[],
+  ): Promise<void> {
     const credentials = this.credentialsValue
     if (this.phaseValue !== 'running' || credentials === undefined) return
     const chunks = splitForChannel(text, this.options.capabilities.maxChars)
-    for (const chunk of chunks) {
-      await this.transport.sendText(credentials, chatId, chunk)
+    for (const [index, chunk] of chunks.entries()) {
+      // Buttons belong to the last chunk so a split card does not duplicate them.
+      await this.transport.sendText(
+        credentials,
+        chatId,
+        chunk,
+        index === chunks.length - 1 && buttons !== undefined && buttons.length > 0 ? { buttons } : {},
+      )
     }
   }
 

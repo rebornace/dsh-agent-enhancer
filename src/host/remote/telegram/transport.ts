@@ -1,5 +1,5 @@
 import { ChannelAuthError } from '../channels/types.ts'
-import type { InboundItem, UpdatesPage } from '../channels/types.ts'
+import type { InboundItem, InboundMessage, UpdatesPage } from '../channels/types.ts'
 
 /**
  * Telegram Bot API transport.
@@ -37,6 +37,8 @@ const DEFAULT_API_BASE = 'https://api.telegram.org'
 const DEFAULT_POLL_TIMEOUT_MS = 35_000
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
 const LONG_POLL_SECONDS = 25
+/** Telegram rejects callback_data longer than 64 bytes. */
+const CALLBACK_DATA_MAX_BYTES = 64
 
 interface TelegramResponse {
   readonly ok?: boolean
@@ -64,18 +66,51 @@ function itemsOf(message: Record<string, unknown>): InboundItem[] {
   return [{ kind: 'other' }]
 }
 
-function parseUpdate(update: unknown): { readonly cursorId: number; readonly message?: import('../channels/types.ts').InboundMessage } {
+function privateChatId(chat: unknown): string | undefined {
+  if (chat === null || typeof chat !== 'object') return undefined
+  const record = chat as Record<string, unknown>
+  if (record.type !== 'private') return undefined
+  return typeof record.id === 'number' ? String(record.id) : undefined
+}
+
+function parseCallback(update: Record<string, unknown>): InboundMessage | undefined {
+  const query = update.callback_query
+  if (query === null || typeof query !== 'object') return undefined
+  const record = query as Record<string, unknown>
+  const id = typeof record.id === 'string' ? record.id : undefined
+  const data = typeof record.data === 'string' ? record.data : undefined
+  const message = record.message
+  if (id === undefined || data === undefined || message === null || typeof message !== 'object') {
+    return undefined
+  }
+  const messageRecord = message as Record<string, unknown>
+  const chatId = privateChatId(messageRecord.chat)
+  if (chatId === undefined) return undefined
+  const from = record.from
+  const fromRecord = from !== null && typeof from === 'object' ? from as Record<string, unknown> : {}
+  return {
+    seq: typeof messageRecord.message_id === 'number' ? messageRecord.message_id : 0,
+    messageId: typeof messageRecord.message_id === 'number' ? messageRecord.message_id : 0,
+    fromUserId: chatId,
+    toUserId: typeof fromRecord.id === 'number' ? String(fromRecord.id) : chatId,
+    createdAt: typeof messageRecord.date === 'number' ? messageRecord.date * 1_000 : 0,
+    items: [{ kind: 'text', text: data }],
+    callbackQueryId: id,
+  }
+}
+
+function parseUpdate(update: unknown): { readonly cursorId: number; readonly message?: InboundMessage } {
   if (update === null || typeof update !== 'object') return { cursorId: 0 }
   const record = update as Record<string, unknown>
   const updateId = typeof record.update_id === 'number' ? record.update_id : 0
+  const callback = parseCallback(record)
+  if (callback !== undefined) return { cursorId: updateId, message: callback }
   const message = record.message
   if (message === null || typeof message !== 'object') return { cursorId: updateId }
   const item = message as Record<string, unknown>
-  const chat = item.chat
-  const chatRecord = chat !== null && typeof chat === 'object' ? chat as Record<string, unknown> : {}
-  const chatId = typeof chatRecord.id === 'number' ? String(chatRecord.id) : undefined
+  const chatId = privateChatId(item.chat)
   // Bound chats are personal; a group would be one shared control surface.
-  if (chatId === undefined || chatRecord.type !== 'private') return { cursorId: updateId }
+  if (chatId === undefined) return { cursorId: updateId }
   const from = item.from
   const fromRecord = from !== null && typeof from === 'object' ? from as Record<string, unknown> : {}
   const fromId = typeof fromRecord.id === 'number' ? String(fromRecord.id) : chatId
@@ -175,12 +210,12 @@ export class TelegramTransport {
   async getUpdates(credentials: TelegramCredentials, cursor = ''): Promise<UpdatesPage> {
     const body: Record<string, unknown> = {
       timeout: LONG_POLL_SECONDS,
-      allowed_updates: ['message'],
+      allowed_updates: ['message', 'callback_query'],
     }
     if (cursor !== '') body.offset = Number(cursor)
     const result = await this.call(credentials.token, 'getUpdates', body, this.pollTimeoutMs)
     const updates = Array.isArray(result) ? result : []
-    const messages = []
+    const messages: InboundMessage[] = []
     let next = cursor === '' ? 0 : Number(cursor)
     for (const update of updates) {
       const parsed = parseUpdate(update)
@@ -190,15 +225,44 @@ export class TelegramTransport {
     return { cursor: next === 0 ? cursor : String(next), messages }
   }
 
-  async sendText(credentials: TelegramCredentials, chatId: string, text: string): Promise<number> {
+  async sendText(
+    credentials: TelegramCredentials,
+    chatId: string,
+    text: string,
+    options: { readonly buttons?: readonly { readonly label: string; readonly command: string }[] } = {},
+  ): Promise<number> {
     if (chatId === '') throw new TelegramTransportError('invalid-recipient', '缺少接收者')
     if (text.trim() === '') throw new TelegramTransportError('empty-text', '要发送的文本为空')
-    const result = await this.call(credentials.token, 'sendMessage', {
+    const body: Record<string, unknown> = {
       chat_id: chatId,
       text,
       disable_web_page_preview: true,
-    }, this.requestTimeoutMs)
+    }
+    const buttons = (options.buttons ?? [])
+      .filter(button => Buffer.byteLength(button.command, 'utf8') <= CALLBACK_DATA_MAX_BYTES)
+    if (buttons.length > 0) {
+      // Two per row keeps short 批准/拒绝 pairs together.
+      const rows: { text: string; callback_data: string }[][] = []
+      for (let index = 0; index < buttons.length; index += 2) {
+        rows.push(buttons.slice(index, index + 2).map(button => ({
+          text: button.label,
+          callback_data: button.command,
+        })))
+      }
+      body.reply_markup = { inline_keyboard: rows }
+    }
+    const result = await this.call(credentials.token, 'sendMessage', body, this.requestTimeoutMs)
     const record = result !== null && typeof result === 'object' ? result as Record<string, unknown> : {}
     return typeof record.message_id === 'number' ? record.message_id : 0
+  }
+
+  /** Stop the spinner on a tapped inline button. */
+  async answerCallbackQuery(credentials: TelegramCredentials, callbackQueryId: string): Promise<void> {
+    await this.call(
+      credentials.token,
+      'answerCallbackQuery',
+      { callback_query_id: callbackQueryId },
+      this.requestTimeoutMs,
+    )
   }
 }

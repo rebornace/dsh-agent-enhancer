@@ -73,7 +73,7 @@ describe('TelegramTransport', () => {
     const page = await transport.getUpdates(credentials, '')
     expect(page.messages).toHaveLength(1)
     expect(page.messages[0]?.items).toEqual([{ kind: 'image' }])
-    expect(calls[0]?.body).toMatchObject({ timeout: 25, allowed_updates: ['message'] })
+    expect(calls[0]?.body).toMatchObject({ timeout: 25, allowed_updates: ['message', 'callback_query'] })
   })
 
   it('sends the cursor as the update offset', async () => {
@@ -106,6 +106,57 @@ describe('TelegramTransport', () => {
     const error = await transport.getUpdates(credentials, '').catch((cause: unknown) => cause)
     expect(error).toBeInstanceOf(TelegramTransportError)
     expect((error as TelegramTransportError).detail.retryAfterMs).toBe(3_000)
+  })
+
+  it('maps a tapped inline button to its command and keeps the query id', async () => {
+    const { fetchImpl } = fetchQueue([{
+      body: {
+        ok: true,
+        result: [{
+          update_id: 30,
+          callback_query: {
+            id: 'cb-1',
+            from: { id: 555 },
+            data: '批准 a3f9',
+            message: { message_id: 8, date: 1, chat: { id: 555, type: 'private' } },
+          },
+        }],
+      },
+    }])
+    const transport = new TelegramTransport({ fetchImpl })
+    const page = await transport.getUpdates(credentials, '')
+    expect(page.messages).toHaveLength(1)
+    expect(page.messages[0]?.items).toEqual([{ kind: 'text', text: '批准 a3f9' }])
+    expect(page.messages[0]?.callbackQueryId).toBe('cb-1')
+  })
+
+  it('sends inline buttons and drops callback data over 64 bytes', async () => {
+    const { fetchImpl, calls } = fetchQueue([{ body: { ok: true, result: { message_id: 1 } } }])
+    const transport = new TelegramTransport({ fetchImpl })
+    await transport.sendText(credentials, '555', '要写入文件', {
+      buttons: [
+        { label: '批准', command: '批准 a3f9' },
+        { label: '拒绝', command: '拒绝 a3f9' },
+        { label: '太长', command: 'x'.repeat(65) },
+      ],
+    })
+    const body = calls[0]?.body as {
+      reply_markup?: { inline_keyboard?: { text: string; callback_data: string }[][] }
+    }
+    expect(body.reply_markup?.inline_keyboard).toEqual([
+      [
+        { text: '批准', callback_data: '批准 a3f9' },
+        { text: '拒绝', callback_data: '拒绝 a3f9' },
+      ],
+    ])
+  })
+
+  it('answers a callback query to stop the spinner', async () => {
+    const { fetchImpl, calls } = fetchQueue([{ body: { ok: true, result: true } }])
+    const transport = new TelegramTransport({ fetchImpl })
+    await transport.answerCallbackQuery(credentials, 'cb-1')
+    expect(calls[0]?.url).toContain('/answerCallbackQuery')
+    expect(calls[0]?.body).toMatchObject({ callback_query_id: 'cb-1' })
   })
 
   it('rejects a malformed token before any request', async () => {

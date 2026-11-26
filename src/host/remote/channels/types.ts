@@ -23,6 +23,8 @@ export interface InboundMessage {
   readonly items: readonly InboundItem[]
   /** WeChat replies need the latest one; other platforms ignore it. */
   readonly contextToken?: string
+  /** Telegram callback query id; must be acknowledged to stop the spinner. */
+  readonly callbackQueryId?: string
 }
 
 export interface UpdatesPage {
@@ -32,15 +34,15 @@ export interface UpdatesPage {
 
 export interface OutboundOptions {
   readonly contextToken?: string
+  /** Inline action buttons; platforms without buttons ignore them. */
+  readonly buttons?: readonly { readonly label: string; readonly command: string }[]
 }
 
-/**
- * The only two calls a polling channel needs. Credentials are captured by the
- * closures the platform builds, so callers never see a token.
- */
 export interface ChannelTransport {
   getUpdates(cursor: string): Promise<UpdatesPage>
   sendText(chatId: string, text: string, options?: OutboundOptions): Promise<unknown>
+  /** Stop a Telegram callback spinner; no-op elsewhere. */
+  acknowledge?(callbackQueryId: string): Promise<void>
 }
 
 /** A transport failure that will not heal by retrying (bad or revoked token). */

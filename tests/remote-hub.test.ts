@@ -79,7 +79,12 @@ function harness(options: HarnessOptions) {
     get: (name: string) => (name === 'sessionController' ? sessionController : undefined),
   } as unknown as Context
 
-  const sent: { channel: 'weixin' | 'telegram'; chatId: string; text: string }[] = []
+  const sent: {
+    channel: 'weixin' | 'telegram'
+    chatId: string
+    text: string
+    buttons?: readonly { label: string; command: string }[]
+  }[] = []
   const weixinPages: UpdatesPage[] = []
   const telegramPages: UpdatesPage[] = []
 
@@ -89,8 +94,13 @@ function harness(options: HarnessOptions) {
     getUpdates: vi.fn(async (_credentials: unknown, cursor?: string) => (
       weixinPages.shift() ?? { cursor: cursor ?? '', messages: [] }
     )),
-    sendText: vi.fn(async (_credentials: unknown, chatId: string, text: string) => {
-      sent.push({ channel: 'weixin', chatId, text })
+    sendText: vi.fn(async (
+      _credentials: unknown,
+      chatId: string,
+      text: string,
+      options?: { readonly buttons?: readonly { label: string; command: string }[] },
+    ) => {
+      sent.push({ channel: 'weixin', chatId, text, ...(options?.buttons === undefined ? {} : { buttons: options.buttons }) })
       return 1
     }),
   } as unknown as WeixinTransport
@@ -100,8 +110,13 @@ function harness(options: HarnessOptions) {
     getUpdates: vi.fn(async (_credentials: unknown, cursor?: string) => (
       telegramPages.shift() ?? { cursor: cursor ?? '', messages: [] }
     )),
-    sendText: vi.fn(async (_credentials: unknown, chatId: string, text: string) => {
-      sent.push({ channel: 'telegram', chatId, text })
+    sendText: vi.fn(async (
+      _credentials: unknown,
+      chatId: string,
+      text: string,
+      options?: { readonly buttons?: readonly { label: string; command: string }[] },
+    ) => {
+      sent.push({ channel: 'telegram', chatId, text, ...(options?.buttons === undefined ? {} : { buttons: options.buttons }) })
       return 1
     }),
   } as unknown as TelegramTransport
@@ -211,6 +226,36 @@ describe('RemoteHub', () => {
     await until(() => sent.length >= 2)
     expect(sent.some(entry => entry.channel === 'weixin' && entry.text.includes('模型超时'))).toBe(true)
     expect(sent.some(entry => entry.channel === 'telegram' && entry.text.includes('模型超时'))).toBe(true)
+    hub.stop()
+  })
+
+  it('adds decision buttons on Telegram but not WeChat', async () => {
+    const { hub, sent, handlers, weixinPages, telegramPages } = harness({
+      weixin: { baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' },
+      telegram: { token: '123456:ABC-def_ghi' },
+    })
+    await hub.start()
+    const wx = hub.issueBindCode('weixin')
+    weixinPages.push({ cursor: 'c1', messages: [message('wx-chat', wx.code)] })
+    await until(() => hub.devices('weixin').length === 1)
+    const tg = hub.issueBindCode('telegram')
+    telegramPages.push({ cursor: 't1', messages: [message('tg-chat', tg.code)] })
+    await until(() => hub.devices('telegram').length === 1)
+
+    sent.length = 0
+    const onApproval = handlers.get('approval/request')
+    if (onApproval === undefined) throw new Error('missing approval/request handler')
+    onApproval({
+      agent: { session: { id: 's1' } },
+      toolName: 'write',
+      reason: '写入 report.xlsx',
+    } as never, (() => 'desktop') as never)
+
+    await until(() => sent.filter(entry => entry.text.includes('请求执行')).length === 2)
+    const telegram = sent.find(entry => entry.channel === 'telegram' && entry.text.includes('请求执行'))
+    const weixin = sent.find(entry => entry.channel === 'weixin' && entry.text.includes('请求执行'))
+    expect(telegram?.buttons?.map(button => button.label)).toEqual(['批准', '拒绝', '详情'])
+    expect(weixin?.buttons).toBeUndefined()
     hub.stop()
   })
 

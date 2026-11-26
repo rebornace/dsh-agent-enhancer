@@ -36,7 +36,16 @@ export class TelegramAdapter {
       channel: 'telegram',
       transport: {
         getUpdates: cursor => options.transport.getUpdates(options.credentials, cursor),
-        sendText: (chatId, text) => options.transport.sendText(options.credentials, chatId, text),
+        sendText: (chatId, text, sendOptions) => options.transport.sendText(
+          options.credentials,
+          chatId,
+          text,
+          sendOptions,
+        ),
+        acknowledge: callbackQueryId => options.transport.answerCallbackQuery(
+          options.credentials,
+          callbackQueryId,
+        ),
       },
       controller: options.controller,
       bindings: options.bindings,

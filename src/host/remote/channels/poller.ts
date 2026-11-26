@@ -125,6 +125,15 @@ export class ChannelPoller {
           await this.handle(message)
         } catch (error) {
           this.options.onError?.(error)
+        } finally {
+          // Telegram spins a tapped button until this call arrives.
+          if (message.callbackQueryId !== undefined) {
+            try {
+              await this.options.transport.acknowledge?.(message.callbackQueryId)
+            } catch (error) {
+              this.options.onError?.(error)
+            }
+          }
         }
       }
       if (page.messages.length === 0 && !this.stopped) {

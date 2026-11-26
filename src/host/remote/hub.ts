@@ -7,6 +7,7 @@ import type { RemoteController } from './controller.ts'
 import { installRemoteHostBridge } from './host-bridge.ts'
 import type { BridgeNotice, HostBridge } from './host-bridge.ts'
 import { createHostPorts } from './ports.ts'
+import { decisionActions } from './render.ts'
 import type { ChannelCapabilities } from './types.ts'
 import { TelegramChannel } from './telegram/channel.ts'
 import { createTelegramCredentialStore } from './telegram/credentials.ts'
@@ -36,7 +37,7 @@ export interface RemoteHubOptions {
 }
 
 const TELEGRAM_CAPABILITIES: ChannelCapabilities = {
-  buttons: false,
+  buttons: true,
   editMessage: false,
   threads: false,
   media: 'none',
@@ -327,7 +328,20 @@ export class RemoteHub {
         const answer = clip(notice.answer, binding.channel === 'telegram' ? 3_000 : 1_500)
         if (answer !== '') text += `\n\n${answer}`
       }
-      void channel.send(binding.chatId, text).catch(error => this.options.onError?.(error))
+      const task = controller.tasks().find(entry => entry.id === notice.sessionId)
+      const pending = task?.pending
+      let buttons: { label: string; command: string }[] | undefined
+      if (capabilities.buttons && pending !== undefined) {
+        if (pending.kind === 'approval') {
+          buttons = decisionActions(pending).map(action => ({ label: action.label, command: action.command }))
+        } else if (pending.options !== undefined && pending.options.length > 0) {
+          buttons = pending.options.map(option => ({
+            label: option,
+            command: `回答 ${pending.code} ${option}`,
+          }))
+        }
+      }
+      void channel.send(binding.chatId, text, buttons).catch(error => this.options.onError?.(error))
     }
   }
 

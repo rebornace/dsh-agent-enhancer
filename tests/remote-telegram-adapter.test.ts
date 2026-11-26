@@ -16,7 +16,10 @@ const textOnly: ChannelCapabilities = {
   privateOnly: true,
 }
 
-function message(text: string | undefined, options: { from?: string; voice?: boolean } = {}): InboundMessage {
+function message(
+  text: string | undefined,
+  options: { from?: string; voice?: boolean; callbackId?: string } = {},
+): InboundMessage {
   return {
     seq: 1,
     messageId: 1,
@@ -28,6 +31,7 @@ function message(text: string | undefined, options: { from?: string; voice?: boo
       : options.voice === true
         ? [{ kind: 'voice' as const, text }]
         : [{ kind: 'text' as const, text }],
+    ...(options.callbackId === undefined ? {} : { callbackQueryId: options.callbackId }),
   }
 }
 
@@ -63,10 +67,12 @@ function harness(options: {
     sent.push({ chatId: _chatId, text })
     return 1
   })
+  const answerCallbackQuery = vi.fn(async () => {})
   const transport = {
     getUpdates,
     sendText,
     validate: vi.fn(async () => ({ id: '42', username: 'dsh_bot' })),
+    answerCallbackQuery,
   } as unknown as TelegramTransport
   adapter = new TelegramAdapter({
     transport,
@@ -77,7 +83,7 @@ function harness(options: {
     sleep: async () => {},
     emptyPageDelayMs: 1,
   })
-  return { adapter, bindings, sent, getUpdates }
+  return { adapter, bindings, sent, getUpdates, answerCallbackQuery }
 }
 
 describe('TelegramAdapter', () => {
@@ -89,6 +95,18 @@ describe('TelegramAdapter', () => {
     expect(sent).toHaveLength(1)
     expect(sent[0]?.chatId).toBe('555')
     expect(sent[0]?.text).toContain('1 周报导出')
+  })
+
+  it('runs a tapped inline button and acknowledges the callback', async () => {
+    const bindings = new BindingStore({ filePath: null, now: () => 0 })
+    bindings.bind('555', 'telegram')
+    const { adapter, sent, answerCallbackQuery } = harness({
+      pages: [{ cursor: '2', messages: [message('任务', { callbackId: 'cb-1' })] }],
+      bindings,
+    })
+    await adapter.run()
+    expect(sent[0]?.text).toContain('周报导出')
+    expect(answerCallbackQuery).toHaveBeenCalledWith(expect.anything(), 'cb-1')
   })
 
   it('asks an unbound chat to pair first', async () => {
