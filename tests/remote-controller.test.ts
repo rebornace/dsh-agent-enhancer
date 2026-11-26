@@ -56,6 +56,36 @@ describe('RemoteController', () => {
     expect(controller.renderCard('s1', textOnly)).not.toContain('a3f9')
   })
 
+  it('focuses a lone waiting task when the chat has chosen nothing', async () => {
+    const { controller } = setup()
+    seed(controller)
+    controller.askApproval('s2', { prompt: '写入 report.xlsx' })
+
+    const reply = await controller.execute('chat-1', '先看下这个', textOnly)
+    expect(reply.text).toContain('网页重构')
+    expect(controller.focus('chat-1')).toBe('s2')
+  })
+
+  it('never steals a focus the chat chose explicitly', async () => {
+    const { controller } = setup()
+    seed(controller)
+    await controller.execute('chat-1', '切 1', textOnly)
+    controller.askApproval('s2', { prompt: '写入 report.xlsx' })
+
+    const reply = await controller.execute('chat-1', '再改一下', textOnly)
+    expect(reply.text).toContain('周报导出')
+    expect(controller.focus('chat-1')).toBe('s1')
+  })
+
+  it('restores a focus only when the task still exists', () => {
+    const { controller } = setup()
+    seed(controller)
+    controller.setFocus('chat-1', 's2')
+    expect(controller.focus('chat-1')).toBe('s2')
+    controller.setFocus('chat-2', 'gone')
+    expect(controller.focus('chat-2')).toBeUndefined()
+  })
+
   it('releases held asks when the channel is torn down', async () => {
     const { controller } = setup()
     seed(controller)

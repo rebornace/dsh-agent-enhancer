@@ -8,11 +8,17 @@ export interface ChatBinding {
   readonly chatId: string
   readonly channel: RemoteChannel
   readonly boundAt: number
+  /** Last task this chat chose; a stable session id, not a runtime handle. */
+  readonly focusSessionId?: string
 }
 
 interface FileShape {
   readonly version: 1
-  readonly chats: Record<string, { readonly channel: RemoteChannel; readonly boundAt: number }>
+  readonly chats: Record<string, {
+    readonly channel: RemoteChannel
+    readonly boundAt: number
+    readonly focusSessionId?: string
+  }>
 }
 
 export interface BindingStoreOptions {
@@ -34,9 +40,10 @@ function numericCode(): string {
 /**
  * Chat bindings plus the short-lived pairing codes.
  *
- * Only the chat rows are written to disk. Pairing codes are one-shot and live
- * in memory: a code that survives a restart is a code an attacker can wait
- * for. The file holds no tokens and no session handles.
+ * Only the chat rows are written to disk, including the last task each chat
+ * focused on (a session id, never a page/window handle). Pairing codes are
+ * one-shot and live in memory: a code that survives a restart is a code an
+ * attacker can wait for. The file holds no tokens.
  */
 export class BindingStore {
   private readonly chats = new Map<string, ChatBinding>()
@@ -82,6 +89,17 @@ export class BindingStore {
   unbindAll(): void {
     if (this.chats.size === 0) return
     this.chats.clear()
+    this.save()
+  }
+
+  /** Remember (or clear) the task this chat is following. */
+  setFocus(chatId: string, focusSessionId: string | undefined): void {
+    const existing = this.chats.get(chatId)
+    if (existing === undefined) return
+    if (existing.focusSessionId === focusSessionId) return
+    const { focusSessionId: _previous, ...rest } = existing
+    const next: ChatBinding = focusSessionId === undefined ? rest : { ...rest, focusSessionId }
+    this.chats.set(chatId, next)
     this.save()
   }
 
@@ -132,8 +150,14 @@ export class BindingStore {
       if (value === null || typeof value !== 'object') continue
       const channel = (value as { channel?: unknown }).channel
       const boundAt = (value as { boundAt?: unknown }).boundAt
+      const focus = (value as { focusSessionId?: unknown }).focusSessionId
       if (channel !== 'weixin') continue
-      this.chats.set(chatId, { chatId, channel, boundAt: typeof boundAt === 'number' ? boundAt : 0 })
+      this.chats.set(chatId, {
+        chatId,
+        channel,
+        boundAt: typeof boundAt === 'number' ? boundAt : 0,
+        ...(typeof focus === 'string' && focus !== '' ? { focusSessionId: focus } : {}),
+      })
     }
   }
 
@@ -144,7 +168,11 @@ export class BindingStore {
       version: FILE_VERSION,
       chats: Object.fromEntries([...this.chats].map(([chatId, binding]) => [
         chatId,
-        { channel: binding.channel, boundAt: binding.boundAt },
+        {
+          channel: binding.channel,
+          boundAt: binding.boundAt,
+          ...(binding.focusSessionId === undefined ? {} : { focusSessionId: binding.focusSessionId }),
+        },
       ])),
     }
     try {

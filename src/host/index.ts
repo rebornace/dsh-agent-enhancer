@@ -1836,6 +1836,13 @@ export function apply(ctx: Context, config: Config): void {
     }
   }
   void syncRemoteControl(settings().remoteControlEnabled)
+  sessionCleanup.register({
+    id: 'remote-control',
+    label: 'Remote control focus',
+    async purge(sessionId) {
+      remoteRuntime.forgetSession(sessionId)
+    },
+  })
 
   new AgentEnhancerService(ctx, models, {
       async summarize(range) {

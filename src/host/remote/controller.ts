@@ -206,6 +206,12 @@ export class RemoteController {
     return this.focusByChat.get(chatId)
   }
 
+  /** Restore a persisted focus; ignore ids the board no longer has. */
+  setFocus(chatId: string, id: TaskId): void {
+    if (this.board.get(id) === undefined) return
+    this.focusByChat.set(chatId, id)
+  }
+
   /**
    * Mark a session whose prompt came from the remote chat, so its turn end is
    * worth pushing back. A turn started at the desktop stays quiet.
@@ -351,6 +357,14 @@ export class RemoteController {
       const task = this.board.get(focused)
       if (task !== undefined) return { id: task.id, title: task.title }
       this.focusByChat.delete(chatId)
+    }
+    // No explicit focus: a single task waiting for the user is the obvious one.
+    const waiting = this.tasks().filter(task => task.pending !== undefined)
+    if (waiting.length === 1) {
+      const only = waiting[0]
+      if (only === undefined) return undefined
+      this.focusByChat.set(chatId, only.id)
+      return { id: only.id, title: only.title }
     }
     const all = this.tasks()
     if (all.length !== 1) return undefined

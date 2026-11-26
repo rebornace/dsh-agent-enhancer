@@ -173,6 +173,15 @@ export class RemoteRuntime {
     this.errorValue = undefined
     this.retries = 0
     this.clearRetry()
+    // Restore each chat's last task now that the board is populated.
+    const controller = this.controller
+    if (controller !== undefined) {
+      for (const binding of this.bindings?.list() ?? []) {
+        if (binding.focusSessionId !== undefined) {
+          controller.setFocus(binding.chatId, binding.focusSessionId)
+        }
+      }
+    }
     // A stop/dispose landed while sessions were loading: the runtime is gone.
     if (this.generation !== generation) return this.status()
     const stored = await this.options.credentials.load().catch(() => undefined)
@@ -239,6 +248,14 @@ export class RemoteRuntime {
       boundAt: binding.boundAt,
       channel: binding.channel,
     }))
+  }
+
+  /** Session deleted: drop it from the board and clear any chat that followed it. */
+  forgetSession(sessionId: string): void {
+    this.controller?.untrack(sessionId)
+    for (const binding of this.bindings?.list() ?? []) {
+      if (binding.focusSessionId === sessionId) this.bindings?.setFocus(binding.chatId, undefined)
+    }
   }
 
   revoke(chatId?: string): boolean {

@@ -74,6 +74,24 @@ describe('BindingStore', () => {
     expect(store.issueCode().code).toBe('222222')
   })
 
+  it('persists the chat focus and clears it', () => {
+    const file = tempFile()
+    const first = new BindingStore({ filePath: file, now: () => 0 })
+    first.bind('chat-1', 'weixin')
+    first.setFocus('chat-1', 'session-1')
+
+    const second = new BindingStore({ filePath: file })
+    expect(second.binding('chat-1')?.focusSessionId).toBe('session-1')
+
+    second.setFocus('chat-1', undefined)
+    const third = new BindingStore({ filePath: file })
+    expect(third.binding('chat-1')?.focusSessionId).toBeUndefined()
+
+    // An unbound chat is not created just to hold a focus.
+    third.setFocus('nope', 'session-1')
+    expect(third.list()).toHaveLength(1)
+  })
+
   it('ignores a corrupt file instead of throwing', () => {
     const file = tempFile()
     const store = new BindingStore({ filePath: file })

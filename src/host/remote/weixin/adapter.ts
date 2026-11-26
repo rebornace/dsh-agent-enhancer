@@ -156,6 +156,8 @@ export class WeixinAdapter {
       this.options.onError?.(error)
     }
     const reply = await this.options.controller.execute(chatId, text, this.options.capabilities)
+    // Follow the chat's choice across replies and restarts.
+    this.options.bindings.setFocus(chatId, this.options.controller.focus(chatId))
     await this.reply(chatId, reply.text, message.contextToken)
   }
 

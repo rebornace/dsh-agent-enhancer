@@ -120,6 +120,17 @@ describe('WeixinAdapter', () => {
     expect(refresh).toHaveBeenCalledOnce()
   })
 
+  it('remembers the chosen task for the next message', async () => {
+    const bindings = new BindingStore({ filePath: null, now: () => 0 })
+    bindings.bind('chat-1', 'weixin')
+    const { adapter } = harness({
+      pages: [{ cursor: 'c1', messages: [message('切 1'), message('再改一下')] }],
+      bindings,
+    })
+    await adapter.run()
+    expect(bindings.binding('chat-1')?.focusSessionId).toBe('s1')
+  })
+
   it('asks an unbound chat to redeem a code first', async () => {
     const { adapter, sent } = harness({ pages: [{ cursor: 'c1', messages: [message('你好')] }] })
     await adapter.run()
