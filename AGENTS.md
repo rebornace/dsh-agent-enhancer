@@ -80,6 +80,8 @@ Plans live in `docs/plans/<name>.md` (local-only); the check is the first sectio
 
 User-facing capabilities **must** appear under **设置 → 智能体增强 → 功能** with an on/off switch in the **same change set** (`MODULES` + Config + `SETTINGS_FEATURE_GROUPS` + locales + runtime gate). Do not ship always-on surfaces with no switch. See `.cursor/rules/no-orphan-features.mdc`.
 
+The Features page shows a switch and one-line description per capability; options live behind a per-row **高级设置** disclosure, closed by default. Channel setup for remote control lives on the **远程连接** tab while its master switch stays in Features: Features enables, Remote connects.
+
 ## Persisted data must not hold volatile handles
 
 Anything saved and re-run later (demo recipes, bookmarks, caches) must store semantics, not runtime handles: no `tabId`, no element `ref`, no page/window/process object, no temp path, no per-run counter. Re-resolve from the URL / role+name / current DOM at run time. When the target is gone, stop at the exact step with a reason; do not poke at a stale handle.

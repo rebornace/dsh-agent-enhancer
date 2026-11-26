@@ -14,6 +14,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'settingsBack' | 'settingsConfigure' |
       'settingsTabFeatures' | 'settingsTabRemote' | 'settingsTabModels' | 'settingsTabAbout' |
       'settingsGroupChat' | 'settingsGroupWorkspace' | 'settingsOpenModel' |
+      'settingsAdvanced' | 'settingsAdvancedHide' | 'settingsEnableFirst' |
       'settingsAuxModelsTitle' | 'settingsAuxModelsIntro' |
       'usageTitle' | 'usageNote' | 'usageMeterOpen' | 'usageBuckets' |
       'usageBucketInput' | 'usageBucketOutput' | 'usageBucketCacheRead' | 'usageBucketCacheWrite' |
@@ -306,6 +307,9 @@ export const agentLocales = {
     settingsGroupChat: '对话',
     settingsGroupWorkspace: '工作区与会话',
     settingsOpenModel: '模型',
+    settingsAdvanced: '高级设置',
+    settingsAdvancedHide: '收起高级设置',
+    settingsEnableFirst: '先开启这项功能，再配置下面的选项。',
     settingsAuxModelsTitle: '辅助功能模型',
     settingsAuxModelsIntro: '优化、建议下一条与上下文压缩所用模型；默认可跟随当前会话，或选用 Auto',
     history: '输入历史',
@@ -1083,6 +1087,9 @@ export const agentLocales = {
     settingsGroupChat: 'Chat',
     settingsGroupWorkspace: 'Workspace & sessions',
     settingsOpenModel: 'Model',
+    settingsAdvanced: 'Advanced settings',
+    settingsAdvancedHide: 'Hide advanced settings',
+    settingsEnableFirst: 'Turn this feature on before configuring the options below.',
     settingsAuxModelsTitle: 'Helper models',
     settingsAuxModelsIntro: 'Models for optimize, suggest next, and context compact — follow the session or pick Auto by default',
     history: 'Input history',
