@@ -79,7 +79,7 @@ describe('installRemoteHostBridge', () => {
     expect(task?.lastLine).toBe('模型超时')
   })
 
-  it('holds an approval request until the chat answers it', async () => {
+  it('offers an approval on both surfaces and lets the chat decide', async () => {
     const { bridge, handlers } = harness()
     await bridge.refreshSessions()
     emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
@@ -91,12 +91,59 @@ describe('installRemoteHostBridge', () => {
       reason: '写入 report.xlsx',
     }, next) as Promise<'approve' | 'reject'>
 
-    expect(next).not.toHaveBeenCalled()
+    // The official desktop card must be shown too, not bypassed.
+    expect(next).toHaveBeenCalledOnce()
     const code = bridge.controller.tasks()[0]?.pending?.code
     expect(code).toBeTruthy()
     if (code === undefined) return
 
     await bridge.controller.execute('chat-1', `批准 ${code}`, textOnly)
+    await expect(decision).resolves.toBe('approve')
+  })
+
+  it('takes the desktop decision and drops the stale remote card', async () => {
+    const { bridge, handlers } = harness()
+    await bridge.refreshSessions()
+    emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
+
+    let fromDesktop: (value: 'approve') => void = () => {}
+    const desktop = new Promise<'approve'>(resolve => { fromDesktop = resolve })
+    const decision = emit(handlers, 'approval/request', {
+      agent: { session: { id: 's1' } },
+      toolName: 'write',
+      reason: '写入 report.xlsx',
+    }, vi.fn(() => desktop)) as Promise<'approve' | 'reject'>
+
+    const code = bridge.controller.tasks()[0]?.pending?.code
+    expect(code).toBeTruthy()
+    fromDesktop('approve')
+    await expect(decision).resolves.toBe('approve')
+    expect(bridge.controller.tasks()[0]?.pending).toBeUndefined()
+
+    if (code === undefined) return
+    const late = await bridge.controller.execute('chat-1', `批准 ${code}`, textOnly)
+    expect(late.text).not.toContain('已批准')
+  })
+
+  it('keeps the remote decision when the desktop card is still open', async () => {
+    const { bridge, handlers } = harness()
+    await bridge.refreshSessions()
+    emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
+
+    let fromDesktop: (value: 'reject') => void = () => {}
+    const desktop = new Promise<'reject'>(resolve => { fromDesktop = resolve })
+    const decision = emit(handlers, 'approval/request', {
+      agent: { session: { id: 's1' } },
+      toolName: 'write',
+      reason: '写入 report.xlsx',
+    }, vi.fn(() => desktop)) as Promise<'approve' | 'reject'>
+
+    const code = bridge.controller.tasks()[0]?.pending?.code
+    if (code === undefined) throw new Error('missing pending')
+    await bridge.controller.execute('chat-1', `批准 ${code}`, textOnly)
+    await expect(decision).resolves.toBe('approve')
+    // Resolving the losing surface later must not throw or change the result.
+    fromDesktop('reject')
     await expect(decision).resolves.toBe('approve')
   })
 
@@ -126,6 +173,23 @@ describe('installRemoteHostBridge', () => {
     if (code === undefined) throw new Error('missing code')
     await bridge.controller.execute('chat-1', `回答 ${code} 详细`, textOnly)
     await expect(answer).resolves.toEqual({ answers: [{ id: 'q1', selected: ['详细'] }] })
+  })
+
+  it('takes the desktop answer and drops the remote question card', async () => {
+    const { bridge, handlers } = harness()
+    await bridge.refreshSessions()
+    emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
+
+    const fromDesktop = {
+      answers: [{ id: 'q1', selected: ['简洁'] }],
+    }
+    const answer = emit(handlers, 'user-questions/request', {
+      agent: { session: { id: 's1' } },
+      questions: [{ id: 'q1', header: '选哪个模板？', options: [{ label: '简洁' }, { label: '详细' }] }],
+    }, vi.fn(() => Promise.resolve(fromDesktop))) as Promise<unknown>
+
+    await expect(answer).resolves.toEqual(fromDesktop)
+    expect(bridge.controller.tasks()[0]?.pending).toBeUndefined()
   })
 
   it('refreshes the board when an unseen session emits an event', async () => {

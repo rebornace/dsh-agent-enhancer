@@ -177,6 +177,20 @@ export class RemoteController {
     return false
   }
 
+  /**
+   * Another surface (the desktop card) resolved this ask: drop its remote card
+   * and waiter so the remote chat cannot approve an already-finished decision.
+   */
+  dropPending(code: string): void {
+    this.approvalWaiters.delete(code)
+    this.questionWaiters.delete(code)
+    for (const [approvalId, pendingCode] of this.codeByApprovalId) {
+      if (pendingCode === code) this.codeByApprovalId.delete(approvalId)
+    }
+    const task = this.board.list().find(entry => entry.pending?.code === code)
+    if (task !== undefined) this.board.clearPending(task.id)
+  }
+
   /** Drop expired codes so the board does not keep stale cards. */
   expire(at = this.now()): readonly string[] {
     const dropped = this.board.expire(at)

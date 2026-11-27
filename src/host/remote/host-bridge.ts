@@ -149,12 +149,31 @@ function pickAnswer(labels: readonly string[], text: string): { selected: string
 }
 
 /**
+ * Invoke the official handler so the desktop card still appears. It returns a
+ * promise only when a real desktop surface is waiting; a synchronous value (or
+ * a throw) means there is nothing to race with, so the remote ask owns the
+ * decision as before.
+ */
+function callNext(next: () => unknown): Promise<unknown> | undefined {
+  let result: unknown
+  try {
+    result = next()
+  } catch {
+    return undefined
+  }
+  if (result === null || typeof result !== 'object') return undefined
+  const then = (result as { then?: unknown }).then
+  return typeof then === 'function' ? result as Promise<unknown> : undefined
+}
+
+/**
  * Wire the controller to cordis.
  *
  * The event names come from a working 0.2.x implementation:
  * `session/event`, `approval/request`, `user-questions/request`. The two
- * waterline hooks return the decision itself, so the host waits on the phone
- * exactly as it would wait on the desktop.
+ * waterline hooks offer the ask on **both** surfaces and return the first
+ * decision that arrives, so sitting at the desktop never requires signing out
+ * of remote control to approve something.
  *
  * Deliberately conservative: an untracked session, a multi-question card, or a
  * task that already has a pending falls through to `next()` instead of guessing.
@@ -283,7 +302,16 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
         risk: 'other',
       })
       notify({ kind: 'approval', sessionId, code: handle.code })
-      return handle.wait
+      const desktop = callNext(next)
+      if (desktop === undefined) return handle.wait
+      // Both cards are live; whichever surface answers first decides.
+      return Promise.race([
+        handle.wait,
+        Promise.resolve(desktop).then(decision => {
+          controller.dropPending(handle.code)
+          return decision
+        }),
+      ])
     } catch {
       // Already waiting on another decision: leave this one to the desktop.
       return next()
@@ -311,9 +339,18 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
         ...(labels.length === 0 ? {} : { options: labels }),
       })
       notify({ kind: 'question', sessionId, code: handle.code })
-      return handle.wait.then(text => ({
+      const remote = handle.wait.then(text => ({
         answers: [{ id: questionId, ...pickAnswer(labels, text) }],
       }))
+      const desktop = callNext(next)
+      if (desktop === undefined) return remote
+      return Promise.race([
+        remote,
+        Promise.resolve(desktop).then(answer => {
+          controller.dropPending(handle.code)
+          return answer
+        }),
+      ])
     } catch {
       return next()
     }
