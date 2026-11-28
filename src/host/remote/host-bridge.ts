@@ -149,6 +149,24 @@ function pickAnswer(labels: readonly string[], text: string): { selected: string
   return match === undefined ? { selected: [], custom: text } : { selected: [match] }
 }
 
+/** A promise that never settles: used to ignore a non-decision from the other surface. */
+function never(): Promise<never> {
+  return new Promise(() => {})
+}
+
+/** The official answerer can resolve with an empty answer when no card was shown. */
+function hasAnswer(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return false
+  const answers = (value as { answers?: unknown }).answers
+  if (!Array.isArray(answers)) return false
+  return answers.some(item => {
+    if (item === null || typeof item !== 'object') return false
+    const record = item as { selected?: unknown; custom?: unknown }
+    return (Array.isArray(record.selected) && record.selected.length > 0)
+      || (typeof record.custom === 'string' && record.custom.trim() !== '')
+  })
+}
+
 /**
  * Invoke the official handler so the desktop card still appears. It returns a
  * promise only when a real desktop surface is waiting; a synchronous value (or
@@ -320,19 +338,20 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
       const remote = handle.wait.then(decision => decision === 'approve' ? 'allowed-once' : 'rejected')
       const desktop = callNext(next)
       if (desktop === undefined) return remote
-      return Promise.race([
-        remote,
-        Promise.resolve(desktop).then(outcome => {
+      const fromDesktop = Promise.resolve(desktop).then(
+        outcome => {
+          // `unavailable` / `cancelled` are not decisions: the official answerer
+          // often settles with them immediately when no card was shown. Let the
+          // remote card keep waiting instead of killing the approval.
+          if (outcome !== 'allowed-once' && outcome !== 'rejected') return never()
           controller.dropPending(handle.code)
-          const decision = outcome === 'allowed-once' || outcome === 'approve'
-            ? 'approve'
-            : outcome === 'rejected' || outcome === 'reject'
-              ? 'reject'
-              : undefined
-          if (decision !== undefined) notify({ kind: 'decided', sessionId, decision })
+          const decision = outcome === 'allowed-once' ? 'approve' : 'reject'
+          notify({ kind: 'decided', sessionId, decision })
           return outcome
-        }),
-      ])
+        },
+        () => never(),
+      )
+      return Promise.race([remote, fromDesktop])
     } catch {
       // Already waiting on another decision: leave this one to the desktop.
       return next()
@@ -369,14 +388,16 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
       }))
       const desktop = callNext(next)
       if (desktop === undefined) return remote
-      return Promise.race([
-        remote,
-        Promise.resolve(desktop).then(answer => {
+      const fromDesktop = Promise.resolve(desktop).then(
+        answer => {
+          if (!hasAnswer(answer)) return never()
           controller.dropPending(handle.code)
           notify({ kind: 'decided', sessionId, decision: 'answered' })
           return answer
-        }),
-      ])
+        },
+        () => never(),
+      )
+      return Promise.race([remote, fromDesktop])
     } catch {
       return next()
     }

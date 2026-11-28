@@ -112,8 +112,8 @@ describe('installRemoteHostBridge', () => {
     await bridge.refreshSessions()
     emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
 
-    let fromDesktop: (value: 'approve') => void = () => {}
-    const desktop = new Promise<'approve'>(resolve => { fromDesktop = resolve })
+    let fromDesktop: (value: 'allowed-once') => void = () => {}
+    const desktop = new Promise<'allowed-once'>(resolve => { fromDesktop = resolve })
     const decision = emit(handlers, 'approval/request', {
       agent: { session: { id: 's1' } },
       toolName: 'write',
@@ -122,8 +122,8 @@ describe('installRemoteHostBridge', () => {
 
     const code = bridge.controller.tasks()[0]?.pending?.code
     expect(code).toBeTruthy()
-    fromDesktop('approve')
-    await expect(decision).resolves.toBe('approve')
+    fromDesktop('allowed-once')
+    await expect(decision).resolves.toBe('allowed-once')
     expect(bridge.controller.tasks()[0]?.pending).toBeUndefined()
     expect(notices).toContainEqual({ kind: 'decided', sessionId: 's1', decision: 'approve' })
 
@@ -137,8 +137,8 @@ describe('installRemoteHostBridge', () => {
     await bridge.refreshSessions()
     emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
 
-    let fromDesktop: (value: 'reject') => void = () => {}
-    const desktop = new Promise<'reject'>(resolve => { fromDesktop = resolve })
+    let fromDesktop: (value: 'rejected') => void = () => {}
+    const desktop = new Promise<'rejected'>(resolve => { fromDesktop = resolve })
     const decision = emit(handlers, 'approval/request', {
       agent: { session: { id: 's1' } },
       toolName: 'write',
@@ -150,7 +150,27 @@ describe('installRemoteHostBridge', () => {
     await bridge.controller.execute('chat-1', `批准 ${code}`, textOnly)
     await expect(decision).resolves.toBe('allowed-once')
     // Resolving the losing surface later must not throw or change the result.
-    fromDesktop('reject')
+    fromDesktop('rejected')
+    await expect(decision).resolves.toBe('allowed-once')
+  })
+
+  it('keeps the remote card live when the official answerer only says unavailable', async () => {
+    const { bridge, handlers } = harness()
+    await bridge.refreshSessions()
+    emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
+
+    const decision = emit(handlers, 'approval/request', {
+      agent: { session: { id: 's1' } },
+      toolName: 'write',
+      reason: '写入 report.xlsx',
+    }, vi.fn(() => Promise.resolve('unavailable'))) as Promise<string>
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const code = bridge.controller.tasks()[0]?.pending?.code
+    expect(code).toBeTruthy()
+    if (code === undefined) return
+    await bridge.controller.execute('chat-1', `批准 ${code}`, textOnly)
     await expect(decision).resolves.toBe('allowed-once')
   })
 
