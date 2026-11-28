@@ -147,15 +147,31 @@ describe('installRemoteHostBridge', () => {
     await expect(decision).resolves.toBe('approve')
   })
 
-  it('falls through for untracked sessions', () => {
+  it('falls through for untracked sessions', async () => {
     const { handlers } = harness()
     const next = vi.fn(() => 'desktop')
-    const result = emit(handlers, 'approval/request', {
+    const result = await emit(handlers, 'approval/request', {
       agent: { session: { id: 'unknown' } },
       toolName: 'write',
     }, next)
     expect(next).toHaveBeenCalled()
     expect(result).toBe('desktop')
+  })
+
+  it('offers a remote card for a session the host index only lists on refresh', async () => {
+    const { bridge, handlers, ports, notices } = harness()
+    vi.mocked(ports.listSessions).mockResolvedValueOnce([{ id: 's2', title: '新会话', running: true }])
+    const decision = emit(handlers, 'approval/request', {
+      agent: { session: { id: 's2' } },
+      toolName: 'write',
+    }, vi.fn(() => 'desktop')) as Promise<'approve' | 'reject'>
+
+    await vi.waitFor(() => { expect(notices).toHaveLength(1) })
+    expect(notices[0]).toMatchObject({ kind: 'approval', sessionId: 's2' })
+    const code = bridge.controller.tasks().find(task => task.id === 's2')?.pending?.code
+    if (code === undefined) throw new Error('missing pending')
+    await bridge.controller.execute('chat-1', `批准 ${code}`, textOnly)
+    await expect(decision).resolves.toBe('approve')
   })
 
   it('maps a single question to the host answer shape', async () => {
@@ -264,7 +280,7 @@ describe('installRemoteHostBridge', () => {
     emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
 
     const next = vi.fn(() => 'desktop')
-    const result = emit(handlers, 'approval/request', {
+    const result = await emit(handlers, 'approval/request', {
       agent: { session: { id: 's1' } },
       toolName: 'write',
     }, next)
@@ -274,10 +290,10 @@ describe('installRemoteHostBridge', () => {
     expect(bridge.controller.tasks()[0]?.pending).toBeUndefined()
   })
 
-  it('leaves multi-question cards to the desktop', () => {
+  it('leaves multi-question cards to the desktop', async () => {
     const { handlers } = harness()
     const next = vi.fn(() => 'desktop')
-    const result = emit(handlers, 'user-questions/request', {
+    const result = await emit(handlers, 'user-questions/request', {
       agent: { session: { id: 's1' } },
       questions: [{ id: 'q1' }, { id: 'q2' }],
     }, next)

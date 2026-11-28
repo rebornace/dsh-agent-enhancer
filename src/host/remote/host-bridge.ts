@@ -291,10 +291,15 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
 
   const canAnswer = (): boolean => options.shouldHold?.() !== false
 
-  const onApprovalRequest = (request: ApprovalRequestLike, next: () => unknown): unknown => {
+  const onApprovalRequest = async (request: ApprovalRequestLike, next: () => unknown): Promise<unknown> => {
     if (!canAnswer()) return next()
     const sessionId = sessionIdOf(request?.agent)
-    if (sessionId === undefined || !known(sessionId)) return next()
+    if (sessionId === undefined) return next()
+    // A brand-new session can ask for approval before the host index lists it.
+    if (!known(sessionId)) {
+      await refreshSessions().catch(() => 0)
+      if (!known(sessionId)) return next()
+    }
     try {
       const handle = controller.askApproval(sessionId, {
         prompt: describeApproval(request),
@@ -318,10 +323,14 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
     }
   }
 
-  const onQuestionRequest = (request: QuestionRequestLike, next: () => unknown): unknown => {
+  const onQuestionRequest = async (request: QuestionRequestLike, next: () => unknown): Promise<unknown> => {
     if (!canAnswer()) return next()
     const sessionId = sessionIdOf(request?.agent) ?? (typeof request?.sessionId === 'string' ? request.sessionId : undefined)
-    if (sessionId === undefined || !known(sessionId)) return next()
+    if (sessionId === undefined) return next()
+    if (!known(sessionId)) {
+      await refreshSessions().catch(() => 0)
+      if (!known(sessionId)) return next()
+    }
     const questions = Array.isArray(request.questions) ? request.questions : []
     // One card per message is all the remote UX can answer honestly.
     if (questions.length !== 1) return next()
