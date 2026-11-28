@@ -132,6 +132,13 @@ export class TelegramChannel {
     this.phaseValue = 'off'
   }
 
+  /** A proactive push failed: inbound can still work, but the UI must say so. */
+  reportSendError(error: unknown): void {
+    this.errorValue = (error as { code?: unknown }).code === 'network-error'
+      ? '推送受限：暂时连不上 Telegram API，消息未发出。'
+      : `推送失败：${messageOf(error)}`
+  }
+
   async send(
     chatId: string,
     text: string,

@@ -472,6 +472,7 @@ export class RemoteHub {
             code: (error as { code?: unknown }).code,
             detail: (error as { detail?: unknown }).detail,
           })
+          channel.reportSendError(error)
           this.options.onError?.(error)
         })
     }

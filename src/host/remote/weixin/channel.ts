@@ -54,6 +54,14 @@ export class WeixinChannel {
     return this.phaseValue === 'running'
   }
 
+  /** A proactive push failed: keep inbound alive but make the reason visible. */
+  reportSendError(error: unknown): void {
+    const providerCode = (error as { detail?: { providerCode?: unknown } }).detail?.providerCode
+    this.errorValue = providerCode === '-2'
+      ? '推送受限：微信会话已过期。在微信里给机器人发一条消息即可恢复。'
+      : `推送失败：${messageOf(error)}`
+  }
+
   status(): ChannelStatus {
     const devices: ChannelDevice[] = (this.options.bindings.list())
       .filter(binding => binding.channel === this.id)

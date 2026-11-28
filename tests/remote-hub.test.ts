@@ -169,6 +169,9 @@ function harness(options: HarnessOptions) {
   return {
     hub,
     sent,
+    weixinTransport,
+    telegramTransport,
+    feishuTransport,
     weixinPages,
     telegramPages,
     feishuPages,
@@ -354,6 +357,32 @@ describe('RemoteHub', () => {
     for (const channel of ['weixin', 'telegram', 'feishu']) {
       expect(sent.some(entry => entry.channel === channel && entry.text.includes('已由桌面批准'))).toBe(true)
     }
+    hub.stop()
+  })
+
+  it('surfaces a WeChat push failure instead of claiming the channel is fine', async () => {
+    const { hub, handlers, weixinPages, weixinTransport } = harness({
+      weixin: { baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' },
+    })
+    await hub.start()
+    const code = hub.issueBindCode('weixin')
+    weixinPages.push({ cursor: 'c1', messages: [message('wx-chat', code.code)] })
+    await until(() => hub.devices('weixin').length === 1)
+
+    vi.mocked(weixinTransport.sendText).mockRejectedValueOnce({
+      message: '微信服务拒绝了这条消息',
+      detail: { providerCode: '-2' },
+    })
+    const onEvent = handlers.get('session/event')
+    if (onEvent === undefined) throw new Error('missing session/event handler')
+    onEvent({ id: 's1' } as never, {
+      type: 'turn/end',
+      time: 10_000,
+      data: { reason: { kind: 'completed' } },
+    } as never)
+
+    await until(() => hub.status().channels.some(channel =>
+      channel.id === 'weixin' && channel.error?.includes('微信会话已过期')))
     hub.stop()
   })
 

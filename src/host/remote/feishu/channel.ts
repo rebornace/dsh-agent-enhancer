@@ -127,6 +127,11 @@ export class FeishuChannel {
     this.phaseValue = 'off'
   }
 
+  /** A proactive push failed: keep the connection, surface the reason. */
+  reportSendError(error: unknown): void {
+    this.errorValue = `推送失败：${messageOf(error)}`
+  }
+
   async send(
     chatId: string,
     text: string,
