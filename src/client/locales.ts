@@ -118,7 +118,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentSidebarDisconnected' | 'browserAgentSidebarChatHint' |
       'remoteControl' | 'remoteControlDescription' | 'remoteManage' |
       'remoteDisabledHint' | 'remoteOpenFeatures' |
-      'remotePillOff' | 'remotePillOn' | 'remotePillNoChannel' | 'remotePillBusy' |
+      'remotePillOff' | 'remotePillOn' | 'remotePillNoChannel' | 'remotePillBusy' | 'remotePillConnecting' |
       'remotePillTooltipOn' | 'remotePillTooltipOff' |
       'remotePillChannelsTitle' | 'remotePillOpenMenu' | 'remotePillMenuHint' | 'remotePillMenuOffHint' |
       'remoteStatChannels' | 'remoteStatChats' | 'remoteStatTasks' |
@@ -522,6 +522,7 @@ export const agentLocales = {
     remotePillOn: '远程已开',
     remotePillNoChannel: '远程待连',
     remotePillBusy: '正在切换…',
+    remotePillConnecting: '远程连接中',
     remotePillTooltipOn: '已连接 {channels} 个渠道、{devices} 个聊天。点击关闭，IM 不再收到消息。',
     remotePillTooltipOff: '远程控制已关闭。点击开启，离开电脑后可在 IM 收到审批和回答。',
     remotePillChannelsTitle: '渠道开关',
@@ -1355,6 +1356,7 @@ export const agentLocales = {
     remotePillOn: 'Remote on',
     remotePillNoChannel: 'Remote idle',
     remotePillBusy: 'Switching…',
+    remotePillConnecting: 'Connecting',
     remotePillTooltipOn: '{channels} channels and {devices} chats connected. Click to stop messages to IM.',
     remotePillTooltipOff: 'Remote control is off. Click to receive approvals and answers in IM while away.',
     remotePillChannelsTitle: 'Channels',

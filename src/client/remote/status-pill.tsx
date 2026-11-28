@@ -146,14 +146,17 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
   }
 
   const running = status?.channels.filter(channel => channel.phase === 'running' && channel.enabled !== false).length ?? 0
+  const enabledCount = status?.channels.filter(channel => channel.enabled !== false).length ?? 0
   const devices = status?.channels.reduce((total, channel) => total + channel.devices.length, 0) ?? 0
   const label = busy
     ? props.t('remotePillBusy')
     : !enabled
       ? props.t('remotePillOff')
-      : running > 0
-        ? props.t('remotePillOn')
-        : props.t('remotePillNoChannel')
+      : enabledCount === 0
+        ? props.t('remotePillNoChannel')
+        : running < enabledCount
+          ? props.t('remotePillConnecting')
+          : props.t('remotePillOn')
   const tooltip = enabled
     ? fill(props.t('remotePillTooltipOn'), { channels: String(running), devices: String(devices) })
     : props.t('remotePillTooltipOff')
