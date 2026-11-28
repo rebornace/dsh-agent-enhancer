@@ -383,12 +383,22 @@ export class RemoteHub {
         if (answer !== '') text += `\n\n${answer}`
       }
       if (notice.kind === 'decided') {
-        const label = notice.decision === 'approve'
-          ? '已由桌面批准'
+        const channel = notice.chatId === undefined
+          ? undefined
+          : this.bindings?.binding(notice.chatId)?.channel
+        const where = channel === undefined
+          ? '桌面'
+          : channel === 'weixin'
+            ? '微信'
+            : channel === 'telegram'
+              ? 'Telegram'
+              : '飞书'
+        const verb = notice.decision === 'approve'
+          ? '批准'
           : notice.decision === 'reject'
-            ? '已由桌面拒绝'
-            : '已由桌面回答'
-        text += `\n\n${label}`
+            ? '拒绝'
+            : '回答'
+        text += `\n\n已由${where}${verb}`
       }
       const task = controller.tasks().find(entry => entry.id === notice.sessionId)
       const pending = task?.pending

@@ -80,7 +80,7 @@ describe('installRemoteHostBridge', () => {
   })
 
   it('offers an approval on both surfaces and lets the chat decide', async () => {
-    const { bridge, handlers } = harness()
+    const { bridge, handlers, notices } = harness()
     await bridge.refreshSessions()
     emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
 
@@ -99,6 +99,12 @@ describe('installRemoteHostBridge', () => {
 
     await bridge.controller.execute('chat-1', `批准 ${code}`, textOnly)
     await expect(decision).resolves.toBe('allowed-once')
+    expect(notices).toContainEqual({
+      kind: 'decided',
+      sessionId: 's1',
+      decision: 'approve',
+      chatId: 'chat-1',
+    })
   })
 
   it('takes the desktop decision and drops the stale remote card', async () => {

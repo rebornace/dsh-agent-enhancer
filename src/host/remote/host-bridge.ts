@@ -61,7 +61,7 @@ export interface HostBridgePorts {
  */
 export type BridgeNotice =
   | { readonly kind: 'approval' | 'question'; readonly sessionId: string; readonly code: string }
-  | { readonly kind: 'decided'; readonly sessionId: string; readonly decision: 'approve' | 'reject' | 'answered' }
+  | { readonly kind: 'decided'; readonly sessionId: string; readonly decision: 'approve' | 'reject' | 'answered'; readonly chatId?: string }
   | { readonly kind: 'failed'; readonly sessionId: string; readonly error?: string }
   | { readonly kind: 'done'; readonly sessionId: string; readonly answer?: string }
 
@@ -180,12 +180,25 @@ function callNext(next: () => unknown): Promise<unknown> | undefined {
  * task that already has a pending falls through to `next()` instead of guessing.
  */
 export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions): HostBridge {
+  const notify = (notice: BridgeNotice): void => {
+    try {
+      options.ports.notify?.(notice)
+    } catch {
+      // A channel that cannot push must not break the watermark.
+    }
+  }
   const controller = new RemoteController({
     actions: {
       sendPrompt: (sessionId, text) => options.ports.prompt(sessionId, text, 'queue'),
       setPaused: (sessionId, paused) => options.ports.setPaused(sessionId, paused),
       stop: sessionId => options.ports.cancel(sessionId),
     },
+    onDecision: info => notify({
+      kind: 'decided',
+      sessionId: info.sessionId,
+      decision: info.decision,
+      chatId: info.chatId,
+    }),
     ...(options.ports.readAnswer === undefined ? {} : { readAnswer: options.ports.readAnswer }),
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.ttlMs === undefined ? {} : { ttlMs: options.ttlMs }),
@@ -195,13 +208,6 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
     controller.tasks().some(task => task.id === sessionId)
 
   const lastAssistant = new Map<string, string>()
-  const notify = (notice: BridgeNotice): void => {
-    try {
-      options.ports.notify?.(notice)
-    } catch {
-      // A channel that cannot push must not break the watermark.
-    }
-  }
 
   let refreshing: Promise<number> | undefined
   let lastEventRefresh = 0

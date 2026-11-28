@@ -43,6 +43,12 @@ export interface RemoteControllerOptions {
   readonly now?: () => number
   readonly ttlMs?: number
   readonly code?: () => string
+  /** Fired after a chat decision so every other surface can catch up. */
+  readonly onDecision?: (info: {
+    readonly chatId: string
+    readonly sessionId: TaskId
+    readonly decision: 'approve' | 'reject' | 'answered'
+  }) => void
   /** Cold-safe last assistant text for `详情` when no live answer is cached. */
   readonly readAnswer?: (sessionId: TaskId) => Promise<string | undefined>
 }
@@ -274,7 +280,7 @@ export class RemoteController {
     }
 
     if (command.kind === 'approve' || command.kind === 'reject') {
-      return this.decide(command.kind, command.code, at)
+      return this.decide(command.kind, command.code, at, chatId)
     }
 
     if (command.kind === 'answer') {
@@ -285,6 +291,7 @@ export class RemoteController {
       const waiter = this.questionWaiters.get(route.pending.code)
       this.questionWaiters.delete(route.pending.code)
       waiter?.(route.text)
+      this.options.onDecision?.({ chatId, sessionId: route.taskId, decision: 'answered' })
       return { text: `已回复【${this.numbers.get(route.taskId) ?? 0}】${this.taskTitle(route.taskId)}` }
     }
 
@@ -356,7 +363,7 @@ export class RemoteController {
     return buttons.length === 0 ? { text } : { text, buttons }
   }
 
-  private decide(kind: 'approve' | 'reject', code: string | undefined, at: number): Reply {
+  private decide(kind: 'approve' | 'reject', code: string | undefined, at: number, chatId: string): Reply {
     const tasks = this.board.list()
     const route = kind === 'approve'
       ? routeDecision(tasks, code === undefined ? { kind: 'approve' } : { kind: 'approve', code }, at)
@@ -367,6 +374,7 @@ export class RemoteController {
     const waiter = this.approvalWaiters.get(route.pending.code)
     this.approvalWaiters.delete(route.pending.code)
     if (route.pending.kind === 'approval') waiter?.(route.decision)
+    this.options.onDecision?.({ chatId, sessionId: route.taskId, decision: route.decision })
     const label = route.decision === 'approve' ? '已批准' : '已拒绝'
     return { text: `${label}【${this.numbers.get(route.taskId) ?? 0}】${this.taskTitle(route.taskId)}` }
   }
