@@ -75,6 +75,8 @@ export interface HostBridgeOptions {
    * chat holds every approval forever even though nothing is listening.
    */
   readonly shouldHold?: () => boolean
+  /** Opt-in diagnostic sink; receives metadata only, never message content. */
+  readonly debugLog?: (line: string) => void
 }
 
 export interface HostBridge {
@@ -199,6 +201,7 @@ function callNext(next: () => unknown): Promise<unknown> | undefined {
  */
 export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions): HostBridge {
   const notify = (notice: BridgeNotice): void => {
+    options.debugLog?.(JSON.stringify({ kind: notice.kind, sessionId: notice.sessionId }))
     try {
       options.ports.notify?.(notice)
     } catch {

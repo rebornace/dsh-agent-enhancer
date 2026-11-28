@@ -1,3 +1,4 @@
+import { appendFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { BindingStore } from './bindings.ts'
@@ -180,6 +181,13 @@ export class RemoteHub {
       ports,
       capabilities: this.weixinCapabilities,
       shouldHold: () => bindings.list().length > 0 && this.anyRunning(),
+      debugLog: line => {
+        try {
+          this.debugNotice({ stage: 'bridge', detail: JSON.parse(line) as unknown })
+        } catch {
+          // Ignore malformed diagnostic lines.
+        }
+      },
     })
     this.controller = this.bridge.controller
 
@@ -357,6 +365,19 @@ export class RemoteHub {
       : 'unbound'
   }
 
+  /** Opt-in diagnostics: create `remote/debug-notices.enabled` in plugin-data. */
+  private debugNotice(entry: Record<string, unknown>): void {
+    try {
+      if (!existsSync(join(this.options.rootDir, 'debug-notices.enabled'))) return
+      appendFileSync(
+        join(this.options.rootDir, 'notice-log.jsonl'),
+        `${JSON.stringify({ at: Date.now(), ...entry })}\n`,
+      )
+    } catch {
+      // Diagnostics must never break notice delivery.
+    }
+  }
+
   /** Send one notice to every paired chat on a channel that can answer. */
   private pushNotice(notice: BridgeNotice): void {
     const controller = this.controller
@@ -423,7 +444,34 @@ export class RemoteHub {
           buttons = [{ label: '详情', command: number === undefined ? '详情' : `详情 ${number}` }]
         }
       }
-      void channel.send(binding.chatId, text, buttons).catch(error => this.options.onError?.(error))
+      this.debugNotice({
+        stage: 'queued',
+        kind: notice.kind,
+        channel: binding.channel,
+        chatId: binding.chatId,
+        sessionId: notice.sessionId,
+      })
+      void channel.send(binding.chatId, text, buttons)
+        .then(() => {
+          this.debugNotice({
+            stage: 'sent',
+            kind: notice.kind,
+            channel: binding.channel,
+            chatId: binding.chatId,
+            sessionId: notice.sessionId,
+          })
+        })
+        .catch(error => {
+          this.debugNotice({
+            stage: 'error',
+            kind: notice.kind,
+            channel: binding.channel,
+            chatId: binding.chatId,
+            sessionId: notice.sessionId,
+            error: messageOf(error),
+          })
+          this.options.onError?.(error)
+        })
     }
   }
 
