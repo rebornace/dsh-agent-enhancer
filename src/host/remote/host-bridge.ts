@@ -61,6 +61,7 @@ export interface HostBridgePorts {
  */
 export type BridgeNotice =
   | { readonly kind: 'approval' | 'question'; readonly sessionId: string; readonly code: string }
+  | { readonly kind: 'decided'; readonly sessionId: string; readonly decision: 'approve' | 'reject' | 'answered' }
   | { readonly kind: 'failed'; readonly sessionId: string; readonly error?: string }
   | { readonly kind: 'done'; readonly sessionId: string; readonly answer?: string }
 
@@ -307,14 +308,23 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
         risk: 'other',
       })
       notify({ kind: 'approval', sessionId, code: handle.code })
+      // The official answerer speaks in outcomes, not in chat words. Returning
+      // `approve` here would be normalized to `unavailable` and leave the
+      // desktop card looking unanswered.
+      const remote = handle.wait.then(decision => decision === 'approve' ? 'allowed-once' : 'rejected')
       const desktop = callNext(next)
-      if (desktop === undefined) return handle.wait
-      // Both cards are live; whichever surface answers first decides.
+      if (desktop === undefined) return remote
       return Promise.race([
-        handle.wait,
-        Promise.resolve(desktop).then(decision => {
+        remote,
+        Promise.resolve(desktop).then(outcome => {
           controller.dropPending(handle.code)
-          return decision
+          const decision = outcome === 'allowed-once' || outcome === 'approve'
+            ? 'approve'
+            : outcome === 'rejected' || outcome === 'reject'
+              ? 'reject'
+              : undefined
+          if (decision !== undefined) notify({ kind: 'decided', sessionId, decision })
+          return outcome
         }),
       ])
     } catch {
@@ -357,6 +367,7 @@ export function installRemoteHostBridge(ctx: Context, options: HostBridgeOptions
         remote,
         Promise.resolve(desktop).then(answer => {
           controller.dropPending(handle.code)
+          notify({ kind: 'decided', sessionId, decision: 'answered' })
           return answer
         }),
       ])

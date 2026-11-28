@@ -382,6 +382,14 @@ export class RemoteHub {
         const answer = clip(notice.answer, 6_000)
         if (answer !== '') text += `\n\n${answer}`
       }
+      if (notice.kind === 'decided') {
+        const label = notice.decision === 'approve'
+          ? '已由桌面批准'
+          : notice.decision === 'reject'
+            ? '已由桌面拒绝'
+            : '已由桌面回答'
+        text += `\n\n${label}`
+      }
       const task = controller.tasks().find(entry => entry.id === notice.sessionId)
       const pending = task?.pending
       let buttons: { label: string; command: string }[] | undefined
@@ -400,7 +408,7 @@ export class RemoteHub {
               command: `回答 ${pending.code} ${option}`,
             }))
           }
-        } else if (notice.kind === 'done' || notice.kind === 'failed') {
+        } else if (notice.kind === 'done' || notice.kind === 'failed' || notice.kind === 'decided') {
           // Reading the answer and replying afterwards go through this task.
           buttons = [{ label: '详情', command: number === undefined ? '详情' : `详情 ${number}` }]
         }

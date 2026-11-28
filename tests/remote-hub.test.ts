@@ -324,6 +324,39 @@ describe('RemoteHub', () => {
     hub.stop()
   })
 
+  it('tells paired chats when the desktop decides an approval', async () => {
+    const { hub, sent, handlers, weixinPages, telegramPages, feishuPages } = harness({
+      weixin: { baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' },
+      telegram: { token: '123456:ABC-def_ghi' },
+      feishu: { appId: 'cli_abc', appSecret: 'secret', name: 'DSH 助手' },
+    })
+    await hub.start()
+    for (const [id, chatId] of [['weixin', 'wx-chat'], ['telegram', 'tg-chat'], ['feishu', 'oc-chat']] as const) {
+      const code = hub.issueBindCode(id)
+      const page = id === 'weixin' ? weixinPages : id === 'telegram' ? telegramPages : feishuPages
+      page.push({ cursor: '', messages: [message(chatId, code.code)] })
+      await until(() => hub.devices(id).length === 1)
+    }
+
+    sent.length = 0
+    const onApproval = handlers.get('approval/request')
+    if (onApproval === undefined) throw new Error('missing approval/request handler')
+    let fromDesktop: (outcome: string) => void = () => {}
+    const desktop = new Promise<string>(resolve => { fromDesktop = resolve })
+    onApproval({
+      agent: { session: { id: 's1' } },
+      toolName: 'write',
+      reason: '写入 report.xlsx',
+    } as never, (() => desktop) as never)
+    fromDesktop('allowed-once')
+
+    await until(() => sent.filter(entry => entry.text.includes('已由桌面批准')).length >= 3)
+    for (const channel of ['weixin', 'telegram', 'feishu']) {
+      expect(sent.some(entry => entry.channel === channel && entry.text.includes('已由桌面批准'))).toBe(true)
+    }
+    hub.stop()
+  })
+
   it('forgets a deleted session and clears its focus', async () => {
     const { hub, weixinPages } = harness({
       weixin: { baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' },

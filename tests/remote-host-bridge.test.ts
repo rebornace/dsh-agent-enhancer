@@ -89,7 +89,7 @@ describe('installRemoteHostBridge', () => {
       agent: { session: { id: 's1' } },
       toolName: 'write',
       reason: '写入 report.xlsx',
-    }, next) as Promise<'approve' | 'reject'>
+    }, next) as Promise<string>
 
     // The official desktop card must be shown too, not bypassed.
     expect(next).toHaveBeenCalledOnce()
@@ -98,11 +98,11 @@ describe('installRemoteHostBridge', () => {
     if (code === undefined) return
 
     await bridge.controller.execute('chat-1', `批准 ${code}`, textOnly)
-    await expect(decision).resolves.toBe('approve')
+    await expect(decision).resolves.toBe('allowed-once')
   })
 
   it('takes the desktop decision and drops the stale remote card', async () => {
-    const { bridge, handlers } = harness()
+    const { bridge, handlers, notices } = harness()
     await bridge.refreshSessions()
     emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
 
@@ -112,13 +112,14 @@ describe('installRemoteHostBridge', () => {
       agent: { session: { id: 's1' } },
       toolName: 'write',
       reason: '写入 report.xlsx',
-    }, vi.fn(() => desktop)) as Promise<'approve' | 'reject'>
+    }, vi.fn(() => desktop)) as Promise<string>
 
     const code = bridge.controller.tasks()[0]?.pending?.code
     expect(code).toBeTruthy()
     fromDesktop('approve')
     await expect(decision).resolves.toBe('approve')
     expect(bridge.controller.tasks()[0]?.pending).toBeUndefined()
+    expect(notices).toContainEqual({ kind: 'decided', sessionId: 's1', decision: 'approve' })
 
     if (code === undefined) return
     const late = await bridge.controller.execute('chat-1', `批准 ${code}`, textOnly)
@@ -136,15 +137,15 @@ describe('installRemoteHostBridge', () => {
       agent: { session: { id: 's1' } },
       toolName: 'write',
       reason: '写入 report.xlsx',
-    }, vi.fn(() => desktop)) as Promise<'approve' | 'reject'>
+    }, vi.fn(() => desktop)) as Promise<string>
 
     const code = bridge.controller.tasks()[0]?.pending?.code
     if (code === undefined) throw new Error('missing pending')
     await bridge.controller.execute('chat-1', `批准 ${code}`, textOnly)
-    await expect(decision).resolves.toBe('approve')
+    await expect(decision).resolves.toBe('allowed-once')
     // Resolving the losing surface later must not throw or change the result.
     fromDesktop('reject')
-    await expect(decision).resolves.toBe('approve')
+    await expect(decision).resolves.toBe('allowed-once')
   })
 
   it('falls through for untracked sessions', async () => {
@@ -164,14 +165,14 @@ describe('installRemoteHostBridge', () => {
     const decision = emit(handlers, 'approval/request', {
       agent: { session: { id: 's2' } },
       toolName: 'write',
-    }, vi.fn(() => 'desktop')) as Promise<'approve' | 'reject'>
+    }, vi.fn(() => 'desktop')) as Promise<string>
 
     await vi.waitFor(() => { expect(notices).toHaveLength(1) })
     expect(notices[0]).toMatchObject({ kind: 'approval', sessionId: 's2' })
     const code = bridge.controller.tasks().find(task => task.id === 's2')?.pending?.code
     if (code === undefined) throw new Error('missing pending')
     await bridge.controller.execute('chat-1', `批准 ${code}`, textOnly)
-    await expect(decision).resolves.toBe('approve')
+    await expect(decision).resolves.toBe('allowed-once')
   })
 
   it('maps a single question to the host answer shape', async () => {
@@ -192,7 +193,7 @@ describe('installRemoteHostBridge', () => {
   })
 
   it('takes the desktop answer and drops the remote question card', async () => {
-    const { bridge, handlers } = harness()
+    const { bridge, handlers, notices } = harness()
     await bridge.refreshSessions()
     emit(handlers, 'session/event', { id: 's1' }, { type: 'turn/start', time: 10, data: {} })
 
@@ -206,6 +207,7 @@ describe('installRemoteHostBridge', () => {
 
     await expect(answer).resolves.toEqual(fromDesktop)
     expect(bridge.controller.tasks()[0]?.pending).toBeUndefined()
+    expect(notices).toContainEqual({ kind: 'decided', sessionId: 's1', decision: 'answered' })
   })
 
   it('refreshes the board when an unseen session emits an event', async () => {
@@ -226,7 +228,7 @@ describe('installRemoteHostBridge', () => {
       agent: { session: { id: 's1' } },
       toolName: 'write',
       reason: '写入 report.xlsx',
-    }, () => undefined) as Promise<'approve' | 'reject'>
+    }, () => undefined) as Promise<string>
     expect(notices).toEqual([{ kind: 'approval', sessionId: 's1', code: expect.any(String) }])
     bridge.controller.releasePending()
     await approval
