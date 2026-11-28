@@ -1841,6 +1841,9 @@ export function apply(ctx: Context, config: Config): void {
       const detail = error instanceof Error ? error.message : String(error)
       ctx.logger.warn(`agent-enhancer: remote control: ${detail}`)
     },
+    desktopNotify: input => {
+      void showOsNotificationNow(input).catch(() => {})
+    },
   })
   let remoteRunning = false
   const syncRemoteControl = async (enabled: boolean): Promise<void> => {

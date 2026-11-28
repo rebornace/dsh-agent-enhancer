@@ -39,6 +39,8 @@ export interface RemoteHubOptions {
   readonly telegramCapabilities?: ChannelCapabilities
   readonly feishuCapabilities?: ChannelCapabilities
   readonly onError?: (error: unknown) => void
+  /** Desktop-side warning channel; used when a push surface goes stale. */
+  readonly desktopNotify?: (input: { readonly title: string; readonly body: string; readonly tag: string }) => void
   /** Tests use 1ms; production polls already held for ~35s. */
   readonly emptyPageDelayMs?: number
 }
@@ -100,6 +102,7 @@ export class RemoteHub {
   private retryTimer: ReturnType<typeof setTimeout> | undefined
   private retries = 0
   private generation = 0
+  private lastWechatWarnAt = 0
   private readonly weixinCapabilities: ChannelCapabilities
   private readonly telegramCapabilities: ChannelCapabilities
   private readonly feishuCapabilities: ChannelCapabilities
@@ -125,6 +128,7 @@ export class RemoteHub {
   }
 
   status(): HubStatus {
+    this.checkWechatFreshness()
     const weixin = this.weixin
     const telegram = this.telegram
     const feishu = this.feishu
@@ -365,6 +369,34 @@ export class RemoteHub {
       : 'unbound'
   }
 
+  /**
+   * WeChat only allows proactive sends while a recent inbound message has
+   * renewed the session. Warn while the user is still at the desktop instead
+   * of failing silently after they walk away.
+   */
+  private checkWechatFreshness(): void {
+    const weixin = this.weixin
+    if (weixin === undefined || !weixin.running) return
+    if (!(this.bindings?.list().some(binding => binding.channel === 'weixin') ?? false)) return
+    const last = weixin.lastInbound
+    if (last === 0 || Date.now() - last < 2 * 60 * 60_000) return
+    weixin.reportStale()
+    this.warnWechatStale('idle')
+  }
+
+  private warnWechatStale(reason: 'expired' | 'idle'): void {
+    const now = Date.now()
+    if (now - this.lastWechatWarnAt < 12 * 60 * 60_000) return
+    this.lastWechatWarnAt = now
+    this.options.desktopNotify?.({
+      title: '微信远程推送可能收不到',
+      body: reason === 'expired'
+        ? '微信会话已过期。离开电脑前给机器人发一条消息，否则审批和回答推不到微信。'
+        : '超过 2 小时没有微信消息。离开电脑前给机器人发一条消息，确保还能收到审批。',
+      tag: 'remote-wechat-stale',
+    })
+  }
+
   /** Opt-in diagnostics: create `remote/debug-notices.enabled` in plugin-data. */
   private debugNotice(entry: Record<string, unknown>): void {
     try {
@@ -473,6 +505,10 @@ export class RemoteHub {
             detail: (error as { detail?: unknown }).detail,
           })
           channel.reportSendError(error)
+          if (binding.channel === 'weixin'
+            && (error as { detail?: { providerCode?: unknown } }).detail?.providerCode === '-2') {
+            this.warnWechatStale('expired')
+          }
           this.options.onError?.(error)
         })
     }

@@ -65,7 +65,12 @@ interface HarnessOptions {
   readonly feishu?: { appId: string; appSecret: string; name?: string }
 }
 
-function harness(options: HarnessOptions) {
+function harness(options: {
+  readonly weixin?: { baseUrl: string; token: string; botId?: string }
+  readonly telegram?: { token: string; botId?: string; username?: string }
+  readonly feishu?: { appId: string; appSecret: string; name?: string }
+  readonly desktopNotify?: (input: { title: string; body: string; tag: string }) => void
+}) {
   const handlers = new Map<string, (...args: never[]) => unknown>()
   const sessionController = {
     list: vi.fn(async () => ({
@@ -163,6 +168,7 @@ function harness(options: HarnessOptions) {
     weixinCredentials: weixinStore as unknown as WeixinCredentialStore,
     telegramCredentials: telegramStore as unknown as TelegramCredentialStore,
     feishuCredentials: feishuStore as unknown as FeishuCredentialStore,
+    ...(options.desktopNotify === undefined ? {} : { desktopNotify: options.desktopNotify }),
     emptyPageDelayMs: 1,
   })
 
@@ -361,8 +367,10 @@ describe('RemoteHub', () => {
   })
 
   it('surfaces a WeChat push failure instead of claiming the channel is fine', async () => {
+    const desktopNotify = vi.fn()
     const { hub, handlers, weixinPages, weixinTransport } = harness({
       weixin: { baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' },
+      desktopNotify,
     })
     await hub.start()
     const code = hub.issueBindCode('weixin')
@@ -383,6 +391,11 @@ describe('RemoteHub', () => {
 
     await until(() => hub.status().channels.some(channel =>
       channel.id === 'weixin' && channel.error?.includes('微信会话已过期')))
+    expect(desktopNotify).toHaveBeenCalledWith({
+      title: '微信远程推送可能收不到',
+      body: expect.stringContaining('给机器人发一条消息'),
+      tag: 'remote-wechat-stale',
+    })
     hub.stop()
   })
 

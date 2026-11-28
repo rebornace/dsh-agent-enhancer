@@ -33,6 +33,7 @@ export interface WeixinAdapterOptions {
   readonly refresh?: () => Promise<unknown>
   /** Pause between empty pages; the real long poll already held for ~35s. */
   readonly emptyPageDelayMs?: number
+  readonly onInbound?: () => void
 }
 
 const WEIXIN_HINTS = {
@@ -68,6 +69,7 @@ export class WeixinAdapter {
       ...(options.refresh === undefined ? {} : { refresh: options.refresh }),
       ...(options.emptyPageDelayMs === undefined ? {} : { emptyPageDelayMs: options.emptyPageDelayMs }),
       isFatal: error => error instanceof WeixinTransportError && error.code === 'stale-token',
+      ...(options.onInbound === undefined ? {} : { onInbound: options.onInbound }),
       hints: WEIXIN_HINTS,
     })
   }

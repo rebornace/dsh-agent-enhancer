@@ -31,6 +31,8 @@ export interface ChannelPollerOptions {
   readonly refresh?: () => Promise<unknown>
   /** Pause between empty pages; the real long poll already held for ~35s. */
   readonly emptyPageDelayMs?: number
+  /** Called for every inbound message so a channel can track freshness. */
+  readonly onInbound?: () => void
   /** A failure that retrying cannot fix (revoked token, logged out). */
   readonly isFatal?: (error: unknown) => boolean
   readonly hints?: Partial<ChannelHints>
@@ -143,6 +145,7 @@ export class ChannelPoller {
   }
 
   private async handle(message: InboundMessage): Promise<void> {
+    this.options.onInbound?.()
     const chatId = message.fromUserId
     if (message.contextToken !== undefined && message.contextToken !== '') {
       this.contexts.set(chatId, message.contextToken)

@@ -42,6 +42,8 @@ export class WeixinChannel {
   private credentialsValue: WeixinCredentials | undefined
   private phaseValue: ChannelPhase = 'off'
   private errorValue: string | undefined
+  /** Timestamp of the last inbound message: WeChat push rights come from it. */
+  private lastInboundAt = 0
   /** Bumped by stop/logout so an in-flight scan result cannot reconnect. */
   private generation = 0
 
@@ -52,6 +54,16 @@ export class WeixinChannel {
 
   get running(): boolean {
     return this.phaseValue === 'running'
+  }
+
+  /** Timestamp of the last inbound message that renewed WeChat push rights. */
+  get lastInbound(): number {
+    return this.lastInboundAt
+  }
+
+  /** Warn before the user walks away; a fresh inbound message clears it. */
+  reportStale(): void {
+    this.errorValue = '推送可能已过期：离开电脑前给机器人发一条消息，否则审批 / 回答推不到微信。'
   }
 
   /** A proactive push failed: keep inbound alive but make the reason visible. */
@@ -148,6 +160,9 @@ export class WeixinChannel {
         contextToken === undefined ? {} : { contextToken },
       )
     }
+    if (this.errorValue?.startsWith('推送受限') === true || this.errorValue?.startsWith('推送可能已过期') === true) {
+      this.errorValue = undefined
+    }
   }
 
   contextFor(chatId: string): string | undefined {
@@ -175,6 +190,12 @@ export class WeixinChannel {
       capabilities: this.options.capabilities,
       cursor,
       refresh: this.options.refresh,
+      onInbound: () => {
+        this.lastInboundAt = Date.now()
+        if (this.errorValue?.startsWith('推送受限') === true || this.errorValue?.startsWith('推送可能已过期') === true) {
+          this.errorValue = undefined
+        }
+      },
       ...(this.options.emptyPageDelayMs === undefined ? {} : { emptyPageDelayMs: this.options.emptyPageDelayMs }),
       onError: error => this.options.onError?.(error),
       onFatal: error => {
