@@ -469,6 +469,8 @@ export class RemoteHub {
             chatId: binding.chatId,
             sessionId: notice.sessionId,
             error: messageOf(error),
+            code: (error as { code?: unknown }).code,
+            detail: (error as { detail?: unknown }).detail,
           })
           this.options.onError?.(error)
         })
