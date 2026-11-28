@@ -71,6 +71,20 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
     }
   }, [props.getRemote])
 
+  const persistWithRetry = async (ops: readonly SettingsPersistOp[]): Promise<void> => {
+    let lastError: unknown
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await props.persist(ops)
+        return
+      } catch (error) {
+        lastError = error
+        await new Promise(resolve => { setTimeout(resolve, 150 + attempt * 250) })
+      }
+    }
+    throw lastError
+  }
+
   const toggleMaster = (): void => {
     if (busy) return
     setBusy(true)
@@ -83,7 +97,7 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
         ops.push({ op: 'set', path: [channelField(channel.id)], value: true })
       }
     }
-    void props.persist(ops)
+    void persistWithRetry(ops)
       .then(() => {
         setEnabled(!enabled)
         setOpen(false)
@@ -110,11 +124,12 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
               value: channel.id === id,
             })
           }
-          setEnabled(true)
         } else {
           ops.push({ op: 'set', path: [channelField(id)], value: next })
         }
-        await props.persist(ops)
+        await persistWithRetry(ops)
+        if (!enabled && next) setEnabled(true)
+
         let started = false
         for (let attempt = 0; attempt < 10 && !started; attempt += 1) {
           const result = await agentEnhancerRemoteSetChannelEnabled.invoke(remote, { channel: id, enabled: next })

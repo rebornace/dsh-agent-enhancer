@@ -269,7 +269,10 @@ export class RemoteHub {
     })
 
     await Promise.all([this.weixin, this.telegram, this.feishu].map(async channel => {
-      if (this.channelEnabled.get(channel.id) === false) return
+      if (this.channelEnabled.get(channel.id) === false) {
+        this.debugNotice({ stage: 'startSkip', channel: channel.id })
+        return
+      }
       await channel.start()
     }))
     this.refreshPhase()
@@ -329,6 +332,7 @@ export class RemoteHub {
 
   /** Apply persisted per-channel switches; safe before the hub has started. */
   applyChannelSettings(enabled: Record<RemoteChannel, boolean>): void {
+    this.debugNotice({ stage: 'flags', enabled, phase: this.phaseValue })
     for (const channel of REMOTE_CHANNELS) {
       const before = this.channelEnabled.get(channel) !== false
       const wanted = enabled[channel] !== false
@@ -357,6 +361,7 @@ export class RemoteHub {
 
   /** Pause one channel without touching its credentials or pairing codes. */
   setChannelEnabled(channel: RemoteChannel, enabled: boolean): boolean {
+    this.debugNotice({ stage: 'setChannel', channel, enabled, phase: this.phaseValue })
     const runtime = channel === 'weixin'
       ? this.weixin
       : channel === 'telegram'
