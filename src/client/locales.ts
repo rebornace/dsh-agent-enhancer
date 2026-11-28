@@ -118,6 +118,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'browserAgentSidebarDisconnected' | 'browserAgentSidebarChatHint' |
       'remoteControl' | 'remoteControlDescription' | 'remoteManage' |
       'remoteDisabledHint' | 'remoteOpenFeatures' |
+      'remotePillOff' | 'remotePillOn' | 'remotePillNoChannel' | 'remotePillBusy' |
+      'remotePillTooltipOn' | 'remotePillTooltipOff' |
       'remoteSettingsIntro' | 'remoteChannelWeixin' | 'remoteChannelTelegram' | 'remoteChannelFeishu' |
       'remoteChannelPhase_off' | 'remoteChannelPhase_unbound' | 'remoteChannelPhase_running' | 'remoteChannelPhase_failed' |
       'remoteTelegramToken' | 'remoteTelegramTokenPlaceholder' | 'remoteTelegramTokenHint' | 'remoteTelegramConnect' |
@@ -513,6 +515,12 @@ export const agentLocales = {
     remoteManage: '管理远程连接',
     remoteDisabledHint: '远程控制当前未开启。先到「功能」页打开开关，再回来连接渠道。',
     remoteOpenFeatures: '去功能页开启',
+    remotePillOff: '远程已关',
+    remotePillOn: '远程已开',
+    remotePillNoChannel: '远程待连',
+    remotePillBusy: '正在切换…',
+    remotePillTooltipOn: '已连接 {channels} 个渠道、{devices} 个聊天。点击关闭，IM 不再收到消息。',
+    remotePillTooltipOff: '远程控制已关闭。点击开启，离开电脑后可在 IM 收到审批和回答。',
     remoteSettingsIntro: '一个页面管理所有渠道：扫码或填写凭据连接，生成一次性绑定码，再用对应聊天控制桌面会话。',
     remoteChannelWeixin: '微信',
     remoteChannelTelegram: 'Telegram',
@@ -1330,6 +1338,12 @@ export const agentLocales = {
     remoteManage: 'Manage remote connections',
     remoteDisabledHint: 'Remote control is off. Turn it on in Features, then come back to connect a channel.',
     remoteOpenFeatures: 'Open Features',
+    remotePillOff: 'Remote off',
+    remotePillOn: 'Remote on',
+    remotePillNoChannel: 'Remote idle',
+    remotePillBusy: 'Switching…',
+    remotePillTooltipOn: '{channels} channels and {devices} chats connected. Click to stop messages to IM.',
+    remotePillTooltipOff: 'Remote control is off. Click to receive approvals and answers in IM while away.',
     remoteSettingsIntro: 'One page for every channel: scan a QR code or paste credentials to connect, create a one-time pairing code, then control desktop sessions from that chat.',
     remoteChannelWeixin: 'WeChat',
     remoteChannelTelegram: 'Telegram',

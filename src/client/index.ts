@@ -94,6 +94,7 @@ import { QuoteExternalHosts } from './quote/external-hosts.tsx'
 import { SessionDeleteMenuItem } from './session-delete/menu.tsx'
 import { SessionDeleteOverlay } from './session-delete/overlay.tsx'
 import { RunAlertsHost } from './run-alerts/host.tsx'
+import { RemoteStatusPill } from './remote/status-pill.tsx'
 import { basenameOfPath, parseWorkspaceFileAddress } from './file-edit/address.ts'
 import { FileEditDocumentAction } from './file-edit/action.tsx'
 import { FILE_EDIT_TAB_ID, FILE_EDIT_TAB_KIND } from './file-edit/kind.ts'
@@ -209,6 +210,19 @@ export function apply(ctx: Context): void {
     ))
     form.acceptLocal(ops)
   }
+  // Remote status shortcut: visible in the frame so checking / stopping IM
+  // pushes never requires opening Settings first.
+  ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'agent-enhancer-remote-status',
+    order: 167,
+    locale: 'agent-enhancer',
+  }, () => createElement(RemoteStatusPill, {
+    t,
+    getRemote: () => agentEnhancerRemote,
+    isEnabled: () => resolveSettings(form.getSnapshot().value).remoteControlEnabled,
+    persist,
+  }))))
   const SettingsTab = (props: { readonly form: typeof form; readonly t: typeof t }) => (
     createElement(PluginSettings, {
       form: props.form,

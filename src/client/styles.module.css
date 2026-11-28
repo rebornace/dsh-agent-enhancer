@@ -2597,6 +2597,55 @@
   max-width: 620px;
 }
 
+/* Frame-wide status pill: small, always visible, one click to stop IM pushes. */
+.remotePill {
+  position: fixed;
+  right: 16px;
+  bottom: 76px;
+  z-index: 5001;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2, #1f1f1f);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  pointer-events: auto;
+  white-space: nowrap;
+}
+
+.remotePill[data-on='true'] {
+  color: var(--dsw-alias-label-primary);
+}
+
+.remotePill:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.remotePillDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-secondary);
+}
+
+.remotePill[data-on='true'] .remotePillDot {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.remotePillCount {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  font-size: 11px;
+}
+
 .remoteSettingsHeader {
   display: flex;
   align-items: flex-start;
