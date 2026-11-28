@@ -79,14 +79,29 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
     const remote = props.getRemote?.()
     if (remote === undefined || busyChannel !== null) return
     setBusyChannel(id)
-    void agentEnhancerRemoteSetChannelEnabled.invoke(remote, { channel: id, enabled: next })
-      .then(async () => {
+    void (async () => {
+      try {
+        if (!enabled && next) {
+          // A paused channel cannot be started while the whole feature is off:
+          // turn the master switch on first, then wait for the host hub to boot.
+          await props.persist([{ op: 'set', path: ['remoteControlEnabled'], value: true }])
+          setEnabled(true)
+          let started = false
+          for (let attempt = 0; attempt < 10 && !started; attempt += 1) {
+            const result = await agentEnhancerRemoteSetChannelEnabled.invoke(remote, { channel: id, enabled: true })
+            started = result.ok
+            if (!started) await new Promise(resolve => { setTimeout(resolve, 200) })
+          }
+        } else {
+          await agentEnhancerRemoteSetChannelEnabled.invoke(remote, { channel: id, enabled: next })
+        }
         setStatus(await agentEnhancerRemoteStatus.invoke(remote))
-      })
-      .catch(() => {
+      } catch {
         // Leave the previous state visible; the poll will reconcile it.
-      })
-      .finally(() => { setBusyChannel(null) })
+      } finally {
+        setBusyChannel(null)
+      }
+    })()
   }
 
   const running = status?.channels.filter(channel => channel.phase === 'running' && channel.enabled !== false).length ?? 0
@@ -125,16 +140,18 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
           title={props.t('remotePillOpenMenu')}
           aria-label={props.t('remotePillOpenMenu')}
           aria-expanded={open}
-          disabled={!enabled || busy}
+          disabled={busy}
           onClick={() => { setOpen(current => !current) }}
         >
           ▾
         </button>
       </div>
-      {open && enabled ? (
+      {open ? (
         <div className={styles.remotePillMenu} role="group" aria-label={props.t('remotePillChannelsTitle')}>
           <span className={styles.remotePillMenuTitle}>{props.t('remotePillChannelsTitle')}</span>
-          <span className={styles.remotePillMenuHint}>{props.t('remotePillMenuHint')}</span>
+          <span className={styles.remotePillMenuHint}>
+            {enabled ? props.t('remotePillMenuHint') : props.t('remotePillMenuOffHint')}
+          </span>
           {CHANNELS.map(channel => {
             const row = status?.channels.find(entry => entry.id === channel.id)
             const on = row?.phase === 'running' && row.enabled !== false

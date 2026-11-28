@@ -120,7 +120,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'remoteDisabledHint' | 'remoteOpenFeatures' |
       'remotePillOff' | 'remotePillOn' | 'remotePillNoChannel' | 'remotePillBusy' |
       'remotePillTooltipOn' | 'remotePillTooltipOff' |
-      'remotePillChannelsTitle' | 'remotePillOpenMenu' | 'remotePillMenuHint' |
+      'remotePillChannelsTitle' | 'remotePillOpenMenu' | 'remotePillMenuHint' | 'remotePillMenuOffHint' |
       'remoteStatChannels' | 'remoteStatChats' | 'remoteStatTasks' |
       'remotePauseChannel' | 'remoteResumeChannel' |
       'remoteSettingsIntro' | 'remoteChannelWeixin' | 'remoteChannelTelegram' | 'remoteChannelFeishu' |
@@ -527,6 +527,7 @@ export const agentLocales = {
     remotePillChannelsTitle: '渠道开关',
     remotePillOpenMenu: '选择渠道',
     remotePillMenuHint: '暂停的渠道不再推送消息；凭据和绑定都会保留。',
+    remotePillMenuOffHint: '远程总开关已关闭；点某个渠道会同时打开总开关。',
     remoteStatChannels: '已连接渠道',
     remoteStatChats: '已绑定聊天',
     remoteStatTasks: '已同步任务',
@@ -1359,6 +1360,7 @@ export const agentLocales = {
     remotePillChannelsTitle: 'Channels',
     remotePillOpenMenu: 'Choose channels',
     remotePillMenuHint: 'Paused channels stop pushing messages; credentials and bindings stay.',
+    remotePillMenuOffHint: 'Remote is off; choosing a channel turns the master switch back on.',
     remoteStatChannels: 'Channels live',
     remoteStatChats: 'Chats paired',
     remoteStatTasks: 'Tasks synced',

@@ -91,4 +91,38 @@ describe('RemoteStatusPill', () => {
     fireEvent.click(wechat.closest('button')!)
     expect(setChannelEnabled).toHaveBeenCalledWith({ channel: 'weixin', enabled: false })
   })
+
+  it('opens a single channel from the menu even when the master switch is off', async () => {
+    const persist = vi.fn(async (_ops: readonly unknown[]) => {})
+    const setChannelEnabled = vi.fn(async (_request: { channel: string; enabled: boolean }) => ({
+      ok: true,
+      value: { ok: true },
+    }))
+    const remote = {
+      agentEnhancer: {
+        remoteStatus: vi.fn(async () => ({ ok: true, value: status(0) })),
+        remoteSetChannelEnabled: setChannelEnabled,
+      },
+    }
+    render(
+      <RemoteStatusPill
+        t={t}
+        getRemote={() => remote}
+        isEnabled={() => false}
+        persist={persist as never}
+      />,
+    )
+
+    expect(await screen.findByText('remotePillOff')).toBeTruthy()
+    fireEvent.click(screen.getByTitle('remotePillOpenMenu'))
+    expect(await screen.findByText('remotePillMenuOffHint')).toBeTruthy()
+    fireEvent.click(screen.getByText('remoteChannelWeixin').closest('button')!)
+
+    expect(persist).toHaveBeenCalledWith([
+      { op: 'set', path: ['remoteControlEnabled'], value: true },
+    ])
+    await waitFor(() => {
+      expect(setChannelEnabled).toHaveBeenCalledWith({ channel: 'weixin', enabled: true })
+    })
+  })
 })
