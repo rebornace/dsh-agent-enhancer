@@ -103,6 +103,7 @@ export class RemoteHub {
   private retries = 0
   private generation = 0
   private lastWechatWarnAt = 0
+  private readonly channelEnabled = new Map<RemoteChannel, boolean>()
   private readonly weixinCapabilities: ChannelCapabilities
   private readonly telegramCapabilities: ChannelCapabilities
   private readonly feishuCapabilities: ChannelCapabilities
@@ -134,8 +135,14 @@ export class RemoteHub {
     const feishu = this.feishu
     const started = weixin !== undefined && telegram !== undefined && feishu !== undefined
     const channels = started
-      ? [weixin.status(), telegram.status(), feishu.status()]
-      : [offStatus('weixin'), offStatus('telegram'), offStatus('feishu')]
+      ? [weixin, telegram, feishu].map(channel => ({
+        ...channel.status(),
+        enabled: this.channelEnabled.get(channel.id) !== false,
+      }))
+      : [offStatus('weixin'), offStatus('telegram'), offStatus('feishu')].map(channel => ({
+        ...channel,
+        enabled: this.channelEnabled.get(channel.id) !== false,
+      }))
     let phase: HubStatus['phase']
     if (!started) {
       phase = this.phaseValue === 'failed' ? 'failed' : this.phaseValue
@@ -261,7 +268,10 @@ export class RemoteHub {
         : { emptyPageDelayMs: this.options.emptyPageDelayMs }),
     })
 
-    await Promise.all([this.weixin.start(), this.telegram.start(), this.feishu.start()])
+    await Promise.all([this.weixin, this.telegram, this.feishu].map(async channel => {
+      if (this.channelEnabled.get(channel.id) === false) return
+      await channel.start()
+    }))
     this.refreshPhase()
     return this.status()
   }
@@ -315,6 +325,26 @@ export class RemoteHub {
     const targets = this.bindings.list().filter(binding => channel === undefined || binding.channel === channel)
     for (const binding of targets) this.bindings.unbind(binding.chatId)
     return targets.length
+  }
+
+  /** Pause one channel without touching its credentials or pairing codes. */
+  setChannelEnabled(channel: RemoteChannel, enabled: boolean): boolean {
+    const runtime = channel === 'weixin'
+      ? this.weixin
+      : channel === 'telegram'
+        ? this.telegram
+        : this.feishu
+    if (runtime === undefined) return false
+    this.channelEnabled.set(channel, enabled)
+    if (!enabled) {
+      runtime.stop()
+      // Nobody left to answer: do not leave a tool waiting on a dead surface.
+      if (!this.anyRunning()) this.controller?.releasePending()
+    } else if (this.phaseValue !== 'stopped') {
+      void runtime.start().catch(error => this.options.onError?.(error))
+    }
+    this.refreshPhase()
+    return true
   }
 
   async logout(channel?: RemoteChannel): Promise<void> {

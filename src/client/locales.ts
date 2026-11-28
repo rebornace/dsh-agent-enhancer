@@ -120,8 +120,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       'remoteDisabledHint' | 'remoteOpenFeatures' |
       'remotePillOff' | 'remotePillOn' | 'remotePillNoChannel' | 'remotePillBusy' |
       'remotePillTooltipOn' | 'remotePillTooltipOff' |
+      'remotePillChannelsTitle' | 'remotePillOpenMenu' | 'remotePillMenuHint' |
+      'remoteStatChannels' | 'remoteStatChats' | 'remoteStatTasks' |
+      'remotePauseChannel' | 'remoteResumeChannel' |
       'remoteSettingsIntro' | 'remoteChannelWeixin' | 'remoteChannelTelegram' | 'remoteChannelFeishu' |
-      'remoteChannelPhase_off' | 'remoteChannelPhase_unbound' | 'remoteChannelPhase_running' | 'remoteChannelPhase_failed' |
+      'remoteChannelPhase_off' | 'remoteChannelPhase_unbound' | 'remoteChannelPhase_running' | 'remoteChannelPhase_failed' | 'remoteChannelPhase_paused' |
       'remoteTelegramToken' | 'remoteTelegramTokenPlaceholder' | 'remoteTelegramTokenHint' | 'remoteTelegramConnect' |
       'remoteTelegramOpenBotFather' | 'remoteTelegramHideBotFather' | 'remoteTelegramQrLabel' | 'remoteTelegramQrHint' |
       'remoteTelegramNameHint' |
@@ -521,7 +524,15 @@ export const agentLocales = {
     remotePillBusy: '正在切换…',
     remotePillTooltipOn: '已连接 {channels} 个渠道、{devices} 个聊天。点击关闭，IM 不再收到消息。',
     remotePillTooltipOff: '远程控制已关闭。点击开启，离开电脑后可在 IM 收到审批和回答。',
-    remoteSettingsIntro: '一个页面管理所有渠道：扫码或填写凭据连接，生成一次性绑定码，再用对应聊天控制桌面会话。',
+    remotePillChannelsTitle: '渠道开关',
+    remotePillOpenMenu: '选择渠道',
+    remotePillMenuHint: '暂停的渠道不再推送消息；凭据和绑定都会保留。',
+    remoteStatChannels: '已连接渠道',
+    remoteStatChats: '已绑定聊天',
+    remoteStatTasks: '已同步任务',
+    remotePauseChannel: '暂停此渠道',
+    remoteResumeChannel: '恢复此渠道',
+    remoteSettingsIntro: '连接微信 / Telegram / 飞书，离开电脑也能看任务、审批和回答。',
     remoteChannelWeixin: '微信',
     remoteChannelTelegram: 'Telegram',
     remoteChannelFeishu: '飞书',
@@ -529,6 +540,7 @@ export const agentLocales = {
     remoteChannelPhase_unbound: '未连接',
     remoteChannelPhase_running: '已连接',
     remoteChannelPhase_failed: '连接异常',
+    remoteChannelPhase_paused: '已暂停',
     remoteTelegramToken: 'Bot Token',
     remoteTelegramTokenPlaceholder: '从 @BotFather 获取，例如 123456:ABC…',
     remoteTelegramTokenHint: 'Token 只保存在宿主凭据服务。连接后插件用长轮询收消息，不需要公网地址；重启会自动重连。',
@@ -1344,7 +1356,15 @@ export const agentLocales = {
     remotePillBusy: 'Switching…',
     remotePillTooltipOn: '{channels} channels and {devices} chats connected. Click to stop messages to IM.',
     remotePillTooltipOff: 'Remote control is off. Click to receive approvals and answers in IM while away.',
-    remoteSettingsIntro: 'One page for every channel: scan a QR code or paste credentials to connect, create a one-time pairing code, then control desktop sessions from that chat.',
+    remotePillChannelsTitle: 'Channels',
+    remotePillOpenMenu: 'Choose channels',
+    remotePillMenuHint: 'Paused channels stop pushing messages; credentials and bindings stay.',
+    remoteStatChannels: 'Channels live',
+    remoteStatChats: 'Chats paired',
+    remoteStatTasks: 'Tasks synced',
+    remotePauseChannel: 'Pause this channel',
+    remoteResumeChannel: 'Resume this channel',
+    remoteSettingsIntro: 'Connect WeChat / Telegram / Feishu to see tasks, approvals and answers while away from the computer.',
     remoteChannelWeixin: 'WeChat',
     remoteChannelTelegram: 'Telegram',
     remoteChannelFeishu: 'Feishu',
@@ -1352,6 +1372,7 @@ export const agentLocales = {
     remoteChannelPhase_unbound: 'Not connected',
     remoteChannelPhase_running: 'Connected',
     remoteChannelPhase_failed: 'Connection problem',
+    remoteChannelPhase_paused: 'Paused',
     remoteTelegramToken: 'Bot Token',
     remoteTelegramTokenPlaceholder: 'From @BotFather, e.g. 123456:ABC…',
     remoteTelegramTokenHint: 'The token is stored only in the host credential service. After connecting, the plugin uses long polling, so no public address is needed; it reconnects on restart.',

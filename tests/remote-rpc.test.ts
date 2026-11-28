@@ -12,6 +12,7 @@ import {
   agentEnhancerRemoteRevoke,
   agentEnhancerRemoteStatus,
   agentEnhancerRemoteTelegramConnect,
+  agentEnhancerRemoteSetChannelEnabled,
   clientRemoteInfo,
 } from '../src/client/remote.ts'
 
@@ -24,6 +25,7 @@ const METHODS = [
   'remoteLogout',
   'remoteTelegramConnect',
   'remoteFeishuConnect',
+  'remoteSetChannelEnabled',
 ] as const
 
 describe('remote-control RPC surface', () => {
@@ -107,5 +109,8 @@ describe('remote-control RPC surface', () => {
 
     const feishu = await agentEnhancerRemoteFeishuConnect.invoke(undefined, { appId: 'cli_x', appSecret: 's' })
     expect(feishu.ok).toBe(false)
+
+    const channel = await agentEnhancerRemoteSetChannelEnabled.invoke(undefined, { channel: 'weixin', enabled: false })
+    expect(channel.ok).toBe(false)
   })
 })

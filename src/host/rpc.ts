@@ -639,6 +639,7 @@ export const remoteChannelStatusSchema = z.strictObject({
   login: remoteChannelLoginSchema,
   devices: z.array(remoteChannelDeviceSchema),
   handle: z.string().optional(),
+  enabled: z.boolean().optional(),
   error: z.string().optional(),
 })
 export type RemoteChannelStatusWire = z.infer<typeof remoteChannelStatusSchema>
@@ -698,6 +699,16 @@ export const remoteTelegramConnectResultSchema = z.strictObject({
   error: z.string().optional(),
 })
 export type RemoteTelegramConnectResult = z.infer<typeof remoteTelegramConnectResultSchema>
+export const remoteSetChannelEnabledRequestSchema = z.strictObject({
+  channel: remoteChannelIdSchema,
+  enabled: z.boolean(),
+})
+export type RemoteSetChannelEnabledRequest = z.infer<typeof remoteSetChannelEnabledRequestSchema>
+export const remoteSetChannelEnabledResultSchema = z.strictObject({
+  ok: z.boolean(),
+  error: z.string().optional(),
+})
+export type RemoteSetChannelEnabledResult = z.infer<typeof remoteSetChannelEnabledResultSchema>
 export const remoteFeishuConnectRequestSchema = z.strictObject({
   appId: z.string().min(1).max(100),
   appSecret: z.string().min(1).max(200),
@@ -747,6 +758,14 @@ const remoteFeishuConnectRequestCodec = codec(
 const remoteFeishuConnectResultCodec = codec(
   'dsh-agent-enhancer#RemoteFeishuConnectResult',
   remoteFeishuConnectResultSchema,
+)
+const remoteSetChannelEnabledRequestCodec = codec(
+  'dsh-agent-enhancer#RemoteSetChannelEnabledRequest',
+  remoteSetChannelEnabledRequestSchema,
+)
+const remoteSetChannelEnabledResultCodec = codec(
+  'dsh-agent-enhancer#RemoteSetChannelEnabledResult',
+  remoteSetChannelEnabledResultSchema,
 )
 const remoteOkResultCodec = codec('dsh-agent-enhancer#RemoteOkResult', remoteOkResultSchema)
 
@@ -2010,6 +2029,18 @@ export const remoteInfo = createTypertRemoteInfo({
         strictCodec: remoteFeishuConnectRequestCodec,
       }],
       result: remoteFeishuConnectResultCodec,
+    },
+    'agentEnhancer/remoteSetChannelEnabled': {
+      service: 'agentEnhancer',
+      implementation: 'remoteSetChannelEnabled',
+      invocation: { kind: 'direct' },
+      parameters: [{
+        name: 'request',
+        source: 'json',
+        codec: remoteSetChannelEnabledRequestCodec,
+        strictCodec: remoteSetChannelEnabledRequestCodec,
+      }],
+      result: remoteSetChannelEnabledResultCodec,
     },
     'agentEnhancer/showOsNotification': {
       service: 'agentEnhancer',

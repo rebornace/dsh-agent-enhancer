@@ -241,6 +241,25 @@ describe('RemoteHub', () => {
     hub.stop()
   })
 
+  it('pauses and resumes one channel without clearing its credentials', async () => {
+    const { hub, weixinStore } = harness({
+      weixin: { baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' },
+    })
+    await hub.start()
+    expect(hub.status().channels.find(channel => channel.id === 'weixin')?.phase).toBe('running')
+
+    expect(hub.setChannelEnabled('weixin', false)).toBe(true)
+    const paused = hub.status().channels.find(channel => channel.id === 'weixin')
+    expect(paused?.enabled).toBe(false)
+    expect(paused?.phase).toBe('off')
+    expect(weixinStore.value).toBeDefined()
+
+    expect(hub.setChannelEnabled('weixin', true)).toBe(true)
+    await until(() => hub.status().channels.some(channel =>
+      channel.id === 'weixin' && channel.phase === 'running'))
+    hub.stop()
+  })
+
   it('binds chats per channel with a one-shot code and revokes by channel', async () => {
     const { hub, sent, weixinPages, telegramPages } = harness({
       weixin: { baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' },

@@ -11,6 +11,7 @@ import {
   agentEnhancerRemoteRevoke,
   agentEnhancerRemoteStatus,
   agentEnhancerRemoteTelegramConnect,
+  agentEnhancerRemoteSetChannelEnabled,
 } from '../remote.ts'
 import { QrCode } from './qr-code.tsx'
 
@@ -177,13 +178,35 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
     void run(`logout-${channel}`, remote => agentEnhancerRemoteLogout.invoke(remote, { channel }))
   }
 
+  const toggleChannel = (channel: RemoteChannelIdWire, next: boolean): void => {
+    void run(`channel-${channel}`, remote => agentEnhancerRemoteSetChannelEnabled.invoke(
+      remote,
+      { channel, enabled: next },
+    ))
+  }
+
   return (
     <div className={styles.remoteSettings}>
       <div className={styles.remoteSettingsHeader}>
         <p className={styles.remoteIntro}>{t('remoteSettingsIntro')}</p>
-        <span className={styles.remoteHint}>
-          {t('remoteTasksSynced')}: {status?.tasks ?? 0}
-        </span>
+        <div className={styles.remoteSummary}>
+          <div className={styles.remoteStat}>
+            <span className={styles.remoteStatValue}>
+              {status?.channels.filter(channel => channel.phase === 'running' && channel.enabled !== false).length ?? 0}
+            </span>
+            <span className={styles.remoteStatLabel}>{t('remoteStatChannels')}</span>
+          </div>
+          <div className={styles.remoteStat}>
+            <span className={styles.remoteStatValue}>
+              {status?.channels.reduce((total, channel) => total + channel.devices.length, 0) ?? 0}
+            </span>
+            <span className={styles.remoteStatLabel}>{t('remoteStatChats')}</span>
+          </div>
+          <div className={styles.remoteStat}>
+            <span className={styles.remoteStatValue}>{status?.tasks ?? 0}</span>
+            <span className={styles.remoteStatLabel}>{t('remoteStatTasks')}</span>
+          </div>
+        </div>
       </div>
 
       {loadError !== null ? <p className={styles.remoteError} role="status">{loadError}</p> : null}
@@ -217,6 +240,7 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
         onBindCode={() => { issueCode('weixin') }}
         onLogout={() => { logout('weixin') }}
         onRevoke={chatId => { revoke('weixin', chatId) }}
+        onToggleEnabled={enabled => { toggleChannel('weixin', enabled) }}
       />
 
       <ChannelCard
@@ -240,6 +264,7 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
         onBindCode={() => { issueCode('telegram') }}
         onLogout={() => { logout('telegram') }}
         onRevoke={chatId => { revoke('telegram', chatId) }}
+        onToggleEnabled={enabled => { toggleChannel('telegram', enabled) }}
         showBotFather={showBotFather}
         onToggleBotFather={() => { setShowBotFather(current => !current) }}
       />
@@ -273,6 +298,7 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
         onBindCode={() => { issueCode('feishu') }}
         onLogout={() => { logout('feishu') }}
         onRevoke={chatId => { revoke('feishu', chatId) }}
+        onToggleEnabled={enabled => { toggleChannel('feishu', enabled) }}
       />
         </>
       ) : null}
@@ -304,6 +330,7 @@ interface ChannelCardProps {
   readonly onBindCode: () => void
   readonly onLogout: () => void
   readonly onRevoke: (chatId: string) => void
+  readonly onToggleEnabled?: (enabled: boolean) => void
 }
 
 function ChannelCard(props: ChannelCardProps) {
@@ -313,6 +340,8 @@ function ChannelCard(props: ChannelCardProps) {
   const qrUrl = login?.qrUrl
   const waiting = login?.phase === 'waiting' && qrUrl !== undefined
   const connected = phase === 'running'
+  const paused = channel?.enabled === false
+  const phaseLabel = paused ? t('remoteChannelPhase_paused') : t(`remoteChannelPhase_${phase}` as 'remoteChannelPhase_off')
   const devices = channel?.devices ?? []
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
@@ -337,11 +366,21 @@ function ChannelCard(props: ChannelCardProps) {
     <section className={styles.remoteChannelCard} data-channel={id}>
       <header className={styles.remoteChannelHeader}>
         <span className={styles.remoteChannelName}>{title}</span>
-        <span className={styles.remotePhase} data-phase={phase}>
-          {t(`remoteChannelPhase_${phase}` as 'remoteChannelPhase_off')}
+        <span className={styles.remotePhase} data-phase={paused ? 'paused' : phase}>
+          {phaseLabel}
         </span>
         {channel?.handle !== undefined ? (
           <span className={styles.remoteHint} title={channel.handle}>{channel.handle}</span>
+        ) : null}
+        {connected || paused ? (
+          <button
+            type="button"
+            className={styles.settingsLink}
+            disabled={disabled}
+            onClick={() => { props.onToggleEnabled?.(!connected) }}
+          >
+            {paused ? t('remoteResumeChannel') : t('remotePauseChannel')}
+          </button>
         ) : null}
         {connected ? (
           <button
@@ -375,7 +414,7 @@ function ChannelCard(props: ChannelCardProps) {
         </div>
       ) : null}
 
-      {id === 'weixin' && !connected && !waiting ? (
+      {id === 'weixin' && !connected && !paused && !waiting ? (
         <div className={styles.remoteActions}>
           <button
             type="button"
@@ -393,7 +432,7 @@ function ChannelCard(props: ChannelCardProps) {
         </div>
       ) : null}
 
-      {id === 'telegram' && !connected ? (
+      {id === 'telegram' && !connected && !paused ? (
         <div className={styles.remoteTokenRow}>
           <input
             className={styles.remoteTokenInput}
@@ -420,11 +459,11 @@ function ChannelCard(props: ChannelCardProps) {
         </div>
       ) : null}
 
-      {id === 'telegram' && !connected ? (
+      {id === 'telegram' && !connected && !paused ? (
         <p className={styles.remoteHint}>{t('remoteTelegramTokenHint')}</p>
       ) : null}
 
-      {id === 'telegram' && !connected ? (
+      {id === 'telegram' && !connected && !paused ? (
         <div className={styles.remoteBotFather}>
           <button
             type="button"
@@ -444,7 +483,7 @@ function ChannelCard(props: ChannelCardProps) {
         </div>
       ) : null}
 
-      {id === 'feishu' && !connected ? (
+      {id === 'feishu' && !connected && !paused ? (
         <div className={styles.remoteCredentialFields}>
           <input
             className={styles.remoteTokenInput}
@@ -474,7 +513,7 @@ function ChannelCard(props: ChannelCardProps) {
         </div>
       ) : null}
 
-      {id === 'feishu' && !connected ? (
+      {id === 'feishu' && !connected && !paused ? (
         <div className={styles.remoteFeishuGuide}>
           <span className={styles.remoteFeishuGuideTitle}>{t('remoteFeishuTemplateTitle')}</span>
           <ol className={styles.remoteFeishuSteps}>
@@ -632,7 +671,7 @@ function ChannelCard(props: ChannelCardProps) {
         </div>
       ) : null}
 
-      {id === 'feishu' && !connected ? (
+      {id === 'feishu' && !connected && !paused ? (
         <>
           <p className={styles.remoteHint}>{t('remoteFeishuHint')}</p>
           <div className={styles.remoteActions}>

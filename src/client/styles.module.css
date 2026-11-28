@@ -2598,11 +2598,26 @@
 }
 
 /* Frame-wide status pill: small, always visible, one click to stop IM pushes. */
-.remotePill {
+.remotePillWrap {
   position: fixed;
   right: 16px;
   bottom: 76px;
   z-index: 5001;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.remotePillRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  pointer-events: auto;
+}
+
+.remotePill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2646,6 +2661,88 @@
   font-size: 11px;
 }
 
+.remotePillCaret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 28px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2, #1f1f1f);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.remotePillCaret:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.remotePillMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 196px;
+  padding: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2, #1f1f1f);
+  pointer-events: auto;
+}
+
+.remotePillMenuTitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.remotePillMenuHint {
+  margin-bottom: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.remotePillChannel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.remotePillChannel:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.remotePillChannel:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.remotePillChannel[data-on='true'] .remotePillDot {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.remotePillChannelState {
+  margin-left: auto;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+}
+
 .remoteSettingsHeader {
   display: flex;
   align-items: flex-start;
@@ -2658,6 +2755,35 @@
   color: var(--dsw-alias-label-secondary);
   font-size: 13px;
   line-height: 20px;
+}
+
+/* Compact stat trio: numbers first, labels below, no cramped inline "x: n". */
+.remoteSummary {
+  display: flex;
+  flex-shrink: 0;
+  gap: 14px;
+}
+
+.remoteStat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 58px;
+}
+
+.remoteStatValue {
+  color: var(--dsw-alias-label-primary);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.remoteStatLabel {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
 }
 
 .remoteChannelCard {

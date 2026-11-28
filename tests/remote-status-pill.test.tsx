@@ -14,6 +14,7 @@ function status(running: number): RemoteStatusWire {
     channels: ['weixin', 'telegram', 'feishu'].map((id, index) => ({
       id: id as 'weixin' | 'telegram' | 'feishu',
       phase: index < running ? 'running' as const : 'unbound' as const,
+      enabled: index < running,
       login: { phase: 'idle' as const, status: 'idle' },
       devices: index < running ? [{ chatId: `chat-${index}`, boundAt: 0 }] : [],
     })),
@@ -62,5 +63,32 @@ describe('RemoteStatusPill', () => {
     expect(persist).toHaveBeenCalledWith([
       { op: 'set', path: ['remoteControlEnabled'], value: false },
     ])
+  })
+
+  it('pauses one channel from the caret menu', async () => {
+    const setChannelEnabled = vi.fn(async (_request: { channel: string; enabled: boolean }) => ({
+      ok: true,
+      value: { ok: true },
+    }))
+    const remote = {
+      agentEnhancer: {
+        remoteStatus: vi.fn(async () => ({ ok: true, value: status(2) })),
+        remoteSetChannelEnabled: setChannelEnabled,
+      },
+    }
+    render(
+      <RemoteStatusPill
+        t={t}
+        getRemote={() => remote}
+        isEnabled={() => true}
+        persist={vi.fn(async (_ops: readonly unknown[]) => {}) as never}
+      />,
+    )
+
+    expect(await screen.findByText('remotePillOn')).toBeTruthy()
+    fireEvent.click(screen.getByTitle('remotePillOpenMenu'))
+    const wechat = await screen.findByText('remoteChannelWeixin')
+    fireEvent.click(wechat.closest('button')!)
+    expect(setChannelEnabled).toHaveBeenCalledWith({ channel: 'weixin', enabled: false })
   })
 })

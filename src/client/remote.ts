@@ -58,6 +58,8 @@ import type {
   RemoteTelegramConnectResult,
   RemoteFeishuConnectRequest,
   RemoteFeishuConnectResult,
+  RemoteSetChannelEnabledRequest,
+  RemoteSetChannelEnabledResult,
 } from '../host/rpc.ts'
 import type { AuxiliaryResult } from '../host/types.ts'
 import type { WebChatLoginSnapshot } from '../host/web-chat-bridge/login-snapshot-types.ts'
@@ -419,6 +421,20 @@ export const clientRemoteInfo = {
       codec: codec('dsh-agent-enhancer#RemoteFeishuConnectRequest'),
     }],
     result: codec('dsh-agent-enhancer#RemoteFeishuConnectResult'),
+  }, {
+    id: 'dsh-agent-enhancer#agentEnhancer/remoteSetChannelEnabled',
+    service: 'agentEnhancer',
+    namespace: 'agentEnhancer',
+    method: 'remoteSetChannelEnabled',
+    implementation: 'remoteSetChannelEnabled',
+    invocation: { kind: 'direct' },
+    parameters: [{
+      name: 'request',
+      wire: 'request',
+      source: 'json',
+      codec: codec('dsh-agent-enhancer#RemoteSetChannelEnabledRequest'),
+    }],
+    result: codec('dsh-agent-enhancer#RemoteSetChannelEnabledResult'),
   }, {
     id: 'dsh-agent-enhancer#agentEnhancer/showOsNotification',
     service: 'agentEnhancer',
@@ -1415,6 +1431,30 @@ export const agentEnhancerRemoteFeishuConnect = {
     try {
       const result = await call.call(namespace, request)
       return result.ok ? result.value : unavailable('连接失败')
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      return unavailable(errorMessage(error))
+    }
+  },
+}
+export const agentEnhancerRemoteSetChannelEnabled = {
+  async invoke(
+    remote: unknown,
+    request: RemoteSetChannelEnabledRequest,
+    signal?: AbortSignal,
+  ): Promise<RemoteSetChannelEnabledResult> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    const unavailable = (error: string): RemoteSetChannelEnabledResult => ({ ok: false, error })
+    if (remote === null || remote === undefined || typeof remote !== 'object') return unavailable('宿主不可用')
+    const namespace = Reflect.get(remote, 'agentEnhancer') as object | undefined
+    if (namespace === undefined || typeof namespace !== 'object') return unavailable('插件远程接口缺失')
+    const call = Reflect.get(namespace, 'remoteSetChannelEnabled') as
+      | ((request: RemoteSetChannelEnabledRequest) => Promise<RemoteResult<RemoteSetChannelEnabledResult>>)
+      | undefined
+    if (typeof call !== 'function') return unavailable('remoteSetChannelEnabled 缺失')
+    try {
+      const result = await call.call(namespace, request)
+      return result.ok ? result.value : unavailable('操作失败')
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
       return unavailable(errorMessage(error))

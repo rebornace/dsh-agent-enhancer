@@ -22,6 +22,8 @@ export interface ChannelStatus {
   readonly devices: readonly ChannelDevice[]
   /** Bot identity for humans: WeChat bot id, Telegram @username. */
   readonly handle?: string
+  /** False when the user paused this channel while remote control stays on. */
+  readonly enabled?: boolean
   readonly error?: string
 }
 

@@ -264,6 +264,8 @@ import type {
   RemoteTelegramConnectResult,
   RemoteFeishuConnectRequest,
   RemoteFeishuConnectResult,
+  RemoteSetChannelEnabledRequest,
+  RemoteSetChannelEnabledResult,
 } from './rpc.ts'
 import { showOsNotificationNow } from './run-alerts/notify.ts'
 import { RemoteHub } from './remote/hub.ts'
@@ -1353,6 +1355,17 @@ export class AgentEnhancerService extends TypertRemoteService {
   async showOsNotification(request: ShowOsNotificationRequest): Promise<ShowOsNotificationResult> {
     this.assertOwner()
     return await showOsNotificationNow(request)
+  }
+
+  /** Pause or resume one channel without clearing its credentials. */
+  async remoteSetChannelEnabled(request: RemoteSetChannelEnabledRequest): Promise<RemoteSetChannelEnabledResult> {
+    this.assertOwner()
+    try {
+      const ok = this.requireRemoteControl().setChannelEnabled(request.channel, request.enabled)
+      return ok ? { ok: true } : { ok: false, error: '远程控制还没有启动' }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   async browserAgentSnapshot(): Promise<BrowserAgentSnapshot> {

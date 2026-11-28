@@ -53,6 +53,7 @@ function harness(initial: RemoteStatusWire) {
       })),
       remoteRevoke: vi.fn(async () => ({ ok: true, value: { ok: true, revoked: 1 } })),
       remoteLogout: vi.fn(async () => ({ ok: true, value: { ok: true } })),
+      remoteSetChannelEnabled: vi.fn(async () => ({ ok: true, value: { ok: true } })),
       remoteTelegramConnect: vi.fn(async () => {
         current = status({
           phase: 'running',
@@ -239,6 +240,37 @@ describe('RemoteSettingsPanel', () => {
     fireEvent.click(await screen.findByText('remoteRevoke'))
     await waitFor(() => {
       expect(remote.agentEnhancer.remoteRevoke).toHaveBeenCalledWith({ channel: 'weixin', chatId: 'chat-1' })
+    })
+  })
+
+  it('shows compact stats and pauses one channel on its own', async () => {
+    const { remote, get } = harness(status({
+      phase: 'running',
+      channels: [
+        channel('weixin', {
+          phase: 'running',
+          enabled: true,
+          login: { phase: 'connected', status: 'connected' },
+          devices: [{ chatId: 'chat-1', boundAt: 0 }],
+        }),
+        channel('telegram'),
+        channel('feishu'),
+      ],
+      tasks: 52,
+    }))
+    render(<RemoteSettingsPanel t={t} getRemote={get} busy={false} enabled onOpenFeatures={() => {}} />)
+
+    expect(await screen.findByText('remoteStatChannels')).toBeTruthy()
+    expect(screen.getByText('remoteStatChats')).toBeTruthy()
+    expect(screen.getByText('remoteStatTasks')).toBeTruthy()
+    expect(screen.getByText('52')).toBeTruthy()
+
+    fireEvent.click(screen.getByText('remotePauseChannel'))
+    await waitFor(() => {
+      expect(remote.agentEnhancer.remoteSetChannelEnabled).toHaveBeenCalledWith({
+        channel: 'weixin',
+        enabled: false,
+      })
     })
   })
 })
