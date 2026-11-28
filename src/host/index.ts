@@ -315,6 +315,9 @@ export const Config = z.object({
   webChatBridgeEnabled: z.boolean().default(true).volatile(),
   /** WeChat + Telegram remote control; on by default, inert until a chat is paired. */
   remoteControlEnabled: z.boolean().default(true).volatile(),
+  remoteWeixinEnabled: z.boolean().default(true).volatile(),
+  remoteTelegramEnabled: z.boolean().default(true).volatile(),
+  remoteFeishuEnabled: z.boolean().default(true).volatile(),
   instructionsSkillsEnabled: z.boolean().default(true).volatile(),
   mcpConnectorsEnabled: z.boolean().default(true).volatile(),
   // Empty provider/model = follow the current Desktop session model.
@@ -1718,6 +1721,9 @@ function readSettings(config: Config): EnhancerSettings {
     browserAgentUnattendedActions: config.browserAgentUnattendedActions.get(),
     webChatBridgeEnabled: config.webChatBridgeEnabled.get(),
     remoteControlEnabled: config.remoteControlEnabled.get(),
+    remoteWeixinEnabled: config.remoteWeixinEnabled.get(),
+    remoteTelegramEnabled: config.remoteTelegramEnabled.get(),
+    remoteFeishuEnabled: config.remoteFeishuEnabled.get(),
     instructionsSkillsEnabled: config.instructionsSkillsEnabled.get(),
     mcpConnectorsEnabled: config.mcpConnectorsEnabled.get(),
     optimizeProvider: config.optimizeProvider.get(),
@@ -1743,6 +1749,14 @@ function readSettings(config: Config): EnhancerSettings {
     autoClassifierModel: config.autoClassifierModel.get(),
     autoClassifierReasoningEffort: config.autoClassifierReasoningEffort.get(),
   })
+}
+
+function remoteChannelFlags(settings: EnhancerSettings) {
+  return {
+    weixin: settings.remoteWeixinEnabled,
+    telegram: settings.remoteTelegramEnabled,
+    feishu: settings.remoteFeishuEnabled,
+  }
 }
 
 export function apply(ctx: Context, config: Config): void {
@@ -1871,6 +1885,7 @@ export function apply(ctx: Context, config: Config): void {
       ctx.logger.warn(`agent-enhancer: remote control start failed: ${detail}`)
     }
   }
+  remoteHub.applyChannelSettings(remoteChannelFlags(settings()))
   void syncRemoteControl(settings().remoteControlEnabled)
   sessionCleanup.register({
     id: 'remote-control',
@@ -1927,6 +1942,7 @@ export function apply(ctx: Context, config: Config): void {
       browserAgentLive.enabled = cfg.browserAgentEnabled.get()
       browserAgentLive.browser = hostBrowserPreference(cfg.browserAgentBrowser.get())
       browserAgentLive.demonstrate = cfg.browserAgentDemonstrate.get()
+      remoteHub.applyChannelSettings(remoteChannelFlags(readSettings(cfg)))
       void syncRemoteControl(cfg.remoteControlEnabled.get())
       // Always refresh: heals missing browser_* tools after live pack reload /
       // async teardown races. Idempotent when already mounted.

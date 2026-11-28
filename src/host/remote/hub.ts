@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { BindingStore } from './bindings.ts'
+import { BindingStore, REMOTE_CHANNELS } from './bindings.ts'
 import type { RemoteChannel } from './bindings.ts'
 import type { ChannelStatus, HubStatus } from './channels/status.ts'
 import type { RemoteController } from './controller.ts'
@@ -325,6 +325,34 @@ export class RemoteHub {
     const targets = this.bindings.list().filter(binding => channel === undefined || binding.channel === channel)
     for (const binding of targets) this.bindings.unbind(binding.chatId)
     return targets.length
+  }
+
+  /** Apply persisted per-channel switches; safe before the hub has started. */
+  applyChannelSettings(enabled: Record<RemoteChannel, boolean>): void {
+    for (const channel of REMOTE_CHANNELS) {
+      const before = this.channelEnabled.get(channel) !== false
+      const wanted = enabled[channel] !== false
+      this.channelEnabled.set(channel, wanted)
+      if (before === wanted) continue
+      const runtime = channel === 'weixin'
+        ? this.weixin
+        : channel === 'telegram'
+          ? this.telegram
+          : this.feishu
+      if (runtime === undefined) continue
+      if (wanted) {
+        if (this.phaseValue !== 'stopped') void runtime.start().catch(error => this.options.onError?.(error))
+      } else {
+        runtime.stop()
+      }
+    }
+    // Before start() the channels do not exist yet: only record the desired
+    // flags; startInternal() honours them. Do not move phase off `stopped`,
+    // otherwise start() refuses to boot.
+    if (this.weixin !== undefined) {
+      if (!this.anyRunning()) this.controller?.releasePending()
+      this.refreshPhase()
+    }
   }
 
   /** Pause one channel without touching its credentials or pairing codes. */

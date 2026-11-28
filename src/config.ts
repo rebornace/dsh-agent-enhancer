@@ -158,6 +158,10 @@ export interface AuxiliaryModelSettings {
 }
 
 export type EnhancerSettings = Readonly<Record<`${ModuleName}Enabled`, boolean>> & {
+  /** Per-channel switches; the master switch gates all of them. Default on. */
+  readonly remoteWeixinEnabled: boolean
+  readonly remoteTelegramEnabled: boolean
+  readonly remoteFeishuEnabled: boolean
   readonly runAlertsLevel: RunAlertsLevel
   /** Dedicated window: auto (Win→Edge, Mac→Safari), or force a platform browser. */
   readonly browserAgentBrowser: BrowserAgentBrowser
@@ -225,6 +229,9 @@ export const DEFAULT_SETTINGS: EnhancerSettings = {
   instructionsSkillsEnabled: true,
   mcpConnectorsEnabled: true,
   remoteControlEnabled: true,
+  remoteWeixinEnabled: true,
+  remoteTelegramEnabled: true,
+  remoteFeishuEnabled: true,
   optimizeProvider: '',
   optimizeModel: '',
   optimizeReasoningEffort: '',
@@ -278,6 +285,9 @@ export function resolveSettings(value: Partial<EnhancerSettings> | undefined): E
     instructionsSkillsEnabled: value?.instructionsSkillsEnabled ?? true,
     mcpConnectorsEnabled: value?.mcpConnectorsEnabled ?? true,
     remoteControlEnabled: value?.remoteControlEnabled ?? true,
+    remoteWeixinEnabled: value?.remoteWeixinEnabled ?? true,
+    remoteTelegramEnabled: value?.remoteTelegramEnabled ?? true,
+    remoteFeishuEnabled: value?.remoteFeishuEnabled ?? true,
     optimizeProvider: text(value?.optimizeProvider),
     optimizeModel: text(value?.optimizeModel),
     optimizeReasoningEffort: text(value?.optimizeReasoningEffort),

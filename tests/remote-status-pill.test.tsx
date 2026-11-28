@@ -39,6 +39,9 @@ describe('RemoteStatusPill', () => {
     fireEvent.click(screen.getByText('remotePillOff').closest('button')!)
     expect(persist).toHaveBeenCalledWith([
       { op: 'set', path: ['remoteControlEnabled'], value: true },
+      { op: 'set', path: ['remoteWeixinEnabled'], value: true },
+      { op: 'set', path: ['remoteTelegramEnabled'], value: true },
+      { op: 'set', path: ['remoteFeishuEnabled'], value: true },
     ])
   })
 
@@ -66,6 +69,7 @@ describe('RemoteStatusPill', () => {
   })
 
   it('pauses one channel from the caret menu', async () => {
+    const persist = vi.fn(async (_ops: readonly unknown[]) => {})
     const setChannelEnabled = vi.fn(async (_request: { channel: string; enabled: boolean }) => ({
       ok: true,
       value: { ok: true },
@@ -81,7 +85,7 @@ describe('RemoteStatusPill', () => {
         t={t}
         getRemote={() => remote}
         isEnabled={() => true}
-        persist={vi.fn(async (_ops: readonly unknown[]) => {}) as never}
+        persist={persist as never}
       />,
     )
 
@@ -89,7 +93,12 @@ describe('RemoteStatusPill', () => {
     fireEvent.click(screen.getByTitle('remotePillOpenMenu'))
     const wechat = await screen.findByText('remoteChannelWeixin')
     fireEvent.click(wechat.closest('button')!)
-    expect(setChannelEnabled).toHaveBeenCalledWith({ channel: 'weixin', enabled: false })
+    expect(persist).toHaveBeenCalledWith([
+      { op: 'set', path: ['remoteWeixinEnabled'], value: false },
+    ])
+    await waitFor(() => {
+      expect(setChannelEnabled).toHaveBeenCalledWith({ channel: 'weixin', enabled: false })
+    })
   })
 
   it('opens a single channel from the menu even when the master switch is off', async () => {
@@ -120,6 +129,9 @@ describe('RemoteStatusPill', () => {
 
     expect(persist).toHaveBeenCalledWith([
       { op: 'set', path: ['remoteControlEnabled'], value: true },
+      { op: 'set', path: ['remoteWeixinEnabled'], value: true },
+      { op: 'set', path: ['remoteTelegramEnabled'], value: false },
+      { op: 'set', path: ['remoteFeishuEnabled'], value: false },
     ])
     await waitFor(() => {
       expect(setChannelEnabled).toHaveBeenCalledWith({ channel: 'weixin', enabled: true })

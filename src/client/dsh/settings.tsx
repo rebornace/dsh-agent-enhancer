@@ -455,6 +455,7 @@ function PluginSettingsBody({ form, t, persist, loadCatalog, getRemote }: Plugin
           busy={busy}
           enabled={settings.remoteControlEnabled}
           onOpenFeatures={() => { setTab('features') }}
+          persist={writeOps}
         />
       )
       break

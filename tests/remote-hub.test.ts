@@ -241,6 +241,19 @@ describe('RemoteHub', () => {
     hub.stop()
   })
 
+  it('honours persisted channel flags at startup', async () => {
+    const { hub } = harness({
+      weixin: { baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' },
+      telegram: { token: '123456:ABC-def_ghi' },
+    })
+    hub.applyChannelSettings({ weixin: true, telegram: false, feishu: true })
+    await hub.start()
+    const channels = hub.status().channels
+    expect(channels.find(channel => channel.id === 'weixin')?.phase).toBe('running')
+    expect(channels.find(channel => channel.id === 'telegram')).toMatchObject({ enabled: false, phase: 'off' })
+    hub.stop()
+  })
+
   it('pauses and resumes one channel without clearing its credentials', async () => {
     const { hub, weixinStore } = harness({
       weixin: { baseUrl: 'https://ilinkai.weixin.qq.com/', token: 'token' },

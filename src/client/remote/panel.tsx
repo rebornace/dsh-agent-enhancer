@@ -1,6 +1,7 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { useEffect, useRef, useState } from 'react'
 import type { RemoteChannelIdWire, RemoteChannelStatusWire, RemoteStatusWire } from '../../host/rpc.ts'
+import type { SettingsPersistOp } from '../dsh/persist-settings.ts'
 import styles from '../styles.module.css'
 import {
   agentEnhancerRemoteBindCode,
@@ -23,6 +24,8 @@ export interface RemoteSettingsPanelProps {
   /** Master switch lives on the Features tab. */
   readonly enabled: boolean
   readonly onOpenFeatures: () => void
+  /** Persist channel switches; the master switch stays in Features. */
+  readonly persist?: (ops: readonly SettingsPersistOp[]) => Promise<void>
 }
 
 const POLL_MS = 3_000
@@ -83,7 +86,7 @@ function errorMessage(error: unknown): string {
  * band. Approval decisions never happen here; this page only connects channels
  * and pairs chats.
  */
-export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeatures }: RemoteSettingsPanelProps) {
+export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeatures, persist }: RemoteSettingsPanelProps) {
   const [status, setStatus] = useState<RemoteStatusWire | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -179,10 +182,17 @@ export function RemoteSettingsPanel({ t, getRemote, busy, enabled, onOpenFeature
   }
 
   const toggleChannel = (channel: RemoteChannelIdWire, next: boolean): void => {
-    void run(`channel-${channel}`, remote => agentEnhancerRemoteSetChannelEnabled.invoke(
-      remote,
-      { channel, enabled: next },
-    ))
+    void run(`channel-${channel}`, async remote => {
+      const field = channel === 'weixin'
+        ? 'remoteWeixinEnabled'
+        : channel === 'telegram'
+          ? 'remoteTelegramEnabled'
+          : 'remoteFeishuEnabled'
+      if (persist !== undefined) {
+        await persist([{ op: 'set', path: [field], value: next }])
+      }
+      return agentEnhancerRemoteSetChannelEnabled.invoke(remote, { channel, enabled: next })
+    })
   }
 
   return (

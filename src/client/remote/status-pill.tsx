@@ -19,6 +19,14 @@ const CHANNELS: readonly { readonly id: RemoteChannelIdWire; readonly label: 're
   { id: 'feishu', label: 'remoteChannelFeishu' },
 ]
 
+function channelField(id: RemoteChannelIdWire): 'remoteWeixinEnabled' | 'remoteTelegramEnabled' | 'remoteFeishuEnabled' {
+  return id === 'weixin'
+    ? 'remoteWeixinEnabled'
+    : id === 'telegram'
+      ? 'remoteTelegramEnabled'
+      : 'remoteFeishuEnabled'
+}
+
 function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match)
 }
@@ -66,7 +74,16 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
   const toggleMaster = (): void => {
     if (busy) return
     setBusy(true)
-    void props.persist([{ op: 'set', path: ['remoteControlEnabled'], value: !enabled }])
+    const ops: SettingsPersistOp[] = [
+      { op: 'set', path: ['remoteControlEnabled'], value: !enabled },
+    ]
+    if (!enabled) {
+      // Turning the master back on means all channels come back too.
+      for (const channel of CHANNELS) {
+        ops.push({ op: 'set', path: [channelField(channel.id)], value: true })
+      }
+    }
+    void props.persist(ops)
       .then(() => {
         setEnabled(!enabled)
         setOpen(false)
@@ -81,19 +98,28 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
     setBusyChannel(id)
     void (async () => {
       try {
+        const ops: SettingsPersistOp[] = []
         if (!enabled && next) {
-          // A paused channel cannot be started while the whole feature is off:
-          // turn the master switch on first, then wait for the host hub to boot.
-          await props.persist([{ op: 'set', path: ['remoteControlEnabled'], value: true }])
-          setEnabled(true)
-          let started = false
-          for (let attempt = 0; attempt < 10 && !started; attempt += 1) {
-            const result = await agentEnhancerRemoteSetChannelEnabled.invoke(remote, { channel: id, enabled: true })
-            started = result.ok
-            if (!started) await new Promise(resolve => { setTimeout(resolve, 200) })
+          // Turning one channel on from a fully-off state must not start the
+          // others: persist the exact desired set before the host boots.
+          ops.push({ op: 'set', path: ['remoteControlEnabled'], value: true })
+          for (const channel of CHANNELS) {
+            ops.push({
+              op: 'set',
+              path: [channelField(channel.id)],
+              value: channel.id === id,
+            })
           }
+          setEnabled(true)
         } else {
-          await agentEnhancerRemoteSetChannelEnabled.invoke(remote, { channel: id, enabled: next })
+          ops.push({ op: 'set', path: [channelField(id)], value: next })
+        }
+        await props.persist(ops)
+        let started = false
+        for (let attempt = 0; attempt < 10 && !started; attempt += 1) {
+          const result = await agentEnhancerRemoteSetChannelEnabled.invoke(remote, { channel: id, enabled: next })
+          started = result.ok
+          if (!started) await new Promise(resolve => { setTimeout(resolve, 200) })
         }
         setStatus(await agentEnhancerRemoteStatus.invoke(remote))
       } catch {
