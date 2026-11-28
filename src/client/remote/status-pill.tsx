@@ -154,7 +154,7 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
           </span>
           {CHANNELS.map(channel => {
             const row = status?.channels.find(entry => entry.id === channel.id)
-            const on = row?.phase === 'running' && row.enabled !== false
+            const on = enabled && row?.phase === 'running' && row.enabled !== false
             return (
               <button
                 key={channel.id}
