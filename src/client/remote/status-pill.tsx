@@ -8,6 +8,7 @@ import styles from '../styles.module.css'
 export interface RemoteStatusPillProps {
   readonly t: TranslateNS<'agent-enhancer'>
   readonly getRemote?: () => unknown
+  /** The Settings feature switch; the pill exists only while the feature is on. */
   readonly isEnabled: () => boolean
   readonly persist: (ops: readonly SettingsPersistOp[]) => Promise<void>
 }
@@ -32,9 +33,9 @@ function fill(template: string, values: Record<string, string>): string {
 }
 
 /**
- * Frame-wide one-click remote switch. The master click toggles the same
- * `remoteControlEnabled` config as Settings; the caret opens a small menu for
- * pausing individual channels without clearing their credentials or bindings.
+ * Frame-wide shortcut for the *channel* switches. The Settings feature switch
+ * owns whether this pill exists at all; the pill itself only pauses/resumes
+ * message delivery, so it stays reachable for a one-click start before leaving.
  */
 export function RemoteStatusPill(props: RemoteStatusPillProps) {
   const [status, setStatus] = useState<RemoteStatusWire | null>(null)
@@ -85,81 +86,60 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
     throw lastError
   }
 
-  const toggleMaster = (): void => {
+  const applyChannels = async (ids: readonly RemoteChannelIdWire[], value: boolean): Promise<void> => {
+    const remote = props.getRemote?.()
+    if (remote === undefined) return
+    await persistWithRetry(ids.map(id => ({
+      op: 'set' as const,
+      path: [channelField(id)],
+      value,
+    })))
+    for (const id of ids) {
+      await agentEnhancerRemoteSetChannelEnabled.invoke(remote, { channel: id, enabled: value })
+    }
+    setStatus(await agentEnhancerRemoteStatus.invoke(remote))
+  }
+
+  const running = status?.channels.filter(channel => channel.phase === 'running' && channel.enabled !== false).length ?? 0
+  const enabledCount = status?.channels.filter(channel => channel.enabled !== false).length ?? 0
+  const devices = status?.channels.reduce((total, channel) => total + channel.devices.length, 0) ?? 0
+  const paused = enabledCount === 0
+
+  // The feature switch in Settings owns the pill's existence.
+  if (!enabled) return null
+
+  const label = busy
+    ? props.t('remotePillBusy')
+    : paused
+      ? props.t('remotePillOff')
+      : running < enabledCount && devices === 0
+        ? props.t('remotePillNoChannel')
+        : running < enabledCount
+          ? props.t('remotePillConnecting')
+          : props.t('remotePillOn')
+  const tooltip = paused
+    ? props.t('remotePillTooltipOff')
+    : fill(props.t('remotePillTooltipOn'), { channels: String(running), devices: String(devices) })
+
+  const toggleAll = (): void => {
     if (busy) return
     setBusy(true)
-    const ops: SettingsPersistOp[] = [
-      { op: 'set', path: ['remoteControlEnabled'], value: !enabled },
-    ]
-    if (!enabled) {
-      // Turning the master back on means all channels come back too.
-      for (const channel of CHANNELS) {
-        ops.push({ op: 'set', path: [channelField(channel.id)], value: true })
-      }
-    }
-    void persistWithRetry(ops)
-      .then(() => {
-        setEnabled(!enabled)
+    void applyChannels(CHANNELS.map(channel => channel.id), paused)
+      .catch(() => { setStatus(null) })
+      .finally(() => {
+        setBusy(false)
         setOpen(false)
       })
-      .catch(() => { setEnabled(props.isEnabled()) })
-      .finally(() => { setBusy(false) })
   }
 
   const toggleChannel = (id: RemoteChannelIdWire, next: boolean): void => {
     const remote = props.getRemote?.()
     if (remote === undefined || busyChannel !== null) return
     setBusyChannel(id)
-    void (async () => {
-      try {
-        const ops: SettingsPersistOp[] = []
-        if (!enabled && next) {
-          // Turning one channel on from a fully-off state must not start the
-          // others: persist the exact desired set before the host boots.
-          ops.push({ op: 'set', path: ['remoteControlEnabled'], value: true })
-          for (const channel of CHANNELS) {
-            ops.push({
-              op: 'set',
-              path: [channelField(channel.id)],
-              value: channel.id === id,
-            })
-          }
-        } else {
-          ops.push({ op: 'set', path: [channelField(id)], value: next })
-        }
-        await persistWithRetry(ops)
-        if (!enabled && next) setEnabled(true)
-
-        let started = false
-        for (let attempt = 0; attempt < 10 && !started; attempt += 1) {
-          const result = await agentEnhancerRemoteSetChannelEnabled.invoke(remote, { channel: id, enabled: next })
-          started = result.ok
-          if (!started) await new Promise(resolve => { setTimeout(resolve, 200) })
-        }
-        setStatus(await agentEnhancerRemoteStatus.invoke(remote))
-      } catch {
-        // Leave the previous state visible; the poll will reconcile it.
-      } finally {
-        setBusyChannel(null)
-      }
-    })()
+    void applyChannels([id], next)
+      .catch(() => { /* the poll reconciles */ })
+      .finally(() => { setBusyChannel(null) })
   }
-
-  const running = status?.channels.filter(channel => channel.phase === 'running' && channel.enabled !== false).length ?? 0
-  const enabledCount = status?.channels.filter(channel => channel.enabled !== false).length ?? 0
-  const devices = status?.channels.reduce((total, channel) => total + channel.devices.length, 0) ?? 0
-  const label = busy
-    ? props.t('remotePillBusy')
-    : !enabled
-      ? props.t('remotePillOff')
-      : enabledCount === 0
-        ? props.t('remotePillNoChannel')
-        : running < enabledCount
-          ? props.t('remotePillConnecting')
-          : props.t('remotePillOn')
-  const tooltip = enabled
-    ? fill(props.t('remotePillTooltipOn'), { channels: String(running), devices: String(devices) })
-    : props.t('remotePillTooltipOff')
 
   return (
     <div className={styles.remotePillWrap}>
@@ -167,16 +147,16 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
         <button
           type="button"
           className={styles.remotePill}
-          data-on={enabled ? 'true' : 'false'}
+          data-on={!paused ? 'true' : 'false'}
           disabled={busy}
           title={tooltip}
           aria-label={tooltip}
-          aria-pressed={enabled}
-          onClick={toggleMaster}
+          aria-pressed={!paused}
+          onClick={toggleAll}
         >
           <span className={styles.remotePillDot} aria-hidden="true" />
           <span>{label}</span>
-          {enabled && running > 0 ? <span className={styles.remotePillCount}>{running}</span> : null}
+          {!paused && running > 0 ? <span className={styles.remotePillCount}>{running}</span> : null}
         </button>
         <button
           type="button"
@@ -193,12 +173,10 @@ export function RemoteStatusPill(props: RemoteStatusPillProps) {
       {open ? (
         <div className={styles.remotePillMenu} role="group" aria-label={props.t('remotePillChannelsTitle')}>
           <span className={styles.remotePillMenuTitle}>{props.t('remotePillChannelsTitle')}</span>
-          <span className={styles.remotePillMenuHint}>
-            {enabled ? props.t('remotePillMenuHint') : props.t('remotePillMenuOffHint')}
-          </span>
+          <span className={styles.remotePillMenuHint}>{props.t('remotePillMenuHint')}</span>
           {CHANNELS.map(channel => {
             const row = status?.channels.find(entry => entry.id === channel.id)
-            const on = enabled && row?.phase === 'running' && row.enabled !== false
+            const on = row?.phase === 'running' && row.enabled !== false
             return (
               <button
                 key={channel.id}
